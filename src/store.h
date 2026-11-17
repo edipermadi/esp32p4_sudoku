@@ -36,6 +36,9 @@ void store_clear_game(void);
 uint8_t store_last_collection(void);
 void store_set_last_collection(uint8_t c);
 
+bool store_sound_enabled(void);
+void store_set_sound_enabled(bool on);
+
 #ifdef __cplusplus
 }
 #endif

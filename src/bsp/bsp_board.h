@@ -35,6 +35,14 @@ extern "C" {
 #define BSP_I2C_SCL_GPIO         8
 #define BSP_TOUCH_I2C_HZ         400000
 
+/* ---------------------------------------------------------------- audio */
+#define BSP_I2S_MCLK_GPIO        13
+#define BSP_I2S_BCLK_GPIO        12
+#define BSP_I2S_WS_GPIO          10
+#define BSP_I2S_DOUT_GPIO        9       /* SoC -> ES8311 DSDIN */
+#define BSP_I2S_DIN_GPIO         11      /* ES7210 mic ADC -> SoC (unused here) */
+#define BSP_AUDIO_PA_GPIO        53      /* NS4150 amp enable, active high */
+
 typedef enum {
     BSP_PANEL_UNKNOWN = 0,
     BSP_PANEL_ST7703,
@@ -60,6 +68,20 @@ bool bsp_touch_read(uint16_t *x, uint16_t *y);
 /* All of the above + LVGL display/input-device registration.
  * After this returns, create your UI and call lv_timer_handler() from loop(). */
 esp_err_t bsp_lvgl_start(void);
+
+/* Speaker: I2S0 (TX only, 16-bit stereo) -> ES8311 -> amp. Supported rates:
+ * 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000.
+ * Turns the amp on when done. */
+esp_err_t bsp_audio_init(uint32_t sample_rate);
+/* Re-clocks I2S + codec; call only while holding the audio (see acquire). */
+esp_err_t bsp_audio_set_sample_rate(uint32_t sample_rate);
+/* Exclusive use of the speaker for one audio producer (the MP3 player takes it per track). */
+bool bsp_audio_acquire(uint32_t timeout_ms);
+void bsp_audio_release(void);
+/* Blocking write of interleaved L/R 16-bit frames. */
+esp_err_t bsp_audio_write(const int16_t *stereo_frames, size_t frames, uint32_t timeout_ms);
+/* 0..100 % (0 = mute, 100 = 0 dB codec gain). */
+void bsp_audio_set_volume(int percent);
 
 #ifdef __cplusplus
 }

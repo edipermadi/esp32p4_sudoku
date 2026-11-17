@@ -1,6 +1,6 @@
 # esp32p4_sudoku
 
-A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã—720 MIPI-DSI, GT911 touch), built with LVGL 9.6 as an Arduino sketch.
+A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã—720 MIPI-DSI, GT911 touch, ES8311 speaker), built with LVGL 9.6 as an Arduino sketch.
 
 ## Features
 
@@ -21,6 +21,12 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã
 - **Time to solve**
   - The timer counts only while the game screen is open. Tap it to pause, which also hides the board.
   - The best time for each puzzle is stored.
+- **Sound effects**: synthesised on the device, with no audio files. A background task mixes up to four at once.
+  - A short tick on every touch.
+  - A low buzz when a digit you place breaks a row, column or box rule.
+  - A rising chime when all nine of a digit are placed without conflicts.
+  - A fanfare when the puzzle is solved.
+  - The speaker button on the list screen turns sound on or off. The setting is saved.
 - **Saved state**: best times and the game in progress (entries, notes and elapsed time) are kept in NVS. While you play, the game is saved every 10 s and again when you leave it.
 
 ## Building
@@ -63,6 +69,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã
 | Start the puzzle over           | **Restart** (asks first if there is progress)    |
 | Pause                           | Tap the timer; tap the board to resume           |
 | Back to the list                | **List** (top left); the game is saved           |
+| Sound on/off                    | Speaker button on the list screen                |
 
 The small number on each pad button is how many of that digit are still to place. Red digits break a row, column or box rule. The puzzle is solved when every cell is filled and nothing is red. Each puzzle has exactly one solution, so the solution is always the intended one.
 
@@ -85,16 +92,21 @@ npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 36 --font $FONT \
     -r 0x20,0x30-0x3A --format lvgl --lv-include lvgl.h -o src/fonts/font_timer_36.c
 ```
 
+## Tuning the sounds
+
+The effects are note tables at the top of `src/sfx.c`. Each note has a frequency, a length in ms, a waveform (sine, triangle or square) and a level. `SFX_VOLUME` sets the codec volume, 70 % by default.
+
 ## Layout
 
 ```
 esp32p4_sudoku.ino      setup/loop
 src/sudoku_ui.c         list + game screens
-src/store.cpp           NVS: best times, saved game, last collection
+src/store.cpp           NVS: best times, saved game, last collection, sound on/off
+src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
 src/fonts/              Montserrat 44 px digits / 36 px timer (lv_font_conv)
-src/bsp/                display (ST7703 / JD9365), GT911 touch, LVGL port
+src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/opensudoku/       the downloaded .opensudoku collections
 ```

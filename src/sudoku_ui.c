@@ -8,6 +8,9 @@
  *     top, and Undo / Erase / Notes / Restart at the bottom. Conflicting
  *     digits turn red; a complete board without conflicts is solved (every
  *     embedded puzzle has exactly one solution).
+ *
+ * Sounds: a tick on every touch, a buzz when a placed digit breaks a rule,
+ * a chime when all nine of a digit are placed, a fanfare when solved.
  */
 #include "sudoku_ui.h"
 #include <stdio.h>
@@ -15,6 +18,7 @@
 #include <lvgl.h>
 #include "puzzles.h"
 #include "store.h"
+#include "sfx.h"
 
 LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
 LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
@@ -90,7 +94,7 @@ static int      g_undo_head, g_undo_len;
 static lv_obj_t *scr_list, *scr_game;
 
 /* list screen */
-static lv_obj_t *l_total, *l_continue, *l_continue_lbl;
+static lv_obj_t *l_total, *l_continue, *l_continue_lbl, *l_sound_lbl;
 static lv_obj_t *l_coll_btn[PUZZLE_COLLECTION_COUNT], *l_coll_cnt[PUZZLE_COLLECTION_COUNT];
 static lv_obj_t *l_name, *l_stats, *l_btnm;
 static int       l_coll;
@@ -307,6 +311,7 @@ static void on_solved(void)
 {
     g_solved = true;
     g_paused = false;
+    sfx_play(SFX_SOLVED);
     g_sel = -1;
     uint32_t secs = (g_elapsed_ms + 500) / 1000;
     uint32_t prev = store_best_time(g_id);
@@ -361,6 +366,7 @@ static void enter_digit(int d)
 {
     if (!can_edit()) return;
     int i = g_sel;
+    bool placed = false;
     if (g_notes_mode) {
         if (g_b.val[i]) return;
         push_undo();
@@ -372,12 +378,28 @@ static void enter_digit(int d)
         } else {
             g_b.val[i] = (uint8_t)d;
             g_b.notes[i] = 0;
+            placed = true;
             for (int j = 0; j < 81; j++) {           /* digit placed: drop it from peers' notes */
                 if (j != i && is_peer(i, j)) g_b.notes[j] &= (uint16_t)~(1u << d);
             }
         }
     }
     after_move();
+    if (!placed || g_solved) return;          /* on_solved() plays its own sound */
+
+    if (g_conflict[i]) {
+        sfx_play(SFX_ERROR);
+        return;
+    }
+    int n = 0;
+    bool clean = true;
+    for (int j = 0; j < 81; j++) {
+        if (g_b.val[j] == d) {
+            n++;
+            clean &= !g_conflict[j];
+        }
+    }
+    if (n == 9 && clean) sfx_play(SFX_DIGIT_DONE);
 }
 
 /* ------------------------------------------------------------- events */
@@ -816,6 +838,22 @@ static void coll_click_cb(lv_event_t *e)
     refresh_list();
 }
 
+static void update_sound_btn(void)
+{
+    bool on = sfx_enabled();
+    lv_label_set_text(l_sound_lbl, on ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_MUTE);
+    lv_obj_set_style_text_color(l_sound_lbl, on ? C_TEXT : C_MUTED, 0);
+}
+
+static void sound_cb(lv_event_t *e)
+{
+    bool on = !sfx_enabled();
+    sfx_set_enabled(on);
+    store_set_sound_enabled(on);
+    update_sound_btn();
+    sfx_play(SFX_TOUCH);      /* the tick for this press was skipped while muted */
+}
+
 static void continue_cb(lv_event_t *e)
 {
     uint16_t id = store_saved_game()->id;
@@ -870,6 +908,11 @@ static void build_list(void)
     lv_obj_set_pos(t, 16, 8);
     l_total = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(l_total, 16, 44);
+
+    lv_obj_t *snd = make_btn(scr_list, SCR_W - 12 - 380 - 12 - 60, 10, 60, 52, NULL, NULL, sound_cb, NULL);
+    l_sound_lbl = make_label(snd, &lv_font_montserrat_22, C_TEXT);
+    lv_obj_center(l_sound_lbl);
+    update_sound_btn();
 
     l_continue = make_btn(scr_list, SCR_W - 12 - 380, 10, 380, 52, NULL, NULL, continue_cb, NULL);
     lv_obj_set_style_bg_color(l_continue, C_LIST_ACTIVE, 0);
@@ -938,6 +981,37 @@ static void build_list(void)
 
 /* ============================================================= start */
 
+static void notice_del_cb(lv_timer_t *t)
+{
+    lv_obj_delete((lv_obj_t *)lv_timer_get_user_data(t));
+}
+
+void sudoku_ui_notice(const char *text, uint32_t ms)
+{
+    /* on the top layer so it stays visible across screen changes */
+    lv_obj_t *n = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(n, SCR_W - 40, LV_SIZE_CONTENT);
+    lv_obj_align(n, LV_ALIGN_BOTTOM_MID, 0, -40);
+    lv_obj_set_style_bg_color(n, lv_color_hex(0x5A2A1A), 0);
+    lv_obj_set_style_border_color(n, C_ORANGE, 0);
+    lv_obj_set_style_border_width(n, 2, 0);
+    lv_obj_set_style_radius(n, 10, 0);
+    lv_obj_set_style_pad_all(n, 14, 0);
+    lv_obj_set_scrollable(n, false);
+    lv_obj_set_clickable(n, false);
+    lv_obj_t *l = make_label(n, &lv_font_montserrat_18, C_TEXT);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
+    lv_label_set_text(l, text);
+    lv_timer_t *t = lv_timer_create(notice_del_cb, ms, n);
+    lv_timer_set_repeat_count(t, 1);
+}
+
+static void touch_sound_cb(lv_event_t *e)
+{
+    sfx_play(SFX_TOUCH);
+}
+
 esp_err_t sudoku_ui_start(void)
 {
     lv_display_t *disp = lv_display_get_default();
@@ -946,6 +1020,11 @@ esp_err_t sudoku_ui_start(void)
 #if LV_USE_PERF_MONITOR
     lv_sysmon_hide_performance(NULL);
 #endif
+
+    sfx_set_enabled(store_sound_enabled());
+    for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in)) {
+        lv_indev_add_event_cb(in, touch_sound_cb, LV_EVENT_PRESSED, NULL);
+    }
 
     l_coll = store_last_collection();
     build_game();

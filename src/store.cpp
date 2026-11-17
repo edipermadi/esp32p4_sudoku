@@ -6,7 +6,8 @@
 /* Key layout in namespace "sudoku":
  *   "best" : uint16_t[PUZZLE_COUNT] best time in seconds (0 = unsolved, capped at 65535)
  *   "game" : saved_game_t
- *   "coll" : uint8_t last collection */
+ *   "coll" : uint8_t last collection
+ *   "snd"  : bool sound effects on */
 static Preferences s_prefs;
 static uint16_t s_best[PUZZLE_COUNT];
 static saved_game_t s_game;
@@ -77,4 +78,14 @@ uint8_t store_last_collection(void)
 void store_set_last_collection(uint8_t c)
 {
     if (c != s_prefs.getUChar("coll", 0xFF)) s_prefs.putUChar("coll", c);
+}
+
+bool store_sound_enabled(void)
+{
+    return s_prefs.getBool("snd", true);
+}
+
+void store_set_sound_enabled(bool on)
+{
+    s_prefs.putBool("snd", on);
 }
