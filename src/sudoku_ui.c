@@ -1,0 +1,959 @@
+/*
+ * Sudoku UI for a 720x720 touch screen (LVGL 9).
+ *
+ * Two screens:
+ *   - list: collections on the left, a 10x10 grid of puzzles on the right.
+ *     Solved puzzles are green, the game in progress is orange.
+ *   - game: the 9x9 board, a 1..9 number pad on the right, a timer at the
+ *     top, and Undo / Erase / Notes / Restart at the bottom. Conflicting
+ *     digits turn red; a complete board without conflicts is solved (every
+ *     embedded puzzle has exactly one solution).
+ */
+#include "sudoku_ui.h"
+#include <stdio.h>
+#include <string.h>
+#include <lvgl.h>
+#include "puzzles.h"
+#include "store.h"
+
+LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
+LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
+
+/* ------------------------------------------------------------- palette */
+#define C_BG          lv_color_hex(0x101218)
+#define C_CARD        lv_color_hex(0x1B1E27)
+#define C_TEXT        lv_color_hex(0xEDEFF4)
+#define C_MUTED       lv_color_hex(0x8B92A5)
+#define C_ACCENT      lv_color_hex(0x4F8CFF)
+#define C_GREEN       lv_color_hex(0x3DD68C)
+#define C_ORANGE      lv_color_hex(0xFFA94D)
+#define C_RED         lv_color_hex(0xFF6B6B)
+
+#define C_GRID_THICK  lv_color_hex(0x8B92A5)
+#define C_GRID_THIN   lv_color_hex(0x3A3F4E)
+#define C_CELL        lv_color_hex(0x1B1E27)
+#define C_CELL_GIVEN  lv_color_hex(0x22262F)
+#define C_CELL_PEER   lv_color_hex(0x272D3D)
+#define C_CELL_SAME   lv_color_hex(0x2F3F63)
+#define C_CELL_SEL    lv_color_hex(0x3A5BA0)
+#define C_CELL_BAD    lv_color_hex(0x4A2329)
+#define C_CELL_SOLVED lv_color_hex(0x173A2A)
+#define C_DIGIT_USER  lv_color_hex(0x7FB0FF)
+
+#define C_LIST_SOLVED lv_color_hex(0x1E7A4F)
+#define C_LIST_ACTIVE lv_color_hex(0xA0621C)
+
+/* ------------------------------------------------------------- geometry */
+#define SCR_W       720
+#define TOP_H       60
+#define CELL        64
+#define GRID_X      8
+#define GRID_Y      64
+#define GRID_SIZE   604     /* 4 + 3 * (3*64 + 2*2) + 2*4 + 4 */
+#define BOX_SIZE    196     /* 3*64 + 2*2 */
+#define PAD_X       (GRID_X + GRID_SIZE + 8)
+#define PAD_W       (SCR_W - PAD_X - 8)
+#define PAD_H       62
+#define PAD_GAP     5
+#define BOT_Y       (GRID_Y + GRID_SIZE + 6)
+#define BOT_H       (SCR_W - BOT_Y - 6)
+
+#define SAVE_INTERVAL_MS 10000
+#define UNDO_MAX         128
+#define MAX_PER_COLL     100
+
+static const char *const DIGITS[10] = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+
+/* ------------------------------------------------------------- game state */
+typedef struct {
+    uint8_t  val[81];
+    uint16_t notes[81];
+} board_t;
+
+static uint16_t g_id = STORE_NO_GAME;
+static uint8_t  g_given[81];
+static board_t  g_b;
+static bool     g_conflict[81];
+static int      g_sel = -1;
+static bool     g_notes_mode;
+static bool     g_solved;
+static bool     g_paused;
+static uint32_t g_elapsed_ms;
+static uint32_t g_last_tick;
+static bool     g_dirty;
+static uint32_t g_last_save;
+
+static board_t  g_undo[UNDO_MAX];
+static int      g_undo_head, g_undo_len;
+
+/* ------------------------------------------------------------- widgets */
+static lv_obj_t *scr_list, *scr_game;
+
+/* list screen */
+static lv_obj_t *l_total, *l_continue, *l_continue_lbl;
+static lv_obj_t *l_coll_btn[PUZZLE_COLLECTION_COUNT], *l_coll_cnt[PUZZLE_COLLECTION_COUNT];
+static lv_obj_t *l_name, *l_stats, *l_btnm;
+static int       l_coll;
+static char      l_labels[MAX_PER_COLL][4];
+static const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];
+static uint16_t  l_pending_id;
+
+/* game screen */
+static lv_obj_t *g_cells[81], *g_cell_lbl[81];
+static lv_obj_t *g_pad[9], *g_pad_cnt[9];
+static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
+static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best;
+
+static void show_list(void);
+static void open_puzzle(uint16_t id);
+
+/* ============================================================= helpers */
+
+static void fmt_time(char *buf, size_t n, uint32_t s)
+{
+    if (s >= 3600) {
+        snprintf(buf, n, "%u:%02u:%02u", (unsigned)(s / 3600), (unsigned)(s / 60 % 60), (unsigned)(s % 60));
+    } else {
+        snprintf(buf, n, "%02u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
+    }
+}
+
+static void puzzle_name(uint16_t id, char *buf, size_t n)
+{
+    int c = puzzle_collection_of(id);
+    snprintf(buf, n, "%s #%u", puzzle_collections[c].name, (unsigned)(id - puzzle_collections[c].first + 1));
+}
+
+static lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *text,
+                          const lv_font_t *font, lv_event_cb_t cb, void *user)
+{
+    lv_obj_t *b = lv_button_create(parent);
+    lv_obj_set_pos(b, x, y);
+    lv_obj_set_size(b, w, h);
+    lv_obj_set_style_bg_color(b, C_CARD, 0);
+    lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_CHECKED);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_radius(b, 8, 0);
+    lv_obj_set_style_pad_all(b, 0, 0);
+    if (text) {
+        lv_obj_t *l = lv_label_create(b);
+        lv_label_set_text(l, text);
+        lv_obj_set_style_text_font(l, font, 0);
+        lv_obj_set_style_text_color(l, C_TEXT, 0);
+        lv_obj_center(l);
+    }
+    if (cb) lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, user);
+    return b;
+}
+
+static lv_obj_t *make_screen(void)
+{
+    lv_obj_t *s = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(s, C_BG, 0);
+    lv_obj_set_style_bg_opa(s, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(s, false);
+    return s;
+}
+
+static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color)
+{
+    lv_obj_t *l = lv_label_create(parent);
+    lv_obj_set_style_text_font(l, font, 0);
+    lv_obj_set_style_text_color(l, color, 0);
+    lv_label_set_text(l, "");
+    return l;
+}
+
+/* ============================================================= sudoku rules */
+
+static bool is_peer(int a, int b)
+{
+    int ra = a / 9, ca = a % 9, rb = b / 9, cb = b % 9;
+    return ra == rb || ca == cb || (ra / 3 == rb / 3 && ca / 3 == cb / 3);
+}
+
+/* Marks every filled cell that shares a row, column or box with the same digit. */
+static int compute_conflicts(void)
+{
+    int n = 0;
+    memset(g_conflict, 0, sizeof(g_conflict));
+    for (int i = 0; i < 81; i++) {
+        if (!g_b.val[i]) continue;
+        for (int j = i + 1; j < 81; j++) {
+            if (g_b.val[j] == g_b.val[i] && is_peer(i, j)) {
+                g_conflict[i] = g_conflict[j] = true;
+            }
+        }
+    }
+    for (int i = 0; i < 81; i++) n += g_conflict[i];
+    return n;
+}
+
+static int filled_count(void)
+{
+    int n = 0;
+    for (int i = 0; i < 81; i++) n += g_b.val[i] != 0;
+    return n;
+}
+
+static bool has_progress(void)
+{
+    for (int i = 0; i < 81; i++) {
+        if ((g_b.val[i] && !g_given[i]) || g_b.notes[i]) return true;
+    }
+    return false;
+}
+
+/* ============================================================= persistence */
+
+static void save_current(void)
+{
+    if (g_id == STORE_NO_GAME || g_solved) return;
+    const saved_game_t *s = store_saved_game();
+    if (!has_progress() && s->id != g_id) return;   /* only looked at it: keep the slot as is */
+    saved_game_t sg;
+    sg.id = g_id;
+    memcpy(sg.val, g_b.val, sizeof(sg.val));
+    memcpy(sg.notes, g_b.notes, sizeof(sg.notes));
+    sg.elapsed_ms = g_elapsed_ms;
+    store_save_game(&sg);
+    g_dirty = false;
+    g_last_save = lv_tick_get();
+}
+
+/* ============================================================= game view */
+
+static void update_timer_label(void)
+{
+    char buf[16];
+    fmt_time(buf, sizeof(buf), g_elapsed_ms / 1000);
+    if (strcmp(lv_label_get_text(g_timer), buf) != 0) lv_label_set_text(g_timer, buf);
+    lv_obj_set_style_text_color(g_timer, g_solved ? C_GREEN : (g_paused ? C_MUTED : C_TEXT), 0);
+}
+
+static void update_header(void)
+{
+    char name[40], best[24], buf[48];
+    puzzle_name(g_id, name, sizeof(name));
+    lv_label_set_text(g_title, name);
+    uint32_t b = store_best_time(g_id);
+    if (b) {
+        fmt_time(best, sizeof(best), b);
+        snprintf(buf, sizeof(buf), LV_SYMBOL_OK "  Solved  -  best %s", best);
+        lv_obj_set_style_text_color(g_best, C_GREEN, 0);
+    } else {
+        snprintf(buf, sizeof(buf), "Not solved yet");
+        lv_obj_set_style_text_color(g_best, C_MUTED, 0);
+    }
+    lv_label_set_text(g_best, buf);
+    lv_label_set_text(g_timer_icon, g_solved ? LV_SYMBOL_OK : (g_paused ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE));
+    lv_obj_set_style_text_color(g_timer_icon, g_solved ? C_GREEN : C_MUTED, 0);
+    update_timer_label();
+}
+
+static void refresh_board(void)
+{
+    int sv = g_sel >= 0 ? g_b.val[g_sel] : 0;
+    for (int i = 0; i < 81; i++) {
+        lv_color_t bg = g_given[i] ? C_CELL_GIVEN : C_CELL;
+        if (g_solved) {
+            bg = C_CELL_SOLVED;
+        } else if (g_sel >= 0) {
+            if (i == g_sel) bg = C_CELL_SEL;
+            else if (sv && g_b.val[i] == sv) bg = C_CELL_SAME;
+            else if (is_peer(i, g_sel)) bg = C_CELL_PEER;
+        }
+        if (!g_solved && g_conflict[i] && !g_given[i] && i != g_sel) bg = C_CELL_BAD;
+        lv_obj_set_style_bg_color(g_cells[i], bg, 0);
+
+        lv_color_t fg = g_given[i] ? C_TEXT : C_DIGIT_USER;
+        if (g_solved) fg = g_given[i] ? C_TEXT : C_GREEN;
+        else if (g_conflict[i]) fg = C_RED;
+        lv_obj_set_style_text_color(g_cell_lbl[i], fg, 0);
+
+        const char *t = DIGITS[g_b.val[i]];
+        if (strcmp(lv_label_get_text(g_cell_lbl[i]), t) != 0) lv_label_set_text_static(g_cell_lbl[i], t);
+        lv_obj_invalidate(g_cells[i]);   /* notes are custom-drawn */
+    }
+
+    /* number pad: digits left to place; a finished digit is dimmed */
+    int count[10] = {0};
+    for (int i = 0; i < 81; i++) count[g_b.val[i]]++;
+    for (int d = 1; d <= 9; d++) {
+        int left = 9 - count[d];
+        lv_label_set_text_fmt(g_pad_cnt[d - 1], "%d", left > 0 ? left : 0);
+        lv_obj_set_style_opa(g_pad[d - 1], left <= 0 ? LV_OPA_40 : LV_OPA_COVER, 0);
+    }
+
+    /* status line */
+    int bad = 0;
+    for (int i = 0; i < 81; i++) bad += g_conflict[i];
+    if (g_solved) {
+        char t[16];
+        fmt_time(t, sizeof(t), g_elapsed_ms / 1000);
+        lv_label_set_text_fmt(g_status, LV_SYMBOL_OK "  Solved in %s", t);
+        lv_obj_set_style_text_color(g_status, C_GREEN, 0);
+    } else if (bad) {
+        lv_label_set_text_fmt(g_status, LV_SYMBOL_WARNING "  %d conflicting", bad);
+        lv_obj_set_style_text_color(g_status, C_RED, 0);
+    } else {
+        lv_label_set_text_fmt(g_status, "Filled %d / 81", filled_count());
+        lv_obj_set_style_text_color(g_status, C_MUTED, 0);
+    }
+}
+
+static void on_solved(void)
+{
+    g_solved = true;
+    g_paused = false;
+    g_sel = -1;
+    uint32_t secs = (g_elapsed_ms + 500) / 1000;
+    uint32_t prev = store_best_time(g_id);
+    bool best = store_record_solve(g_id, secs);
+    store_clear_game();
+    g_dirty = false;
+
+    char t[16], b[16];
+    fmt_time(t, sizeof(t), secs);
+    lv_label_set_text(g_win_time, t);
+    if (best && prev) {
+        fmt_time(b, sizeof(b), prev);
+        lv_label_set_text_fmt(g_win_best, "New best!  (was %s)", b);
+        lv_obj_set_style_text_color(g_win_best, C_ORANGE, 0);
+    } else if (best) {
+        lv_label_set_text(g_win_best, "First solve!");
+        lv_obj_set_style_text_color(g_win_best, C_ORANGE, 0);
+    } else {
+        fmt_time(b, sizeof(b), prev);
+        lv_label_set_text_fmt(g_win_best, "Best time %s", b);
+        lv_obj_set_style_text_color(g_win_best, C_MUTED, 0);
+    }
+    lv_obj_set_hidden(g_pause_ovl, true);
+    lv_obj_set_hidden(g_win_ovl, false);
+    update_header();
+}
+
+static void after_move(void)
+{
+    g_dirty = true;
+    compute_conflicts();
+    bool full = filled_count() == 81;
+    bool ok = true;
+    for (int i = 0; i < 81; i++) ok &= !g_conflict[i];
+    if (full && ok) on_solved();
+    refresh_board();
+}
+
+static void push_undo(void)
+{
+    g_undo[g_undo_head] = g_b;
+    g_undo_head = (g_undo_head + 1) % UNDO_MAX;
+    if (g_undo_len < UNDO_MAX) g_undo_len++;
+}
+
+static bool can_edit(void)
+{
+    return g_sel >= 0 && !g_given[g_sel] && !g_solved && !g_paused;
+}
+
+static void enter_digit(int d)
+{
+    if (!can_edit()) return;
+    int i = g_sel;
+    if (g_notes_mode) {
+        if (g_b.val[i]) return;
+        push_undo();
+        g_b.notes[i] ^= (uint16_t)(1u << d);
+    } else {
+        push_undo();
+        if (g_b.val[i] == d) {
+            g_b.val[i] = 0;
+        } else {
+            g_b.val[i] = (uint8_t)d;
+            g_b.notes[i] = 0;
+            for (int j = 0; j < 81; j++) {           /* digit placed: drop it from peers' notes */
+                if (j != i && is_peer(i, j)) g_b.notes[j] &= (uint16_t)~(1u << d);
+            }
+        }
+    }
+    after_move();
+}
+
+/* ------------------------------------------------------------- events */
+
+static void cell_click_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused) return;
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    g_sel = i;
+    refresh_board();
+}
+
+static void cell_draw_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (g_b.val[i] || !g_b.notes[i]) return;
+    lv_obj_t *cell = lv_event_get_current_target_obj(e);
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_area_t co;
+    lv_obj_get_coords(cell, &co);
+    int sv = g_sel >= 0 ? g_b.val[g_sel] : 0;
+
+    lv_draw_label_dsc_t d;
+    lv_draw_label_dsc_init(&d);
+    d.font = &lv_font_montserrat_16;
+    d.align = LV_TEXT_ALIGN_CENTER;
+    for (int n = 1; n <= 9; n++) {
+        if (!(g_b.notes[i] & (1u << n))) continue;
+        int r = (n - 1) / 3, c = (n - 1) % 3;
+        lv_area_t a = {
+            .x1 = co.x1 + 1 + c * 21, .y1 = co.y1 + 2 + r * 21,
+            .x2 = co.x1 + 1 + c * 21 + 20, .y2 = co.y1 + 2 + r * 21 + 20,
+        };
+        d.color = n == sv ? C_ACCENT : C_MUTED;
+        d.text = DIGITS[n];
+        lv_draw_label(layer, &d, &a);
+    }
+}
+
+static void pad_click_cb(lv_event_t *e)
+{
+    enter_digit((int)(intptr_t)lv_event_get_user_data(e));
+}
+
+static void erase_cb(lv_event_t *e)
+{
+    if (!can_edit()) return;
+    if (!g_b.val[g_sel] && !g_b.notes[g_sel]) return;
+    push_undo();
+    g_b.val[g_sel] = 0;
+    g_b.notes[g_sel] = 0;
+    after_move();
+}
+
+static void undo_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused || g_undo_len == 0) return;
+    g_undo_head = (g_undo_head + UNDO_MAX - 1) % UNDO_MAX;
+    g_undo_len--;
+    g_b = g_undo[g_undo_head];
+    after_move();
+}
+
+static void notes_cb(lv_event_t *e)
+{
+    g_notes_mode = lv_obj_has_state(g_notes_btn, LV_STATE_CHECKED);
+}
+
+static void set_paused(bool p)
+{
+    if (g_solved) p = false;
+    g_paused = p;
+    lv_obj_set_hidden(g_pause_ovl, !p);
+    update_header();
+}
+
+static void pause_cb(lv_event_t *e)
+{
+    set_paused(!g_paused);
+}
+
+static void reset_game(void)
+{
+    memcpy(g_b.val, g_given, sizeof(g_b.val));
+    memset(g_b.notes, 0, sizeof(g_b.notes));
+    g_elapsed_ms = 0;
+    g_undo_len = g_undo_head = 0;
+    g_sel = -1;
+    g_solved = false;
+    g_dirty = false;
+    lv_obj_set_hidden(g_win_ovl, true);
+    set_paused(false);
+    compute_conflicts();
+    refresh_board();
+}
+
+static void restart_confirm_cb(lv_event_t *e)
+{
+    lv_obj_t *mbox = (lv_obj_t *)lv_event_get_user_data(e);
+    if (store_saved_game()->id == g_id) store_clear_game();
+    reset_game();
+    lv_msgbox_close_async(mbox);
+}
+
+static void mbox_close_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+}
+
+static lv_obj_t *make_msgbox(const char *title, const char *text)
+{
+    lv_obj_t *m = lv_msgbox_create(NULL);
+    lv_msgbox_add_title(m, title);
+    lv_msgbox_add_text(m, text);
+    lv_obj_set_width(m, 520);
+    lv_obj_set_style_text_font(m, &lv_font_montserrat_20, 0);
+    return m;
+}
+
+static void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary)
+{
+    lv_obj_t *b = lv_msgbox_add_footer_button(m, text);
+    lv_obj_set_flex_grow(b, 1);
+    lv_obj_set_height(b, 52);
+    if (!primary) lv_obj_set_style_bg_color(b, C_CARD, 0);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, m);
+}
+
+static void restart_cb(lv_event_t *e)
+{
+    if (!g_solved && !has_progress()) {
+        reset_game();
+        return;
+    }
+    lv_obj_t *m = make_msgbox("Restart puzzle?", "All entries and the timer will be reset.");
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, "Restart", restart_confirm_cb, true);
+}
+
+static void back_cb(lv_event_t *e)
+{
+    save_current();
+    show_list();
+}
+
+static void win_next_cb(lv_event_t *e)
+{
+    int c = puzzle_collection_of(g_id);
+    const puzzle_collection_t *pc = &puzzle_collections[c];
+    uint16_t next = g_id + 1;
+    if (next >= pc->first + pc->count) next = pc->first;
+    open_puzzle(next);
+}
+
+static void win_list_cb(lv_event_t *e)
+{
+    show_list();
+}
+
+static void win_hide_cb(lv_event_t *e)
+{
+    /* tap outside the card: look at the solved board */
+    if (lv_event_get_target_obj(e) == g_win_ovl) lv_obj_set_hidden(g_win_ovl, true);
+}
+
+static void tick_cb(lv_timer_t *t)
+{
+    uint32_t now = lv_tick_get();
+    bool running = g_id != STORE_NO_GAME && lv_screen_active() == scr_game && !g_solved && !g_paused;
+    if (running) {
+        g_elapsed_ms += now - g_last_tick;
+        update_timer_label();
+        if (g_dirty && now - g_last_save >= SAVE_INTERVAL_MS) save_current();
+    }
+    g_last_tick = now;
+}
+
+static void start_game(uint16_t id, bool resume)
+{
+    g_id = id;
+    puzzle_load(id, g_given);
+    reset_game();
+    const saved_game_t *s = store_saved_game();
+    if (resume && s->id == id) {
+        memcpy(g_b.val, s->val, sizeof(g_b.val));
+        memcpy(g_b.notes, s->notes, sizeof(g_b.notes));
+        for (int i = 0; i < 81; i++) {
+            if (g_given[i]) g_b.val[i] = g_given[i];   /* givens are never editable */
+            if (g_b.val[i] > 9) g_b.val[i] = 0;
+        }
+        g_elapsed_ms = s->elapsed_ms;
+    }
+    g_notes_mode = false;
+    lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
+    g_last_save = g_last_tick = lv_tick_get();
+    compute_conflicts();
+    refresh_board();
+    update_header();
+    lv_screen_load(scr_game);
+}
+
+/* ------------------------------------------------------------- build */
+
+static void build_game(void)
+{
+    scr_game = make_screen();
+
+    /* top bar */
+    make_btn(scr_game, 8, 6, 104, 48, LV_SYMBOL_LEFT "  List", &lv_font_montserrat_18, back_cb, NULL);
+    g_title = make_label(scr_game, &lv_font_montserrat_22, C_TEXT);
+    lv_obj_set_pos(g_title, 126, 6);
+    g_best = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_pos(g_best, 126, 36);
+
+    lv_obj_t *tb = make_btn(scr_game, SCR_W - 8 - 200, 6, 200, 48, NULL, NULL, pause_cb, NULL);
+    lv_obj_set_style_bg_opa(tb, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(tb, LV_OPA_COVER, LV_STATE_PRESSED);
+    g_timer_icon = make_label(tb, &lv_font_montserrat_20, C_MUTED);
+    lv_obj_align(g_timer_icon, LV_ALIGN_LEFT_MID, 12, 0);
+    g_timer = make_label(tb, &font_timer_36, C_TEXT);
+    lv_obj_align(g_timer, LV_ALIGN_RIGHT_MID, -6, 0);
+
+    /* board: thick-line background, 9 boxes in thin-line colour, 81 cells */
+    lv_obj_t *grid = lv_obj_create(scr_game);
+    lv_obj_remove_style_all(grid);
+    lv_obj_set_pos(grid, GRID_X, GRID_Y);
+    lv_obj_set_size(grid, GRID_SIZE, GRID_SIZE);
+    lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(grid, false);
+    for (int b = 0; b < 9; b++) {
+        lv_obj_t *box = lv_obj_create(grid);
+        lv_obj_remove_style_all(box);
+        lv_obj_set_pos(box, 4 + (b % 3) * (BOX_SIZE + 4), 4 + (b / 3) * (BOX_SIZE + 4));
+        lv_obj_set_size(box, BOX_SIZE, BOX_SIZE);
+        lv_obj_set_style_bg_color(box, C_GRID_THIN, 0);
+        lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+        lv_obj_set_scrollable(box, false);
+        lv_obj_set_clickable(box, false);
+    }
+    for (int i = 0; i < 81; i++) {
+        int r = i / 9, c = i % 9;
+        lv_obj_t *cell = lv_obj_create(grid);
+        lv_obj_remove_style_all(cell);
+        lv_obj_set_pos(cell, 4 + (c / 3) * (BOX_SIZE + 4) + (c % 3) * (CELL + 2),
+                             4 + (r / 3) * (BOX_SIZE + 4) + (r % 3) * (CELL + 2));
+        lv_obj_set_size(cell, CELL, CELL);
+        lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
+        lv_obj_set_clickable(cell, true);
+        lv_obj_set_scrollable(cell, false);
+        lv_obj_add_event_cb(cell, cell_click_cb, LV_EVENT_PRESSED, (void *)(intptr_t)i);
+        lv_obj_add_event_cb(cell, cell_draw_cb, LV_EVENT_DRAW_MAIN_END, (void *)(intptr_t)i);
+        lv_obj_t *l = make_label(cell, &font_digits_44, C_TEXT);
+        lv_obj_center(l);
+        g_cells[i] = cell;
+        g_cell_lbl[i] = l;
+    }
+
+    /* pause cover */
+    g_pause_ovl = lv_obj_create(scr_game);
+    lv_obj_remove_style_all(g_pause_ovl);
+    lv_obj_set_pos(g_pause_ovl, GRID_X, GRID_Y);
+    lv_obj_set_size(g_pause_ovl, GRID_SIZE, GRID_SIZE);
+    lv_obj_set_style_bg_color(g_pause_ovl, C_CARD, 0);
+    lv_obj_set_style_bg_opa(g_pause_ovl, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(g_pause_ovl, true);
+    lv_obj_set_hidden(g_pause_ovl, true);
+    lv_obj_add_event_cb(g_pause_ovl, pause_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *pl = make_label(g_pause_ovl, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(pl, LV_SYMBOL_PAUSE "  Paused");
+    lv_obj_align(pl, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_t *pl2 = make_label(g_pause_ovl, &lv_font_montserrat_18, C_MUTED);
+    lv_label_set_text(pl2, "Tap to resume");
+    lv_obj_align(pl2, LV_ALIGN_CENTER, 0, 24);
+
+    /* number pad */
+    for (int d = 1; d <= 9; d++) {
+        lv_obj_t *b = make_btn(scr_game, PAD_X, GRID_Y + 1 + (d - 1) * (PAD_H + PAD_GAP), PAD_W, PAD_H,
+                               DIGITS[d], &lv_font_montserrat_28, pad_click_cb, (void *)(intptr_t)d);
+        g_pad[d - 1] = b;
+        g_pad_cnt[d - 1] = make_label(b, &lv_font_montserrat_12, C_MUTED);
+        lv_obj_align(g_pad_cnt[d - 1], LV_ALIGN_TOP_RIGHT, -6, 4);
+    }
+
+    /* bottom bar */
+    int bx = 8, bw = 118;
+    make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LEFT "  Undo", &lv_font_montserrat_16, undo_cb, NULL);
+    bx += bw + 8;
+    make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_BACKSPACE "  Erase", &lv_font_montserrat_16, erase_cb, NULL);
+    bx += bw + 8;
+    g_notes_btn = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_EDIT "  Notes", &lv_font_montserrat_16, NULL, NULL);
+    lv_obj_set_checkable(g_notes_btn, true);
+    lv_obj_add_event_cb(g_notes_btn, notes_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    bx += bw + 8;
+    make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_REFRESH "  Restart", &lv_font_montserrat_16, restart_cb, NULL);
+    bx += bw + 8;
+    g_status = make_label(scr_game, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_set_width(g_status, SCR_W - 8 - bx);
+    lv_obj_set_style_text_align(g_status, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(g_status, bx, BOT_Y + (BOT_H - 22) / 2);
+
+    /* solved dialog */
+    g_win_ovl = lv_obj_create(scr_game);
+    lv_obj_remove_style_all(g_win_ovl);
+    lv_obj_set_size(g_win_ovl, SCR_W, SCR_W);
+    lv_obj_set_style_bg_color(g_win_ovl, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(g_win_ovl, LV_OPA_60, 0);
+    lv_obj_set_clickable(g_win_ovl, true);
+    lv_obj_set_hidden(g_win_ovl, true);
+    lv_obj_add_event_cb(g_win_ovl, win_hide_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *card = lv_obj_create(g_win_ovl);
+    lv_obj_set_size(card, 460, 330);
+    lv_obj_center(card);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_color(card, C_GREEN, 0);
+    lv_obj_set_style_border_width(card, 2, 0);
+    lv_obj_set_style_radius(card, 16, 0);
+    lv_obj_set_scrollable(card, false);
+
+    lv_obj_t *wt = make_label(card, &lv_font_montserrat_28, C_GREEN);
+    lv_label_set_text(wt, LV_SYMBOL_OK "  Solved!");
+    lv_obj_align(wt, LV_ALIGN_TOP_MID, 0, 8);
+    lv_obj_t *tl = make_label(card, &lv_font_montserrat_16, C_MUTED);
+    lv_label_set_text(tl, "Time to solve");
+    lv_obj_align(tl, LV_ALIGN_TOP_MID, 0, 62);
+    g_win_time = make_label(card, &font_timer_36, C_TEXT);
+    lv_obj_align(g_win_time, LV_ALIGN_TOP_MID, 0, 86);
+    g_win_best = make_label(card, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_align(g_win_best, LV_ALIGN_TOP_MID, 0, 140);
+
+    lv_obj_t *b1 = make_btn(card, 0, 0, 196, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_18, win_list_cb, NULL);
+    lv_obj_align(b1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_set_style_bg_color(b1, lv_color_hex(0x2A2F3D), 0);
+    lv_obj_t *b2 = make_btn(card, 0, 0, 196, 60, "Next  " LV_SYMBOL_RIGHT, &lv_font_montserrat_18, win_next_cb, NULL);
+    lv_obj_align(b2, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    lv_obj_set_style_bg_color(b2, C_ACCENT, 0);
+}
+
+/* ============================================================= list screen */
+
+static void list_btnm_draw_cb(lv_event_t *e)
+{
+    lv_draw_task_t *t = lv_event_get_draw_task(e);
+    lv_draw_dsc_base_t *base = (lv_draw_dsc_base_t *)lv_draw_task_get_draw_dsc(t);
+    if (base->part != LV_PART_ITEMS) return;
+    uint16_t id = puzzle_collections[l_coll].first + base->id1;
+    bool solved = store_best_time(id) != 0;
+    bool active = store_saved_game()->id == id;
+    if (!solved && !active) return;
+    if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_FILL) {
+        lv_draw_fill_dsc_t *f = lv_draw_task_get_fill_dsc(t);
+        if (lv_buttonmatrix_get_selected_button(base->obj) == base->id1 &&
+            lv_obj_has_state(base->obj, LV_STATE_PRESSED)) {
+            return;   /* keep the pressed colour */
+        }
+        f->color = active ? C_LIST_ACTIVE : C_LIST_SOLVED;
+    } else if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_LABEL) {
+        lv_draw_label_dsc_t *l = lv_draw_task_get_label_dsc(t);
+        l->color = lv_color_white();
+    }
+}
+
+static void refresh_list(void)
+{
+    const puzzle_collection_t *pc = &puzzle_collections[l_coll];
+    uint16_t total = 0;
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+        const puzzle_collection_t *p = &puzzle_collections[c];
+        uint16_t n = store_solved_count(p->first, p->count);
+        total += n;
+        lv_label_set_text_fmt(l_coll_cnt[c], "%u/%u", (unsigned)n, (unsigned)p->count);
+        lv_obj_set_style_text_color(l_coll_cnt[c], n == p->count ? C_GREEN : C_MUTED, 0);
+        if (c == l_coll) lv_obj_add_state(l_coll_btn[c], LV_STATE_CHECKED);
+        else lv_obj_remove_state(l_coll_btn[c], LV_STATE_CHECKED);
+    }
+    lv_label_set_text_fmt(l_total, "%u of %u puzzles solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
+
+    /* collection panel */
+    uint32_t sum = 0, best = 0;
+    uint16_t n = 0;
+    for (uint16_t i = 0; i < pc->count; i++) {
+        uint32_t s = store_best_time(pc->first + i);
+        if (!s) continue;
+        n++;
+        sum += s;
+        if (!best || s < best) best = s;
+    }
+    lv_label_set_text(l_name, pc->name);
+    if (n) {
+        char b[16], a[16];
+        fmt_time(b, sizeof(b), best);
+        fmt_time(a, sizeof(a), sum / n);
+        lv_label_set_text_fmt(l_stats, "%u / %u solved   -   fastest %s   -   average %s",
+                              (unsigned)n, (unsigned)pc->count, b, a);
+    } else {
+        lv_label_set_text_fmt(l_stats, "0 / %u solved", (unsigned)pc->count);
+    }
+
+    /* puzzle numbers 1..count, 10 per row */
+    int m = 0;
+    uint16_t cnt = pc->count > MAX_PER_COLL ? MAX_PER_COLL : pc->count;
+    for (int i = 0; i < cnt; i++) {
+        if (i && i % 10 == 0) l_map[m++] = "\n";
+        snprintf(l_labels[i], sizeof(l_labels[i]), "%d", i + 1);
+        l_map[m++] = l_labels[i];
+    }
+    l_map[m] = "";
+    lv_buttonmatrix_set_map(l_btnm, l_map);
+
+    /* resume shortcut */
+    const saved_game_t *s = store_saved_game();
+    lv_obj_set_hidden(l_continue, s->id == STORE_NO_GAME);
+    if (s->id != STORE_NO_GAME) {
+        char name[40], t[16];
+        puzzle_name(s->id, name, sizeof(name));
+        fmt_time(t, sizeof(t), s->elapsed_ms / 1000);
+        lv_label_set_text_fmt(l_continue_lbl, LV_SYMBOL_PLAY "  Continue %s  (%s)", name, t);
+    }
+}
+
+static void show_list(void)
+{
+    if (g_id != STORE_NO_GAME) {
+        l_coll = puzzle_collection_of(g_id);
+        store_set_last_collection((uint8_t)l_coll);
+    }
+    refresh_list();
+    lv_screen_load(scr_list);
+}
+
+static void coll_click_cb(lv_event_t *e)
+{
+    l_coll = (int)(intptr_t)lv_event_get_user_data(e);
+    store_set_last_collection((uint8_t)l_coll);
+    refresh_list();
+}
+
+static void continue_cb(lv_event_t *e)
+{
+    uint16_t id = store_saved_game()->id;
+    if (id != STORE_NO_GAME) start_game(id, true);
+}
+
+static void discard_confirm_cb(lv_event_t *e)
+{
+    store_clear_game();
+    start_game(l_pending_id, false);
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+}
+
+static void resume_other_cb(lv_event_t *e)
+{
+    start_game(store_saved_game()->id, true);
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+}
+
+static void open_puzzle(uint16_t id)
+{
+    const saved_game_t *s = store_saved_game();
+    if (s->id == STORE_NO_GAME || s->id == id) {
+        start_game(id, s->id == id);
+        return;
+    }
+    char cur[40], next[40], t[16], text[200];
+    puzzle_name(s->id, cur, sizeof(cur));
+    puzzle_name(id, next, sizeof(next));
+    fmt_time(t, sizeof(t), s->elapsed_ms / 1000);
+    snprintf(text, sizeof(text), "%s is in progress (%s).\nStarting %s will discard it.", cur, t, next);
+    l_pending_id = id;
+    lv_obj_t *m = make_msgbox("Unfinished game", text);
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, "Resume", resume_other_cb, false);
+    msgbox_button(m, "Discard", discard_confirm_cb, true);
+}
+
+static void btnm_cb(lv_event_t *e)
+{
+    uint32_t idx = lv_buttonmatrix_get_selected_button(l_btnm);
+    if (idx == LV_BUTTONMATRIX_BUTTON_NONE) return;
+    open_puzzle(puzzle_collections[l_coll].first + (uint16_t)idx);
+}
+
+static void build_list(void)
+{
+    scr_list = make_screen();
+
+    lv_obj_t *t = make_label(scr_list, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Sudoku");
+    lv_obj_set_pos(t, 16, 8);
+    l_total = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_pos(l_total, 16, 44);
+
+    l_continue = make_btn(scr_list, SCR_W - 12 - 380, 10, 380, 52, NULL, NULL, continue_cb, NULL);
+    lv_obj_set_style_bg_color(l_continue, C_LIST_ACTIVE, 0);
+    l_continue_lbl = make_label(l_continue, &lv_font_montserrat_16, lv_color_white());
+    lv_obj_center(l_continue_lbl);
+
+    /* collections */
+    lv_obj_t *list = lv_obj_create(scr_list);
+    lv_obj_set_pos(list, 12, 76);
+    lv_obj_set_size(list, 252, SCR_W - 76 - 12);
+    lv_obj_set_style_bg_color(list, C_CARD, 0);
+    lv_obj_set_style_border_width(list, 0, 0);
+    lv_obj_set_style_radius(list, 12, 0);
+    lv_obj_set_style_pad_all(list, 6, 0);
+    lv_obj_set_style_pad_row(list, 4, 0);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+        lv_obj_t *b = lv_button_create(list);
+        lv_obj_set_size(b, LV_PCT(100), 50);
+        lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_CHECKED);
+        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_PRESSED);
+        lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_CHECKED);
+        lv_obj_set_style_bg_color(b, lv_color_hex(0x2A2F3D), LV_STATE_PRESSED);
+        lv_obj_set_style_shadow_width(b, 0, 0);
+        lv_obj_set_style_radius(b, 8, 0);
+        lv_obj_set_style_pad_hor(b, 12, 0);
+        lv_obj_t *n = make_label(b, &lv_font_montserrat_16, C_TEXT);
+        lv_label_set_text(n, puzzle_collections[c].name);
+        lv_obj_align(n, LV_ALIGN_LEFT_MID, 0, 0);
+        l_coll_cnt[c] = make_label(b, &lv_font_montserrat_14, C_MUTED);
+        lv_obj_align(l_coll_cnt[c], LV_ALIGN_RIGHT_MID, 0, 0);
+        lv_obj_add_event_cb(b, coll_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)c);
+        l_coll_btn[c] = b;
+    }
+
+    /* puzzles of the selected collection */
+    int px = 12 + 252 + 12, pw = SCR_W - px - 12;
+    l_name = make_label(scr_list, &lv_font_montserrat_22, C_TEXT);
+    lv_obj_set_pos(l_name, px + 4, 80);
+    l_stats = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_pos(l_stats, px + 4, 110);
+
+    l_btnm = lv_buttonmatrix_create(scr_list);
+    lv_obj_set_pos(l_btnm, px, 136);
+    lv_obj_set_size(l_btnm, pw, SCR_W - 136 - 30);
+    lv_obj_set_style_bg_opa(l_btnm, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(l_btnm, 0, 0);
+    lv_obj_set_style_pad_all(l_btnm, 0, 0);
+    lv_obj_set_style_pad_gap(l_btnm, 5, 0);
+    lv_obj_set_style_bg_color(l_btnm, C_CARD, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(l_btnm, C_ACCENT, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(l_btnm, C_TEXT, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(l_btnm, &lv_font_montserrat_16, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(l_btnm, 0, LV_PART_ITEMS);
+    lv_obj_set_style_radius(l_btnm, 6, LV_PART_ITEMS);
+    lv_obj_set_send_draw_task_events(l_btnm, true);
+    lv_obj_add_event_cb(l_btnm, list_btnm_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
+    lv_obj_add_event_cb(l_btnm, btnm_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    /* attribution */
+    lv_obj_t *src = make_label(scr_list, &lv_font_montserrat_12, C_MUTED);
+    lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
+    lv_obj_align(src, LV_ALIGN_BOTTOM_RIGHT, -14, -2);
+}
+
+/* ============================================================= start */
+
+esp_err_t sudoku_ui_start(void)
+{
+    lv_display_t *disp = lv_display_get_default();
+    lv_theme_t *th = lv_theme_default_init(disp, C_ACCENT, C_ORANGE, true, &lv_font_montserrat_16);
+    lv_display_set_theme(disp, th);
+#if LV_USE_PERF_MONITOR
+    lv_sysmon_hide_performance(NULL);
+#endif
+
+    l_coll = store_last_collection();
+    build_game();
+    build_list();
+    refresh_list();
+    lv_screen_load(scr_list);
+
+    g_last_tick = lv_tick_get();
+    lv_timer_create(tick_cb, 200, NULL);
+    return ESP_OK;
+}
