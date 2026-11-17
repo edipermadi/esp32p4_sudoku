@@ -30,11 +30,18 @@ uint16_t store_solved_count(uint16_t first, uint16_t count);
 
 /* Game in progress (one slot). */
 const saved_game_t *store_saved_game(void);   /* id == STORE_NO_GAME if none */
-void store_save_game(const saved_game_t *g);
-void store_clear_game(void);
+/* Updates the in-memory copy only; store_commit_game() writes it to flash.
+ * A flash write can blink the display, so callers commit it while the
+ * screen is changing anyway. */
+void store_set_game(const saved_game_t *g);
+void store_commit_game(void);
+void store_clear_game(void);                  /* memory + flash, immediately */
 
 uint8_t store_last_collection(void);
 void store_set_last_collection(uint8_t c);
+
+bool store_dark_mode(void);
+void store_set_dark_mode(bool dark);
 
 bool store_sound_enabled(void);
 void store_set_sound_enabled(bool on);

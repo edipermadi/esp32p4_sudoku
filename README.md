@@ -27,7 +27,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã
   - A rising chime when all nine of a digit are placed without conflicts.
   - A fanfare when the puzzle is solved.
   - The speaker button on the list screen turns sound on or off. The setting is saved.
-- **Saved state**: best times and the game in progress (entries, notes and elapsed time) are kept in NVS. While you play, the game is saved every 10 s and again when you leave it.
+- **Light and dark mode**: the **Light** / **Dark** button on the list screen switches between colour schemes. The choice is saved.
+- **Saved state**: best times and the game in progress (entries, notes and elapsed time) are kept in NVS. The game is saved when you leave it or pause, and the best time when you solve. Nothing is written to flash during play: a flash write briefly stalls the display's frame buffer in PSRAM and makes the panel blink. If power is cut mid-game, the moves since the last leave or pause are lost.
 
 ## Building
 
@@ -70,6 +71,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã
 | Pause                           | Tap the timer; tap the board to resume           |
 | Back to the list                | **List** (top left); the game is saved           |
 | Sound on/off                    | Speaker button on the list screen                |
+| Light / dark mode               | **Light** / **Dark** button on the list screen   |
 
 The small number on each pad button is how many of that digit are still to place. Red digits break a row, column or box rule. The puzzle is solved when every cell is filled and nothing is red. Each puzzle has exactly one solution, so the solution is always the intended one.
 
@@ -92,6 +94,10 @@ npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 36 --font $FONT \
     -r 0x20,0x30-0x3A --format lvgl --lv-include lvgl.h -o src/fonts/font_timer_36.c
 ```
 
+## Changing the colours
+
+Both colour schemes are tables at the top of `src/sudoku_ui.c`: `PAL_DARK` and `PAL_LIGHT`. They set the background, text, grid lines and each cell highlight state.
+
 ## Tuning the sounds
 
 The effects are note tables at the top of `src/sfx.c`. Each note has a frequency, a length in ms, a waveform (sine, triangle or square) and a level. `SFX_VOLUME` sets the codec volume, 70 % by default.
@@ -101,7 +107,7 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 ```
 esp32p4_sudoku.ino      setup/loop
 src/sudoku_ui.c         list + game screens
-src/store.cpp           NVS: best times, saved game, last collection, sound on/off
+src/store.cpp           NVS: best times, saved game, last collection, sound on/off, colour scheme
 src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data

@@ -7,7 +7,8 @@
  *   "best" : uint16_t[PUZZLE_COUNT] best time in seconds (0 = unsolved, capped at 65535)
  *   "game" : saved_game_t
  *   "coll" : uint8_t last collection
- *   "snd"  : bool sound effects on */
+ *   "snd"  : bool sound effects on
+ *   "dark" : bool dark colour scheme */
 static Preferences s_prefs;
 static uint16_t s_best[PUZZLE_COUNT];
 static saved_game_t s_game;
@@ -56,10 +57,15 @@ const saved_game_t *store_saved_game(void)
     return &s_game;
 }
 
-void store_save_game(const saved_game_t *g)
+void store_set_game(const saved_game_t *g)
 {
     s_game = *g;
-    s_prefs.putBytes("game", &s_game, sizeof(s_game));
+}
+
+void store_commit_game(void)
+{
+    if (s_game.id == STORE_NO_GAME) s_prefs.remove("game");
+    else s_prefs.putBytes("game", &s_game, sizeof(s_game));
 }
 
 void store_clear_game(void)
@@ -78,6 +84,16 @@ uint8_t store_last_collection(void)
 void store_set_last_collection(uint8_t c)
 {
     if (c != s_prefs.getUChar("coll", 0xFF)) s_prefs.putUChar("coll", c);
+}
+
+bool store_dark_mode(void)
+{
+    return s_prefs.getBool("dark", true);
+}
+
+void store_set_dark_mode(bool dark)
+{
+    s_prefs.putBool("dark", dark);
 }
 
 bool store_sound_enabled(void)
