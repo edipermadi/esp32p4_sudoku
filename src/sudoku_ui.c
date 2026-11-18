@@ -1449,7 +1449,7 @@ static void sd_poll_cb(lv_timer_t *t)
         else if (act == scr_stats) refresh_stats();
     }
 
-    if (u_ovl && usb_msc_ejected()) usb_finish();
+    if (u_ovl && (usb_msc_ejected() || usb_msc_unplugged())) usb_finish();   /* eject, or cable out */
     static store_prefs_t prefs;
     if (u_reloading && stats_db_take_prefs(&prefs)) {
         /* sudoku.db is back (perhaps a restored copy): take everything from it */
@@ -1615,7 +1615,8 @@ static void usb_connect_cb(lv_event_t *e)
     lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(hint, "Eject the drive on the computer when you're done; the game takes the card "
-                            "back by itself. Done does the same, but only tap it once copying has finished.");
+                            "back by itself, also if the USB cable is unplugged. Done does the same, but "
+                            "only tap it once copying has finished.");
     lv_obj_t *d = make_btn(u_ovl, 0, 0, 220, 60, "Done", &lv_font_montserrat_20, usb_done_cb, NULL);
     lv_obj_set_style_bg_color(d, C_ACCENT, 0);
     lv_obj_set_style_text_color(lv_obj_get_child(d, 0), lv_color_white(), 0);

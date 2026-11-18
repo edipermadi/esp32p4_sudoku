@@ -20,6 +20,7 @@ static bool s_started;
 static volatile bool s_enabled;          /* checked by the TinyUSB callbacks */
 static volatile bool s_ejected;
 static volatile bool s_suspended;         /* bus suspended: unplugged, or the host sleeps */
+static volatile uint32_t s_suspended_ms;  /* millis() when it was */
 
 /* TinyUSB passes whole sectors in practice (bufsize = n * 512, offset = 0);
  * reject anything else rather than silently corrupting the card. */
@@ -58,7 +59,7 @@ static bool on_start_stop(uint8_t power_condition, bool start, bool load_eject)
 static void on_usb_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     switch (id) {
-    case ARDUINO_USB_SUSPEND_EVENT: s_suspended = true; break;
+    case ARDUINO_USB_SUSPEND_EVENT: s_suspended = true; s_suspended_ms = millis(); break;
     case ARDUINO_USB_RESUME_EVENT:
     case ARDUINO_USB_STARTED_EVENT: s_suspended = false; break;   /* STARTED = enumerated */
     default: break;
@@ -104,11 +105,19 @@ extern "C" esp_err_t usb_msc_set_enabled(bool on)
     }
     s_enabled = false;
     if (s_started) s_msc.mediaPresent(false);
-    printf("usb_msc: card back to the board%s\n", s_ejected ? " (ejected by the computer)" : "");
+    printf("usb_msc: card back to the board%s\n", s_ejected ? " (ejected by the computer)"
+           : (s_started && (!(bool)USB || s_suspended)) ? " (USB unplugged)" : "");
     return ESP_OK;
 }
 
 extern "C" bool usb_msc_ejected(void)
 {
     return s_ejected;
+}
+
+extern "C" bool usb_msc_unplugged(void)
+{
+    if (!s_started || !s_enabled) return false;
+    if (!(bool)USB) return true;                              /* not enumerated any more */
+    return s_suspended && millis() - s_suspended_ms > 1500;   /* bus quiet: cable out */
 }

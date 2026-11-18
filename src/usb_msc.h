@@ -32,6 +32,11 @@ esp_err_t usb_msc_set_enabled(bool on);
 /* True once the computer has ejected the drive since it was enabled. */
 bool usb_msc_ejected(void);
 
+/* True once the computer has gone away while the drive was enabled: the OTG
+ * port is no longer enumerated, or its bus has been suspended for 1.5 s
+ * (an unplugged cable, or a computer gone to sleep). */
+bool usb_msc_unplugged(void);
+
 #ifdef __cplusplus
 }
 #endif
