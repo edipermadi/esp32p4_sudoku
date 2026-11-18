@@ -4074,7 +4074,7 @@ static void render_stats(const stats_view_t *v, bool from_db)
         /* one row per level */
         lv_label_set_text(x_title, "All levels");
         stats_summary(&v->total, PUZZLE_COUNT);
-        static const int32_t w[] = {140, 66, 72, 72, 82};   /* sums to PANE_W */
+        static const int32_t w[] = {120, 70, 72, 86, 84};   /* sums to PANE_W; every header on one line */
         static const char *const h[] = {"Level", "Solved", "Fastest", "Average", "Mistakes"};
         lv_table_set_row_count(x_table, PUZZLE_COLLECTION_COUNT + KIND_COUNT + 1);
         table_columns(5, w, h);
@@ -4105,7 +4105,7 @@ static void render_stats(const stats_view_t *v, bool from_db)
                               (unsigned)t->solved, t->solved == 1 ? "" : "s", (unsigned)t->perfect,
                               (unsigned long)t->solves);
         lv_label_set_text_fmt(x_sum2, "Fastest %s   -   average %s   -   mistakes %s per puzzle", f, a, m);
-        static const int32_t w[] = {140, 66, 72, 72, 82};
+        static const int32_t w[] = {120, 70, 72, 86, 84};
         static const char *const h[] = {"Level", "Solved", "Fastest", "Average", "Mistakes"};
         lv_table_set_row_count(x_table, GEN_LEVELS + 1);
         table_columns(5, w, h);
@@ -6656,6 +6656,10 @@ static void build_home(void)
     lv_obj_align(src, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
 
+/* the Statistics screen, top down: title and (i); player, Chart; levels | table */
+#define X_ROW_Y   72                                /* the row under the title */
+#define X_BODY_Y  (X_ROW_Y + 52 + 12)               /* the level column and the pane */
+
 static void build_stats(void)
 {
     scr_stats = make_screen();
@@ -6664,12 +6668,15 @@ static void build_stats(void)
     lv_obj_t *t = make_label(scr_stats, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Statistics");
     lv_obj_set_pos(t, 150, 20);
-    lv_obj_t *info = make_btn(scr_stats, 300, 10, 52, 52, SYMBOL_INFO, &font_icons_24, stats_info_cb, NULL);
+    lv_obj_t *info = make_btn(scr_stats, SCR_W - 12 - 52, 10, 52, 52, SYMBOL_INFO, &font_icons_24, stats_info_cb,
+                              NULL);                 /* top right, on the title's line */
     lv_obj_set_style_bg_opa(info, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(info, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_set_style_text_color(lv_obj_get_child(info, 0), C_ACCENT, 0);
 
     lv_obj_t *list = make_coll_column(scr_stats);
+    lv_obj_set_pos(list, 12, X_BODY_Y);
+    lv_obj_set_size(list, COLL_W, SCR_W - X_BODY_Y - 12);
     x_btn[0] = make_coll_btn(list, "All levels", &x_name_lbl[0], &x_cnt_lbl[0], stats_row_cb, 0);
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
         x_btn[c + 1] = make_coll_btn(list, puzzle_collections[c].name, &x_name_lbl[c + 1], &x_cnt_lbl[c + 1],
@@ -6683,8 +6690,8 @@ static void build_stats(void)
     int px = PANE_X, pw = PANE_W;
     /* top bar, right: whose statistics, as a dropdown */
     x_player_dd = lv_dropdown_create(scr_stats);
-    lv_obj_set_pos(x_player_dd, SCR_W - 12 - 250, 10);
-    lv_obj_set_size(x_player_dd, 250, 52);
+    lv_obj_set_pos(x_player_dd, 12, X_ROW_Y);          /* whose statistics: first in the row */
+    lv_obj_set_size(x_player_dd, 320, 52);
     lv_obj_set_style_text_font(x_player_dd, &font_icons_20, 0);
     lv_obj_set_style_text_color(x_player_dd, C_TEXT, 0);
     lv_obj_set_style_bg_color(x_player_dd, C_CARD, 0);
@@ -6706,15 +6713,15 @@ static void build_stats(void)
     lv_obj_add_event_cb(x_player_dd, stats_player_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
     stats_player_dd_update();
     x_title = make_label(scr_stats, &lv_font_montserrat_22, C_TEXT);
-    lv_obj_set_pos(x_title, px + 4, 80);
+    lv_obj_set_pos(x_title, px + 4, X_BODY_Y + 4);
     x_sum1 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
-    lv_obj_set_pos(x_sum1, px + 4, 110);
+    lv_obj_set_pos(x_sum1, px + 4, X_BODY_Y + 34);
     x_sum2 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
-    lv_obj_set_pos(x_sum2, px + 4, 130);
+    lv_obj_set_pos(x_sum2, px + 4, X_BODY_Y + 54);
 
     x_table = lv_table_create(scr_stats);
-    lv_obj_set_pos(x_table, px, 158);
-    lv_obj_set_size(x_table, pw, SCR_W - 158 - 12);
+    lv_obj_set_pos(x_table, px, X_BODY_Y + 82);
+    lv_obj_set_size(x_table, pw, SCR_W - X_BODY_Y - 82 - 12);
     lv_obj_set_style_bg_color(x_table, C_CARD, 0);
     lv_obj_set_style_border_width(x_table, 0, 0);
     lv_obj_set_style_radius(x_table, 12, 0);
@@ -6734,15 +6741,15 @@ static void build_stats(void)
 
     x_empty = make_label(scr_stats, &lv_font_montserrat_18, C_MUTED);
     lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
-    lv_obj_set_pos(x_empty, px + 4, 180);
+    lv_obj_set_pos(x_empty, px + 4, X_BODY_Y + 104);
 
     /* Chart / Table switch (top right of the pane) and the chart card in the table's place */
-    x_chart_btn = make_btn(scr_stats, SCR_W - 12 - 130, 68, 130, 40, SYMBOL_CHART "  Chart", &font_icons_20,
+    x_chart_btn = make_btn(scr_stats, SCR_W - 12 - 160, X_ROW_Y, 160, 52, SYMBOL_CHART "  Chart", &font_icons_20,
                            chart_btn_cb, NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(x_chart_btn, 0), C_ACCENT, 0);
     x_chart = lv_obj_create(scr_stats);
-    lv_obj_set_pos(x_chart, px, 158);
-    lv_obj_set_size(x_chart, pw, SCR_W - 158 - 12);
+    lv_obj_set_pos(x_chart, px, X_BODY_Y + 82);
+    lv_obj_set_size(x_chart, pw, SCR_W - X_BODY_Y - 82 - 12);
     lv_obj_set_style_bg_color(x_chart, C_CARD, 0);
     lv_obj_set_style_border_width(x_chart, 0, 0);
     lv_obj_set_style_radius(x_chart, 12, 0);
@@ -6752,7 +6759,7 @@ static void build_stats(void)
     lv_obj_set_style_pad_row(x_chart, 10, 0);
     x_plot = lv_obj_create(x_chart);
     lv_obj_remove_style_all(x_plot);
-    lv_obj_set_size(x_plot, LV_PCT(100), 380);
+    lv_obj_set_size(x_plot, LV_PCT(100), 320);       /* (the trend line under it) */
     lv_obj_add_event_cb(x_plot, plot_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
     x_trend = make_label(x_chart, &lv_font_montserrat_16, C_TEXT);
     lv_obj_set_width(x_trend, LV_PCT(100));
