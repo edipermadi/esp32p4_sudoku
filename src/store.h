@@ -74,6 +74,8 @@ typedef struct {
     uint8_t last_collection;
     bool dark_mode, sound;
     uint8_t screen_timeout_min;
+    uint8_t brightness;                       /* backlight, 10..100 % */
+    uint8_t volume;                           /* speaker, 0..100 % */
     char timezone[STORE_TZ_LEN];
     int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
     char player_name[STORE_NAME_LEN];
@@ -107,6 +109,12 @@ void store_set_timezone(const char *name);
 /* Minutes without a touch before the screen turns off; 0 = never. */
 uint8_t store_screen_timeout_min(void);
 void store_set_screen_timeout_min(uint8_t min);
+
+/* Backlight 10..100 % and speaker volume 0..100 %. */
+uint8_t store_brightness(void);
+void store_set_brightness(uint8_t percent);
+uint8_t store_volume(void);
+void store_set_volume(uint8_t percent);
 
 #ifdef __cplusplus
 }

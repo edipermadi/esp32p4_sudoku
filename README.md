@@ -52,7 +52,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
   - `level_stats` (view): per player and level: solved, solves, fastest, average, average mistakes and solves without mistakes.
   - `saved_game`: each player's unfinished game (one row per player): `cells` holds 81 digits row by row (0 = empty, givens included), `notes` 81 little-endian 16-bit masks (bit d = pencil mark d), plus `elapsed_ms`, `mistakes`, `hints`, `moves` (the move log so far), `started_at` and `saved_at`. It is saved after every move.
   - `generated`: puzzles made with **New puzzle**: `id` (their puzzle number elsewhere is 2000 + id), `level` (0 Easy, 1 Medium, 2 Hard, 3 Expert), `givens` (81 digits row by row, 0 = empty) and `created_at`. Their solves are logged with level "Generated Easy" etc.
-  - `settings`: `dark_mode`, `sound`, `screen_off_minutes`, `time_zone`, `last_level`, `current_player` and `migrated_from_nvs`.
+  - `settings`: `dark_mode`, `sound`, `brightness` (10–100), `volume` (0–100), `screen_off_minutes`, `time_zone`, `last_level`, `current_player` and `migrated_from_nvs`.
 
   ```
   sqlite3 -box sudoku.db "SELECT level, number, seconds, mistakes, datetime(started_at, 'unixepoch', 'localtime') AS started, datetime(finished_at, 'unixepoch', 'localtime') AS finished FROM solves ORDER BY id DESC LIMIT 10"
@@ -116,6 +116,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 | Watch a recorded game again     | **Gameplays** on the home screen, tap a game     |
 | See solve times and mistakes    | **Statistics** on the home screen; pick a level on the left |
 | Sound on/off                    | **Settings → Sound effects**                     |
+| Screen brightness               | **Settings → Brightness** (10–100 %)             |
+| Speaker volume                  | **Settings → Volume** (0–100 %; a tick plays at the new level) |
 | Light / dark mode               | **Settings → Dark mode**                         |
 | Screen timeout                  | **Settings → Screen off after**                  |
 | Connect to Wi-Fi                | **Settings → Wi-Fi**, switch on, tap a network   |

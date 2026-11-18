@@ -22,7 +22,7 @@
  *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
  *   generated(id, level, givens, created_at): puzzles made on the board;
  *       their puzzle id elsewhere is 2000 + id, level "Generated Easy" etc.
- *   settings(key, value): dark_mode, sound, screen_off_minutes, time_zone,
+ *   settings(key, value): dark_mode, sound, screen_off_minutes, brightness, volume, time_zone,
  *       last_level, current_player, and migrated_from_nvs (set when the database is first
  *       filled: from what the board has, or, after a format, with just the
  *       current settings and game)

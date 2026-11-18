@@ -30,6 +30,8 @@ static const store_prefs_t DEFAULT_PREFS = {
     .dark_mode = true,
     .sound = true,
     .screen_timeout_min = 5,
+    .brightness = 100,
+    .volume = 70,
     .timezone = "UTC",
     .player_id = 0,
     .player_name = "Player 1",
@@ -272,6 +274,28 @@ void store_set_timezone(const char *name)
 {
     snprintf(s_p.timezone, sizeof(s_p.timezone), "%s", name);
     stats_db_set_text("time_zone", s_p.timezone);
+}
+
+uint8_t store_brightness(void)
+{
+    return s_p.brightness < 10 ? 10 : (s_p.brightness > 100 ? 100 : s_p.brightness);
+}
+
+void store_set_brightness(uint8_t percent)
+{
+    s_p.brightness = percent;
+    stats_db_set_int("brightness", percent);
+}
+
+uint8_t store_volume(void)
+{
+    return s_p.volume > 100 ? 100 : s_p.volume;
+}
+
+void store_set_volume(uint8_t percent)
+{
+    s_p.volume = percent;
+    stats_db_set_int("volume", percent);
 }
 
 uint8_t store_screen_timeout_min(void)

@@ -194,6 +194,7 @@ static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 
 /* settings screen */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
+static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
 static lv_obj_t *st_sd_btn, *st_sd_hint;
 static lv_obj_t *u_ovl;                   /* "USB drive" panel while the computer has the card */
@@ -2275,6 +2276,49 @@ static void sound_sw_cb(lv_event_t *e)
     if (on) sfx_play(SFX_TOUCH);   /* the tick for this press was skipped while muted */
 }
 
+/* brightness and volume: applied while the slider moves, saved when it's let go */
+static void bright_sl_cb(lv_event_t *e)
+{
+    int v = lv_slider_get_value(st_bright_sl);
+    bsp_display_brightness_set(v);
+    lv_label_set_text_fmt(st_bright_lbl, "%d%%", v);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_brightness((uint8_t)v);
+}
+
+static void vol_sl_cb(lv_event_t *e)
+{
+    int v = lv_slider_get_value(st_vol_sl);
+    bsp_audio_set_volume(v);
+    lv_label_set_text_fmt(st_vol_lbl, "%d%%", v);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
+        store_set_volume((uint8_t)v);
+        sfx_play(SFX_TOUCH);                       /* hear the new level */
+    }
+}
+
+/* a slider + its value on the right of a settings row */
+static lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_cb_t cb, lv_obj_t **lbl)
+{
+    lv_obj_t *sl = lv_slider_create(row);
+    lv_obj_set_size(sl, 220, 14);
+    lv_obj_align(sl, LV_ALIGN_RIGHT_MID, -14, 0);
+    lv_slider_set_range(sl, min, max);
+    lv_slider_set_value(sl, value, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(sl, C_CARD2, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(sl, C_ACCENT, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(sl, C_ACCENT, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(sl, 8, LV_PART_KNOB);              /* a knob a finger can find */
+    lv_obj_set_ext_click_area(sl, 24);
+    lv_obj_add_event_cb(sl, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(sl, cb, LV_EVENT_RELEASED, NULL);
+    *lbl = make_label(row, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_set_width(*lbl, 56);
+    lv_obj_set_style_text_align(*lbl, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_label_set_text_fmt(*lbl, "%d%%", value);
+    lv_obj_align(*lbl, LV_ALIGN_RIGHT_MID, -250, 0);
+    return sl;
+}
+
 static void sleep_dd_cb(lv_event_t *e)
 {
     uint32_t sel = lv_dropdown_get_selected(st_sleep_dd);
@@ -2502,6 +2546,8 @@ static void apply_loaded_prefs(void)
     g_id = STORE_NO_GAME;
     p_count = -1;
     sfx_set_enabled(store_sound_enabled());
+    bsp_audio_set_volume(store_volume());
+    bsp_display_brightness_set(store_brightness());
     tz_apply(store_timezone());
     s_sleep_min = store_screen_timeout_min();
     l_coll = store_last_collection();
@@ -3777,8 +3823,14 @@ static void build_settings(void)
     lv_obj_t *r = settings_row(col, "Dark mode", "Light text on a dark background");
     st_theme_sw = settings_switch(r, s_dark, theme_sw_cb);
 
+    r = settings_row(col, "Brightness", "Screen backlight");
+    st_bright_sl = settings_slider(r, 10, 100, store_brightness(), bright_sl_cb, &st_bright_lbl);
+
     r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
     st_sound_sw = settings_switch(r, sfx_enabled(), sound_sw_cb);
+
+    r = settings_row(col, "Volume", "Speaker loudness");
+    st_vol_sl = settings_slider(r, 0, 100, store_volume(), vol_sl_cb, &st_vol_lbl);
 
     r = settings_row(col, "Screen off after", "Without a touch. The game pauses; tap to wake.");
     st_sleep_dd = lv_dropdown_create(r);
@@ -3923,7 +3975,7 @@ static void saver_wake_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSED) {
-        bsp_display_brightness_set(100);
+        bsp_display_brightness_set(store_brightness());
     } else if (s_saver) {
         /* removed only once the finger is up, so the waking tap reaches nothing below */
         lv_obj_delete_async(s_saver);
@@ -4009,6 +4061,8 @@ esp_err_t sudoku_ui_start(void)
     wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
 
     sfx_set_enabled(store_sound_enabled());
+    bsp_audio_set_volume(store_volume());
+    bsp_display_brightness_set(store_brightness());
     for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in)) {
         lv_indev_add_event_cb(in, touch_sound_cb, LV_EVENT_PRESSED, NULL);
     }
