@@ -36,6 +36,7 @@ The port also carries the firmware's log (`printf`, ESP-IDF `E (...)` lines, cra
 | Command | Answer | Notes |
 |---|---|---|
 | `ping` | `OK pong` | |
+| `heap [1]` | `HEAP internal <free>, largest <block>, min ever <n>; dma <free>, largest <block>; psram <free>, largest <block>`, then `OK heap` | Free memory in bytes. With `1`, ESP-IDF's per-region summary follows (`heap_caps_print_heap_info`). Internal RAM is the scarce one: the MP4 export needs one free block of about 52 KB. |
 | `baud <n>` | `OK baud <n>` | Sent at the old speed. The board then switches its port to `n` (≥ 9600). Switch the host side too, wait about 100 ms, flush the input, and `ping` to check. `tools/devctl.py` uses 921600. The speed lasts until the next reset. |
 
 ### Touch and screen

@@ -13,6 +13,7 @@
  *   press <x> <y> / move <x> <y> / release    by hand
  *   wait <ms>                 let the UI run (animations, the database)
  *   screenoff                 turn the screen off as its timeout does (the next tap wakes it)
+ *   heap [1]                  -> "HEAP internal <free>, largest <n>, ...; dma ...; psram ..." (1: per region too)
  *   shot                      the screen, as lines (below)
  *
  * Files on the microSD card (paths from its root, %XX for spaces):

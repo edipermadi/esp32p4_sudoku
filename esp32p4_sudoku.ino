@@ -54,12 +54,14 @@ static const char *abnormal_reset_text(esp_reset_reason_t r)
 
 void setup()
 {
-  /* malloc() of 64 bytes or more goes to PSRAM (the core default is 4096):
+  /* malloc() of 16 bytes or more goes to PSRAM (the core default is 4096):
    * LVGL's widgets and SQLite then stay out of the 768 KB internal RAM, which
    * the Wi-Fi link (ESP-Hosted DMA buffers) and the H.264 encoder (one ~52 KB
    * block for MP4 export) need. Wi-Fi, lwIP, USB and FreeRTOS ask for internal
-   * RAM explicitly and are not affected. */
-  heap_caps_malloc_extmem_enable(64);
+   * RAM explicitly and are not affected. (64 was enough once; with the screens
+   * grown, LVGL's many 16-63 byte pieces filled internal RAM: 6000+ blocks,
+   * the largest free block 31 KB, and MP4 export failed.) */
+  heap_caps_malloc_extmem_enable(16);
   Serial.setRxBufferSize(2048);      /* devctl uploads: 12 data lines between ACKs */
   Serial.begin(115200);
   delay(500);

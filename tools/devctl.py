@@ -13,6 +13,7 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     press X Y | move X Y | release [X Y]
     wait MS                 let the UI run
     screenoff               turn the screen off as its timeout does (the next tap wakes it)
+    heap [1]                free memory (internal, DMA, PSRAM); 1: per heap region too
     shot FILE.png [--blur X1,Y1,X2,Y2 ...]
                             save the screen as a PNG; --blur pixelates those
                             rectangles first (e.g. a network name)
@@ -330,6 +331,17 @@ def run(board, words):
         board.ser.write((" ".join([cmd] + [enc(w) for w in words[1:need]]) + "\n").encode())
         board.wait_for("OK " + cmd, 20, fail="ERR")
         print("ok:", " ".join(words[:need]))
+    elif cmd == "heap":
+        board.ser.write((" ".join(words) + "\n").encode())
+        end = time.time() + 10
+        while time.time() < end:
+            line = board.readline(5)
+            if line is None:
+                break
+            if line.startswith("OK heap"):
+                break
+            if line.startswith("HEAP") or len(words) > 1:
+                print(line)
     elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "ping", "screenoff"):
         timeout = 20 + (int(words[1]) / 1000 if cmd == "wait" and len(words) > 1 else 0)
         board.command(" ".join(words), timeout=timeout)

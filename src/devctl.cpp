@@ -472,6 +472,16 @@ static void run(char *line)
         pump(a[0] > 0 ? (uint32_t)a[0] : 0);
     } else if (!strcmp(cmd, "shot")) {
         shot();
+    } else if (!strcmp(cmd, "heap")) {           /* free memory: internal (and its DMA part), PSRAM */
+        Serial.printf("HEAP internal %u free, largest %u, min ever %u; dma %u, largest %u; psram %u free, largest %u\n",
+                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+                      (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
+                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
+                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        if (n >= 1 && a[0]) heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);   /* "heap 1": per region */
     } else if (!strcmp(cmd, "screenoff")) {
         sudoku_ui_screen_off();                     /* as the timeout: black, then the lock screen if on */
         pump(200);
