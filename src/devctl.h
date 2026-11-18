@@ -3,6 +3,7 @@
  * Serial control for documentation and testing: commands on the USB-UART
  * port (Serial, a line each) take screenshots and play touches, so screens
  * can be captured by a script (tools/devctl.py). Runs in the LVGL task.
+ * The full protocol: docs/devctl-protocol.md (keep the two in step).
  *
  *   ping                      -> "OK pong"
  *   baud <n>                  -> "OK baud <n>", then the port runs at n baud
@@ -13,6 +14,15 @@
  *   wait <ms>                 let the UI run (animations, the database)
  *   screenoff                 turn the screen off as its timeout does (the next tap wakes it)
  *   shot                      the screen, as lines (below)
+ *
+ * Files on the microSD card (paths from its root, %XX for spaces):
+ *   ls [dir]                  -> "L d 0 <name>" / "L f <size> <name>" lines
+ *   get <path>                -> "FILE BEGIN <size>", "F <n> <base64>" lines, "FILE END <bytes> <crc32>"
+ *   put <path> <size> <crc32> -> "READY"; then "D <base64 of up to 96 bytes>" lines, with
+ *                                "ACK <bytes>" after every 12 (send the next 12 then); written
+ *                                to <path>.part, renamed to <path> once the CRC matches
+ *   mv <from> <to>, rm <path> (a file or an empty folder), mkdir <path>
+ * sudoku.db is open: it can be read, not replaced, renamed or deleted.
  *
  * Every command answers "OK <command>" (or "ERR <why>") once done.
  *

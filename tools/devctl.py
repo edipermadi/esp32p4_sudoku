@@ -18,6 +18,20 @@ Commands (on the command line, or one per line in a script; # starts a comment):
                             rectangles first (e.g. a network name)
     ping
 
+Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
+    ls [DIR]                list a folder (the root by default)
+    get REMOTE [LOCAL]      download (LOCAL defaults to the file's name, here)
+    put LOCAL [REMOTE]      upload (REMOTE defaults to LOCAL's name, in the root);
+                            it lands as REMOTE.part, renamed once its CRC checks out
+    mv FROM TO              rename or move (TO must not exist)
+    rm PATH                 delete a file or an empty folder
+    mkdir PATH              make a folder
+sudoku.db is open while the board runs: get works, put/mv/rm on it don't
+(use Settings > Data > USB drive). Paths with spaces: quote them.
+
+    python3 tools/devctl.py --port /dev/ttyACM1 "put build/esp32p4_sudoku.ino.bin update.bin"
+    python3 tools/devctl.py --port /dev/ttyACM1 "get sudoku.db backup.db; ls puzzles"
+
 Opening the port resets the board (its auto-reset circuit), so a run starts
 from a freshly booted Home screen: the tool waits for "DEVCTL ready" first
 (--no-wait skips that, for a board that didn't reset). Then it switches to
@@ -77,7 +91,7 @@ class Board:
                 return line
         return None
 
-    def wait_for(self, text, timeout):
+    def wait_for(self, text, timeout, fail=None):
         end = time.time() + timeout
         while time.time() < end:
             line = self.readline(end - time.time())
@@ -87,7 +101,81 @@ class Board:
                 print("  <", line)
             if text in line:
                 return line
+            if fail and line.startswith(fail):
+                sys.exit(line)
         sys.exit("timed out waiting for %r (is the board on %s?)" % (text, self.ser.port))
+
+    # ---- files on the card
+
+    def ls(self, path):
+        self.ser.write(("ls %s\n" % enc(path)).encode())
+        rows = []
+        end = time.time() + 20
+        while time.time() < end:
+            line = self.readline(10)
+            if line is None:
+                break
+            if line.startswith("L "):
+                _, kind, size, name = line.split(" ", 3)
+                rows.append((kind, int(size), dec(name)))
+            elif line.startswith("OK ls"):
+                for kind, size, name in sorted(rows, key=lambda r: (r[0] != "d", r[2].lower())):
+                    print("%-4s %10s  %s" % ("dir" if kind == "d" else "", "" if kind == "d" else size, name))
+                return
+            elif line.startswith("ERR"):
+                sys.exit(line)
+        sys.exit("ls: no answer")
+
+    def get(self, remote, local):
+        self.ser.write(("get %s\n" % enc(remote)).encode())
+        self.wait_for("FILE BEGIN", 20, fail="ERR")
+        chunks, end_line = {}, None
+        t0 = time.time()
+        while True:
+            line = self.readline(10)
+            if line is None:
+                sys.exit("get: the transfer stopped")
+            if line.startswith("F "):
+                parts = line.split(" ", 2)
+                if len(parts) == 3 and parts[1].isdigit():
+                    try:
+                        chunks[int(parts[1])] = base64.b64decode(parts[2])
+                    except Exception:
+                        pass                       # a log line got in the way: the CRC will tell
+            elif line.startswith("FILE END"):
+                end_line = line
+            elif line.startswith("OK get"):
+                break
+            elif self.verbose:
+                print("  <", line)
+        _, _, size, crc = end_line.split()
+        data = b"".join(chunks[i] for i in sorted(chunks))
+        if len(data) != int(size) or zlib.crc32(data) != int(crc, 16):
+            sys.exit("get: %s arrived garbled (try again)" % remote)
+        with open(local, "wb") as f:
+            f.write(data)
+        dt = max(time.time() - t0, 1e-3)
+        print("got %s -> %s, %d bytes (%.0f KB/s)" % (remote, local, len(data), len(data) / 1024 / dt))
+
+    def put(self, local, remote, window=12, chunk=96):
+        with open(local, "rb") as f:
+            data = f.read()
+        self.ser.write(("put %s %d %08x\n" % (enc(remote), len(data), zlib.crc32(data))).encode())
+        self.wait_for("READY", 20, fail="ERR")
+        t0 = time.time()
+        lines = [data[i:i + chunk] for i in range(0, len(data), chunk)]
+        for i in range(0, len(lines), window):
+            batch = lines[i:i + window]
+            self.ser.write(b"".join(b"D " + base64.b64encode(c) + b"\n" for c in batch))
+            if i + window < len(lines):
+                self.wait_for("ACK", 20, fail="ERR")
+            if sys.stdout.isatty():
+                print("\r  %d / %d bytes" % (min((i + window) * chunk, len(data)), len(data)), end="", flush=True)
+        if sys.stdout.isatty():
+            print()
+        self.wait_for("OK put", 60, fail="ERR")
+        dt = max(time.time() - t0, 1e-3)
+        print("put %s -> %s, %d bytes (%.0f KB/s)" % (local, remote, len(data), len(data) / 1024 / dt))
 
     def command(self, cmd, expect=None, timeout=20):
         if self.verbose:
@@ -132,6 +220,29 @@ class Board:
                     return
             print("screenshot garbled, retrying (%d)" % (attempt + 1))
         sys.exit("couldn't get a clean screenshot")
+
+
+def enc(path):
+    """a path as one word for the board: %XX for spaces, '%' and other unusual bytes"""
+    out = []
+    for b in path.encode("utf-8"):
+        out.append("%%%02X" % b if b <= 32 or b == 37 or b >= 127 else chr(b))
+    return "".join(out)
+
+
+def dec(word):
+    out, i, raw = bytearray(), 0, word.encode("latin-1", "replace")
+    while i < len(raw):
+        if raw[i] == 37 and i + 3 <= len(raw):
+            try:
+                out.append(int(raw[i + 1:i + 3], 16))
+                i += 3
+                continue
+            except ValueError:
+                pass
+        out.append(raw[i])
+        i += 1
+    return out.decode("utf-8", "replace")
 
 
 def decode_rle(data, w, h):
@@ -202,6 +313,23 @@ def run(board, words):
         elif rest:
             sys.exit("unknown shot option: %s" % " ".join(rest))
         board.shot(words[1], blur)
+    elif cmd == "ls":
+        board.ls(words[1] if len(words) > 1 else "")
+    elif cmd == "get":
+        if len(words) < 2:
+            sys.exit("get REMOTE [LOCAL]")
+        board.get(words[1], words[2] if len(words) > 2 else os.path.basename(words[1].rstrip("/")))
+    elif cmd == "put":
+        if len(words) < 2:
+            sys.exit("put LOCAL [REMOTE]")
+        board.put(words[1], words[2] if len(words) > 2 else os.path.basename(words[1]))
+    elif cmd in ("mv", "rm", "mkdir"):
+        need = 3 if cmd == "mv" else 2
+        if len(words) < need:
+            sys.exit("%s needs %d path%s" % (cmd, need - 1, "s" if need > 2 else ""))
+        board.ser.write((" ".join([cmd] + [enc(w) for w in words[1:need]]) + "\n").encode())
+        board.wait_for("OK " + cmd, 20, fail="ERR")
+        print("ok:", " ".join(words[:need]))
     elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "ping", "screenoff"):
         timeout = 20 + (int(words[1]) / 1000 if cmd == "wait" and len(words) > 1 else 0)
         board.command(" ".join(words), timeout=timeout)

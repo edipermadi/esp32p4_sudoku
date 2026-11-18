@@ -237,6 +237,27 @@ python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
 - `docs/screenshots.txt` makes the pictures above: it only looks at screens (opens Easy #1 without playing it, changes nothing) and writes `docs/screenshots/*.png`.
 - The protocol, for other tools: send a command line, wait for `OK <command>` (or `ERR ...`). `shot` answers `SHOT BEGIN 720 720`, lines `S <n> <base64>`, `SHOT END <bytes> <crc32 hex>`, then `OK shot`.
 
+The wire protocol (lines, answers, the screenshot and file formats, a minimal client) is in [docs/devctl-protocol.md](docs/devctl-protocol.md).
+
+### Files on the microSD card over serial
+
+The same port and tool reach the card's files, without taking the card out or using the USB drive (the game keeps running):
+
+```
+python3 tools/devctl.py --port /dev/ttyACM1 ls                       # the card's root
+python3 tools/devctl.py --port /dev/ttyACM1 "ls puzzles"
+python3 tools/devctl.py --port /dev/ttyACM1 "get sudoku.db backup.db"   # a backup
+python3 tools/devctl.py --port /dev/ttyACM1 "mkdir puzzles; put mine.sdm puzzles/mine.sdm"
+python3 tools/devctl.py --port /dev/ttyACM1 "put build/esp32p4_sudoku.ino.bin update.bin"   # then Settings > Data > Firmware update
+python3 tools/devctl.py --port /dev/ttyACM1 "mv 'old name.txt' new.txt; rm new.txt"
+```
+
+- `ls [DIR]`, `get REMOTE [LOCAL]` (LOCAL defaults to the file's name), `put LOCAL [REMOTE]` (REMOTE defaults to LOCAL's name in the root), `mv FROM TO` (TO must not exist), `rm PATH` (a file or an empty folder), `mkdir PATH`. Paths start at the card's root; quote the ones with spaces. No `.` or `..` parts.
+- Transfers run at about 50 KB/s (a 2.2 MB firmware takes about 45 s); the screen doesn't respond while one runs. Each is checked with a CRC-32: a download that arrives garbled is not saved, and an upload is written to `REMOTE.part`, which only replaces `REMOTE` once its CRC matches (a broken upload leaves the old file as it was).
+- `sudoku.db` is open while the board runs, so it can be downloaded but not replaced, renamed or deleted over serial (to restore a backup, use **Settings → Data → USB drive**, which closes it first). A download is a copy of the moment: taken while a game is being saved, it may miss that save.
+- On the board, the commands are lines on the serial port (`src/devctl.h` has the protocol): a download comes as base64 lines like a screenshot; an upload sends base64 lines with an `ACK` from the board after every 12, so its 2 KB receive buffer never overflows.
+
+
 ## Changing the colours
 
 Both colour schemes are tables at the top of `src/sudoku_ui.c`: `PAL_DARK` and `PAL_LIGHT`. They set the background, text, grid lines and each cell highlight state.

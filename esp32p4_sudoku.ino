@@ -60,6 +60,7 @@ void setup()
    * block for MP4 export) need. Wi-Fi, lwIP, USB and FreeRTOS ask for internal
    * RAM explicitly and are not affected. */
   heap_caps_malloc_extmem_enable(64);
+  Serial.setRxBufferSize(2048);      /* devctl uploads: 12 data lines between ACKs */
   Serial.begin(115200);
   delay(500);
   Serial.println("ESP32-P4 Sudoku");
