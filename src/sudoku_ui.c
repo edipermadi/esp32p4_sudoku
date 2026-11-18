@@ -136,6 +136,7 @@ static const char *const DIGITS[10] = {"", "1", "2", "3", "4", "5", "6", "7", "8
 typedef struct {
     uint8_t  val[81];
     uint16_t notes[81];
+    uint8_t  colors[81];         /* cell colours, 0 = none, 1..CELL_COLORS (long press a cell) */
 } board_t;
 
 static uint16_t g_id = STORE_NO_GAME;
@@ -237,6 +238,7 @@ static int       g_layout_var = -1;     /* variant the board and pad are laid ou
 static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
 static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
 static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
+static lv_obj_t *g_win_h2h;      /* Solved dialog: how others did on this puzzle */
 static lv_obj_t *g_undo_btn, *g_redo_btn;
 
 static void show_list(void);
@@ -290,6 +292,7 @@ typedef struct {
     uint8_t level;
     uint8_t regions[81];                /* Jigsaw: the region map */
     char cages[STATS_CAGES_LEN];        /* Killer: the cages (sudoku_cages_text()), "" = none */
+    char marks[82];                     /* Even-Odd / Consecutive: the marks (sudoku_marks_text()), "" = none */
     uint8_t givens[81];
     char day[12];                       /* daily puzzle's date, "" otherwise */
 } gen_cache_t;
@@ -298,7 +301,7 @@ static int s_gen_cache_next;
 static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
 
 static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions,
-                          const char *cages, const char *day)
+                          const char *cages, const char *marks, const char *day)
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) return;
@@ -307,6 +310,7 @@ static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t giv
     if (regions) memcpy(s_gen_cache[s_gen_cache_next].regions, regions, 81);
     else memset(s_gen_cache[s_gen_cache_next].regions, 0, 81);
     snprintf(s_gen_cache[s_gen_cache_next].cages, STATS_CAGES_LEN, "%s", cages ? cages : "");
+    snprintf(s_gen_cache[s_gen_cache_next].marks, 82, "%s", marks ? marks : "");
     s_gen_cache[s_gen_cache_next].variant = (uint8_t)variant;
     s_gen_cache[s_gen_cache_next].level = (uint8_t)level;
     memcpy(s_gen_cache[s_gen_cache_next].givens, givens, 81);
@@ -315,14 +319,15 @@ static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t giv
 }
 
 /* givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown */
-static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char *cages, int *variant, int *level,
-                            char day[12])
+static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char *cages, char *marks, int *variant,
+                            int *level, char day[12])
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) {
             if (givens) memcpy(givens, s_gen_cache[i].givens, 81);
             if (regions) memcpy(regions, s_gen_cache[i].regions, 81);
             if (cages) snprintf(cages, STATS_CAGES_LEN, "%s", s_gen_cache[i].cages);
+            if (marks) snprintf(marks, 82, "%s", s_gen_cache[i].marks);
             if (variant) *variant = s_gen_cache[i].variant;
             if (level) *level = s_gen_cache[i].level;
             if (day) snprintf(day, 12, "%s", s_gen_cache[i].day);
@@ -335,9 +340,11 @@ static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char
     if (!cg && !(cg = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return false;
     int lv, var = VAR_CLASSIC;
     char d[12];
-    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, reg, cg, &var, &lv, d)) return false;
+    char mk[82] = "";
+    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, reg, cg, mk, &var, &lv, d)) return false;
     if (var < 0 || var >= VAR_COUNT) var = VAR_CLASSIC;
-    gen_cache_put(id, var, lv, g, reg, cg, d);
+    gen_cache_put(id, var, lv, g, reg, cg, mk, d);
+    if (marks) snprintf(marks, 82, "%s", mk);
     if (givens) memcpy(givens, g, 81);
     if (regions) memcpy(regions, reg, 81);
     if (cages) snprintf(cages, STATS_CAGES_LEN, "%s", cg);
@@ -349,12 +356,12 @@ static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char
 
 static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12])
 {
-    return gen_lookup_full(id, givens, NULL, NULL, variant, level, day);
+    return gen_lookup_full(id, givens, NULL, NULL, NULL, variant, level, day);
 }
 
 static bool gen_lookup(uint16_t id, uint8_t *givens, int *variant, int *level)
 {
-    return gen_lookup_full(id, givens, NULL, NULL, variant, level, NULL);
+    return gen_lookup_full(id, givens, NULL, NULL, NULL, variant, level, NULL);
 }
 
 /* variant of any puzzle: the built-in ones are classic */
@@ -374,10 +381,12 @@ static const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *va
     static char *cages;                             /* STATS_CAGES_LEN, PSRAM (LVGL task only) */
     if (!cages && !(cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return sudoku_geom(VAR_CLASSIC);
     cages[0] = 0;
-    if (puzzle_is_generated(id)) gen_lookup_full(id, NULL, reg, cages, &v, NULL, NULL);
+    char marks[82] = "";
+    if (puzzle_is_generated(id)) gen_lookup_full(id, NULL, reg, cages, marks, &v, NULL, NULL);
     if (variant) *variant = v;
     if (v == VAR_JIGSAW && buf && sudoku_geom_jigsaw(reg, buf)) return buf;
     if (v == VAR_KILLER && buf && sudoku_geom_killer_text(cages, buf)) return buf;
+    if ((v == VAR_EVENODD || v == VAR_CONSEC) && buf && sudoku_geom_marks(v, marks, buf)) return buf;
     return sudoku_geom(v);                          /* (a broken map or cages: a classic board) */
 }
 
@@ -645,6 +654,17 @@ static int compute_conflicts(void)
             }
         }
     }
+    for (int i = 0; i < 81; i++) {                  /* Even-Odd: a digit of the wrong kind */
+        if (g_b.val[i] && !(g_geo->allow[i] >> g_b.val[i] & 1)) g_conflict[i] = true;
+    }
+    for (int i = 0; g_geo->consec_on && i < 81; i++) {   /* Consecutive: a bar and not 1 apart, or 1 apart and no bar */
+        for (int k = 0; k < 2; k++) {
+            int o = k ? i + 9 : i + 1, bit = k ? CONSEC_DOWN : CONSEC_RIGHT;
+            if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) continue;
+            bool near = abs(g_b.val[i] - g_b.val[o]) == 1;
+            if (near != ((g_geo->consec[i] & bit) != 0)) g_conflict[i] = g_conflict[o] = true;
+        }
+    }
     for (int k = 0; k < g_geo->ncages; k++) {       /* Killer: a cage over its sum, or full and short of it */
         int sum = 0, filled = 0, n = g_geo->cage_n[k];
         for (int i = 0; i < n; i++) {
@@ -699,10 +719,18 @@ static int units_completed_by(int i)
     return n;
 }
 
+/* the colours a cell can be painted (1..CELL_COLORS) */
+static lv_color_t cell_color(int k)
+{
+    static const uint32_t C[CELL_COLORS] = {0xE5484D, 0xF5A524, 0xE2D33C, 0x30A46C, 0x3E7BFA, 0x9E6CF0};
+    return lv_color_hex(C[(k - 1) % CELL_COLORS]);
+}
+
 /* the cell's colour with nothing selected: X-Sudoku tints its two diagonals */
 static lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given)
 {
     lv_color_t bg = given ? C_CELL_GIVEN : C_CELL;
+    if (geo->parity[i] == PARITY_EVEN) bg = lv_color_mix(C_GRID_THIN, bg, 150);   /* Even-Odd: even cells shaded */
     return sudoku_geom_tinted(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
 }
 
@@ -716,7 +744,7 @@ static int filled_count(void)
 static bool has_progress(void)
 {
     for (int i = 0; i < 81; i++) {
-        if ((g_b.val[i] && !g_given[i]) || g_b.notes[i]) return true;
+        if ((g_b.val[i] && !g_given[i]) || g_b.notes[i] || g_b.colors[i]) return true;
     }
     return false;
 }
@@ -758,6 +786,7 @@ static void save_current(void)
     sg.id = g_id;
     memcpy(sg.val, g_b.val, sizeof(sg.val));
     memcpy(sg.notes, g_b.notes, sizeof(sg.notes));
+    memcpy(sg.colors, g_b.colors, sizeof(sg.colors));
     sg.elapsed_ms = g_elapsed_ms;
     sg.mistakes = g_mistakes;
     sg.hints = g_hints;
@@ -773,6 +802,7 @@ static void update_timer_label(void)
 {
     char buf[16];
     fmt_time(buf, sizeof(buf), g_elapsed_ms / 1000);
+    if (!store_show_timer() && !g_solved) snprintf(buf, sizeof(buf), "--:--");   /* Settings > Show timer off */
     if (strcmp(lv_label_get_text(g_timer), buf) != 0) lv_label_set_text(g_timer, buf);
     lv_obj_set_style_text_color(g_timer, g_solved ? C_GREEN : (g_paused ? C_MUTED : C_TEXT), 0);
 }
@@ -803,6 +833,7 @@ static void refresh_board(void)
     for (int i = 0; i < 81; i++) {
         if (!g_geo->used[i]) continue;
         lv_color_t bg = cell_base_bg(g_geo, i, g_given[i]);
+        if (g_b.colors[i]) bg = lv_color_mix(cell_color(g_b.colors[i]), bg, 110);   /* painted by the player */
         if (g_solved) {
             bg = C_CELL_SOLVED;
         } else if (g_sel >= 0) {
@@ -879,6 +910,17 @@ static void solve_commit_cb(lv_timer_t *t)
     store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
     stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_hints,
                           s_solve_started, g_moves, g_nmoves);               /* finished: now */
+    /* head-to-head: where this leaves the player among everyone who solved it (after the solve above) */
+    stats_h2h_t h;
+    char line[96] = "";
+    if (stats_db_ready() && stats_db_puzzle_rank(s_solve_id, &h) && h.rank) {
+        char t[16];
+        fmt_time(t, sizeof(t), h.leader_seconds);
+        if (!h.leader[0]) snprintf(line, sizeof(line), "Nobody else has solved this one yet");
+        else if (h.second) snprintf(line, sizeof(line), SYMBOL_STAR "  1st of %d: ahead of %s (%s)", h.of, h.leader, t);
+        else snprintf(line, sizeof(line), "%d%s of %d   -   %s leads with %s", h.rank, ordinal(h.rank), h.of, h.leader, t);
+    }
+    lv_label_set_text(g_win_h2h, line);
     if (store_saved_game()->id == s_solve_id) store_clear_game();
     char day[12] = "";
     if (puzzle_is_generated(s_solve_id) && gen_lookup_day(s_solve_id, NULL, NULL, NULL, day) && day[0]) {
@@ -939,6 +981,7 @@ static void on_solved(void)
         lv_label_set_text_fmt(g_win_miss, "%u mistake%s", (unsigned)g_mistakes, g_mistakes == 1 ? "" : "s");
         lv_obj_set_style_text_color(g_win_miss, C_MUTED, 0);
     }
+    lv_label_set_text(g_win_h2h, "");                 /* (solve_commit_cb fills it in) */
     if (g_hints == 0) {
         lv_label_set_text(g_win_hint, "No hints");
         lv_obj_set_style_text_color(g_win_hint, C_GREEN, 0);
@@ -1086,6 +1129,8 @@ static void placed_sounds(int i, int d)
 
 /* ------------------------------------------------------------- events */
 
+static void cell_long_cb(lv_event_t *e);
+
 static void cell_click_cb(lv_event_t *e)
 {
     if (g_solved || g_paused) return;
@@ -1096,6 +1141,122 @@ static void cell_click_cb(lv_event_t *e)
         return;
     }
     refresh_board();
+}
+
+/* ---- the cell menu (long press a cell): paint it, and on Killer the cage's digit sets */
+static lv_obj_t *cm_ovl;
+static int cm_cell;
+
+static void cm_close(void)
+{
+    if (cm_ovl) lv_obj_delete_async(cm_ovl);
+    cm_ovl = NULL;
+}
+
+static void cm_backdrop_cb(lv_event_t *e)
+{
+    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) cm_close();
+}
+
+static void cm_color_cb(lv_event_t *e)
+{
+    int k = (int)(intptr_t)lv_event_get_user_data(e);
+    int i = cm_cell;
+    cm_close();
+    if (g_solved || g_paused || i < 0 || g_b.colors[i] == k) return;
+    push_undo();
+    g_b.colors[i] = (uint8_t)k;
+    after_move();                                   /* redraws and saves (colours aren't in the move log) */
+}
+
+/* the sets of different digits that make up a cage's sum and hold the digits
+ * already in it, as text ("1+5+9   2+4+9 ..."); how many sets */
+static int cage_sets_text(int k, char *buf, size_t n)
+{
+    int size = g_geo->cage_n[k], sum = g_geo->cage_sum[k], count = 0;
+    uint16_t have = 0;
+    for (int j = 0; j < size; j++) {
+        int v = g_b.val[g_geo->cage_cell[k][j]];
+        if (v) have |= (uint16_t)(1u << v);
+    }
+    size_t len = 0;
+    buf[0] = 0;
+    for (uint16_t m = 2; m < 0x400; m += 2) {       /* digit sets as bits 1..9 */
+        if (__builtin_popcount(m) != size || (m & have) != have) continue;
+        int s = 0;
+        for (int d = 1; d <= 9; d++) s += (m >> d & 1) * d;
+        if (s != sum) continue;
+        count++;
+        if (len + 24 >= n) continue;                /* (the count still goes on) */
+        len += snprintf(buf + len, n - len, "%s", count > 1 ? "     " : "");
+        bool first = true;
+        for (int d = 1; d <= 9; d++) {
+            if (!(m >> d & 1)) continue;
+            len += snprintf(buf + len, n - len, first ? "%d" : "+%d", d);
+            first = false;
+        }
+    }
+    return count;
+}
+
+static void cell_long_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused) return;
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    cm_close();
+    cm_cell = i;
+    cm_ovl = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(cm_ovl);
+    lv_obj_set_size(cm_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(cm_ovl, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(cm_ovl, LV_OPA_30, 0);
+    lv_obj_set_clickable(cm_ovl, true);
+    lv_obj_add_event_cb(cm_ovl, cm_backdrop_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *card = lv_obj_create(cm_ovl);
+    lv_obj_set_size(card, 520, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_color(card, C_ACCENT, 0);
+    lv_obj_set_style_border_width(card, 2, 0);
+    lv_obj_set_style_radius(card, 14, 0);
+    lv_obj_set_style_pad_all(card, 14, 0);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(card, 10, 0);
+    lv_obj_set_scrollable(card, false);
+    /* above the cell's row when it's low on the board, else below it */
+    lv_area_t co;
+    lv_obj_get_coords(g_cells[i], &co);
+    lv_obj_align(card, co.y1 > SCR_W / 2 ? LV_ALIGN_TOP_MID : LV_ALIGN_BOTTOM_MID, 0, co.y1 > SCR_W / 2 ? 70 : -20);
+    lv_obj_t *t = make_label(card, &lv_font_montserrat_18, C_TEXT);
+    lv_label_set_text_fmt(t, "Row %d, column %d: colour", i / 9 + 1, i % 9 + 1);
+    lv_obj_t *row = lv_obj_create(card);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), 56);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(row, 8, 0);
+    for (int k = 0; k <= CELL_COLORS; k++) {        /* none, then the colours */
+        lv_obj_t *b = make_btn(row, 0, 0, 58, 56, k ? NULL : LV_SYMBOL_CLOSE, &lv_font_montserrat_20, cm_color_cb,
+                               (void *)(intptr_t)k);
+        if (k) lv_obj_set_style_bg_color(b, cell_color(k), 0);
+        else lv_obj_set_style_bg_color(b, C_CARD2, 0);
+        if (g_b.colors[i] == k) {
+            lv_obj_set_style_border_color(b, C_TEXT, 0);
+            lv_obj_set_style_border_width(b, 3, 0);
+        }
+    }
+    int k = g_geo->cage_of[i];
+    if (k != CAGE_NONE) {                           /* Killer helper */
+        char sets[240];
+        int n = cage_sets_text(k, sets, sizeof(sets));
+        lv_obj_t *h = make_label(card, &lv_font_montserrat_16, C_MUTED);
+        lv_label_set_text_fmt(h, "Cage: %d in %d cells, %d way%s%s", g_geo->cage_sum[k], g_geo->cage_n[k], n,
+                              n == 1 ? "" : "s", n ? ":" : " (check the digits in it)");
+        if (n) {
+            lv_obj_t *l = make_label(card, &lv_font_montserrat_20, C_TEXT);
+            lv_obj_set_width(l, LV_PCT(100));
+            lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
+            lv_label_set_text(l, sets);
+        }
+    }
 }
 
 static void cell_draw_cb(lv_event_t *e)
@@ -1268,6 +1429,7 @@ static const char *units_word(void)
     if (g_geo->windows) return "row, column, box or window";
     if (g_geo->variant == VAR_JIGSAW) return "row, column or region";
     if (g_geo->ncages) return "row, column, box or cage";
+    if (g_geo->variant == VAR_KNIGHT) return "row, column, box or a knight's move away";
     return "row, column or box";
 }
 
@@ -1299,7 +1461,24 @@ static void hint_render(void)
     /* where to look: the technique's area if one is needed, else the single's */
     if (h->kind == STEP_WRONG || h->kind == STEP_NAKED_SINGLE || h->kind == STEP_NONE) h_mark[h->cell] = 1;
     if (h->kind == STEP_HIDDEN_SINGLE && !t->kind) mark_unit(h->unit, 1);
-    if (t->kind == TECH_CAGE) {                     /* Killer: the cage's cells */
+    if (t->kind == TECH_CONSEC) {                   /* Consecutive: the cell and its neighbours */
+        int c = t->unit;
+        if (c >= 0 && c < 81) {
+            h_mark[c] = 1;
+            if (c % 9 > 0) h_mark[c - 1] = 1;
+            if (c % 9 < 8) h_mark[c + 1] = 1;
+            if (c > 8) h_mark[c - 9] = 1;
+            if (c < 72) h_mark[c + 9] = 1;
+        }
+        snprintf(u1, sizeof(u1), "row %d, column %d", c / 9 + 1, c % 9 + 1);
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+        }
+        snprintf(tech, sizeof(tech), "The bars around row %d, column %d (and where there are none) leave it only %s. ",
+                 c / 9 + 1, c % 9 + 1, digs);
+    } else if (t->kind == TECH_CAGE) {              /* Killer: the cage's cells */
         int k = t->unit;
         for (int i = 0; k >= 0 && k < g_geo->ncages && i < g_geo->cage_n[k]; i++) h_mark[g_geo->cage_cell[k][i]] = 1;
         int c0 = k >= 0 && k < g_geo->ncages ? g_geo->cage_cell[k][0] : 0;
@@ -1445,6 +1624,7 @@ static void reset_game(void)
 {
     memcpy(g_b.val, g_given, sizeof(g_b.val));
     memset(g_b.notes, 0, sizeof(g_b.notes));
+    memset(g_b.colors, 0, sizeof(g_b.colors));
     g_elapsed_ms = 0;
     g_mistakes = 0;
     g_hints = 0;
@@ -1631,11 +1811,53 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
 
 /* Over the cells: Jigsaw's thick lines between regions, Killer's cages (the
  * grid's children: the 9 boxes, then the 81 cells) */
+/* Even-Odd: a ring in each odd cell (even ones are shaded, cell_base_bg);
+ * Consecutive: a bar across the line between two cells 1 apart */
+static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    for (int i = 0; i < 81; i++) {
+        lv_area_t a, b;
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
+        if (geo->parity[i] == PARITY_ODD) {
+            lv_draw_rect_dsc_init(&d);
+            d.bg_opa = LV_OPA_TRANSP;
+            d.border_color = C_MUTED;
+            d.border_width = 2;
+            d.border_opa = LV_OPA_70;
+            d.radius = LV_RADIUS_CIRCLE;
+            lv_area_t r = {.x1 = a.x1 + 5, .y1 = a.y1 + 5, .x2 = a.x2 - 5, .y2 = a.y2 - 5};
+            lv_draw_rect(layer, &d, &r);
+        }
+        if (!geo->consec_on) continue;
+        lv_draw_rect_dsc_init(&d);
+        d.bg_color = C_ORANGE;
+        d.bg_opa = LV_OPA_COVER;
+        d.radius = 3;
+        d.border_color = C_CARD;
+        d.border_width = 1;
+        if (i % 9 < 8 && (geo->consec[i] & CONSEC_RIGHT)) {          /* upright bar on the line to the right */
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 1), &b);
+            int cx = (a.x2 + b.x1) / 2, cy = (a.y1 + a.y2) / 2;
+            lv_area_t r = {.x1 = cx - 4, .x2 = cx + 4, .y1 = cy - 12, .y2 = cy + 12};
+            lv_draw_rect(layer, &d, &r);
+        }
+        if (i / 9 < 8 && (geo->consec[i] & CONSEC_DOWN)) {           /* flat bar on the line below */
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 9), &b);
+            int cx = (a.x1 + a.x2) / 2, cy = (a.y2 + b.y1) / 2;
+            lv_area_t r = {.x1 = cx - 12, .x2 = cx + 12, .y1 = cy - 4, .y2 = cy + 4};
+            lv_draw_rect(layer, &d, &r);
+        }
+    }
+}
+
 static void board_regions_draw_cb(lv_event_t *e)
 {
     lv_obj_t *grid = lv_event_get_current_target_obj(e);
     const sudoku_geom_t *geo = lv_obj_get_user_data(grid);
     if (geo && geo->ncages) board_cages_draw(grid, geo, lv_event_get_layer(e));
+    if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) board_marks_draw(grid, geo, lv_event_get_layer(e));
     if (!geo || geo->variant != VAR_JIGSAW) return;
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_draw_rect_dsc_t d;
@@ -1713,7 +1935,8 @@ static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *con
 static void game_layout(void)
 {
     if (!g_geo) g_geo = sudoku_geom(g_var);
-    if (g_layout_var == g_var && g_var != VAR_JIGSAW && g_var != VAR_KILLER) {
+    if (g_layout_var == g_var && g_var != VAR_JIGSAW && g_var != VAR_KILLER && g_var != VAR_EVENODD &&
+        g_var != VAR_CONSEC) {
         lv_obj_invalidate(g_grid);
         return;
     }
@@ -1751,6 +1974,7 @@ static void start_game(uint16_t id, bool resume)
     if (resume && s->id == id) {
         memcpy(g_b.val, s->val, sizeof(g_b.val));
         memcpy(g_b.notes, s->notes, sizeof(g_b.notes));
+        for (int i = 0; i < 81; i++) g_b.colors[i] = s->colors[i] <= CELL_COLORS ? s->colors[i] : 0;
         for (int i = 0; i < 81; i++) {
             if (g_given[i]) g_b.val[i] = g_given[i];   /* givens are never editable */
             if (g_b.val[i] > g_geo->n || !g_geo->used[i]) g_b.val[i] = 0;
@@ -1828,6 +2052,7 @@ static void build_game(void)
         lv_obj_set_clickable(cell, true);
         lv_obj_set_scrollable(cell, false);
         lv_obj_add_event_cb(cell, cell_click_cb, LV_EVENT_PRESSED, (void *)(intptr_t)i);
+        lv_obj_add_event_cb(cell, cell_long_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);   /* colours, cage sums */
         lv_obj_add_event_cb(cell, cell_draw_cb, LV_EVENT_DRAW_MAIN_END, (void *)(intptr_t)i);
         lv_obj_t *l = make_label(cell, &font_digits_44, C_TEXT);
         lv_obj_center(l);
@@ -1928,7 +2153,7 @@ static void build_game(void)
     lv_obj_add_event_cb(g_win_ovl, win_hide_cb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *card = lv_obj_create(g_win_ovl);
-    lv_obj_set_size(card, 460, 330);
+    lv_obj_set_size(card, 480, 362);
     lv_obj_center(card);
     lv_obj_set_style_bg_color(card, C_CARD, 0);
     lv_obj_set_style_border_color(card, C_GREEN, 0);
@@ -1950,6 +2175,11 @@ static void build_game(void)
     lv_obj_align(g_win_miss, LV_ALIGN_TOP_MID, 0, 164);
     g_win_hint = make_label(card, &lv_font_montserrat_18, C_MUTED);
     lv_obj_align(g_win_hint, LV_ALIGN_TOP_MID, 0, 190);
+    g_win_h2h = make_label(card, &font_icons_20, C_ACCENT);      /* head-to-head: filled in a moment later */
+    lv_obj_set_width(g_win_h2h, 440);
+    lv_obj_set_style_text_align(g_win_h2h, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(g_win_h2h, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_align(g_win_h2h, LV_ALIGN_TOP_MID, 0, 220);
 
     lv_obj_t *b1 = make_btn(card, 0, 0, 128, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_16, win_list_cb, NULL);
     lv_obj_align(b1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -2493,6 +2723,7 @@ static int gen_level_req, gen_level_got;
 static uint8_t gen_givens[81];
 static sudoku_geom_t *gen_board;                    /* the puzzle's board (Jigsaw regions, Killer cages), PSRAM */
 static char *gen_cages;                             /* STATS_CAGES_LEN, PSRAM */
+static char gen_marks[82];
 static uint32_t gen_seed;                           /* 0 = random */
 static char gen_day[12];                            /* making a daily puzzle: its date */
 
@@ -2504,6 +2735,8 @@ static void gen_task(void *arg)
                     gen_board, &got);
     gen_cages[0] = 0;
     if (gen_var_req == VAR_KILLER) sudoku_cages_text(gen_board, gen_cages, STATS_CAGES_LEN);
+    gen_marks[0] = 0;
+    if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC) sudoku_marks_text(gen_board, gen_marks, 82);
     int clues = 0;
     for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
     printf("generator: %s %s asked, %s made, %d clues, %u ms\n", VARIANT_NAMES[gen_var_req],
@@ -2524,7 +2757,8 @@ static void gen_poll_cb(lv_timer_t *t)
     uint16_t id;
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
     const char *cages = gen_var_req == VAR_KILLER ? gen_cages : NULL;
-    int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages,
+    const char *marks = gen_marks[0] ? gen_marks : NULL;
+    int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,
                                                   gen_day[0] ? gen_day : NULL)
                                : -1;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
@@ -2533,7 +2767,7 @@ static void gen_poll_cb(lv_timer_t *t)
         id = s_gen_ram_next++;                       /* no card: until power-off */
         if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
     }
-    gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, regions, cages, gen_day);
+    gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, regions, cages, marks, gen_day);
     if (gen_level_got != gen_level_req && !gen_day[0]) {
         char msg[96];
         snprintf(msg, sizeof(msg), "Couldn't make a %s %s quickly; this one is %s.", GEN_LEVEL_NAMES[gen_level_req],
@@ -2686,7 +2920,8 @@ static lv_obj_t *gen_pick_desc;                     /* its line about the varian
 static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kept until power-off) */
 
 /* the variants in the New puzzle dialog, in button order */
-static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_MINI};
+static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_MINI,
+                                                 VAR_KNIGHT, VAR_EVENODD, VAR_CONSEC};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -2694,6 +2929,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_HYPER] = "9x9, and the four tinted 3x3 windows also hold 1-9 once each.",
     [VAR_JIGSAW] = "9x9 with nine irregular regions (thick borders) instead of boxes; each holds 1-9 once.",
     [VAR_KILLER] = "9x9 with cages (dashed): a cage's digits add up to its sum, none repeated. Few or no givens.",
+    [VAR_KNIGHT] = "9x9, and two cells a chess knight's move apart never hold the same digit.",
+    [VAR_EVENODD] = "9x9: shaded cells hold an even digit, cells with a ring an odd one.",
+    [VAR_CONSEC] = "9x9: a bar joins every two side-by-side cells whose digits are 1 apart; no bar, they aren't.",
 };
 
 static void gen_pick_close(void)
@@ -2739,7 +2977,8 @@ static void new_puzzle_cb(lv_event_t *e)
                    "singles; Hard needs pairs or locked candidates; Expert needs more than that.");
 
     /* the variant: Classic, X-Sudoku or Mini 6x6 (one of them checked) */
-    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "\n", "Jigsaw", "Killer", "Mini 6x6", ""};
+    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "\n", "Jigsaw", "Killer", "Mini 6x6", "\n",
+                                          "Anti-Knight", "Even-Odd", "Consecutive", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
@@ -2747,7 +2986,7 @@ static void new_puzzle_cb(lv_event_t *e)
     for (uint32_t i = 0; i < VAR_COUNT; i++) {
         if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
     }
-    lv_obj_set_size(vm, LV_PCT(100), 124);          /* two rows of three */
+    lv_obj_set_size(vm, LV_PCT(100), 172);          /* three rows of three */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);
@@ -2773,7 +3012,7 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_set_style_pad_row(grid, 12, 0);
     lv_obj_set_style_pad_top(grid, 16, 0);
     for (int lv = 0; lv < GEN_LEVELS; lv++) {
-        lv_obj_t *b = make_btn(grid, 0, 0, 0, 72, GEN_LEVEL_NAMES[lv], &lv_font_montserrat_22, gen_level_cb,
+        lv_obj_t *b = make_btn(grid, 0, 0, 0, 60, GEN_LEVEL_NAMES[lv], &lv_font_montserrat_22, gen_level_cb,
                                (void *)(intptr_t)lv);
         lv_obj_set_width(b, LV_PCT(48));
         lv_obj_set_style_bg_color(b, C_ACCENT, 0);
@@ -3636,6 +3875,21 @@ static lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_
     lv_label_set_text_fmt(*lbl, "%d%%", value);
     lv_obj_align(*lbl, LV_ALIGN_RIGHT_MID, -250, 0);
     return sl;
+}
+
+static void timer_sw_cb(lv_event_t *e)
+{
+    store_set_show_timer(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+}
+
+static void export_cb(lv_event_t *e)
+{
+    if (!stats_db_ready()) {
+        sudoku_ui_notice("Export needs sudoku.db on a microSD card.", 3000);
+        return;
+    }
+    sudoku_ui_notice("Exporting...", 1500);
+    stats_db_export_csv();                          /* the result comes back as a message */
 }
 
 static void assist_dd_cb(lv_event_t *e)
@@ -5821,6 +6075,9 @@ static void build_settings(void)
     r = settings_row(col, "Volume", "Speaker loudness");
     st_vol_sl = settings_slider(r, 0, 100, store_volume(), vol_sl_cb, &st_vol_lbl);
 
+    r = settings_row(col, "Show timer", "Off: the clock is hidden while you play (times are still kept)");
+    settings_switch(r, store_show_timer(), timer_sw_cb);
+
     r = settings_row(col, "Mistake check", "Red digits: none, rule breakers, or any wrong digit");
     st_assist_dd = settings_dropdown(r, "Off\nRules\nSolution", store_assist(), 150, assist_dd_cb);
 
@@ -5893,6 +6150,11 @@ static void build_settings(void)
     lv_obj_set_style_text_opa(st_usb_btn, LV_OPA_50, LV_STATE_DISABLED);
     lv_obj_align(st_usb_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     usb_btn_update();
+
+    r = settings_row(col, "Export to CSV", "Solves, achievements and records, for a spreadsheet (export/ on the card)");
+    lv_obj_t *ex = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_SAVE "  Export", &lv_font_montserrat_18, export_cb, NULL);
+    lv_obj_set_style_bg_color(ex, C_CARD2, 0);
+    lv_obj_align(ex, LV_ALIGN_RIGHT_MID, 0, 0);
 
     r = settings_row(col, "Factory reset", "Settings, Wi-Fi network, players and statistics");
     lv_obj_t *fr = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_WARNING "  Reset", &lv_font_montserrat_18,

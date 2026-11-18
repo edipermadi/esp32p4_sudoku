@@ -28,7 +28,9 @@ typedef struct {
     uint16_t mistakes;         /* rule-breaking digits placed so far */
     int64_t  started_at;       /* Unix time the puzzle was opened (or restarted), 0 = unknown */
     uint16_t hints;            /* cells filled with Fill (the solution) so far */
-} saved_game_t;                /* (older NVS saves end before mistakes or started_at) */
+    uint8_t  colors[81];       /* cell colours (0 = none, 1..CELL_COLORS) */
+} saved_game_t;
+#define CELL_COLORS 6                /* (older NVS saves end before mistakes or started_at) */
 
 void store_init(void);
 
@@ -78,6 +80,7 @@ typedef struct {
     uint8_t brightness;                       /* backlight, 10..100 % */
     uint8_t volume;                           /* speaker, 0..100 % */
     uint8_t assist;                           /* store_assist_t: what turns red */
+    bool show_timer;                          /* the game's clock is shown (it always runs) */
     char timezone[STORE_TZ_LEN];
     int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
     char player_name[STORE_NAME_LEN];
@@ -126,6 +129,10 @@ typedef enum {
 } store_assist_t;
 uint8_t store_assist(void);
 void store_set_assist(uint8_t assist);
+
+/* Show the game's clock (Settings > Show timer); it runs and is recorded either way. */
+bool store_show_timer(void);
+void store_set_show_timer(bool on);
 
 #ifdef __cplusplus
 }

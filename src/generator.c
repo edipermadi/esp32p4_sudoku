@@ -5,7 +5,8 @@
 #include <stdio.h>
 
 const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
-const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer"};
+const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
+                                              "Anti-Knight", "Even-Odd", "Consecutive"};
 
 /* sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
 static uint8_t s_mask_sum[1024];
@@ -60,6 +61,7 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
     for (int u = 0; u < UNITS_MAX; u++) {
         if (g->active[u]) g->unit_ids[g->nunits++] = (uint8_t)u;
     }
+    for (int k = 0; k < g->ncells; k++) g->allow[g->cells[k]] = g->all;
     for (int k = 0; k < g->ncells; k++) {                   /* peers: share any unit */
         int cell = g->cells[k];
         for (int i = 0; i < g->nunits; i++) {
@@ -86,6 +88,24 @@ void sudoku_geom_init(void)
     geom_build(&g[VAR_X], VAR_X, 9, 3, 3, true, false, NULL);
     geom_build(&g[VAR_MINI], VAR_MINI, 6, 2, 3, false, false, NULL);
     geom_build(&g[VAR_HYPER], VAR_HYPER, 9, 3, 3, false, true, NULL);
+    geom_build(&g[VAR_KNIGHT], VAR_KNIGHT, 9, 3, 3, false, false, NULL);
+    for (int c = 0; c < 81; c++) {                  /* Anti-Knight: a knight's move away is a peer too */
+        static const int8_t KM[8][2] = {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}};
+        sudoku_geom_t *k = &g[VAR_KNIGHT];
+        for (int m = 0; m < 8; m++) {
+            int r = c / 9 + KM[m][0], q = c % 9 + KM[m][1];
+            if (r < 0 || r > 8 || q < 0 || q > 8) continue;
+            int o = r * 9 + q;
+            k->xpeers[c][k->nxpeers[c]++] = (uint8_t)o;
+            if (sudoku_geom_peer(k, c, o)) continue;
+            k->peer_bits[c][o >> 5] |= 1u << (o & 31);
+            k->peers[c][k->npeers[c]++] = (uint8_t)o;
+        }
+    }
+    g[VAR_EVENODD] = g[VAR_CLASSIC];
+    g[VAR_EVENODD].variant = VAR_EVENODD;
+    g[VAR_CONSEC] = g[VAR_CLASSIC];
+    g[VAR_CONSEC].variant = VAR_CONSEC;
     g[VAR_JIGSAW] = g[VAR_CLASSIC];                 /* placeholders: these boards come with their puzzle */
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
     g[VAR_KILLER] = g[VAR_CLASSIC];
@@ -101,8 +121,51 @@ void sudoku_geom_init(void)
 const sudoku_geom_t *sudoku_geom(int variant)
 {
     sudoku_geom_init();
-    if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER) variant = VAR_CLASSIC;
+    if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER ||
+        variant == VAR_EVENODD || variant == VAR_CONSEC) {
+        variant = VAR_CLASSIC;
+    }
     return &s_geom[variant];
+}
+
+bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
+{
+    if (!text || strlen(text) != 81 || (variant != VAR_EVENODD && variant != VAR_CONSEC)) return false;
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = (uint8_t)variant;
+    for (int c = 0; c < 81; c++) {
+        char ch = text[c];
+        if (variant == VAR_EVENODD) {
+            if (ch == 'e') {
+                out->parity[c] = PARITY_EVEN;
+                out->allow[c] = 0x154;                 /* 2 4 6 8 */
+            } else if (ch == 'o') {
+                out->parity[c] = PARITY_ODD;
+                out->allow[c] = 0x2AA;                 /* 1 3 5 7 9 */
+            } else if (ch != '.') {
+                return false;
+            }
+        } else {
+            if (ch < '0' || ch > '3') return false;
+            out->consec[c] = (uint8_t)(ch - '0');
+            if (c % 9 == 8) out->consec[c] &= (uint8_t)~CONSEC_RIGHT;
+            if (c / 9 == 8) out->consec[c] &= (uint8_t)~CONSEC_DOWN;
+        }
+    }
+    out->consec_on = variant == VAR_CONSEC;
+    return true;
+}
+
+bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    if (len < 82) return false;
+    for (int c = 0; c < 81; c++) {
+        if (g->variant == VAR_CONSEC) buf[c] = (char)('0' + (g->consec[c] & 3));
+        else buf[c] = g->parity[c] == PARITY_EVEN ? 'e' : g->parity[c] == PARITY_ODD ? 'o' : '.';
+    }
+    buf[81] = 0;
+    return true;
 }
 
 /* Killer: a classic board plus cages (cage_of: cage per cell, CAGE_NONE =
@@ -278,8 +341,24 @@ static uint16_t grid_free(const grid_t *g, int i)
 {
     uint16_t used = 0;
     for (int k = 0; k < 5 && g->units[i][k] >= 0; k++) used |= g->um[g->units[i][k]];
-    uint16_t free = (uint16_t)(g->G->all & ~used);
-    int c = g->G->cage_of[i];
+    const sudoku_geom_t *G = g->G;
+    uint16_t free = (uint16_t)(G->allow[i] & ~used);
+    for (int k = 0; k < G->nxpeers[i]; k++) {       /* Anti-Knight */
+        int v = g->v[G->xpeers[i][k]];
+        if (v) free &= (uint16_t)~(1u << v);
+    }
+    if (G->consec_on && free) {                     /* Consecutive: a bar = differ by 1, none = don't */
+        const int nb[4] = {i % 9 > 0 ? i - 1 : -1, i % 9 < 8 ? i + 1 : -1, i > 8 ? i - 9 : -1, i < 72 ? i + 9 : -1};
+        const bool bar[4] = {nb[0] >= 0 && (G->consec[i - 1] & CONSEC_RIGHT), (G->consec[i] & CONSEC_RIGHT) != 0,
+                             nb[2] >= 0 && (G->consec[i - 9] & CONSEC_DOWN), (G->consec[i] & CONSEC_DOWN) != 0};
+        for (int k = 0; k < 4; k++) {
+            if (nb[k] < 0 || !g->v[nb[k]]) continue;
+            int w = g->v[nb[k]];
+            uint16_t near = (uint16_t)(((1u << (w + 1)) | (1u << (w - 1))) & 0x3FE);
+            free &= bar[k] ? near : (uint16_t)~near;
+        }
+    }
+    int c = G->cage_of[i];
     if (c != CAGE_NONE && free) {                    /* Killer: what the cage's sum still allows */
         free &= (uint16_t)~g->cage_used[c];
         int left = g->cage_left[c], others = g->cage_empty[c] - 1;
@@ -427,7 +506,7 @@ static void logic_load(logic_t *L, const sudoku_geom_t *G, const uint8_t *vals)
     memset(L, 0, sizeof(*L));
     L->G = G;
     L->empty = G->ncells;
-    for (int k = 0; k < G->ncells; k++) L->cand[G->cells[k]] = G->all;
+    for (int k = 0; k < G->ncells; k++) L->cand[G->cells[k]] = G->allow[G->cells[k]];
     for (int k = 0; k < G->ncells; k++) {
         int c = G->cells[k];
         if (vals[c] >= 1 && vals[c] <= G->n) place(L, c, vals[c]);
@@ -517,6 +596,39 @@ static bool cage_logic(logic_t *L)
         for (int i = 0; i < n; i++) changed |= eliminate(L, empty[i], (uint16_t)(L->cand[empty[i]] & ~allowed));
         if (changed) {
             trace(TECH_CAGE, k, -1, allowed, 0, -1, -1);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Consecutive: a cell keeps only the digits that suit every neighbour: with
+ * a bar, one of the neighbour's candidates must be 1 away; without, the
+ * neighbour must have a candidate that isn't 1 away (a neighbour's digit
+ * counts as its only candidate). */
+static bool consec_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int c = 0; c < 81; c++) {
+        if (L->v[c]) continue;
+        const int nb[4] = {c % 9 > 0 ? c - 1 : -1, c % 9 < 8 ? c + 1 : -1, c > 8 ? c - 9 : -1, c < 72 ? c + 9 : -1};
+        const bool bar[4] = {nb[0] >= 0 && (G->consec[c - 1] & CONSEC_RIGHT), (G->consec[c] & CONSEC_RIGHT) != 0,
+                             nb[2] >= 0 && (G->consec[c - 9] & CONSEC_DOWN), (G->consec[c] & CONSEC_DOWN) != 0};
+        uint16_t keep = L->cand[c];
+        for (int k = 0; k < 4; k++) {
+            if (nb[k] < 0) continue;
+            uint16_t other = L->v[nb[k]] ? (uint16_t)(1u << L->v[nb[k]]) : L->cand[nb[k]];
+            uint16_t ok = 0;
+            for (int d = 1; d <= 9; d++) {
+                if (!(keep >> d & 1)) continue;
+                uint16_t near = (uint16_t)(((1u << (d + 1)) | (1u << (d - 1))) & 0x3FE);
+                if (bar[k] ? (other & near) : (other & ~near & 0x3FE)) ok |= (uint16_t)(1u << d);
+            }
+            keep &= ok;
+        }
+        if (keep != L->cand[c]) {
+            eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+            trace(TECH_CONSEC, c, -1, keep, 0, c, -1);
             return true;
         }
     }
@@ -634,6 +746,7 @@ static int technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
     while (L.empty && !L.broken) {
         if (singles(&L)) continue;
         if (G->ncages && cage_logic(&L)) continue;  /* Killer: cage sums count as the simple step */
+        if (G->consec_on && consec_logic(&L)) continue;   /* Consecutive: so do the bars */
         if (locked_candidates(&L) || pairs(&L)) {
             tier = 2;
             continue;
@@ -648,6 +761,9 @@ static int technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
 static int easy_min_clues(const sudoku_geom_t *G)
 {
     if (G->ncages) return 8;
+    if (G->consec_on) return 12;                    /* the bars say a lot */
+    if (G->variant == VAR_EVENODD) return 30;
+    if (G->variant == VAR_KNIGHT) return 32;
     return G->n == 9 ? 36 : 16;
 }
 
@@ -695,7 +811,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
     if (G->variant != VAR_CLASSIC && level == GEN_HARD) max_tier = 2;
     /* Jigsaw and Killer: a uniqueness check that takes too long keeps the
      * clue (near the minimum, the plain search can take thousands of times longer) */
-    const uint32_t node_limit = G->variant == VAR_JIGSAW ? 4000 : (G->ncages ? 6000 : 0);
+    const uint32_t node_limit = G->variant == VAR_CLASSIC ? 0 : G->variant == VAR_JIGSAW ? 4000 : 6000;
     for (int k = 0; k < no && clues > stop; k++) {
         int a = order[k], b = (n - 1 - a / 9) * 9 + (n - 1 - a % 9);
         uint8_t va = out[a], vb = out[b];
@@ -864,10 +980,12 @@ static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, su
 bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], sudoku_geom_t *board,
                      gen_level_t *got_level)
 {
-    static sudoku_geom_t *jig;                      /* the Jigsaw / Killer board being tried (PSRAM) */
+    static sudoku_geom_t *jig;                      /* a board made with its puzzle, being tried (PSRAM) */
     const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
-    if ((jigsaw || killer) && !jig && !(jig = malloc(sizeof(*jig)))) return false;
-    const sudoku_geom_t *G = jigsaw || killer ? jig : sudoku_geom(variant);
+    const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
+    const bool own = jigsaw || killer || marks;
+    if (own && !jig && !(jig = malloc(sizeof(*jig)))) return false;
+    const sudoku_geom_t *G = own ? jig : sudoku_geom(variant);
     uint32_t rng = seed ? seed : 1;
     int tries = level == GEN_EXPERT ? 400 : (level == GEN_HARD ? 200 : 60);
     if (G->n == 6 && level == GEN_HARD) tries = 2000;   /* rare on 6x6, but an attempt is cheap there */
@@ -887,6 +1005,23 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         } else if (killer) {                        /* a grid, then cages drawn over it */
             random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!killer_cages(full, level >= GEN_HARD ? 5 : 3, &rng, jig)) continue;
+        } else if (marks) {                         /* a grid, then its marks */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            char text[82];
+            for (int c = 0; c < 81; c++) {
+                if (variant == VAR_CONSEC) {
+                    int m = 0;
+                    if (c % 9 < 8 && abs(full[c] - full[c + 1]) == 1) m |= CONSEC_RIGHT;
+                    if (c / 9 < 8 && abs(full[c] - full[c + 9]) == 1) m |= CONSEC_DOWN;
+                    text[c] = (char)('0' + m);
+                } else {                            /* about a third of the cells say even or odd */
+                    text[c] = rnd(&rng) % 3 ? '.' : (full[c] % 2 ? 'o' : 'e');
+                }
+            }
+            text[81] = 0;
+            sudoku_geom_marks(variant, text, jig);
+        } else if (variant == VAR_KNIGHT) {         /* not every fill works out: try again */
+            if (!random_full_grid(G, full, &rng, 20000)) continue;
         } else {
             random_full_grid(G, full, &rng, 0);
         }
@@ -983,7 +1118,10 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
             s_trace = NULL;
             return true;
         }
-        if (!(G->ncages && cage_logic(&L)) && !locked_candidates(&L) && !pairs(&L)) break;   /* in out->tech */
+        if (!(G->ncages && cage_logic(&L)) && !(G->consec_on && consec_logic(&L)) && !locked_candidates(&L) &&
+            !pairs(&L)) {
+            break;                                                  /* the first one is in out->tech */
+        }
     }
     s_trace = NULL;
     /* nothing simple: the empty cell with the fewest candidates, from the solution */

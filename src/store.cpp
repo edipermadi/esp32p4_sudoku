@@ -33,6 +33,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .brightness = 100,
     .volume = 70,
     .assist = ASSIST_RULES,
+    .show_timer = true,
     .timezone = "UTC",
     .player_id = 0,
     .player_name = "Player 1",
@@ -308,6 +309,17 @@ void store_set_assist(uint8_t assist)
 {
     s_p.assist = assist;
     stats_db_set_int("assist", assist);
+}
+
+bool store_show_timer(void)
+{
+    return s_p.show_timer;
+}
+
+void store_set_show_timer(bool on)
+{
+    s_p.show_timer = on;
+    stats_db_set_int("show_timer", on);
 }
 
 uint8_t store_screen_timeout_min(void)

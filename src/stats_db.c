@@ -41,6 +41,7 @@ typedef enum {
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
+    CMD_PRANK, CMD_EXPORT,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -114,6 +115,7 @@ typedef struct {
     uint8_t regions[81];
     bool has_regions;            /* a Jigsaw puzzle: regions is its map */
     char cages[STATS_CAGES_LEN]; /* a Killer puzzle's cages, "" = none */
+    char marks[82];              /* an Even-Odd / Consecutive puzzle's marks, "" = none */
     char day[12];                /* daily: 'YYYY-MM-DD', "" otherwise */
     bool ok;
     bool solved_today;           /* CMD_DAILY results */
@@ -121,6 +123,7 @@ typedef struct {
     int rank, of;                /* CMD_RANK results */
     uint16_t puzzle;             /* CMD_LOAD_GAME: which one */
     saved_game_t game;           /* CMD_LOAD_GAME result */
+    stats_h2h_t h2h;             /* CMD_PRANK result */
     int ngames;                  /* CMD_LIST_GAMES result */
     stats_game_row_t games[STATS_MAX_GAMES];
 } gen_call_t;
@@ -211,6 +214,7 @@ static bool exec(const char *sql)
     "  hints INTEGER NOT NULL DEFAULT 0,"                                       \
     "  moves BLOB,"                         /* move log so far (moves.h) */    \
     "  seq INTEGER NOT NULL DEFAULT 0,"     /* higher = played more recently */ \
+    "  colors BLOB,"                        /* 81 cell colours, 0 = none */    \
     "  PRIMARY KEY (player_id, puzzle))"
 
 static const char SCHEMA[] =
@@ -232,7 +236,8 @@ static const char SCHEMA[] =
     "  day TEXT,"                                        /* daily puzzle: its date 'YYYY-MM-DD', else NULL */
     "  variant INTEGER NOT NULL DEFAULT 0,"              /* 0 classic, 1 X-Sudoku, 2 mini 6x6, 3 Hyper, 4 Jigsaw */
     "  regions TEXT,"                                    /* Jigsaw: 81 digits 0-8, the region of each cell */
-    "  cages TEXT);";                                    /* Killer: "sum:cell,cell,...;sum:..." */
+    "  cages TEXT,"                                      /* Killer: "sum:cell,cell,...;sum:..." */
+    "  marks TEXT);";                                    /* Even-Odd / Consecutive: sudoku_marks_text() */
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -271,9 +276,9 @@ static const char SQL_SOLVE_INSERT[] =
     " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10)";
 
 const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
-                                                  "Killer", "Mini 6x6"};
+                                                  "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Mini 6x6"};
 const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
-                                                   "Mini"};
+                                                   "Anti-Knight", "Even-Odd", "Consecutive", "Mini"};
 
 int stats_kind_of(int variant, bool daily)
 {
@@ -283,6 +288,9 @@ int stats_kind_of(int variant, bool daily)
     case VAR_HYPER: return KIND_HYPER;
     case VAR_JIGSAW: return KIND_JIGSAW;
     case VAR_KILLER: return KIND_KILLER;
+    case VAR_KNIGHT: return KIND_KNIGHT;
+    case VAR_EVENODD: return KIND_EVENODD;
+    case VAR_CONSEC: return KIND_CONSEC;
     case VAR_MINI: return KIND_MINI;
     default: return KIND_NEW;
     }
@@ -400,9 +408,9 @@ static void save_game(const saved_game_t *g, const game_move_t *moves, int nmove
     time_t now = time(NULL);
     if (sqlite3_prepare_v2(s_db,
             "INSERT OR REPLACE INTO saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms,"
-            " mistakes, saved_at, started_at, hints, moves, seq)"
+            " mistakes, saved_at, started_at, hints, moves, seq, colors)"
             " VALUES(?10, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?11, ?12,"
-            "  (SELECT COALESCE(MAX(seq), 0) + 1 FROM saved_game WHERE player_id = ?10))",
+            "  (SELECT COALESCE(MAX(seq), 0) + 1 FROM saved_game WHERE player_id = ?10), ?13)",
             -1, &st, NULL) != SQLITE_OK) {
         return;
     }
@@ -417,6 +425,10 @@ static void save_game(const saved_game_t *g, const game_move_t *moves, int nmove
     else sqlite3_bind_null(st, 9);
     sqlite3_bind_int(st, 10, s_player);
     sqlite3_bind_int(st, 11, g->hints);
+    bool colored = false;
+    for (int i = 0; i < 81; i++) colored |= g->colors[i] != 0;
+    if (colored) sqlite3_bind_blob(st, 13, g->colors, 81, SQLITE_STATIC);
+    else sqlite3_bind_null(st, 13);
     uint8_t *blob = NULL;
     if (moves && nmoves > 0) blob = heap_caps_malloc((size_t)nmoves * MOVE_BLOB_BYTES, MALLOC_CAP_SPIRAM);
     if (blob) sqlite3_bind_blob(st, 12, blob, (int)moves_pack(moves, nmoves, blob), SQLITE_STATIC);
@@ -447,7 +459,8 @@ static void load_game_of(saved_game_t *g, uint16_t puzzle)
     g->id = STORE_NO_GAME;
     sqlite3_stmt *st;
     int nmoves = 0;
-    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, cells, notes, elapsed_ms, mistakes, started_at, hints, moves FROM saved_game"
+    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, cells, notes, elapsed_ms, mistakes, started_at, hints, moves, colors"
+                                 " FROM saved_game"
                                  " WHERE player_id = ?1 AND (?2 < 0 OR puzzle = ?2) ORDER BY seq DESC LIMIT 1",
                            -1, &st, NULL) != SQLITE_OK) {
         return;
@@ -469,6 +482,10 @@ static void load_game_of(saved_game_t *g, uint16_t puzzle)
             g->mistakes = (uint16_t)sqlite3_column_int(st, 4);
             g->started_at = sqlite3_column_int64(st, 5);      /* NULL reads as 0 = unknown */
             g->hints = (uint16_t)sqlite3_column_int(st, 6);
+            const uint8_t *col = (const uint8_t *)sqlite3_column_blob(st, 8);
+            if (col && sqlite3_column_bytes(st, 8) == 81) {
+                for (int i = 0; i < 81; i++) g->colors[i] = col[i] <= CELL_COLORS ? col[i] : 0;
+            }
             const uint8_t *mb = (const uint8_t *)sqlite3_column_blob(st, 7);
             if (mb && moves_bufs()) {
                 xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -505,6 +522,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "brightness")) p->brightness = v < 10 ? 10 : (v > 100 ? 100 : v);
             else if (!strcmp(k, "volume")) p->volume = v < 0 ? 0 : (v > 100 ? 100 : v);
             else if (!strcmp(k, "assist")) p->assist = v >= ASSIST_OFF && v <= ASSIST_SOLUTION ? v : ASSIST_RULES;
+            else if (!strcmp(k, "show_timer")) p->show_timer = v != 0;
             else if (!strcmp(k, "time_zone") && t) snprintf(p->timezone, sizeof(p->timezone), "%s", t);
             else if (!strcmp(k, "last_level") && t) {
                 for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
@@ -552,6 +570,7 @@ static bool upgrade_schema(void)
     if (!has_column("generated", "variant")) ok &= exec("ALTER TABLE generated ADD COLUMN variant INTEGER NOT NULL DEFAULT 0");
     if (!has_column("generated", "regions")) ok &= exec("ALTER TABLE generated ADD COLUMN regions TEXT");
     if (!has_column("generated", "cages")) ok &= exec("ALTER TABLE generated ADD COLUMN cages TEXT");
+    if (!has_column("generated", "marks")) ok &= exec("ALTER TABLE generated ADD COLUMN marks TEXT");
     if (has_column("saved_game", "player_id") && !has_column("saved_game", "seq")) {
         /* one game per player -> several: the key becomes (player, puzzle) */
         ok &= exec("BEGIN");
@@ -564,6 +583,7 @@ static bool upgrade_schema(void)
         ok &= exec(ok ? "COMMIT" : "ROLLBACK");
         if (ok) printf("stats_db: saved_game now keeps up to %d games per player\n", STATS_MAX_GAMES);
     }
+    if (!has_column("saved_game", "colors")) ok &= exec("ALTER TABLE saved_game ADD COLUMN colors BLOB");
 
     bool old_solves = !has_column("solves", "player_id");
     bool old_stats = !has_column("puzzle_stats", "player_id");
@@ -654,6 +674,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("brightness", false, p->brightness, NULL);
     set_setting("volume", false, p->volume, NULL);
     set_setting("assist", false, p->assist, NULL);
+    set_setting("show_timer", false, p->show_timer, NULL);
     set_setting("time_zone", true, 0, p->timezone);
     set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
                                                           ? p->last_collection : 0].name);
@@ -1188,8 +1209,10 @@ static void do_gen_add(void)
     char reg[82];
     for (int i = 0; i < 81; i++) reg[i] = (char)('0' + (s_gen.regions[i] <= 8 ? s_gen.regions[i] : 0));
     reg[81] = 0;
-    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant, regions, cages)"
-                                         " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)", -1, &st, NULL) == SQLITE_OK) {
+    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant, regions, cages,"
+                                         " marks) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", -1, &st, NULL) == SQLITE_OK) {
+        if (s_gen.marks[0]) sqlite3_bind_text(st, 8, s_gen.marks, -1, SQLITE_STATIC);
+        else sqlite3_bind_null(st, 8);
         if (s_gen.cages[0]) sqlite3_bind_text(st, 7, s_gen.cages, -1, SQLITE_STATIC);
         else sqlite3_bind_null(st, 7);
         sqlite3_bind_int(st, 1, s_gen.level);
@@ -1216,8 +1239,9 @@ static void do_gen_get(void)
     sqlite3_stmt *st;
     s_gen.has_regions = false;
     s_gen.cages[0] = 0;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day, variant, regions, cages FROM generated WHERE id = ?1",
-                                   -1, &st, NULL) == SQLITE_OK) {
+    s_gen.marks[0] = 0;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day, variant, regions, cages, marks FROM generated"
+                                         " WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.id);
         if (sqlite3_step(st) == SQLITE_ROW) {
             const char *g = (const char *)sqlite3_column_text(st, 1);
@@ -1234,6 +1258,8 @@ static void do_gen_get(void)
                 }
                 const char *k = (const char *)sqlite3_column_text(st, 5);
                 snprintf(s_gen.cages, sizeof(s_gen.cages), "%s", k ? k : "");
+                const char *mk = (const char *)sqlite3_column_text(st, 6);
+                snprintf(s_gen.marks, sizeof(s_gen.marks), "%s", mk ? mk : "");
                 s_gen.ok = true;
             }
         }
@@ -1355,15 +1381,12 @@ static int daily_id_of(const char *day, int *level, int *variant)
     return id;
 }
 
-static void board_fill(stats_board_t *b, const char *day)
+/* everyone's best solve of a puzzle (-1: none), fastest first, into b->rows */
+static void board_rows(stats_board_t *b, int puzzle)
 {
-    memset(b, 0, sizeof(*b));
-    snprintf(b->day, sizeof(b->day), "%s", day);
-    int gid = daily_id_of(day, &b->level, &b->variant);
-    b->exists = gid > 0;
     sqlite3_stmt *st;
     if (!s_db || sqlite3_prepare_v2(s_db, BOARD_SQL, -1, &st, NULL) != SQLITE_OK) return;
-    sqlite3_bind_int(st, 1, gid > 0 ? PUZZLE_GEN_BASE + gid : -1);
+    sqlite3_bind_int(st, 1, puzzle);
     while (b->n < STATS_MAX_PLAYERS && sqlite3_step(st) == SQLITE_ROW) {
         stats_board_row_t *r = &b->rows[b->n++];
         r->player_id = sqlite3_column_int(st, 0);
@@ -1378,6 +1401,40 @@ static void board_fill(stats_board_t *b, const char *day)
         r->solves = (uint16_t)sqlite3_column_int(st, 5);
     }
     sqlite3_finalize(st);
+}
+
+static void board_fill(stats_board_t *b, const char *day)
+{
+    memset(b, 0, sizeof(*b));
+    snprintf(b->day, sizeof(b->day), "%s", day);
+    int gid = daily_id_of(day, &b->level, &b->variant);
+    b->exists = gid > 0;
+    board_rows(b, gid > 0 ? PUZZLE_GEN_BASE + gid : -1);
+}
+
+/* head-to-head on s_gen.puzzle (stats_db_puzzle_rank) */
+static void do_puzzle_rank(void)
+{
+    static stats_board_t *b;
+    stats_h2h_t *h = &s_gen.h2h;
+    memset(h, 0, sizeof(*h));
+    s_gen.ok = s_db != NULL && psram_buf((void **)&b, sizeof(*b));
+    if (s_gen.ok) {
+        memset(b, 0, sizeof(*b));
+        board_rows(b, s_gen.puzzle);
+        h->of = b->solved;
+        for (int i = 0; i < b->n; i++) {
+            if (b->rows[i].player_id == s_player && b->rows[i].solved) h->rank = i + 1;
+        }
+        /* the one to beat: the leader, or when that's this player, the runner-up */
+        int who = h->rank == 1 ? 1 : 0;
+        if (who < b->n && b->rows[who].solved && b->rows[who].player_id != s_player) {
+            snprintf(h->leader, sizeof(h->leader), "%s", b->rows[who].player);
+            h->leader_seconds = b->rows[who].seconds;
+            h->second = who == 1;
+        }
+    }
+    xSemaphoreGive(s_gen_done);
 }
 
 static void do_board(const char *day)
@@ -1466,6 +1523,10 @@ static const ach_def_t ACH[] = {
      "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(4)},
     {"killer", "Killer instinct", "Solve a Killer Sudoku.", 1, ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(5)},
+    {"rule_bender", "Rule bender", "Solve an Anti-Knight, an Even-Odd and a Consecutive.", 3, ACH_UNIT_COUNT,
+     "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(6) ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(7) ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(8) ")"},
     {"variety_5", "Collector", "Solve every kind: Classic, X-Sudoku, Hyper, Jigsaw, Killer and Mini 6x6.", 6,
      ACH_UNIT_COUNT,
      "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
@@ -1668,15 +1729,17 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Hyper", OF_VARIANT(3)},
     {"Fastest Jigsaw", OF_VARIANT(4)},
     {"Fastest Killer", OF_VARIANT(5)},
+    {"Fastest Anti-Knight", OF_VARIANT(6)},
+    {"Fastest Even-Odd", OF_VARIANT(7)},
+    {"Fastest Consecutive", OF_VARIANT(8)},
     {"Fastest Mini 6x6", OF_VARIANT(2)},
 };
 
-static void do_records(void)
+/* a player's records into R */
+static void records_fill(int32_t player, stats_records_t *R)
 {
-    static stats_records_t *rp;
-    static stats_records_t *out;
-    if (!psram_buf((void **)&rp, sizeof(*rp)) || !psram_buf((void **)&out, sizeof(*out))) return;
-    stats_records_t *const R = rp;
+    const int32_t me = s_player;
+    s_player = player;                              /* (the helpers below ask about s_player) */
     memset(R, 0, sizeof(*R));
     R->player_id = s_player;
     sqlite3_stmt *st;
@@ -1757,12 +1820,171 @@ static void do_records(void)
     r->value = s_db ? query_int_player("SELECT CAST(TOTAL(seconds) / 60 AS INTEGER) FROM solves WHERE player_id = ?1")
                     : 0;
     r->has = r->value > 0;
+    s_player = me;
+}
 
+static void do_records(void)
+{
+    static stats_records_t *R;
+    static stats_records_t *out;
+    if (!psram_buf((void **)&R, sizeof(*R)) || !psram_buf((void **)&out, sizeof(*out))) return;
+    records_fill(s_player, R);
     xSemaphoreTake(s_lock, portMAX_DELAY);
     *out = *R;
     s_records = out;
     s_records_new = true;
     xSemaphoreGive(s_lock);
+}
+
+/* ------------------------------------------------------------- CSV export */
+
+#define EXPORT_DIR BSP_SD_MOUNT_POINT "/export"
+
+/* a CSV field: quoted when it holds a comma, quote or line break */
+static void csv_field(FILE *f, const char *s, bool last)
+{
+    s = s ? s : "";
+    if (strpbrk(s, ",\"\r\n")) {
+        fputc('"', f);
+        for (; *s; s++) {
+            if (*s == '"') fputc('"', f);
+            fputc(*s, f);
+        }
+        fputc('"', f);
+    } else {
+        fputs(s, f);
+    }
+    fputc(last ? '\n' : ',', f);
+}
+
+/* Unix time as local "YYYY-MM-DD HH:MM:SS", "" for 0 */
+static void csv_time(char *buf, size_t n, int64_t t)
+{
+    buf[0] = 0;
+    if (t <= 0) return;
+    time_t tt = (time_t)t;
+    struct tm tm;
+    localtime_r(&tt, &tm);
+    strftime(buf, n, "%Y-%m-%d %H:%M:%S", &tm);
+}
+
+/* runs a query and writes every row (columns as text; times in the columns
+ * named in time_cols turned into local dates); returns the row count, -1 on failure */
+static int csv_query(const char *path, const char *header, const char *sql, uint32_t time_cols)
+{
+    FILE *f = fopen(path, "w");
+    if (!f) return -1;
+    fputs(header, f);
+    fputc('\n', f);
+    sqlite3_stmt *st;
+    int rows = 0;
+    if (sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) == SQLITE_OK) {
+        int nc = sqlite3_column_count(st);
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            for (int c = 0; c < nc; c++) {
+                char t[24];
+                if ((time_cols >> c & 1) && sqlite3_column_type(st, c) != SQLITE_NULL) {
+                    csv_time(t, sizeof(t), sqlite3_column_int64(st, c));
+                    csv_field(f, t, c == nc - 1);
+                } else {
+                    csv_field(f, (const char *)sqlite3_column_text(st, c), c == nc - 1);
+                }
+            }
+            rows++;
+        }
+        sqlite3_finalize(st);
+    }
+    bool ok = fclose(f) == 0;
+    return ok ? rows : -1;
+}
+
+static void do_export(void)
+{
+    if (!s_db) return;
+    mkdir(EXPORT_DIR, 0775);                        /* fine if it's there */
+    int solves = csv_query(EXPORT_DIR "/solves.csv",
+        "id,player,puzzle,level,number,seconds,mistakes,hints,started,finished",
+        "SELECT s.id, p.name, s.puzzle, s.level, s.number, s.seconds, s.mistakes, s.hints, s.started_at, s.finished_at"
+        " FROM solves s JOIN players p ON p.id = s.player_id ORDER BY s.id", (1u << 8) | (1u << 9));
+
+    /* achievements: every player, every achievement, with progress */
+    int ach_rows = -1;
+    FILE *f = fopen(EXPORT_DIR "/achievements.csv", "w");
+    int32_t ids[STATS_MAX_PLAYERS];
+    char names[STATS_MAX_PLAYERS][STORE_NAME_LEN];
+    int np = 0;
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "SELECT id, name FROM players ORDER BY id", -1, &st, NULL) == SQLITE_OK) {
+        while (np < STATS_MAX_PLAYERS && sqlite3_step(st) == SQLITE_ROW) {
+            ids[np] = sqlite3_column_int(st, 0);
+            const char *n = (const char *)sqlite3_column_text(st, 1);
+            snprintf(names[np++], STORE_NAME_LEN, "%s", n ? n : "");
+        }
+        sqlite3_finalize(st);
+    }
+    if (f) {
+        ach_rows = 0;
+        fputs("player,key,achievement,description,progress,goal,unlocked,unlocked_at\n", f);
+        for (int p = 0; p < np; p++) {
+            int32_t val[ACH_COUNT];
+            int64_t when[ACH_COUNT];
+            ach_values(ids[p], val);
+            ach_unlocked(ids[p], when);
+            for (int i = 0; i < ACH_COUNT; i++) {
+                char a[16], b[16], t[24];
+                csv_field(f, names[p], false);
+                csv_field(f, ACH[i].key, false);
+                csv_field(f, ACH[i].title, false);
+                csv_field(f, ACH[i].desc, false);
+                snprintf(a, sizeof(a), "%ld", (long)(when[i] || val[i] > ACH[i].goal ? ACH[i].goal : val[i]));
+                snprintf(b, sizeof(b), "%ld", (long)ACH[i].goal);
+                csv_field(f, a, false);
+                csv_field(f, b, false);
+                csv_field(f, when[i] ? "yes" : "no", false);
+                csv_time(t, sizeof(t), when[i] > 1 ? when[i] : 0);
+                csv_field(f, t, true);
+                ach_rows++;
+            }
+        }
+        if (fclose(f) != 0) ach_rows = -1;
+    }
+
+    /* records: every player */
+    int rec_rows = -1;
+    static stats_records_t *R;
+    f = psram_buf((void **)&R, sizeof(*R)) ? fopen(EXPORT_DIR "/records.csv", "w") : NULL;
+    if (f) {
+        rec_rows = 0;
+        fputs("player,record,value,unit,puzzle,set_on\n", f);
+        static const char *const UNIT[] = {"seconds", "count", "days", "minutes"};
+        for (int p = 0; p < np; p++) {
+            records_fill(ids[p], R);
+            for (int i = 0; i < R->n; i++) {
+                const stats_record_t *r = &R->r[i];
+                char v[16] = "", pz[16] = "", t[24];
+                if (r->has) snprintf(v, sizeof(v), "%ld", (long)r->value);
+                if (r->has && r->puzzle != STORE_NO_GAME) snprintf(pz, sizeof(pz), "%u", (unsigned)r->puzzle);
+                csv_field(f, names[p], false);
+                csv_field(f, r->title, false);
+                csv_field(f, v, false);
+                csv_field(f, UNIT[r->unit < 4 ? r->unit : 1], false);
+                csv_field(f, pz, false);
+                csv_time(t, sizeof(t), r->has ? r->when : 0);
+                csv_field(f, t, true);
+                rec_rows++;
+            }
+        }
+        if (fclose(f) != 0) rec_rows = -1;
+    }
+    char msg[96];
+    if (solves < 0 || ach_rows < 0 || rec_rows < 0) {
+        snprintf(msg, sizeof(msg), "Export failed: couldn't write the files in export/ on the card.");
+    } else {
+        snprintf(msg, sizeof(msg), "Exported %d solve%s, achievements and records to export/ on the card.", solves,
+                 solves == 1 ? "" : "s");
+    }
+    printf("stats_db: %s\n", msg);
+    post_message(msg);
 }
 
 /* a page of recorded solves (newest first), for the Gameplays screen */
@@ -1990,6 +2212,12 @@ static void worker(void *arg)
         case CMD_RECORDS:
             do_records();
             break;
+        case CMD_PRANK:
+            do_puzzle_rank();
+            break;
+        case CMD_EXPORT:
+            do_export();
+            break;
         case CMD_SUSPEND:
             flush_game();
             db_close();
@@ -2205,10 +2433,11 @@ static bool gen_call(cmd_type_t type)
 }
 
 int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages,
-                     const char *day)
+                     const char *marks, const char *day)
 {
     if (!s_genp) return -1;                              /* no database this session */
     snprintf(s_gen.cages, sizeof(s_gen.cages), "%s", cages ? cages : "");
+    snprintf(s_gen.marks, sizeof(s_gen.marks), "%s", marks ? marks : "");
     s_gen.variant = variant;
     s_gen.level = level;
     memcpy(s_gen.givens, givens, 81);
@@ -2218,14 +2447,15 @@ int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uin
     return gen_call(CMD_GEN_ADD) ? s_gen.id : -1;
 }
 
-bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, char *cages, int *variant, int *level,
-                      char day[12])
+bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, char *cages, char *marks, int *variant,
+                      int *level, char day[12])
 {
     if (!s_genp) return false;                              /* no database this session */
     s_gen.id = id;
     if (!gen_call(CMD_GEN_GET)) return false;
     memcpy(givens, s_gen.givens, 81);
     if (cages) snprintf(cages, STATS_CAGES_LEN, "%s", s_gen.cages);
+    if (marks) snprintf(marks, 82, "%s", s_gen.marks);
     if (regions && s_gen.has_regions) memcpy(regions, s_gen.regions, 81);
     if (variant) *variant = s_gen.variant;
     if (level) *level = s_gen.level;
@@ -2300,6 +2530,21 @@ static int query_int_player(const char *sql)
         sqlite3_finalize(st);
     }
     return v;
+}
+
+bool stats_db_puzzle_rank(uint16_t puzzle, stats_h2h_t *out)
+{
+    if (!s_genp) return false;
+    s_gen.puzzle = puzzle;
+    if (!gen_call(CMD_PRANK)) return false;
+    *out = s_gen.h2h;
+    return true;
+}
+
+void stats_db_export_csv(void)
+{
+    cmd_t c = {.type = CMD_EXPORT};
+    if (!send(&c)) post_message("Export: no database.");
 }
 
 void stats_db_query_records(void)
