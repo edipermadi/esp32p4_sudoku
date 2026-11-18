@@ -127,7 +127,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 ## Building
 
 1. Install **esp32 Arduino core 3.3.x**.
-2. Install **LVGL 9.6.0** and put `lv_conf.h` at `~/Arduino/libraries/lv_conf.h`. It needs Montserrat 12–28 enabled.
+2. Install **LVGL 9.6.0** and put `lv_conf.h` at `~/Arduino/libraries/lv_conf.h`. It needs Montserrat 12–28 enabled. `extras/lv_conf.h` is the one the firmware is built with (CI copies it there); keep the two in step.
 3. Choose these settings in the Tools menu:
 
    | Setting          | Value                                   |
@@ -149,6 +149,27 @@ Captured from the board over its serial port (see [Screenshots and remote contro
    ```
 
    Game data is on the microSD card, so uploads don't touch it; the Wi-Fi network survives a normal upload too. "Erase All Flash Before Sketch Upload" forgets the Wi-Fi network (and the old pre-database data).
+
+### Builds and releases (GitHub Actions)
+
+`.github/workflows/firmware.yml` builds the firmware on every push to `main` and every pull request, with the versions pinned in it (arduino-cli 1.6.0, esp32 core 3.3.12, LVGL 9.6.0, `extras/lv_conf.h`, the FQBN above). The run's summary shows the size and checksums, and the files are kept as the run's artifact for 30 days.
+
+Pushing a tag that starts with `v` also publishes a GitHub release with them (a tag with a `-`, like `v1.1.0-rc1`, makes a pre-release):
+
+```
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+| File | What it's for |
+|------|---------------|
+| `esp32p4_sudoku-VERSION-update.bin` | The app alone. Copy it to the card as `update.bin` and use **Settings → Data → Firmware update** (or flash it at 0x10000). |
+| `esp32p4_sudoku-VERSION-flash.zip` | The bootloader, partition table, `boot_app0.bin` and app, with `flash_args`: `esptool --chip esp32p4 -p PORT write-flash @flash_args` in its folder. Keeps the Wi-Fi setting. |
+| `esp32p4_sudoku-VERSION-factory.bin` | All of it in one image, written at 0x0: for a blank board. Its gaps cover the settings area in flash (NVS), so a configured board forgets its Wi-Fi network. |
+| `esp32p4_sudoku-VERSION-elf.zip` | The ELF file, to decode a crash's backtrace. |
+| `SHA256SUMS` | Checksums of the above. |
+
+The release builds are for pre-v3.00 chips (`ChipVariant=prev3`, most 4B boards). `tools/package_release.sh BUILD_DIR OUT_DIR VERSION` makes the same files from a local build.
 
 ## How to play
 
