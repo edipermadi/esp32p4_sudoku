@@ -58,6 +58,9 @@
 #include "stats_db.h"
 #include "usb_msc.h"
 #include "solver.h"
+#include "generator.h"
+#include "esp_random.h"
+#include "esp_timer.h"
 #include "video_enc.h"
 #include <sys/stat.h>
 #include "moves.h"
@@ -238,8 +241,70 @@ static void fmt_time(char *buf, size_t n, uint32_t s)
     }
 }
 
+/* ------------------------------------------------------------- generated puzzles */
+/* The puzzles made on the board live in sudoku.db (stats_db_gen_*); the last
+ * few are cached here, and without a card that's the only place they are. */
+#define GEN_CACHE 24
+static struct {
+    uint16_t id;                        /* 0 = free slot */
+    uint8_t level;
+    uint8_t givens[81];
+} s_gen_cache[GEN_CACHE];
+static int s_gen_cache_next;
+static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+
+static void gen_cache_put(uint16_t id, int level, const uint8_t givens[81])
+{
+    for (int i = 0; i < GEN_CACHE; i++) {
+        if (s_gen_cache[i].id == id) return;
+    }
+    s_gen_cache[s_gen_cache_next].id = id;
+    s_gen_cache[s_gen_cache_next].level = (uint8_t)level;
+    memcpy(s_gen_cache[s_gen_cache_next].givens, givens, 81);
+    s_gen_cache_next = (s_gen_cache_next + 1) % GEN_CACHE;
+}
+
+/* givens and level of a generated puzzle (givens may be NULL); false if unknown */
+static bool gen_lookup(uint16_t id, uint8_t *givens, int *level)
+{
+    for (int i = 0; i < GEN_CACHE; i++) {
+        if (s_gen_cache[i].id == id) {
+            if (givens) memcpy(givens, s_gen_cache[i].givens, 81);
+            if (level) *level = s_gen_cache[i].level;
+            return true;
+        }
+    }
+    if (id >= PUZZLE_GEN_RAM_BASE) return false;          /* RAM-only, and gone */
+    uint8_t g[81];
+    int lv;
+    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, &lv)) return false;
+    gen_cache_put(id, lv, g);
+    if (givens) memcpy(givens, g, 81);
+    if (level) *level = lv;
+    return true;
+}
+
+/* the givens of any puzzle, built-in or generated */
+static bool puzzle_get(uint16_t id, uint8_t cells[81])
+{
+    if (!puzzle_is_generated(id)) {
+        if (id >= PUZZLE_COUNT) return false;
+        puzzle_load(id, cells);
+        return true;
+    }
+    return gen_lookup(id, cells, NULL);
+}
+
 static void puzzle_name(uint16_t id, char *buf, size_t n)
 {
+    if (puzzle_is_generated(id)) {
+        int lv = -1;
+        gen_lookup(id, NULL, &lv);
+        unsigned num = id >= PUZZLE_GEN_RAM_BASE ? (unsigned)(id - PUZZLE_GEN_RAM_BASE + 1)
+                                                 : (unsigned)(id - PUZZLE_GEN_BASE);
+        snprintf(buf, n, "Generated %s #%u", lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", num);
+        return;
+    }
     int c = puzzle_collection_of(id);
     snprintf(buf, n, "%s #%u", puzzle_collections[c].name, (unsigned)(id - puzzle_collections[c].first + 1));
 }
@@ -825,8 +890,16 @@ static void back_cb(lv_event_t *e)
     show_list();
 }
 
+static void gen_start(int level);
+
 static void win_next_cb(lv_event_t *e)
 {
+    if (puzzle_is_generated(g_id)) {             /* another one of the same level */
+        int lv = GEN_MEDIUM;
+        gen_lookup(g_id, NULL, &lv);
+        gen_start(lv);
+        return;
+    }
     int c = puzzle_collection_of(g_id);
     const puzzle_collection_t *pc = &puzzle_collections[c];
     uint16_t next = g_id + 1;
@@ -858,8 +931,13 @@ static void tick_cb(lv_timer_t *t)
 
 static void start_game(uint16_t id, bool resume)
 {
+    uint8_t given[81];
+    if (!puzzle_get(id, given)) {
+        sudoku_ui_notice("This puzzle isn't available (it was made on the board, and sudoku.db is missing).", 4000);
+        return;
+    }
     g_id = id;
-    puzzle_load(id, g_given);
+    memcpy(g_given, given, sizeof(g_given));
     g_sol_ok = sudoku_solve(g_given, g_sol);
     reset_game();
     const saved_game_t *s = store_saved_game();
@@ -1176,8 +1254,7 @@ static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
         rp_vt[i] = vt;
         prev_t = rp_moves[i].t_ms;
     }
-    puzzle_load(id, rp_given);
-    return true;
+    return puzzle_get(id, rp_given);
 }
 
 /* Builds the Replay screen (on the default display) for the prepared log. */
@@ -1547,6 +1624,129 @@ static void export_start(const stats_replay_t *r)
     printf("export: %s, %d frames\n", rx_path, rx_frames);
 }
 
+/* ------------------------------------------------------------- new puzzle (generator) */
+/*
+ * New puzzle: pick a level, a worker task runs the generator (generator.c)
+ * while a dialog says so, then the puzzle is stored (sudoku.db, or RAM
+ * without a card) and opened like any other.
+ */
+static lv_obj_t *gen_box;                           /* the "Generating..." dialog */
+static lv_timer_t *gen_timer;
+static volatile bool gen_done;
+static int gen_level_req, gen_level_got;
+static uint8_t gen_givens[81];
+
+static void gen_task(void *arg)
+{
+    gen_level_t got = (gen_level_t)gen_level_req;
+    uint32_t t0 = (uint32_t)(esp_timer_get_time() / 1000);
+    sudoku_generate((gen_level_t)gen_level_req, esp_random(), gen_givens, &got);
+    int clues = 0;
+    for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
+    printf("generator: %s asked, %s made, %d clues, %u ms\n", GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[got],
+           clues, (unsigned)(esp_timer_get_time() / 1000 - t0));
+    gen_level_got = got;
+    gen_done = true;
+    vTaskDelete(NULL);
+}
+
+static void gen_poll_cb(lv_timer_t *t)
+{
+    if (!gen_done) return;
+    lv_timer_delete(gen_timer);
+    gen_timer = NULL;
+    if (gen_box) lv_msgbox_close(gen_box);
+    gen_box = NULL;
+    uint16_t id;
+    int gid = stats_db_ready() ? stats_db_gen_add(gen_level_got, gen_givens) : -1;
+    if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
+        id = (uint16_t)(PUZZLE_GEN_BASE + gid);
+    } else {
+        id = s_gen_ram_next++;                       /* no card: until power-off */
+        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+    }
+    gen_cache_put(id, gen_level_got, gen_givens);
+    if (gen_level_got != gen_level_req) {
+        char msg[80];
+        snprintf(msg, sizeof(msg), "Couldn't make a %s one quickly; this one is %s.",
+                 GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[gen_level_got]);
+        sudoku_ui_notice(msg, 4000);
+    }
+    open_puzzle(id);
+}
+
+static void gen_start(int level)
+{
+    if (gen_timer) return;                           /* one at a time */
+    gen_level_req = level;
+    gen_done = false;
+    char text[64];
+    snprintf(text, sizeof(text), "Making a new %s puzzle...", GEN_LEVEL_NAMES[level]);
+    gen_box = make_msgbox(LV_SYMBOL_REFRESH "  New puzzle", text);
+    if (xTaskCreate(gen_task, "gen", 16384, NULL, 2, NULL) != pdPASS) {
+        lv_msgbox_close(gen_box);
+        gen_box = NULL;
+        sudoku_ui_notice("Couldn't start the generator.", 3000);
+        return;
+    }
+    gen_timer = lv_timer_create(gen_poll_cb, 50, NULL);
+}
+
+static lv_obj_t *gen_pick;                          /* the level dialog */
+
+static void gen_pick_close(void)
+{
+    if (gen_pick) lv_msgbox_close_async(gen_pick);
+    gen_pick = NULL;
+}
+
+static void gen_level_cb(lv_event_t *e)
+{
+    int level = (int)(intptr_t)lv_event_get_user_data(e);
+    gen_pick_close();
+    gen_start(level);
+}
+
+static void gen_cancel_cb(lv_event_t *e)
+{
+    gen_pick_close();
+}
+
+/* a tap on the dimmed background (not on the dialog) closes it too */
+static void gen_backdrop_cb(lv_event_t *e)
+{
+    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) gen_pick_close();
+}
+
+static void new_puzzle_cb(lv_event_t *e)
+{
+    lv_obj_t *m = make_msgbox("New puzzle", "A new puzzle made on the board, with exactly one solution. "
+                                            "Easy and Medium need only singles; Hard needs pairs or "
+                                            "locked candidates; Expert needs more than that.");
+    gen_pick = m;
+    lv_obj_set_width(m, 600);
+
+    /* the four levels: big buttons in two rows */
+    lv_obj_t *grid = lv_obj_create(lv_msgbox_get_content(m));
+    lv_obj_remove_style_all(grid);
+    lv_obj_set_size(grid, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_style_pad_column(grid, 12, 0);
+    lv_obj_set_style_pad_row(grid, 12, 0);
+    lv_obj_set_style_pad_top(grid, 16, 0);
+    for (int lv = 0; lv < GEN_LEVELS; lv++) {
+        lv_obj_t *b = make_btn(grid, 0, 0, 0, 72, GEN_LEVEL_NAMES[lv], &lv_font_montserrat_22, gen_level_cb,
+                               (void *)(intptr_t)lv);
+        lv_obj_set_width(b, LV_PCT(48));
+        lv_obj_set_style_bg_color(b, C_ACCENT, 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(b, 0), lv_color_white(), 0);
+    }
+
+    msgbox_button(m, "Cancel", gen_cancel_cb, false);
+    lv_obj_t *backdrop = lv_obj_get_parent(m);         /* the modal's dimmed layer */
+    if (backdrop && backdrop != lv_layer_top()) lv_obj_add_event_cb(backdrop, gen_backdrop_cb, LV_EVENT_CLICKED, NULL);
+}
+
 /* ============================================================= list screen */
 
 static void list_btnm_draw_cb(lv_event_t *e)
@@ -1651,7 +1851,7 @@ static void list_reveal_coll(lv_anim_enable_t anim)
 
 static void show_list(void)
 {
-    if (g_id != STORE_NO_GAME) {
+    if (g_id != STORE_NO_GAME && !puzzle_is_generated(g_id)) {
         l_coll = puzzle_collection_of(g_id);
         store_set_last_collection((uint8_t)l_coll);
     }
@@ -3291,6 +3491,10 @@ static void build_list(void)
     lv_obj_set_pos(t, 150, 20);
     l_total = make_label(scr_list, &lv_font_montserrat_16, C_MUTED);
     lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -16, 28);
+    lv_obj_t *nb = make_btn(scr_list, 290, 10, 190, 52, LV_SYMBOL_PLUS "  New puzzle", &lv_font_montserrat_18,
+                            new_puzzle_cb, NULL);
+    lv_obj_set_style_bg_color(nb, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(nb, 0), lv_color_white(), 0);
 
     /* collections: one row of chips (name + solved count), scrolls sideways */
     lv_obj_t *strip = lv_obj_create(scr_list);

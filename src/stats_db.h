@@ -20,6 +20,8 @@
  *              mistakes, saved_at, started_at, hints, moves)    saved after every move
  *       the one unfinished game; cells = 81 digits row by row (0 = empty,
  *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
+ *   generated(id, level, givens, created_at): puzzles made on the board;
+ *       their puzzle id elsewhere is 2000 + id, level "Generated Easy" etc.
  *   settings(key, value): dark_mode, sound, screen_off_minutes, time_zone,
  *       last_level, current_player, and migrated_from_nvs (set when the database is first
  *       filled: from what the board has, or, after a format, with just the
@@ -195,6 +197,12 @@ typedef struct {
     int offset, n, total;
     stats_day_row_t rows[STATS_MAX_DAY_ROWS];
 } stats_plays_t;
+/* Puzzles made on the board (generator.h): stores one and returns its id in
+ * the generated table (puzzle id = PUZZLE_GEN_BASE + it), or -1 without a
+ * database; reads one back. Both wait for the database (milliseconds). */
+int stats_db_gen_add(int level, const uint8_t givens[81]);
+bool stats_db_gen_get(int id, uint8_t givens[81], int *level);
+
 void stats_db_query_plays(int offset);
 bool stats_db_take_plays(stats_plays_t *out);
 

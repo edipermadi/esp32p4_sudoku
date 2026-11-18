@@ -18,6 +18,7 @@
 #include "sqlite/sqlite3.h"
 #include "bsp/bsp_board.h"
 #include "store.h"
+#include "generator.h"
 
 static const char *TAG = "stats_db";
 
@@ -38,7 +39,7 @@ typedef struct {                /* CMD_OPEN: what the board has (freed by the wo
 typedef enum {
     CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
-    CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS,
+    CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET,
 } cmd_type_t;
 typedef struct {
     cmd_type_t type;
@@ -96,6 +97,13 @@ static uint16_t s_moves_next_puzzle = STORE_NO_GAME, s_moves_loaded_puzzle = STO
 static stats_replay_t *s_replay;     /* CMD_REPLAY result */
 static bool s_replay_new;
 static stats_plays_t *s_plays;       /* CMD_PLAYS result (PSRAM) */
+/* CMD_GEN_ADD / CMD_GEN_GET: one call at a time, from the UI task, which waits */
+static struct {
+    int level, id;
+    uint8_t givens[81];
+    bool ok;
+} s_gen;
+static SemaphoreHandle_t s_gen_done;
 static bool s_plays_new;
 
 static bool moves_bufs(void)
@@ -121,7 +129,7 @@ static bool exec(const char *sql)
     return true;
 }
 
-/* table layouts (user_version 6), shared by SCHEMA and the upgrade below */
+/* table layouts (user_version 7), shared by SCHEMA and the upgrade below */
 #define T_PLAYERS \
     "players("                                                                  \
     "  id INTEGER PRIMARY KEY,"                                                 \
@@ -170,7 +178,12 @@ static const char SCHEMA[] =
     "CREATE TABLE IF NOT EXISTS " T_SOLVES ";"
     "CREATE TABLE IF NOT EXISTS " T_PUZZLE_STATS ";"
     "CREATE TABLE IF NOT EXISTS " T_SAVED_GAME ";"
-    "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value);";
+    "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value);"
+    "CREATE TABLE IF NOT EXISTS generated("              /* puzzles made on the board */
+    "  id INTEGER PRIMARY KEY,"                          /* puzzle id = 2000 + id */
+    "  level INTEGER NOT NULL,"                          /* 0 Easy, 1 Medium, 2 Hard, 3 Expert */
+    "  givens TEXT NOT NULL,"                            /* 81 digits row by row, 0 = empty */
+    "  created_at INTEGER);";
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -187,7 +200,7 @@ static const char SCHEMA_POST[] =
     "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
     "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
     "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
-    "PRAGMA user_version = 6;";
+    "PRAGMA user_version = 7;";
 
 /* MIN() of SQL is NULL if either side is: keep the known value then */
 #define FEWEST_MERGED "COALESCE(MIN(fewest_mistakes, excluded.fewest_mistakes), fewest_mistakes, excluded.fewest_mistakes)"
@@ -208,10 +221,21 @@ static const char SQL_SOLVE_INSERT[] =
     "INSERT INTO solves(player_id, puzzle, level, number, seconds, mistakes, finished_at, started_at, hints, moves)"
     " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10)";
 
+static int query_int(const char *sql);
+static int gen_level_of(int gid);
+
 static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
 {
-    int c = puzzle_collection_of(id);
     sqlite3_bind_int(st, 1, id);
+    if (puzzle_is_generated(id)) {               /* level "Generated Hard", number = generated.id */
+        char lv[24];
+        int g = gen_level_of(id - PUZZLE_GEN_BASE);
+        snprintf(lv, sizeof(lv), "Generated %s", g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
+        sqlite3_bind_text(st, 2, lv, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(st, 3, id - PUZZLE_GEN_BASE);
+        return;
+    }
+    int c = puzzle_collection_of(id);
     sqlite3_bind_text(st, 2, puzzle_collections[c].name, -1, SQLITE_STATIC);
     sqlite3_bind_int(st, 3, id - puzzle_collections[c].first + 1);
 }
@@ -317,7 +341,7 @@ static void load_game(saved_game_t *g)
         int id = sqlite3_column_int(st, 0);
         const char *cells = (const char *)sqlite3_column_text(st, 1);
         const uint8_t *notes = (const uint8_t *)sqlite3_column_blob(st, 2);
-        if (id >= 0 && id < PUZZLE_COUNT && cells && strlen(cells) == 81 && notes &&
+        if (puzzle_id_valid(id) && cells && strlen(cells) == 81 && notes &&
             sqlite3_column_bytes(st, 2) == 162) {
             g->id = id;
             for (int i = 0; i < 81; i++) {
@@ -489,7 +513,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("time_zone", true, 0, p->timezone);
     set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
                                                           ? p->last_collection : 0].name);
-    save_game(p->game.id < PUZZLE_COUNT ? &p->game : NULL, NULL, 0);
+    save_game(puzzle_id_valid(p->game.id) ? &p->game : NULL, NULL, 0);
     set_setting("migrated_from_nvs", false, 1, NULL);
     exec("COMMIT");
 }
@@ -957,6 +981,62 @@ static void do_month(int year, int month)
     xSemaphoreGive(s_lock);
 }
 
+/* ------------------------------------------------------------- generated puzzles */
+
+static int gen_level_of(int gid)
+{
+    int level = -1;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, gid);
+        if (sqlite3_step(st) == SQLITE_ROW) level = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+    }
+    return level;
+}
+
+static void do_gen_add(void)
+{
+    s_gen.ok = false;
+    sqlite3_stmt *st;
+    char cells[82];
+    for (int i = 0; i < 81; i++) cells[i] = (char)('0' + (s_gen.givens[i] <= 9 ? s_gen.givens[i] : 0));
+    cells[81] = 0;
+    time_t now = time(NULL);
+    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at) VALUES(?1, ?2, ?3)",
+                                   -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_gen.level);
+        sqlite3_bind_text(st, 2, cells, 81, SQLITE_STATIC);
+        if (now > 1700000000) sqlite3_bind_int64(st, 3, now);
+        else sqlite3_bind_null(st, 3);
+        if (sqlite3_step(st) == SQLITE_DONE) {
+            s_gen.id = (int)sqlite3_last_insert_rowid(s_db);
+            s_gen.ok = true;
+        }
+        sqlite3_finalize(st);
+    }
+    xSemaphoreGive(s_gen_done);
+}
+
+static void do_gen_get(void)
+{
+    s_gen.ok = false;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_gen.id);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            const char *g = (const char *)sqlite3_column_text(st, 1);
+            if (g && strlen(g) == 81) {
+                s_gen.level = sqlite3_column_int(st, 0);
+                for (int i = 0; i < 81; i++) s_gen.givens[i] = (g[i] >= '0' && g[i] <= '9') ? g[i] - '0' : 0;
+                s_gen.ok = true;
+            }
+        }
+        sqlite3_finalize(st);
+    }
+    xSemaphoreGive(s_gen_done);
+}
+
 /* a page of recorded solves (newest first), for the Gameplays screen */
 static void do_plays(int offset)
 {
@@ -1015,7 +1095,7 @@ static void do_replay(int64_t id)
         if (sqlite3_step(st) == SQLITE_ROW) {
             int pz = sqlite3_column_int(st, 0);
             const uint8_t *mb = (const uint8_t *)sqlite3_column_blob(st, 4);
-            if (pz >= 0 && pz < PUZZLE_COUNT && mb) {
+            if (puzzle_id_valid(pz) && mb) {
                 r->found = true;
                 r->puzzle = (uint16_t)pz;
                 r->seconds = (uint32_t)sqlite3_column_int64(st, 1);
@@ -1144,6 +1224,12 @@ static void worker(void *arg)
         case CMD_PLAYS:
             do_plays(c.ival);
             break;
+        case CMD_GEN_ADD:
+            do_gen_add();
+            break;
+        case CMD_GEN_GET:
+            do_gen_get();
+            break;
         case CMD_SUSPEND:
             flush_game();
             db_close();
@@ -1179,6 +1265,7 @@ static void start(bool fresh)
     if (!s_q) {
         s_q = xQueueCreate(16, sizeof(cmd_t));
         s_suspended = xSemaphoreCreateBinary();
+        s_gen_done = xSemaphoreCreateBinary();
         s_opened = xSemaphoreCreateBinary();
         s_lock = xSemaphoreCreateMutex();
         /* SQLite wants a deep stack (parser, B-tree balancing) */
@@ -1310,6 +1397,32 @@ int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max)
     *puzzle = s_moves_loaded_puzzle;
     xSemaphoreGive(s_lock);
     return n;
+}
+
+/* runs a generated-puzzle command and waits for the worker (up to 3 s) */
+static bool gen_call(cmd_type_t type)
+{
+    if (!stats_db_ready() || !s_gen_done) return false;
+    xSemaphoreTake(s_gen_done, 0);                         /* clear a stale give */
+    cmd_t c = {.type = type};
+    if (!send(&c)) return false;
+    return xSemaphoreTake(s_gen_done, pdMS_TO_TICKS(3000)) == pdTRUE && s_gen.ok;
+}
+
+int stats_db_gen_add(int level, const uint8_t givens[81])
+{
+    s_gen.level = level;
+    memcpy(s_gen.givens, givens, 81);
+    return gen_call(CMD_GEN_ADD) ? s_gen.id : -1;
+}
+
+bool stats_db_gen_get(int id, uint8_t givens[81], int *level)
+{
+    s_gen.id = id;
+    if (!gen_call(CMD_GEN_GET)) return false;
+    memcpy(givens, s_gen.givens, 81);
+    if (level) *level = s_gen.level;
+    return true;
 }
 
 void stats_db_query_plays(int offset)

@@ -9,6 +9,21 @@ extern "C" {
 
 #define PUZZLE_PACKED_BYTES 41   /* 81 cells, 4 bits each, 0 = empty */
 
+/* Puzzles made on the board (generator.h) have ids from PUZZLE_GEN_BASE:
+ * PUZZLE_GEN_BASE + generated.id in sudoku.db, or, without a card,
+ * PUZZLE_GEN_RAM_BASE and up (kept in RAM until power-off). */
+#define PUZZLE_GEN_BASE      2000
+#define PUZZLE_GEN_RAM_BASE  0xF000
+static inline int puzzle_is_generated(uint16_t id)
+{
+    return id >= PUZZLE_GEN_BASE && id != 0xFFFF;
+}
+/* a puzzle this firmware can show: built-in or generated */
+static inline int puzzle_id_valid(int id)
+{
+    return (id >= 0 && id < PUZZLE_COUNT) || (id >= PUZZLE_GEN_BASE && id < 0xFFFF);
+}
+
 typedef struct {
     const char *name;
     uint16_t first;              /* global index of the collection's first puzzle */

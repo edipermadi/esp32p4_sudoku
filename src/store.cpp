@@ -208,7 +208,7 @@ void store_get_prefs(store_prefs_t *out)
 void store_apply_prefs(const store_prefs_t *in)
 {
     s_p = *in;
-    if (s_game.id >= PUZZLE_COUNT) s_game.id = STORE_NO_GAME;
+    if (!puzzle_id_valid(s_game.id)) s_game.id = STORE_NO_GAME;
     store_load_game_moves();
     if (s_p.last_collection >= PUZZLE_COLLECTION_COUNT) s_p.last_collection = 0;
 }
