@@ -189,6 +189,15 @@ bool stats_db_take_month(stats_month_t *out);
 void stats_db_query_day(int year, int month, int day);
 bool stats_db_take_day(stats_day_t *out);
 
+/* A page of the solves that have a move log, newest first (Gameplays screen):
+ * rows offset..offset+n-1 of total. */
+typedef struct {
+    int offset, n, total;
+    stats_day_row_t rows[STATS_MAX_DAY_ROWS];
+} stats_plays_t;
+void stats_db_query_plays(int offset);
+bool stats_db_take_plays(stats_plays_t *out);
+
 /* Deletes sudoku.db and builds a new skeleton with what store.h holds now
  * (call store_factory_reset() first). The result comes back like an open:
  * stats_db_take_prefs(). */

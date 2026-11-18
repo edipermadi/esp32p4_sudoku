@@ -38,7 +38,7 @@ typedef struct {                /* CMD_OPEN: what the board has (freed by the wo
 typedef enum {
     CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
-    CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY,
+    CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS,
 } cmd_type_t;
 typedef struct {
     cmd_type_t type;
@@ -95,6 +95,8 @@ static int s_moves_next_n, s_moves_loaded_n;
 static uint16_t s_moves_next_puzzle = STORE_NO_GAME, s_moves_loaded_puzzle = STORE_NO_GAME;
 static stats_replay_t *s_replay;     /* CMD_REPLAY result */
 static bool s_replay_new;
+static stats_plays_t *s_plays;       /* CMD_PLAYS result (PSRAM) */
+static bool s_plays_new;
 
 static bool moves_bufs(void)
 {
@@ -955,6 +957,47 @@ static void do_month(int year, int month)
     xSemaphoreGive(s_lock);
 }
 
+/* a page of recorded solves (newest first), for the Gameplays screen */
+static void do_plays(int offset)
+{
+    static stats_plays_t *p;
+    if (!p) p = heap_caps_malloc(sizeof(*p), MALLOC_CAP_SPIRAM);
+    if (!s_plays) s_plays = heap_caps_malloc(sizeof(*s_plays), MALLOC_CAP_SPIRAM);
+    if (!p || !s_plays) return;
+    memset(p, 0, sizeof(*p));
+    p->offset = offset < 0 ? 0 : offset;
+    sqlite3_stmt *st;
+    if (s_db) {
+        p->total = query_int("SELECT COUNT(*) FROM solves WHERE moves IS NOT NULL");
+        if (p->total < 0) p->total = 0;
+        if (sqlite3_prepare_v2(s_db,
+                "SELECT s.started_at, s.finished_at, p.name, s.puzzle, s.seconds, s.mistakes, s.hints, s.id"
+                " FROM solves s JOIN players p ON p.id = s.player_id WHERE s.moves IS NOT NULL"
+                " ORDER BY s.id DESC LIMIT ?1 OFFSET ?2", -1, &st, NULL) == SQLITE_OK) {
+            sqlite3_bind_int(st, 1, STATS_MAX_DAY_ROWS);
+            sqlite3_bind_int(st, 2, p->offset);
+            while (sqlite3_step(st) == SQLITE_ROW && p->n < STATS_MAX_DAY_ROWS) {
+                stats_day_row_t *r = &p->rows[p->n++];
+                r->started_at = sqlite3_column_int64(st, 0);
+                r->finished_at = sqlite3_column_int64(st, 1);
+                const char *name = (const char *)sqlite3_column_text(st, 2);
+                snprintf(r->player, sizeof(r->player), "%s", name ? name : "");
+                r->puzzle = sqlite3_column_int(st, 3);
+                r->seconds = (uint32_t)sqlite3_column_int64(st, 4);
+                r->mistakes = sqlite3_column_int(st, 5);
+                r->hints = sqlite3_column_int(st, 6);
+                r->solve_id = sqlite3_column_int64(st, 7);
+                r->has_moves = true;
+            }
+            sqlite3_finalize(st);
+        }
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    *s_plays = *p;
+    s_plays_new = true;
+    xSemaphoreGive(s_lock);
+}
+
 /* one solve's move log and details, for the Replay screen */
 static void do_replay(int64_t id)
 {
@@ -1097,6 +1140,9 @@ static void worker(void *arg)
             break;
         case CMD_REPLAY:
             do_replay(c.solve_id);
+            break;
+        case CMD_PLAYS:
+            do_plays(c.ival);
             break;
         case CMD_SUSPEND:
             flush_game();
@@ -1264,6 +1310,25 @@ int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max)
     *puzzle = s_moves_loaded_puzzle;
     xSemaphoreGive(s_lock);
     return n;
+}
+
+void stats_db_query_plays(int offset)
+{
+    cmd_t c = {.type = CMD_PLAYS, .ival = offset};
+    send(&c);
+}
+
+bool stats_db_take_plays(stats_plays_t *out)
+{
+    if (!s_lock || !s_plays) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_plays_new;
+    if (fresh) {
+        *out = *s_plays;
+        s_plays_new = false;
+    }
+    xSemaphoreGive(s_lock);
+    return fresh;
 }
 
 void stats_db_query_replay(int64_t solve_id)
