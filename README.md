@@ -2,6 +2,8 @@
 
 A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720×720 MIPI-DSI, GT911 touch, ES8311 speaker), built with LVGL 9.6 as an Arduino sketch.
 
+**[Install it from the browser with the web flasher →](https://edipermadi.github.io/esp32p4_sudoku/)** (Chrome or Edge on a desktop computer; the board's UART USB port). No Arduino IDE needed. It installs the latest release; see [Web flasher](#web-flasher) for details.
+
 ## Screenshots
 
 | Home | Puzzles | Game |
