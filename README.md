@@ -52,6 +52,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
   ```
 
   SQLite 3.54.1 is built in from the official amalgamation (`src/sqlite/`), with a small file layer for ESP-IDF's FAT filesystem. The board doesn't lock the file, so take the card out (or switch off) before opening the database elsewhere.
+- **USB drive (backup and restore)**: **Settings → USB drive → Connect** lends the microSD card to a computer as a USB mass-storage drive on the board's **USB OTG** port (the other USB-C port, not the UART one). **Connect** is greyed out until a computer is plugged into the OTG port; the hint under it says so. (To notice the computer, the board starts USB at power-on with the drive empty, so before **Connect** the computer shows an empty card reader called "Sudoku SD Card".) Copy `sudoku.db` off to back it up, or put a backup in its place to restore it. While the computer has the card, the board closes `sudoku.db` and shows a full-screen "USB drive" panel, so the two never write the card at once. Eject the drive on the computer and the board takes the card back by itself (or tap **Done** once copying has finished); it then reopens `sudoku.db` and loads the settings, player, statistics and game from it. If `sudoku.db` was deleted, a new skeleton is created. Needs Tools → USB Mode = "USB-OTG (TinyUSB)" (the default).
 - **Format microSD card**: **Settings → microSD card → Format** erases the card and gives it a fresh MBR with one primary FAT32 partition spanning the whole card (FatFs `f_mkfs`, cluster size chosen automatically, data area aligned to 4 MiB). It shows the card's name and size in a confirmation dialog first. Formatting erases `sudoku.db` with the statistics and solve history; afterwards the board writes a new, empty `sudoku.db` holding the current settings and the game in progress, and its statistics start from zero.
   - Insert the card before switching the board on. The card shares its SD controller with the Wi-Fi chip, and setting up a card while Wi-Fi runs breaks the Wi-Fi link and restarts the board. So the card is detected at start-up, before Wi-Fi starts, and a card inserted later is only picked up if Wi-Fi hasn't been switched on since start-up.
 - **Settings** (dark mode, sound effects, screen timeout and time zone) are kept in `sudoku.db`; the Wi-Fi network is kept on the board, with the password stored unencrypted in NVS.
@@ -107,6 +108,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 | Screen timeout                  | **Settings → Screen off after**                  |
 | Connect to Wi-Fi                | **Settings → Wi-Fi**, switch on, tap a network   |
 | Time zone                       | **Settings → Time zone**                         |
+| Back up / restore `sudoku.db`  | **Settings → USB drive → Connect**; plug into USB OTG |
 | Format the microSD card         | **Settings → microSD card → Format**, confirm    |
 
 The small number on each pad button is how many of that digit are still to place. Red digits break a row, column or box rule. The puzzle is solved when every cell is filled and nothing is red. Each puzzle has exactly one solution, so the solution is always the intended one.
@@ -145,6 +147,7 @@ esp32p4_sudoku.ino      setup/loop
 src/sudoku_ui.c         home, list, statistics, settings and game screens
 src/store.cpp           RAM copy of statistics, saved game and settings; reads the old NVS keys once
 src/stats_db.c          sudoku.db on the microSD card: statistics, saved game, settings, queries
+src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
 src/wifi_ui.c           Wi-Fi screen: networks, password keyboard

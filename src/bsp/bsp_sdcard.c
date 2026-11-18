@@ -80,6 +80,21 @@ esp_err_t bsp_sdcard_check(void)
     return sdmmc_get_status(&s_card);
 }
 
+esp_err_t bsp_sdcard_read(void *buf, uint32_t sector, uint32_t count)
+{
+    if (!s_ready) return ESP_ERR_INVALID_STATE;
+    return sdmmc_read_sectors(&s_card, buf, sector, count);
+}
+
+esp_err_t bsp_sdcard_write(const void *buf, uint32_t sector, uint32_t count)
+{
+    if (!s_ready) return ESP_ERR_INVALID_STATE;
+    return sdmmc_write_sectors(&s_card, buf, sector, count);
+}
+
+uint32_t bsp_sdcard_sector_count(void) { return s_ready ? (uint32_t)s_card.csd.capacity : 0; }
+uint32_t bsp_sdcard_sector_size(void)  { return s_ready ? (uint32_t)s_card.csd.sector_size : 512; }
+
 /* ------------------------------------------------------- FatFs disk driver */
 static DSTATUS dio_init(BYTE pdrv)   { return s_ready ? 0 : STA_NOINIT; }
 static DSTATUS dio_status(BYTE pdrv) { return s_ready ? 0 : STA_NOINIT; }

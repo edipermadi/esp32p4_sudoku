@@ -82,6 +82,13 @@ esp_err_t bsp_sdcard_check(void);
  * Unmount first. */
 esp_err_t bsp_sdcard_format_fat32(void);
 
+/* Raw sectors of the card found by bsp_sdcard_probe() (the USB drive).
+ * Only while it is unmounted: FatFs and a computer must not share it. */
+esp_err_t bsp_sdcard_read(void *buf, uint32_t sector, uint32_t count);
+esp_err_t bsp_sdcard_write(const void *buf, uint32_t sector, uint32_t count);
+uint32_t bsp_sdcard_sector_count(void);
+uint32_t bsp_sdcard_sector_size(void);
+
 #define BSP_SD_MOUNT_POINT "/sdcard"
 /* Mounts the card's FAT volume at BSP_SD_MOUNT_POINT (POSIX file API).
  * ESP_ERR_NOT_SUPPORTED: the card has no FAT filesystem. */

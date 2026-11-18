@@ -11,7 +11,8 @@
  *   - players: who is playing; switch, add or rename (statistics and the
  *     game in progress are per player, in sudoku.db).
  *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone,
- *     and formatting the microSD card (FAT32, one partition).
+ *     formatting the microSD card (FAT32, one partition), and lending it to a
+ *     computer as a USB drive (to back up or restore sudoku.db).
  *   - wifi: on/off, nearby networks, password keyboard (wifi_ui.c).
  *
  * Clock: with Wi-Fi connected the time comes from NTP (wifi_mgr.cpp starts
@@ -44,6 +45,7 @@
 #include "wifi_ui.h"
 #include "timezones.h"
 #include "stats_db.h"
+#include "usb_msc.h"
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
@@ -149,6 +151,9 @@ static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
 static lv_obj_t *st_sd_btn, *st_sd_hint;
+static lv_obj_t *u_ovl;                   /* "USB drive" panel while the computer has the card */
+static lv_obj_t *st_usb_btn, *st_usb_hint;
+static bool u_reloading;                  /* card back: waiting for sudoku.db to reopen */
 
 /* list screen */
 static lv_obj_t *l_total, *l_strip, *l_arrow_l, *l_arrow_r;
@@ -169,6 +174,9 @@ static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss;
 static void show_list(void);
 static void open_puzzle(uint16_t id);
 static void render_players(void);
+static void usb_finish(void);
+static void usb_btn_update(void);
+static void apply_theme(bool dark);
 
 /* ============================================================= helpers */
 
@@ -1082,6 +1090,7 @@ static void clock_cb(lv_timer_t *t)
         char sd[64];
         stats_db_status(sd, sizeof(sd));
         if (strcmp(lv_label_get_text(st_sd_hint), sd) != 0) lv_label_set_text(st_sd_hint, sd);
+        usb_btn_update();
         return;
     }
     if (act != scr_home) return;
@@ -1440,6 +1449,19 @@ static void sd_poll_cb(lv_timer_t *t)
         else if (act == scr_stats) refresh_stats();
     }
 
+    if (u_ovl && usb_msc_ejected()) usb_finish();
+    static store_prefs_t prefs;
+    if (u_reloading && stats_db_take_prefs(&prefs)) {
+        /* sudoku.db is back (perhaps a restored copy): take everything from it */
+        u_reloading = false;
+        store_apply_prefs(&prefs);
+        g_id = STORE_NO_GAME;
+        sfx_set_enabled(store_sound_enabled());
+        tz_apply(store_timezone());
+        s_sleep_min = store_screen_timeout_min();
+        l_coll = store_last_collection();
+        apply_theme(store_dark_mode());                    /* redraws every screen with it */
+    }
     static stats_player_change_t ch;
     if (stats_db_take_player_change(&ch)) {
         store_set_player(ch.id, ch.name);
@@ -1522,6 +1544,81 @@ static void sd_poll_cb(lv_timer_t *t)
     default:
         break;
     }
+}
+
+/* ------------------------------------------------------------- USB drive */
+
+static void usb_finish(void)
+{
+    if (!u_ovl) return;
+    usb_msc_set_enabled(false);                    /* the computer lets go first */
+    lv_obj_delete_async(u_ovl);
+    u_ovl = NULL;
+    u_reloading = true;                            /* sd_poll_cb applies what sudoku.db has */
+    stats_db_start();                              /* remount + reopen (a new skeleton if it was deleted) */
+    sudoku_ui_notice("Card back on the board: reopening sudoku.db...", 2500);
+}
+
+/* Connect only works with a computer on the OTG port: grey it out otherwise */
+static void usb_btn_update(void)
+{
+    if (!st_usb_btn) return;
+    bool host = usb_msc_host_connected();
+    lv_obj_set_state(st_usb_btn, LV_STATE_DISABLED, !(s_sd_present && host));
+    const char *hint = !s_sd_present ? "No microSD card"
+                     : host ? "Back up or restore sudoku.db on a computer"
+                     : "Plug the USB OTG port (not UART) into a computer";
+    if (strcmp(lv_label_get_text(st_usb_hint), hint) != 0) lv_label_set_text(st_usb_hint, hint);
+}
+
+static void usb_done_cb(lv_event_t *e)
+{
+    usb_finish();
+}
+
+static void usb_connect_cb(lv_event_t *e)
+{
+    if (!s_sd_present) {
+        sudoku_ui_notice("No microSD card. Insert one before switching on.", 4000);
+        return;
+    }
+    if (s_sd_state != SD_IDLE) return;             /* formatting */
+    if (!usb_msc_host_connected()) return;         /* greyed out anyway (see usb_btn_update) */
+    stats_db_suspend();                            /* save, close sudoku.db, unmount: the card is free */
+    if (usb_msc_set_enabled(true) != ESP_OK) {
+        stats_db_start();
+        sudoku_ui_notice("Couldn't start the USB drive.", 4000);
+        return;
+    }
+    /* full screen, above everything: nothing may write the card meanwhile */
+    u_ovl = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(u_ovl);
+    lv_obj_set_size(u_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(u_ovl, C_BG, 0);
+    lv_obj_set_style_bg_opa(u_ovl, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(u_ovl, true);
+    lv_obj_set_flex_flow(u_ovl, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(u_ovl, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(u_ovl, 50, 0);
+    lv_obj_set_style_pad_row(u_ovl, 26, 0);
+    lv_obj_t *t = make_label(u_ovl, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, LV_SYMBOL_USB "  USB drive");
+    lv_obj_t *txt = make_label(u_ovl, &lv_font_montserrat_20, C_TEXT);
+    lv_obj_set_width(txt, LV_PCT(100));
+    lv_label_set_long_mode(txt, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_style_text_align(txt, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(txt, "The microSD card is now a drive on the computer connected to the board's "
+                           "USB OTG port.\n\nCopy sudoku.db to back it up, or put a backup in its place "
+                           "to restore it.");
+    lv_obj_t *hint = make_label(u_ovl, &lv_font_montserrat_16, C_MUTED);
+    lv_obj_set_width(hint, LV_PCT(100));
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(hint, "Eject the drive on the computer when you're done; the game takes the card "
+                            "back by itself. Done does the same, but only tap it once copying has finished.");
+    lv_obj_t *d = make_btn(u_ovl, 0, 0, 220, 60, "Done", &lv_font_montserrat_20, usb_done_cb, NULL);
+    lv_obj_set_style_bg_color(d, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(d, 0), lv_color_white(), 0);
 }
 
 /* ------------------------------------------------------------- players */
@@ -2122,7 +2219,7 @@ static void build_stats(void)
 static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint)
 {
     lv_obj_t *r = lv_obj_create(parent);
-    lv_obj_set_size(r, LV_PCT(100), 84);
+    lv_obj_set_size(r, LV_PCT(100), 76);
     lv_obj_set_style_bg_color(r, C_CARD, 0);
     lv_obj_set_style_border_width(r, 0, 0);
     lv_obj_set_style_radius(r, 12, 0);
@@ -2163,7 +2260,7 @@ static void build_settings(void)
     lv_obj_set_pos(col, 40, 84);
     lv_obj_set_size(col, SCR_W - 80, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(col, 12, 0);
+    lv_obj_set_style_pad_row(col, 10, 0);
 
     lv_obj_t *r = settings_row(col, "Dark mode", "Light text on a dark background");
     st_theme_sw = settings_switch(r, s_dark, theme_sw_cb);
@@ -2254,6 +2351,15 @@ static void build_settings(void)
     lv_obj_set_style_bg_opa(st_sd_btn, LV_OPA_50, LV_STATE_DISABLED);
     lv_obj_align(st_sd_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     if (s_sd_state == SD_FORMATTING) sd_btn_text("Formatting...", false);
+
+    r = settings_row(col, "USB drive", "");
+    st_usb_hint = lv_obj_get_child(r, 1);
+    st_usb_btn = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_USB "  Connect", &lv_font_montserrat_18, usb_connect_cb, NULL);
+    lv_obj_set_style_bg_color(st_usb_btn, C_CARD2, 0);
+    lv_obj_set_style_bg_opa(st_usb_btn, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_set_style_text_opa(st_usb_btn, LV_OPA_50, LV_STATE_DISABLED);
+    lv_obj_align(st_usb_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+    usb_btn_update();
 }
 
 static void build_wifi(void)
@@ -2375,6 +2481,9 @@ esp_err_t sudoku_ui_start(void)
         }
     } else {
         printf("microSD: no card\n");
+    }
+    if (s_sd_present && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
+        printf("usb_msc: USB didn't start\n");
     }
     wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
 
