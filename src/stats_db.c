@@ -39,7 +39,7 @@ typedef struct {                /* CMD_OPEN: what the board has (freed by the wo
 typedef enum {
     CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
-    CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET,
+    CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
 } cmd_type_t;
 typedef struct {
     cmd_type_t type;
@@ -101,7 +101,10 @@ static stats_plays_t *s_plays;       /* CMD_PLAYS result (PSRAM) */
 static struct {
     int level, id;
     uint8_t givens[81];
+    char day[12];                /* daily: 'YYYY-MM-DD', "" otherwise */
     bool ok;
+    bool solved_today;           /* CMD_DAILY results */
+    int streak;
 } s_gen;
 static SemaphoreHandle_t s_gen_done;
 static bool s_plays_new;
@@ -129,7 +132,7 @@ static bool exec(const char *sql)
     return true;
 }
 
-/* table layouts (user_version 7), shared by SCHEMA and the upgrade below */
+/* table layouts (user_version 8), shared by SCHEMA and the upgrade below */
 #define T_PLAYERS \
     "players("                                                                  \
     "  id INTEGER PRIMARY KEY,"                                                 \
@@ -183,7 +186,8 @@ static const char SCHEMA[] =
     "  id INTEGER PRIMARY KEY,"                          /* puzzle id = 2000 + id */
     "  level INTEGER NOT NULL,"                          /* 0 Easy, 1 Medium, 2 Hard, 3 Expert */
     "  givens TEXT NOT NULL,"                            /* 81 digits row by row, 0 = empty */
-    "  created_at INTEGER);";
+    "  created_at INTEGER,"
+    "  day TEXT);";                                      /* daily puzzle: its date 'YYYY-MM-DD', else NULL */
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -200,7 +204,7 @@ static const char SCHEMA_POST[] =
     "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
     "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
     "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
-    "PRAGMA user_version = 7;";
+    "PRAGMA user_version = 8;";
 
 /* MIN() of SQL is NULL if either side is: keep the known value then */
 #define FEWEST_MERGED "COALESCE(MIN(fewest_mistakes, excluded.fewest_mistakes), fewest_mistakes, excluded.fewest_mistakes)"
@@ -222,15 +226,16 @@ static const char SQL_SOLVE_INSERT[] =
     " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10)";
 
 static int query_int(const char *sql);
-static int gen_level_of(int gid);
+static int gen_level_of(int gid, bool *daily);
 
 static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
 {
     sqlite3_bind_int(st, 1, id);
     if (puzzle_is_generated(id)) {               /* level "Generated Hard", number = generated.id */
         char lv[24];
-        int g = gen_level_of(id - PUZZLE_GEN_BASE);
-        snprintf(lv, sizeof(lv), "Generated %s", g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
+        bool daily = false;
+        int g = gen_level_of(id - PUZZLE_GEN_BASE, &daily);
+        snprintf(lv, sizeof(lv), "%s %s", daily ? "Daily" : "Generated", g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
         sqlite3_bind_text(st, 2, lv, -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(st, 3, id - PUZZLE_GEN_BASE);
         return;
@@ -425,6 +430,7 @@ static bool upgrade_schema(void)
     if (!has_column("saved_game", "hints")) ok &= exec("ALTER TABLE saved_game ADD COLUMN hints INTEGER NOT NULL DEFAULT 0");
     if (!has_column("solves", "moves")) ok &= exec("ALTER TABLE solves ADD COLUMN moves BLOB");
     if (!has_column("saved_game", "moves")) ok &= exec("ALTER TABLE saved_game ADD COLUMN moves BLOB");
+    if (!has_column("generated", "day")) ok &= exec("ALTER TABLE generated ADD COLUMN day TEXT");
 
     bool old_solves = !has_column("solves", "player_id");
     bool old_stats = !has_column("puzzle_stats", "player_id");
@@ -987,13 +993,17 @@ static void do_month(int year, int month)
 
 /* ------------------------------------------------------------- generated puzzles */
 
-static int gen_level_of(int gid)
+static int gen_level_of(int gid, bool *daily)
 {
     int level = -1;
+    *daily = false;
     sqlite3_stmt *st;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, day FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, gid);
-        if (sqlite3_step(st) == SQLITE_ROW) level = sqlite3_column_int(st, 0);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            level = sqlite3_column_int(st, 0);
+            *daily = sqlite3_column_type(st, 1) != SQLITE_NULL;
+        }
         sqlite3_finalize(st);
     }
     return level;
@@ -1007,10 +1017,12 @@ static void do_gen_add(void)
     for (int i = 0; i < 81; i++) cells[i] = (char)('0' + (s_gen.givens[i] <= 9 ? s_gen.givens[i] : 0));
     cells[81] = 0;
     time_t now = time(NULL);
-    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at) VALUES(?1, ?2, ?3)",
+    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day) VALUES(?1, ?2, ?3, ?4)",
                                    -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.level);
         sqlite3_bind_text(st, 2, cells, 81, SQLITE_STATIC);
+        if (s_gen.day[0]) sqlite3_bind_text(st, 4, s_gen.day, -1, SQLITE_STATIC);
+        else sqlite3_bind_null(st, 4);
         if (now > 1700000000) sqlite3_bind_int64(st, 3, now);
         else sqlite3_bind_null(st, 3);
         if (sqlite3_step(st) == SQLITE_DONE) {
@@ -1026,15 +1038,72 @@ static void do_gen_get(void)
 {
     s_gen.ok = false;
     sqlite3_stmt *st;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.id);
         if (sqlite3_step(st) == SQLITE_ROW) {
             const char *g = (const char *)sqlite3_column_text(st, 1);
+            const char *day = (const char *)sqlite3_column_text(st, 2);
+            snprintf(s_gen.day, sizeof(s_gen.day), "%s", day ? day : "");
             if (g && strlen(g) == 81) {
                 s_gen.level = sqlite3_column_int(st, 0);
                 for (int i = 0; i < 81; i++) s_gen.givens[i] = (g[i] >= '0' && g[i] <= '9') ? g[i] - '0' : 0;
                 s_gen.ok = true;
             }
+        }
+        sqlite3_finalize(st);
+    }
+    xSemaphoreGive(s_gen_done);
+}
+
+/* 'YYYY-MM-DD' of the day before (in place) */
+static void prev_day(char *d)
+{
+    struct tm tm = {0};
+    if (sscanf(d, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) != 3) return;
+    tm.tm_year -= 1900;
+    tm.tm_mon -= 1;
+    tm.tm_mday -= 1;
+    tm.tm_hour = 12;                              /* clear of DST changes */
+    mktime(&tm);                                  /* normalises day 0 to the month before */
+    strftime(d, 11, "%Y-%m-%d", &tm);
+}
+
+/* today's daily puzzle (s_gen.day) for the current player: its id (0 = not
+ * made yet), solved today, and the streak of days in a row with the daily
+ * solved, ending today or yesterday */
+static void do_daily(void)
+{
+    s_gen.id = 0;
+    s_gen.solved_today = false;
+    s_gen.streak = 0;
+    s_gen.ok = s_db != NULL;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT id FROM generated WHERE day = ?1 ORDER BY id LIMIT 1",
+                                   -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(st, 1, s_gen.day, -1, SQLITE_STATIC);
+        if (sqlite3_step(st) == SQLITE_ROW) s_gen.id = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+    }
+    if (s_db && sqlite3_prepare_v2(s_db,
+            "SELECT DISTINCT g.day FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id"
+            " WHERE s.player_id = ?1 AND g.day IS NOT NULL AND g.day <= ?2 ORDER BY g.day DESC",
+            -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_text(st, 2, s_gen.day, -1, SQLITE_STATIC);
+        char want[12];
+        snprintf(want, sizeof(want), "%s", s_gen.day);
+        bool first = true;
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            const char *d = (const char *)sqlite3_column_text(st, 0);
+            if (!d) break;
+            if (first) {
+                first = false;
+                s_gen.solved_today = strcmp(d, want) == 0;
+                if (!s_gen.solved_today) prev_day(want);   /* not yet today: a streak can end yesterday */
+            }
+            if (strcmp(d, want) != 0) break;
+            s_gen.streak++;
+            prev_day(want);
         }
         sqlite3_finalize(st);
     }
@@ -1234,6 +1303,9 @@ static void worker(void *arg)
         case CMD_GEN_GET:
             do_gen_get();
             break;
+        case CMD_DAILY:
+            do_daily();
+            break;
         case CMD_SUSPEND:
             flush_game();
             db_close();
@@ -1413,19 +1485,31 @@ static bool gen_call(cmd_type_t type)
     return xSemaphoreTake(s_gen_done, pdMS_TO_TICKS(3000)) == pdTRUE && s_gen.ok;
 }
 
-int stats_db_gen_add(int level, const uint8_t givens[81])
+int stats_db_gen_add(int level, const uint8_t givens[81], const char *day)
 {
     s_gen.level = level;
     memcpy(s_gen.givens, givens, 81);
+    snprintf(s_gen.day, sizeof(s_gen.day), "%s", day ? day : "");
     return gen_call(CMD_GEN_ADD) ? s_gen.id : -1;
 }
 
-bool stats_db_gen_get(int id, uint8_t givens[81], int *level)
+bool stats_db_gen_get(int id, uint8_t givens[81], int *level, char day[12])
 {
     s_gen.id = id;
     if (!gen_call(CMD_GEN_GET)) return false;
     memcpy(givens, s_gen.givens, 81);
     if (level) *level = s_gen.level;
+    if (day) snprintf(day, 12, "%s", s_gen.day);
+    return true;
+}
+
+bool stats_db_daily_status(const char *day, int *id, bool *solved_today, int *streak)
+{
+    snprintf(s_gen.day, sizeof(s_gen.day), "%s", day);
+    if (!gen_call(CMD_DAILY)) return false;
+    *id = s_gen.id;
+    *solved_today = s_gen.solved_today;
+    *streak = s_gen.streak;
     return true;
 }
 

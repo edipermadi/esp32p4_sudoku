@@ -37,6 +37,35 @@ int sudoku_grade(const uint8_t givens[81]);
 /* Number of solutions, counting up to limit. */
 int sudoku_count_solutions(const uint8_t cells[81], int limit);
 
+/* ---------------------------------------------------------------- hints */
+/* Units: 0..8 rows, 9..17 columns, 18..26 boxes (left to right, top to bottom). */
+int sudoku_unit_cell(int unit, int k);          /* the k-th cell (0..8) of a unit */
+
+typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR } tech_kind_t;
+typedef struct {
+    int kind;                /* tech_kind_t */
+    int unit, unit2;         /* pointing: box, line; claiming: line, box; pairs: the unit */
+    int digit, digit2;       /* pointing/claiming: digit; pairs: the two digits */
+    int cell1, cell2;        /* pairs: the two cells */
+} sudoku_tech_t;
+
+typedef enum {
+    STEP_NONE = 0,           /* no simple step: cell/digit is just the answer for the easiest cell */
+    STEP_WRONG,              /* cell holds a wrong digit */
+    STEP_HIDDEN_SINGLE,      /* digit fits only cell within unit */
+    STEP_NAKED_SINGLE,       /* cell can only take digit */
+} step_kind_t;
+typedef struct {
+    int kind;                /* step_kind_t */
+    int cell, digit;
+    int unit;                /* hidden single: the unit */
+    sudoku_tech_t tech;      /* before the single, if a technique was needed (kind != TECH_NONE) */
+} sudoku_step_t;
+
+/* The next step a person would take on the board vals (81, 0 = empty;
+ * givens included), knowing the solution. False if the board is full. */
+bool sudoku_next_step(const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out);
+
 #ifdef __cplusplus
 }
 #endif

@@ -20,8 +20,9 @@
  *              mistakes, saved_at, started_at, hints, moves)    saved after every move
  *       the one unfinished game; cells = 81 digits row by row (0 = empty,
  *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
- *   generated(id, level, givens, created_at): puzzles made on the board;
+ *   generated(id, level, givens, created_at, day): puzzles made on the board;
  *       their puzzle id elsewhere is 2000 + id, level "Generated Easy" etc.
+ *       day = the date of a daily puzzle (level "Daily Easy" etc.)
  *   settings(key, value): dark_mode, sound, screen_off_minutes, brightness, volume, time_zone,
  *       last_level, current_player, and migrated_from_nvs (set when the database is first
  *       filled: from what the board has, or, after a format, with just the
@@ -200,8 +201,13 @@ typedef struct {
 /* Puzzles made on the board (generator.h): stores one and returns its id in
  * the generated table (puzzle id = PUZZLE_GEN_BASE + it), or -1 without a
  * database; reads one back. Both wait for the database (milliseconds). */
-int stats_db_gen_add(int level, const uint8_t givens[81]);
-bool stats_db_gen_get(int id, uint8_t givens[81], int *level);
+int stats_db_gen_add(int level, const uint8_t givens[81], const char *day);   /* day: daily puzzle's date, else NULL */
+bool stats_db_gen_get(int id, uint8_t givens[81], int *level, char day[12]); /* day "" if not a daily (may be NULL) */
+/* Daily puzzle of day ('YYYY-MM-DD'): id in the generated table (0 = not
+ * made yet), whether the current player solved it, and their streak of
+ * days in a row with the daily solved (ending today, or yesterday if not
+ * yet today). False without a database. Waits for the database. */
+bool stats_db_daily_status(const char *day, int *id, bool *solved_today, int *streak);
 
 void stats_db_query_plays(int offset);
 bool stats_db_take_plays(stats_plays_t *out);

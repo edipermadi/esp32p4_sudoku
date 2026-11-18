@@ -12,7 +12,7 @@
  *   - statistics: per level and per puzzle best times, mistakes, solves,
  *     read from sudoku.db on the microSD card (stats_db.c).
  *   - history: a calendar of the days anyone played; tap a day for who
- *     played what (from sudoku.db, opened from Statistics); tap a solve to
+ *     played what (from sudoku.db, opened from Home); tap a solve to
  *     replay it.
  *   - replay: a solve's move log played back over the givens, with play /
  *     pause, step, start / end, a slider and 1x-8x speed (also from the
@@ -147,6 +147,11 @@ static uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn'
 static uint16_t g_hints;         /* cells filled with Fill (undo doesn't remove them either) */
 static uint8_t  g_sol[81];       /* the solution, for Fill */
 static game_move_t *g_moves;     /* move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
+static uint8_t  h_mark[81];      /* hint highlight: 0, 1 = where to look, 2 = the cell */
+static int      h_step;          /* 0 = no hint open, 1 = nudge shown, 2 = reason shown */
+static sudoku_step_t h_info;
+static lv_obj_t *h_card, *h_text, *h_act;
+static void hint_drop(void);
 static int      g_nmoves;
 static bool     g_sol_ok;
 static int64_t  g_started_at;    /* Unix time the puzzle was opened/restarted, 0 = not known yet */
@@ -169,7 +174,7 @@ static lv_obj_t *scr_plays;               /* Gameplays: recorded solves to repla
 #define HOME_MENU_MAX_H 470      /* room under the clock, title and count */
 static lv_obj_t *h_menu;
 static int h_menu_grid;                   /* 1 = grid, 0 = column, -1 = not laid out */
-static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player;
+static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player, *h_daily_sub, *h_daily;
 
 /* history screen */
 static lv_obj_t *hz_cal, *hz_title, *hz_list;
@@ -250,11 +255,12 @@ static struct {
     uint16_t id;                        /* 0 = free slot */
     uint8_t level;
     uint8_t givens[81];
+    char day[12];                       /* daily puzzle's date, "" otherwise */
 } s_gen_cache[GEN_CACHE];
 static int s_gen_cache_next;
 static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
 
-static void gen_cache_put(uint16_t id, int level, const uint8_t givens[81])
+static void gen_cache_put(uint16_t id, int level, const uint8_t givens[81], const char *day)
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) return;
@@ -262,27 +268,36 @@ static void gen_cache_put(uint16_t id, int level, const uint8_t givens[81])
     s_gen_cache[s_gen_cache_next].id = id;
     s_gen_cache[s_gen_cache_next].level = (uint8_t)level;
     memcpy(s_gen_cache[s_gen_cache_next].givens, givens, 81);
+    snprintf(s_gen_cache[s_gen_cache_next].day, sizeof(s_gen_cache[0].day), "%s", day ? day : "");
     s_gen_cache_next = (s_gen_cache_next + 1) % GEN_CACHE;
 }
 
-/* givens and level of a generated puzzle (givens may be NULL); false if unknown */
-static bool gen_lookup(uint16_t id, uint8_t *givens, int *level)
+/* givens, level and daily date of a generated puzzle (any may be NULL); false if unknown */
+static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *level, char day[12])
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) {
             if (givens) memcpy(givens, s_gen_cache[i].givens, 81);
             if (level) *level = s_gen_cache[i].level;
+            if (day) snprintf(day, 12, "%s", s_gen_cache[i].day);
             return true;
         }
     }
     if (id >= PUZZLE_GEN_RAM_BASE) return false;          /* RAM-only, and gone */
     uint8_t g[81];
     int lv;
-    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, &lv)) return false;
-    gen_cache_put(id, lv, g);
+    char d[12];
+    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, &lv, d)) return false;
+    gen_cache_put(id, lv, g, d);
     if (givens) memcpy(givens, g, 81);
     if (level) *level = lv;
+    if (day) snprintf(day, 12, "%s", d);
     return true;
+}
+
+static bool gen_lookup(uint16_t id, uint8_t *givens, int *level)
+{
+    return gen_lookup_day(id, givens, level, NULL);
 }
 
 /* the givens of any puzzle, built-in or generated */
@@ -300,7 +315,19 @@ static void puzzle_name(uint16_t id, char *buf, size_t n)
 {
     if (puzzle_is_generated(id)) {
         int lv = -1;
-        gen_lookup(id, NULL, &lv);
+        char day[12] = "";
+        gen_lookup_day(id, NULL, &lv, day);
+        if (day[0]) {                                     /* "Daily Hard, 18 Nov" */
+            struct tm tm = {0};
+            char when[16] = "";
+            if (sscanf(day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
+                tm.tm_year -= 1900;
+                tm.tm_mon -= 1;
+                strftime(when, sizeof(when), "%d %b", &tm);
+            }
+            snprintf(buf, n, "Daily %s, %s", lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", when);
+            return;
+        }
         unsigned num = id >= PUZZLE_GEN_RAM_BASE ? (unsigned)(id - PUZZLE_GEN_RAM_BASE + 1)
                                                  : (unsigned)(id - PUZZLE_GEN_BASE);
         snprintf(buf, n, "Generated %s #%u", lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", num);
@@ -504,6 +531,9 @@ static void refresh_board(void)
             else if (sv && g_b.val[i] == sv) bg = C_CELL_SAME;
             else if (is_peer(i, g_sel)) bg = C_CELL_PEER;
         }
+        if (h_step && !g_solved && h_mark[i]) {
+            bg = h_mark[i] == 2 ? (h_info.kind == STEP_WRONG ? C_CELL_BAD : C_CELL_SEL) : C_CELL_SAME;
+        }
         if (!g_solved && g_conflict[i] && !g_given[i] && i != g_sel) bg = C_CELL_BAD;
         lv_obj_set_style_bg_color(g_cells[i], bg, 0);
 
@@ -556,6 +586,16 @@ static void solve_commit_cb(lv_timer_t *t)
     stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_hints,
                           s_solve_started, g_moves, g_nmoves);               /* finished: now */
     if (store_saved_game()->id == s_solve_id) store_clear_game();
+    char day[12] = "";
+    if (puzzle_is_generated(s_solve_id) && gen_lookup_day(s_solve_id, NULL, NULL, day) && day[0]) {
+        int id, streak;
+        bool solved;
+        if (stats_db_daily_status(day, &id, &solved, &streak) && solved) {   /* after the solve above (queued first) */
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Daily puzzle solved! Streak: %d day%s", streak, streak == 1 ? "" : "s");
+            sudoku_ui_notice(msg, 4000);
+        }
+    }
 }
 
 static void on_solved(void)
@@ -616,6 +656,7 @@ static void on_solved(void)
 
 static void after_move(void)
 {
+    hint_drop();                                    /* the board changed: an open hint no longer fits */
     compute_conflicts();
     bool full = filled_count() == 81;
     bool ok = true;
@@ -807,10 +848,179 @@ static void notes_cb(lv_event_t *e)
 static void set_paused(bool p)
 {
     if (g_solved) p = false;
+    if (p) {
+        hint_drop();
+        refresh_board();
+    }
     g_paused = p;
     lv_obj_set_hidden(g_pause_ovl, !p);
     update_header();
     if (p) save_current();
+}
+
+/* ------------------------------------------------------------- hints */
+/*
+ * Hint: the next step a person would take (generator.c, sudoku_next_step),
+ * in two steps: first where to look, then (More) the cell and why, then
+ * Place it. A wrong digit is pointed out first. Each hint opened counts once.
+ */
+static void unit_name(int u, char *buf, size_t n)
+{
+    if (u < 9) snprintf(buf, n, "row %d", u + 1);
+    else if (u < 18) snprintf(buf, n, "column %d", u - 9 + 1);
+    else snprintf(buf, n, "box %d", u - 18 + 1);
+}
+
+static void mark_unit(int u, uint8_t v)
+{
+    for (int k = 0; k < 9; k++) {
+        int c = sudoku_unit_cell(u, k);
+        if (h_mark[c] < v) h_mark[c] = v;
+    }
+}
+
+/* closes the hint without redrawing (the caller does) */
+static void hint_drop(void)
+{
+    if (!h_step) return;
+    h_step = 0;
+    memset(h_mark, 0, sizeof(h_mark));
+    lv_obj_set_hidden(h_card, true);
+}
+
+static void hint_render(void)
+{
+    const sudoku_step_t *h = &h_info;
+    const sudoku_tech_t *t = &h->tech;
+    char text[300], u1[16], u2[16], tech[160] = "";
+    int r = h->cell / 9 + 1, c = h->cell % 9 + 1;
+    memset(h_mark, 0, sizeof(h_mark));
+
+    /* where to look: the technique's area if one is needed, else the single's */
+    if (h->kind == STEP_WRONG || h->kind == STEP_NAKED_SINGLE || h->kind == STEP_NONE) h_mark[h->cell] = 1;
+    if (h->kind == STEP_HIDDEN_SINGLE && !t->kind) mark_unit(h->unit, 1);
+    if (t->kind) {
+        mark_unit(t->unit, 1);
+        unit_name(t->unit, u1, sizeof(u1));
+        unit_name(t->unit2 >= 0 ? t->unit2 : t->unit, u2, sizeof(u2));
+        switch (t->kind) {
+        case TECH_POINTING:
+            snprintf(tech, sizeof(tech), "In %s, %d can only be in %s, so no other cell of %s can be %d. ",
+                     u1, t->digit, u2, u2, t->digit);
+            break;
+        case TECH_CLAIMING:
+            snprintf(tech, sizeof(tech), "In %s, %d can only be in %s, so no other cell of %s can be %d. ",
+                     u1, t->digit, u2, u2, t->digit);
+            break;
+        case TECH_NAKED_PAIR:
+            snprintf(tech, sizeof(tech), "In %s, two cells can only be %d or %d, so no other cell there can. ",
+                     u1, t->digit, t->digit2);
+            break;
+        case TECH_HIDDEN_PAIR:
+            snprintf(tech, sizeof(tech), "In %s, %d and %d fit only two cells, so those two can't be anything else. ",
+                     u1, t->digit, t->digit2);
+            break;
+        }
+    }
+
+    if (h_step == 1) {
+        char un[16];
+        switch (h->kind) {
+        case STEP_WRONG:
+            snprintf(text, sizeof(text), "Something's not right: check the highlighted cell.");
+            break;
+        case STEP_HIDDEN_SINGLE:
+            if (t->kind) snprintf(text, sizeof(text), "Look at %s: it narrows down where a digit can go.", u1);
+            else {
+                unit_name(h->unit, un, sizeof(un));
+                snprintf(text, sizeof(text), "Look at %s: one digit has only one place left there.", un);
+            }
+            break;
+        case STEP_NAKED_SINGLE:
+            if (t->kind) snprintf(text, sizeof(text), "Look at %s, then at the highlighted cell.", u1);
+            else snprintf(text, sizeof(text), "Look at the highlighted cell: only one digit fits.");
+            break;
+        default:
+            snprintf(text, sizeof(text), "No simple step here: this needs advanced techniques. More shows one cell.");
+            break;
+        }
+        lv_label_set_text(lv_obj_get_child(h_act, 0), "More");
+    } else {
+        h_mark[h->cell] = 2;
+        char un[16];
+        switch (h->kind) {
+        case STEP_WRONG:
+            snprintf(text, sizeof(text), "The %d at row %d, column %d is wrong: it isn't part of the solution.",
+                     h->digit, r, c);
+            break;
+        case STEP_HIDDEN_SINGLE:
+            unit_name(h->unit, un, sizeof(un));
+            snprintf(text, sizeof(text), "%s%s%d can only go here in %s: its other empty cells already see a %d "
+                     "in their row, column or box.", tech, t->kind ? "That leaves one place: " : "",
+                     h->digit, un, h->digit);
+            break;
+        case STEP_NAKED_SINGLE:
+            snprintf(text, sizeof(text), "%sOnly %d fits here (row %d, column %d): every other digit is already "
+                     "in its row, column or box%s.", tech, h->digit, r, c, t->kind ? ", or ruled out above" : "");
+            break;
+        default:
+            snprintf(text, sizeof(text), "The highlighted cell (row %d, column %d) is %d.", r, c, h->digit);
+            break;
+        }
+        lv_label_set_text(lv_obj_get_child(h_act, 0), h->kind == STEP_WRONG ? "Erase it" : "Place it");
+    }
+    lv_label_set_text(h_text, text);
+
+    /* the card at the bottom, or at the top when the bottom row matters */
+    bool bottom_row = false;
+    for (int i = 72; i < 81; i++) bottom_row |= h_mark[i] != 0;
+    lv_obj_set_y(h_card, bottom_row ? 4 : SCR_W - 96);
+    lv_obj_set_hidden(h_card, false);
+    refresh_board();
+}
+
+static void hint_act_cb(lv_event_t *e)
+{
+    if (!h_step || g_solved || g_paused) return;
+    if (h_step == 1) {
+        h_step = 2;
+        hint_render();
+        return;
+    }
+    int i = h_info.cell, d = h_info.digit;
+    bool wrong = h_info.kind == STEP_WRONG;
+    push_undo();
+    if (wrong) {
+        record_move(i, 0, MOVE_ERASE);
+        g_b.val[i] = 0;
+    } else {
+        place_digit(i, d);
+        record_move(i, d, MOVE_FILL);
+    }
+    g_sel = i;
+    after_move();                                   /* closes the hint */
+    if (!wrong && !g_solved) placed_sounds(i, d);
+}
+
+static void hint_close_cb(lv_event_t *e)
+{
+    hint_drop();
+    refresh_board();
+}
+
+static void hint_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused || !g_sol_ok) return;
+    if (h_step) {                                   /* already open: same as More / Place it */
+        hint_act_cb(e);
+        return;
+    }
+    if (!sudoku_next_step(g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
+    if (g_hints < 0xFFFF) g_hints++;               /* every hint opened counts once */
+    refresh_board();                                /* the hint count on the Fill button */
+    save_current();
+    h_step = 1;
+    hint_render();
 }
 
 static void pause_cb(lv_event_t *e)
@@ -826,6 +1036,7 @@ static void reset_game(void)
     g_mistakes = 0;
     g_hints = 0;
     g_nmoves = 0;                                   /* a new attempt, a new log */
+    hint_drop();
     mark_started();                                 /* opened or restarted: a new attempt */
     g_undo_len = g_undo_head = 0;
     g_sel = -1;
@@ -984,6 +1195,9 @@ static void build_game(void)
     g_best = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(g_best, 126, 36);
 
+    lv_obj_t *hb = make_btn(scr_game, SCR_W - 8 - 200 - 8 - 92, 6, 92, 48, "Hint", &lv_font_montserrat_18, hint_cb, NULL);
+    lv_obj_set_style_text_color(lv_obj_get_child(hb, 0), C_ACCENT, 0);
+
     lv_obj_t *tb = make_btn(scr_game, SCR_W - 8 - 200, 6, 200, 48, NULL, NULL, pause_cb, NULL);
     lv_obj_set_style_bg_opa(tb, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(tb, LV_OPA_COVER, LV_STATE_PRESSED);
@@ -1076,6 +1290,30 @@ static void build_game(void)
     lv_obj_set_width(g_status, SCR_W - 8 - bx);
     lv_obj_set_style_text_align(g_status, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(g_status, bx, BOT_Y + (BOT_H - 20) / 2);
+
+    /* hint card: text, then More / Place it, and close (moved to the top by hint_render if needed) */
+    h_card = lv_obj_create(scr_game);
+    lv_obj_set_size(h_card, SCR_W - 16, 92);
+    lv_obj_set_pos(h_card, 8, SCR_W - 96);
+    lv_obj_set_style_bg_color(h_card, C_CARD, 0);
+    lv_obj_set_style_border_color(h_card, C_ACCENT, 0);
+    lv_obj_set_style_border_width(h_card, 2, 0);
+    lv_obj_set_style_radius(h_card, 12, 0);
+    lv_obj_set_style_pad_all(h_card, 10, 0);
+    lv_obj_set_scrollable(h_card, false);
+    h_text = make_label(h_card, &lv_font_montserrat_16, C_TEXT);
+    lv_obj_set_width(h_text, SCR_W - 16 - 20 - 130 - 66);
+    lv_label_set_long_mode(h_text, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_align(h_text, LV_ALIGN_LEFT_MID, 2, 0);
+    h_act = make_btn(h_card, 0, 0, 122, 64, "More", &lv_font_montserrat_18, hint_act_cb, NULL);
+    lv_obj_set_style_bg_color(h_act, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(h_act, 0), lv_color_white(), 0);
+    lv_obj_align(h_act, LV_ALIGN_RIGHT_MID, -66, 0);
+    lv_obj_t *hx = make_btn(h_card, 0, 0, 60, 64, LV_SYMBOL_CLOSE, &lv_font_montserrat_22, hint_close_cb, NULL);
+    lv_obj_set_style_bg_color(hx, C_CARD2, 0);
+    lv_obj_align(hx, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_hidden(h_card, true);
+    h_step = 0;
 
     /* solved dialog */
     g_win_ovl = lv_obj_create(scr_game);
@@ -1542,8 +1780,16 @@ static void rx_name(const stats_replay_t *r, char *out, size_t n)
 
 static void export_start(const stats_replay_t *r)
 {
-    if (rx_busy || !stats_db_ready()) return;
-    if (!rp_prepare(r->puzzle, r->moves, r->n)) return;
+    if (rx_busy) return;
+    if (!stats_db_ready()) {
+        sudoku_ui_notice("Can't export: no sudoku.db on a microSD card.", 3000);
+        return;
+    }
+    if (!rp_prepare(r->puzzle, r->moves, r->n)) {
+        printf("export: puzzle %u not available (%d moves)\n", (unsigned)r->puzzle, r->n);
+        sudoku_ui_notice("Can't export: this puzzle couldn't be loaded.", 3000);
+        return;
+    }
     uint32_t play_ms = rp_n ? rp_vt[rp_n - 1] / RX_SPEED : 0;
     rx_frames = (int)((RX_INTRO_MS + play_ms + RX_OUTRO_MS) * RX_FPS / 1000) + 1;
 
@@ -1555,6 +1801,7 @@ static void export_start(const stats_replay_t *r)
     rx_fb = heap_caps_aligned_alloc(64, SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
     rx_enc = rx_fb ? video_enc_open(rx_path, SCR_W, SCR_W, RX_FPS, rx_frames + 8) : NULL;
     if (!rx_enc) {
+        printf("export: %s didn't open (frame buffer %s)\n", rx_path, rx_fb ? "ok" : "no memory");
         heap_caps_free(rx_fb);
         rx_fb = NULL;
         sudoku_ui_notice("Can't export: the video encoder or the file on the card couldn't be opened.", 4000);
@@ -1636,12 +1883,14 @@ static lv_timer_t *gen_timer;
 static volatile bool gen_done;
 static int gen_level_req, gen_level_got;
 static uint8_t gen_givens[81];
+static uint32_t gen_seed;                           /* 0 = random */
+static char gen_day[12];                            /* making a daily puzzle: its date */
 
 static void gen_task(void *arg)
 {
     gen_level_t got = (gen_level_t)gen_level_req;
     uint32_t t0 = (uint32_t)(esp_timer_get_time() / 1000);
-    sudoku_generate((gen_level_t)gen_level_req, esp_random(), gen_givens, &got);
+    sudoku_generate((gen_level_t)gen_level_req, gen_seed ? gen_seed : esp_random(), gen_givens, &got);
     int clues = 0;
     for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
     printf("generator: %s asked, %s made, %d clues, %u ms\n", GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[got],
@@ -1659,15 +1908,15 @@ static void gen_poll_cb(lv_timer_t *t)
     if (gen_box) lv_msgbox_close(gen_box);
     gen_box = NULL;
     uint16_t id;
-    int gid = stats_db_ready() ? stats_db_gen_add(gen_level_got, gen_givens) : -1;
+    int gid = stats_db_ready() ? stats_db_gen_add(gen_level_got, gen_givens, gen_day[0] ? gen_day : NULL) : -1;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
     } else {
         id = s_gen_ram_next++;                       /* no card: until power-off */
         if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
     }
-    gen_cache_put(id, gen_level_got, gen_givens);
-    if (gen_level_got != gen_level_req) {
+    gen_cache_put(id, gen_level_got, gen_givens, gen_day);
+    if (gen_level_got != gen_level_req && !gen_day[0]) {
         char msg[80];
         snprintf(msg, sizeof(msg), "Couldn't make a %s one quickly; this one is %s.",
                  GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[gen_level_got]);
@@ -1676,13 +1925,17 @@ static void gen_poll_cb(lv_timer_t *t)
     open_puzzle(id);
 }
 
-static void gen_start(int level)
+/* seed 0 = a random puzzle; a daily one has its date as the seed and day set */
+static void gen_start_ex(int level, uint32_t seed, const char *day)
 {
     if (gen_timer) return;                           /* one at a time */
     gen_level_req = level;
+    gen_seed = seed;
+    snprintf(gen_day, sizeof(gen_day), "%s", day ? day : "");
     gen_done = false;
     char text[64];
-    snprintf(text, sizeof(text), "Making a new %s puzzle...", GEN_LEVEL_NAMES[level]);
+    if (day) snprintf(text, sizeof(text), "Making today's %s puzzle...", GEN_LEVEL_NAMES[level]);
+    else snprintf(text, sizeof(text), "Making a new %s puzzle...", GEN_LEVEL_NAMES[level]);
     gen_box = make_msgbox(LV_SYMBOL_REFRESH "  New puzzle", text);
     if (xTaskCreate(gen_task, "gen", 16384, NULL, 2, NULL) != pdPASS) {
         lv_msgbox_close(gen_box);
@@ -1691,6 +1944,95 @@ static void gen_start(int level)
         return;
     }
     gen_timer = lv_timer_create(gen_poll_cb, 50, NULL);
+}
+
+static void gen_start(int level)
+{
+    gen_start_ex(level, 0, NULL);
+}
+
+/* ------------------------------------------------------------- daily puzzle */
+/*
+ * One puzzle a day, the same for every player: made from the date (its seed),
+ * at a level by weekday: Mon/Tue Easy, Wed/Thu Medium, Fri/Sat Hard, Sun
+ * Expert. Stored like any generated puzzle, with its date (generated.day);
+ * the streak counts days in a row with the daily solved (stats_db).
+ */
+static const uint8_t DAILY_LEVEL[7] = {GEN_EXPERT, GEN_EASY, GEN_EASY, GEN_MEDIUM, GEN_MEDIUM, GEN_HARD, GEN_HARD};
+
+/* today's date and level; false while the clock isn't set */
+static bool daily_today(char day[12], int *level, int *wday)
+{
+    time_t now = time(NULL);
+    if (!CLOCK_VALID(now)) return false;
+    struct tm tm;
+    localtime_r(&now, &tm);
+    strftime(day, 12, "%Y-%m-%d", &tm);
+    *level = DAILY_LEVEL[tm.tm_wday];
+    if (wday) *wday = tm.tm_wday;
+    return true;
+}
+
+static uint32_t daily_seed(const char *day)          /* FNV-1a of the date */
+{
+    uint32_t h = 2166136261u;
+    for (const char *p = day; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+    return h ? h : 1;
+}
+
+static void daily_sub_text(char *buf, size_t n);
+
+/* the Daily puzzle button: its line, and greyed out (not tappable) until
+ * the clock is set (Wi-Fi connected, time fetched) */
+static void daily_btn_update(void)
+{
+    char ds[80];
+    daily_sub_text(ds, sizeof(ds));
+    lv_label_set_text(h_daily_sub, ds);
+    time_t now = time(NULL);
+    lv_obj_set_state(h_daily, LV_STATE_DISABLED, !CLOCK_VALID(now));
+}
+
+/* the Daily puzzle line on the home screen */
+static void daily_sub_text(char *buf, size_t n)
+{
+    char day[12];
+    int level, id, streak;
+    bool solved;
+    if (!daily_today(day, &level, NULL)) {
+        snprintf(buf, n, "Needs the date: connect Wi-Fi in Settings");
+        return;
+    }
+    if (!stats_db_daily_status(day, &id, &solved, &streak)) {
+        snprintf(buf, n, "Today: %s", GEN_LEVEL_NAMES[level]);
+        return;
+    }
+    if (solved) snprintf(buf, n, LV_SYMBOL_OK "  Solved today  -  streak %d", streak);
+    else if (streak) snprintf(buf, n, "Today: %s  -  streak %d", GEN_LEVEL_NAMES[level], streak);
+    else snprintf(buf, n, "Today: %s", GEN_LEVEL_NAMES[level]);
+}
+
+static void daily_cb(lv_event_t *e)
+{
+    char day[12];
+    int level, id = 0, streak = 0;
+    bool solved = false;
+    if (!daily_today(day, &level, NULL)) {
+        sudoku_ui_notice("The daily puzzle needs today's date: connect Wi-Fi (Settings) so the clock is set.", 4000);
+        return;
+    }
+    stats_db_daily_status(day, &id, &solved, &streak);
+    if (!id) {                                        /* RAM-only (no card): look in the cache */
+        for (int i = 0; i < GEN_CACHE; i++) {
+            if (s_gen_cache[i].id && !strcmp(s_gen_cache[i].day, day)) id = s_gen_cache[i].id - PUZZLE_GEN_BASE;
+        }
+    }
+    if (id) {
+        if (solved) sudoku_ui_notice("You've solved today's puzzle; playing it again doesn't change the streak.", 3500);
+        open_puzzle((uint16_t)(PUZZLE_GEN_BASE + id));
+        return;
+    }
+    gen_start_ex(level, daily_seed(day), day);
 }
 
 static lv_obj_t *gen_pick;                          /* the level dialog */
@@ -1903,6 +2245,7 @@ static void refresh_home(void)
         fmt_time(t, sizeof(t), s->elapsed_ms / 1000);
         lv_label_set_text_fmt(h_continue_sub, "%s  -  %s", name, t);
     }
+    daily_btn_update();
     home_layout();
 }
 
@@ -1997,6 +2340,19 @@ static void clock_cb(lv_timer_t *t)
     char c[8], d[64];
     time_t now = time(NULL);
     bool valid = now > 1700000000;                         /* set by NTP */
+    /* the Daily puzzle line depends on the date: redo it when the clock gets
+     * set (Wi-Fi) and at midnight */
+    static char daily_key[12] = "?";
+    char key[12] = "";
+    if (valid) {
+        struct tm tm;
+        localtime_r(&now, &tm);
+        strftime(key, sizeof(key), "%Y-%m-%d", &tm);
+    }
+    if (strcmp(key, daily_key) != 0) {
+        strcpy(daily_key, key);
+        daily_btn_update();
+    }
     if (valid) {
         struct tm tm;
         localtime_r(&now, &tm);
@@ -2899,8 +3255,7 @@ static void history_cb(lv_event_t *e)
 
 static void history_back_cb(lv_event_t *e)
 {
-    refresh_stats();
-    lv_screen_load(scr_stats);
+    show_home();
 }
 
 /* results from sudoku.db, and the month arrows (called from sd_poll_cb) */
@@ -2927,11 +3282,11 @@ static void history_poll(void)
 static void build_history(void)
 {
     scr_history = make_screen();
-    make_btn(scr_history, 12, 10, 170, 52, LV_SYMBOL_LEFT "  Statistics", &lv_font_montserrat_18,
+    make_btn(scr_history, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Back", &lv_font_montserrat_18,
              history_back_cb, NULL);
     lv_obj_t *t = make_label(scr_history, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "History");
-    lv_obj_set_pos(t, 200, 20);
+    lv_obj_set_pos(t, 150, 20);
 
     hz_cal = lv_calendar_create(scr_history);
     lv_obj_set_pos(hz_cal, 12, 72);
@@ -3682,7 +4037,12 @@ static void build_home(void)
     lv_obj_set_style_text_opa(h_continue_sub, LV_OPA_80, 0);
 
     home_btn(h_menu, LV_SYMBOL_LIST "  Puzzles", puzzles_cb, NULL);
+    h_daily = home_btn(h_menu, LV_SYMBOL_BELL "  Daily puzzle", daily_cb, &h_daily_sub);
+    lv_obj_set_style_bg_opa(h_daily, LV_OPA_40, LV_STATE_DISABLED);       /* greyed out until the clock is set */
+    lv_obj_set_style_text_opa(h_daily, LV_OPA_40, LV_STATE_DISABLED);
     home_btn(h_menu, LV_SYMBOL_BARS "  Statistics", stats_cb, NULL);
+    lv_obj_t *hb = home_btn(h_menu, SYMBOL_CALENDAR "  History", history_cb, NULL);   /* the calendar of games */
+    lv_obj_set_style_text_font(lv_obj_get_child(hb, 0), &font_icons_24, 0);
     home_btn(h_menu, LV_SYMBOL_VIDEO "  Gameplays", plays_cb, NULL);
     home_btn(h_menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);
 
@@ -3712,8 +4072,7 @@ static void build_stats(void)
     }
 
     int px = PANE_X, pw = PANE_W;
-    /* top bar, right: calendar (History) and whose statistics, as a dropdown */
-    make_btn(scr_stats, SCR_W - 12 - 250 - 10 - 64, 10, 64, 52, SYMBOL_CALENDAR, &font_icons_20, history_cb, NULL);
+    /* top bar, right: whose statistics, as a dropdown */
     x_player_dd = lv_dropdown_create(scr_stats);
     lv_obj_set_pos(x_player_dd, SCR_W - 12 - 250, 10);
     lv_obj_set_size(x_player_dd, 250, 52);

@@ -171,6 +171,21 @@ static bool singles(logic_t *L)
     return false;
 }
 
+/* the first technique used while looking for the next step (sudoku_next_step) */
+static sudoku_tech_t *s_trace;
+
+static void trace(int kind, int unit, int unit2, int d1, int d2, int c1, int c2)
+{
+    if (!s_trace || s_trace->kind != TECH_NONE) return;
+    s_trace->kind = kind;
+    s_trace->unit = unit;
+    s_trace->unit2 = unit2;
+    s_trace->digit = d1;
+    s_trace->digit2 = d2;
+    s_trace->cell1 = c1;
+    s_trace->cell2 = c2;
+}
+
 static bool eliminate(logic_t *L, int c, uint16_t bits)
 {
     if (L->v[c] || !(L->cand[c] & bits)) return false;
@@ -207,11 +222,13 @@ static bool locked_candidates(logic_t *L)
                         int c = s_units[other][k];
                         if (s_cell_units[c][2] != b) changed |= eliminate(L, c, m);
                     }
+                    if (changed) trace(TECH_POINTING, b, other, d, 0, -1, -1);
                 } else if (!line_only && box_only) {          /* claiming: clear the rest of the box */
                     for (int k = 0; k < 9; k++) {
                         int c = s_units[b][k];
                         if (s_cell_units[c][0] != other && s_cell_units[c][1] != other) changed |= eliminate(L, c, m);
                     }
+                    if (changed) trace(TECH_CLAIMING, other, b, d, 0, -1, -1);
                 }
                 if (changed) return true;
             }
@@ -235,7 +252,11 @@ static bool pairs(logic_t *L)
                     int c = s_units[u][k];
                     if (c != ca && c != cb) changed |= eliminate(L, c, L->cand[ca]);
                 }
-                if (changed) return true;
+                if (changed) {
+                    int d1 = __builtin_ctz(L->cand[ca]), d2 = 31 - __builtin_clz(L->cand[ca]);
+                    trace(TECH_NAKED_PAIR, u, -1, d1, d2, ca, cb);
+                    return true;
+                }
             }
         }
         /* hidden pair: two digits that fit only the same two cells */
@@ -251,11 +272,16 @@ static bool pairs(logic_t *L)
                 if (where[d2] != where[d1]) continue;
                 uint16_t keep = (uint16_t)((1u << d1) | (1u << d2));
                 bool changed = false;
+                int cells[2], nc = 0;
                 for (int k = 0; k < 9; k++) {
                     if (!(where[d1] & (1u << k))) continue;
+                    if (nc < 2) cells[nc++] = s_units[u][k];
                     changed |= eliminate(L, s_units[u][k], (uint16_t)(L->cand[s_units[u][k]] & ~keep));
                 }
-                if (changed) return true;
+                if (changed) {
+                    trace(TECH_HIDDEN_PAIR, u, -1, d1, d2, cells[0], cells[1]);
+                    return true;
+                }
             }
         }
     }
@@ -347,4 +373,105 @@ bool sudoku_generate(gen_level_t level, uint32_t seed, uint8_t givens[81], gen_l
     }
     if (got_level) *got_level = best < 0 ? level : (gen_level_t)best;
     return best >= 0;
+}
+
+/* ---------------------------------------------------------------- hints */
+
+/* a hidden single (boxes first: the easiest to spot), or -1 */
+static int find_hidden_single(const logic_t *L, int *digit, int *unit)
+{
+    static const int order[3][2] = {{18, 27}, {0, 9}, {9, 18}};
+    for (int o = 0; o < 3; o++) {
+        for (int u = order[o][0]; u < order[o][1]; u++) {
+            for (int d = 1; d <= 9; d++) {
+                int where = -1, n = 0;
+                for (int k = 0; k < 9; k++) {
+                    int c = s_units[u][k];
+                    if (L->v[c] == d) { n = -1; break; }
+                    if (L->cand[c] & (1u << d)) { where = c; n++; }
+                }
+                if (n == 1) {
+                    *digit = d;
+                    *unit = u;
+                    return where;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+static int find_naked_single(const logic_t *L, int *digit)
+{
+    for (int c = 0; c < 81; c++) {
+        if (!L->v[c] && __builtin_popcount(L->cand[c]) == 1) {
+            *digit = __builtin_ctz(L->cand[c]);
+            return c;
+        }
+    }
+    return -1;
+}
+
+bool sudoku_next_step(const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out)
+{
+    tables();
+    memset(out, 0, sizeof(*out));
+    out->cell = -1;
+    out->unit = -1;
+    for (int c = 0; c < 81; c++) {                       /* a wrong digit first */
+        if (vals[c] && vals[c] != solution[c]) {
+            out->kind = STEP_WRONG;
+            out->cell = c;
+            out->digit = vals[c];
+            return true;
+        }
+    }
+    logic_t L;
+    memset(&L, 0, sizeof(L));
+    L.empty = 81;
+    for (int c = 0; c < 81; c++) L.cand[c] = ALL;
+    for (int c = 0; c < 81; c++) {
+        if (vals[c]) place(&L, c, vals[c]);
+    }
+    if (!L.empty) return false;                          /* solved */
+    s_trace = &out->tech;
+    for (int round = 0; round < 64 && !L.broken; round++) {
+        int d, u, c = find_hidden_single(&L, &d, &u);
+        if (c >= 0) {
+            out->kind = STEP_HIDDEN_SINGLE;
+            out->cell = c;
+            out->digit = d;
+            out->unit = u;
+            s_trace = NULL;
+            return true;
+        }
+        c = find_naked_single(&L, &d);
+        if (c >= 0) {
+            out->kind = STEP_NAKED_SINGLE;
+            out->cell = c;
+            out->digit = d;
+            s_trace = NULL;
+            return true;
+        }
+        if (!locked_candidates(&L) && !pairs(&L)) break;  /* recorded in out->tech (the first one) */
+    }
+    s_trace = NULL;
+    /* nothing simple: the empty cell with the fewest candidates, from the solution */
+    int best = -1, best_n = 10;
+    for (int c = 0; c < 81; c++) {
+        if (vals[c]) continue;
+        int n = __builtin_popcount(L.cand[c]);
+        if (n < best_n) { best = c; best_n = n; }
+    }
+    out->kind = STEP_NONE;
+    out->cell = best;
+    out->digit = best >= 0 ? solution[best] : 0;
+    memset(&out->tech, 0, sizeof(out->tech));
+    return best >= 0;
+}
+
+int sudoku_unit_cell(int unit, int k)
+{
+    tables();
+    return s_units[unit][k];
 }
