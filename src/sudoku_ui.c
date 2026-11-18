@@ -1431,8 +1431,10 @@ static void rx_timer_cb(lv_timer_t *t)
     }
     int pct = rx_frame * 100 / rx_frames;
     lv_bar_set_value(rx_bar, pct, LV_ANIM_OFF);
-    lv_label_set_text_fmt(rx_lbl, "Frame %d of %d   -   %.1f MB", rx_frame, rx_frames,
-                          video_enc_bytes(rx_enc) / 1048576.0);
+    /* LVGL's printf has no %f (LV_SPRINTF_USE_FLOAT off): tenths of a MB by hand */
+    uint32_t tenths = (uint32_t)(((uint64_t)video_enc_bytes(rx_enc) * 10 + 524288) / 1048576);
+    lv_label_set_text_fmt(rx_lbl, "Frame %d of %d   -   %u.%u MB", rx_frame, rx_frames,
+                          (unsigned)(tenths / 10), (unsigned)(tenths % 10));
 }
 
 /* file name from the player, puzzle and when it was solved */
