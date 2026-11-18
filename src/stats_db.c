@@ -9,6 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <strings.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -41,7 +43,7 @@ typedef enum {
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
-    CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR,
+    CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -125,6 +127,12 @@ typedef struct {
     uint16_t puzzle;             /* CMD_LOAD_GAME: which one */
     saved_game_t game;           /* CMD_LOAD_GAME result */
     stats_h2h_t h2h;             /* CMD_PRANK result */
+    int nimports;                /* CMD_LIST_IMPORTS result */
+    stats_import_t imports[STATS_MAX_IMPORTS];
+    int count, nsolved;          /* CMD_SOLVED_IN: puzzle .. puzzle + count - 1 */
+    uint8_t solved_bits[16];
+    char source[STATS_IMPORT_NAME];   /* CMD_GEN_SOURCE result */
+    int number;
     int ngames;                  /* CMD_LIST_GAMES result */
     stats_game_row_t games[STATS_MAX_GAMES];
 } gen_call_t;
@@ -240,7 +248,16 @@ static const char SCHEMA[] =
     "  regions TEXT,"                                    /* Jigsaw: 81 digits 0-8, the region of each cell */
     "  cages TEXT,"                                      /* Killer: "sum:cell,cell,...;sum:..." */
     "  marks TEXT,"                                      /* Even-Odd / Consecutive: sudoku_marks_text() */
-    "  thermos TEXT);";                                  /* Thermo: "cell,cell,...;cell,..." from the bulbs */
+    "  thermos TEXT,"                                    /* Thermo: "cell,cell,...;cell,..." from the bulbs */
+    "  source TEXT,"                                     /* imported: its collection */
+    "  number INTEGER);"                                 /* imported: its place in the collection, from 1 */
+    "CREATE TABLE IF NOT EXISTS imported("               /* collections imported from puzzles/ */
+    "  id INTEGER PRIMARY KEY,"
+    "  name TEXT NOT NULL UNIQUE,"
+    "  file TEXT NOT NULL,"
+    "  first_id INTEGER NOT NULL,"                       /* generated.id of its first puzzle */
+    "  count INTEGER NOT NULL,"
+    "  created_at INTEGER);";
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -280,9 +297,9 @@ static const char SQL_SOLVE_INSERT[] =
 
 const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
                                                   "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo",
-                                                  "Mini 6x6"};
+                                                  "Sandwich", "Mini 6x6"};
 const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
-                                                   "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Mini"};
+                                                   "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini"};
 
 int stats_kind_of(int variant, bool daily)
 {
@@ -296,6 +313,7 @@ int stats_kind_of(int variant, bool daily)
     case VAR_EVENODD: return KIND_EVENODD;
     case VAR_CONSEC: return KIND_CONSEC;
     case VAR_THERMO: return KIND_THERMO;
+    case VAR_SANDWICH: return KIND_SANDWICH;
     case VAR_MINI: return KIND_MINI;
     default: return KIND_NEW;
     }
@@ -320,6 +338,7 @@ static bool kind_level_of(const char *name, int *kind, int *level)
 
 static int query_int(const char *sql);
 static int gen_level_of(int gid, bool *daily, int *variant);
+static bool gen_source_of(int gid, char name[STATS_IMPORT_NAME], int *number);
 static void ach_sync(int32_t player, bool announce);
 static void ach_backfill(void);
 
@@ -327,6 +346,13 @@ static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
 {
     sqlite3_bind_int(st, 1, id);
     if (puzzle_is_generated(id)) {               /* level "Generated Hard", "X-Sudoku Hard", "Mini Hard"; number = generated.id */
+        char src[STATS_IMPORT_NAME];
+        int num;
+        if (gen_source_of(id - PUZZLE_GEN_BASE, src, &num)) {   /* imported: its collection and number */
+            sqlite3_bind_text(st, 2, src, -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int(st, 3, num);
+            return;
+        }
         char lv[24];
         bool daily = false;
         int variant = VAR_CLASSIC;
@@ -354,6 +380,7 @@ static bool step_done(sqlite3_stmt *st, const char *what)
 }
 
 static int query_int_player(const char *sql);
+static int query_int_text(const char *sql, const char *text);
 /* a player's colour: the one chosen, else one by id */
 #define PLAYER_COLOR(p) "COALESCE(" p ".color, (" p ".id - 1) % 8)"
 
@@ -581,6 +608,8 @@ static bool upgrade_schema(void)
     if (!has_column("generated", "cages")) ok &= exec("ALTER TABLE generated ADD COLUMN cages TEXT");
     if (!has_column("generated", "marks")) ok &= exec("ALTER TABLE generated ADD COLUMN marks TEXT");
     if (!has_column("generated", "thermos")) ok &= exec("ALTER TABLE generated ADD COLUMN thermos TEXT");
+    if (!has_column("generated", "source")) ok &= exec("ALTER TABLE generated ADD COLUMN source TEXT");
+    if (!has_column("generated", "number")) ok &= exec("ALTER TABLE generated ADD COLUMN number INTEGER");
     if (!has_column("players", "color")) ok &= exec("ALTER TABLE players ADD COLUMN color INTEGER");
     if (has_column("saved_game", "player_id") && !has_column("saved_game", "seq")) {
         /* one game per player -> several: the key becomes (player, puzzle) */
@@ -1194,6 +1223,25 @@ static void do_month(int year, int month)
 
 /* ------------------------------------------------------------- generated puzzles */
 
+/* an imported puzzle's collection and number (worker) */
+static bool gen_source_of(int gid, char name[STATS_IMPORT_NAME], int *number)
+{
+    bool found = false;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT source, number FROM generated WHERE id = ?1 AND source IS NOT NULL",
+                                   -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, gid);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            const char *n = (const char *)sqlite3_column_text(st, 0);
+            snprintf(name, STATS_IMPORT_NAME, "%s", n ? n : "");
+            *number = sqlite3_column_int(st, 1);
+            found = true;
+        }
+        sqlite3_finalize(st);
+    }
+    return found;
+}
+
 static int gen_level_of(int gid, bool *daily, int *variant)
 {
     int level = -1;
@@ -1550,6 +1598,8 @@ static const ach_def_t ACH[] = {
      " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(8) ")"},
     {"thermo", "Feeling the heat", "Solve a Thermo Sudoku.", 1, ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(9)},
+    {"sandwich", "Lunch break", "Solve a Sandwich Sudoku.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(10)},
     {"variety_5", "Collector", "Solve every kind: Classic, X-Sudoku, Hyper, Jigsaw, Killer and Mini 6x6.", 6,
      ACH_UNIT_COUNT,
      "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
@@ -1560,7 +1610,7 @@ static const ach_def_t ACH[] = {
      " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(2) ")"},
     {"fresh_10", "Fresh off the press", "Solve 10 puzzles made with New puzzle.", 10, ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id"
-     " WHERE s.player_id = ?1 AND g.day IS NULL"},
+     " WHERE s.player_id = ?1 AND g.day IS NULL AND g.source IS NULL"},
     {"daily_10", "Daily regular", "Solve the daily puzzle on 10 different days.", 10, ACH_UNIT_DAYS,
      "SELECT COUNT(*) FROM (" DAILY_DAYS ")"},
     {"streak_3", "On a roll", "Solve the daily puzzle 3 days in a row.", 3, ACH_UNIT_DAYS, NULL},
@@ -1736,6 +1786,192 @@ static void do_achievements(void)
     xSemaphoreGive(s_lock);
 }
 
+/* ------------------------------------------------------------- imported puzzles */
+
+#define IMPORT_DIR BSP_SD_MOUNT_POINT "/puzzles"
+#define IMPORT_MAX_RUN 2000                          /* puzzles per import run */
+static volatile bool s_imports_changed;
+
+/* 81 cells from text (digits, '.' or '0' = empty); false if it isn't a puzzle */
+static bool parse_cells(const char *p, uint8_t out[81])
+{
+    for (int i = 0; i < 81; i++) {
+        char c = p[i];
+        if (c >= '1' && c <= '9') out[i] = (uint8_t)(c - '0');
+        else if (c == '0' || c == '.') out[i] = 0;
+        else return false;
+    }
+    char after = p[81];
+    return !(after >= '0' && after <= '9') && after != '.';
+}
+
+/* the puzzles of one file into cells (n of max); OpenSudoku: data="..." (or '...') attributes */
+static int parse_file(const char *path, bool xml, uint8_t (*cells)[81], int max)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    static char line[512];
+    int n = 0;
+    while (n < max && fgets(line, sizeof(line), f)) {
+        if (xml) {
+            for (const char *q = line; n < max && (q = strstr(q, "data=")) != NULL; q += 5) {
+                if ((q[5] == '"' || q[5] == '\'') && strlen(q + 6) >= 82 && parse_cells(q + 6, cells[n])) n++;
+            }
+        } else {
+            const char *q = line;
+            while (*q == ' ' || *q == '\t') q++;
+            if (strlen(q) >= 81 && parse_cells(q, cells[n])) n++;
+        }
+    }
+    fclose(f);
+    return n;
+}
+
+static bool ends_with(const char *s, const char *suffix)
+{
+    size_t a = strlen(s), b = strlen(suffix);
+    return a >= b && strcasecmp(s + a - b, suffix) == 0;
+}
+
+static void do_import(void)
+{
+    if (!s_db) return;
+    static uint8_t (*cells)[81];
+    if (!cells) cells = heap_caps_malloc(81 * IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM);
+    if (!cells) return;
+    DIR *dir = opendir(IMPORT_DIR);
+    if (!dir) {
+        mkdir(IMPORT_DIR, 0775);                    /* there for next time */
+        post_message("No puzzles/ folder on the card: it's made now. Put .opensudoku or .sdm files in it.");
+        return;
+    }
+    int files = 0, added = 0, bad = 0, skipped = 0, total = 0;
+    struct dirent *e;
+    while ((e = readdir(dir)) != NULL && total < IMPORT_MAX_RUN) {
+        const char *fn = e->d_name;
+        bool xml = ends_with(fn, ".opensudoku");
+        if (!xml && !ends_with(fn, ".sdm") && !ends_with(fn, ".txt")) continue;
+        if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
+            skipped++;
+            continue;
+        }
+        char path[300];
+        snprintf(path, sizeof(path), IMPORT_DIR "/%s", fn);
+        int n = parse_file(path, xml, cells, IMPORT_MAX_RUN - total);
+        int good = 0;
+        for (int i = 0; i < n; i++) {               /* keep the ones with exactly one solution */
+            if (sudoku_classic_unique(cells[i])) memmove(cells[good++], cells[i], 81);
+            else bad++;
+        }
+        if (!good) continue;
+        /* the collection's name: the file's, without the extension */
+        char base[STATS_IMPORT_NAME];
+        snprintf(base, sizeof(base), "%.*s", (int)(strrchr(fn, '.') - fn), fn);
+        bool ok = exec("BEGIN");
+        int chunks = (good + 99) / 100;
+        for (int k = 0; ok && k < chunks; k++) {
+            int from = k * 100, cnt = good - from < 100 ? good - from : 100, first = 0;
+            char name[STATS_IMPORT_NAME];
+            if (chunks == 1) snprintf(name, sizeof(name), "%s", base);
+            else snprintf(name, sizeof(name), "%.*s %d", (int)sizeof(name) - 5, base, k + 1);
+            for (int i = 0; ok && i < cnt; i++) {
+                sqlite3_stmt *st;
+                char g[82];
+                for (int c = 0; c < 81; c++) g[c] = (char)('0' + cells[from + i][c]);
+                g[81] = 0;
+                ok = sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, variant, source, number)"
+                                              " VALUES(0, ?1, ?2, 0, ?3, ?4)", -1, &st, NULL) == SQLITE_OK;
+                if (!ok) break;
+                sqlite3_bind_text(st, 1, g, 81, SQLITE_STATIC);
+                time_t now = time(NULL);
+                if (now > 1700000000) sqlite3_bind_int64(st, 2, now);
+                else sqlite3_bind_null(st, 2);
+                sqlite3_bind_text(st, 3, name, -1, SQLITE_STATIC);
+                sqlite3_bind_int(st, 4, i + 1);
+                ok = step_done(st, "import puzzle");
+                sqlite3_finalize(st);
+                if (ok && i == 0) first = (int)sqlite3_last_insert_rowid(s_db);
+            }
+            sqlite3_stmt *st;
+            if (ok && sqlite3_prepare_v2(s_db, "INSERT INTO imported(name, file, first_id, count, created_at)"
+                                               " VALUES(?1, ?2, ?3, ?4, ?5)", -1, &st, NULL) == SQLITE_OK) {
+                sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
+                sqlite3_bind_text(st, 2, fn, -1, SQLITE_STATIC);
+                sqlite3_bind_int(st, 3, first);
+                sqlite3_bind_int(st, 4, cnt);
+                time_t now = time(NULL);
+                if (now > 1700000000) sqlite3_bind_int64(st, 5, now);
+                else sqlite3_bind_null(st, 5);
+                ok = step_done(st, "import collection");     /* (a name taken already: the file is skipped) */
+                sqlite3_finalize(st);
+            } else {
+                ok = false;
+            }
+        }
+        if (ok && exec("COMMIT")) {
+            files++;
+            added += good;
+            total += good;
+            printf("stats_db: imported %d puzzles from %s\n", good, fn);
+        } else {
+            exec("ROLLBACK");
+        }
+    }
+    closedir(dir);
+    char msg[96];
+    if (added) {
+        snprintf(msg, sizeof(msg), "Imported %d puzzle%s from %d file%s%s.", added, added == 1 ? "" : "s", files,
+                 files == 1 ? "" : "s", bad ? " (some had no single solution and were left out)" : "");
+        s_imports_changed = true;
+    } else if (skipped && !bad) {
+        snprintf(msg, sizeof(msg), "Nothing new in puzzles/: those files are imported already.");
+    } else {
+        snprintf(msg, sizeof(msg), "No puzzles found in puzzles/ (.opensudoku, .sdm or .txt files).");
+    }
+    post_message(msg);
+}
+
+static void do_list_imports(void)
+{
+    s_gen.nimports = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT name, first_id, count FROM imported ORDER BY id", -1, &st,
+                                   NULL) == SQLITE_OK) {
+        while (s_gen.nimports < STATS_MAX_IMPORTS && sqlite3_step(st) == SQLITE_ROW) {
+            stats_import_t *r = &s_gen.imports[s_gen.nimports++];
+            const char *n = (const char *)sqlite3_column_text(st, 0);
+            snprintf(r->name, sizeof(r->name), "%s", n ? n : "");
+            r->first_gid = sqlite3_column_int(st, 1);
+            r->count = sqlite3_column_int(st, 2);
+        }
+        sqlite3_finalize(st);
+    }
+    s_gen.ok = s_db != NULL;
+    xSemaphoreGive(s_gen_done);
+}
+
+static void do_solved_in(void)
+{
+    memset(s_gen.solved_bits, 0, sizeof(s_gen.solved_bits));
+    s_gen.nsolved = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT puzzle FROM puzzle_stats WHERE player_id = ?1 AND puzzle >= ?2"
+                                         " AND puzzle < ?3", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_int(st, 2, s_gen.puzzle);
+        sqlite3_bind_int(st, 3, s_gen.puzzle + s_gen.count);
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            int i = sqlite3_column_int(st, 0) - s_gen.puzzle;
+            if (i < 0 || i >= s_gen.count || i >= 128) continue;
+            s_gen.solved_bits[i >> 3] |= (uint8_t)(1u << (i & 7));
+            s_gen.nsolved++;
+        }
+        sqlite3_finalize(st);
+    }
+    s_gen.ok = s_db != NULL;
+    xSemaphoreGive(s_gen_done);
+}
+
 /* ------------------------------------------------------------- weekly challenge */
 
 static stats_week_t *s_week;         /* CMD_WEEK result (PSRAM) */
@@ -1820,7 +2056,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest solve", "1"},
     {"Fastest without a mistake or a hint", "mistakes = 0 AND hints = 0"},
     {"Fastest from the collections", "puzzle < 2000"},
-    {"Fastest New puzzle (Classic)", "puzzle IN (SELECT 2000 + id FROM generated WHERE variant = 0 AND day IS NULL)"},
+    {"Fastest New puzzle (Classic)",
+     "puzzle IN (SELECT 2000 + id FROM generated WHERE variant = 0 AND day IS NULL AND source IS NULL)"},
+    {"Fastest imported puzzle", "puzzle IN (SELECT 2000 + id FROM generated WHERE source IS NOT NULL)"},
     {"Fastest daily puzzle", "puzzle IN (SELECT 2000 + id FROM generated WHERE day IS NOT NULL)"},
     {"Fastest X-Sudoku", OF_VARIANT(1)},
     {"Fastest Hyper", OF_VARIANT(3)},
@@ -1830,6 +2068,7 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Even-Odd", OF_VARIANT(7)},
     {"Fastest Consecutive", OF_VARIANT(8)},
     {"Fastest Thermo", OF_VARIANT(9)},
+    {"Fastest Sandwich", OF_VARIANT(10)},
     {"Fastest Mini 6x6", OF_VARIANT(2)},
 };
 
@@ -2319,6 +2558,19 @@ static void worker(void *arg)
         case CMD_WEEK:
             do_week(c.text);
             break;
+        case CMD_IMPORT:
+            do_import();
+            break;
+        case CMD_LIST_IMPORTS:
+            do_list_imports();
+            break;
+        case CMD_SOLVED_IN:
+            do_solved_in();
+            break;
+        case CMD_GEN_SOURCE:
+            s_gen.ok = s_db != NULL && gen_source_of(s_gen.id, s_gen.source, &s_gen.number);
+            xSemaphoreGive(s_gen_done);
+            break;
         case CMD_PLAYER_COLOR:
             if (s_db) {
                 sqlite3_stmt *st;
@@ -2634,6 +2886,19 @@ bool stats_db_take_achievements(stats_achievements_t *out)
     return fresh;
 }
 
+/* one number from a query with one text parameter (?1) */
+static int query_int_text(const char *sql, const char *text)
+{
+    int v = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(st, 1, text, -1, SQLITE_STATIC);
+        if (sqlite3_step(st) == SQLITE_ROW) v = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+    }
+    return v;
+}
+
 /* one number from a query on the current player (?1) */
 static int query_int_player(const char *sql)
 {
@@ -2653,6 +2918,46 @@ bool stats_db_puzzle_rank(uint16_t puzzle, stats_h2h_t *out)
     s_gen.puzzle = puzzle;
     if (!gen_call(CMD_PRANK)) return false;
     *out = s_gen.h2h;
+    return true;
+}
+
+void stats_db_import_puzzles(void)
+{
+    cmd_t c = {.type = CMD_IMPORT};
+    if (!send(&c)) post_message("Import: no database.");
+}
+
+bool stats_db_take_imports_changed(void)
+{
+    bool v = s_imports_changed;
+    s_imports_changed = false;
+    return v;
+}
+
+int stats_db_list_imports(stats_import_t *out)
+{
+    if (!s_genp || !gen_call(CMD_LIST_IMPORTS)) return -1;
+    memcpy(out, s_gen.imports, sizeof(stats_import_t) * (size_t)s_gen.nimports);
+    return s_gen.nimports;
+}
+
+int stats_db_solved_in(uint16_t first, int count, uint8_t *solved)
+{
+    if (!s_genp) return 0;
+    s_gen.puzzle = first;
+    s_gen.count = count > 128 ? 128 : count;
+    if (!gen_call(CMD_SOLVED_IN)) return 0;
+    if (solved) memcpy(solved, s_gen.solved_bits, (size_t)(s_gen.count + 7) / 8);
+    return s_gen.nsolved;
+}
+
+bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number)
+{
+    if (!s_genp) return false;
+    s_gen.id = gid;
+    if (!gen_call(CMD_GEN_SOURCE)) return false;
+    snprintf(name, STATS_IMPORT_NAME, "%s", s_gen.source);
+    *number = s_gen.number;
     return true;
 }
 

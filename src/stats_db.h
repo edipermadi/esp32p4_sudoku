@@ -31,7 +31,13 @@
  *       81 digits 0-8 row by row; cages = a Killer puzzle's cages,
  *       "sum:cell,cell,...;sum:..." (sudoku_cages_text()); marks = an Even-Odd
  *       or Consecutive puzzle's marks (sudoku_marks_text()); thermos = a
- *       Thermo puzzle's thermometers (sudoku_thermos_text()); NULL for the others
+ *       Thermo puzzle's thermometers (sudoku_thermos_text()); NULL for the others.
+ *       A Sandwich puzzle's 18 sums are in marks (sudoku_sandwich_text()).
+ *       Imported puzzles (puzzles/ on the card) are here too, as Classic:
+ *       source = their collection, number = their place in it.
+ *   imported(id, name, file, first_id, count, created_at): the collections
+ *       imported from puzzles/ (up to 100 puzzles each; a bigger file makes
+ *       several): generated ids first_id .. first_id + count - 1
  *   achievements(player_id, key, unlocked_at): achievements each player has
  *       unlocked (see stats_db_query_achievements()); unlocked_at NULL =
  *       found already done when the table was first filled, or clock not set
@@ -75,7 +81,7 @@ typedef struct {
 /* Statistics rows after the 16 collections: puzzles made on the board, by
  * kind. Their solves are logged with level "<prefix> <Easy|Medium|Hard|Expert>". */
 typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_KILLER, KIND_KNIGHT, KIND_EVENODD,
-               KIND_CONSEC, KIND_THERMO, KIND_MINI, KIND_COUNT } stats_kind_t;
+               KIND_CONSEC, KIND_THERMO, KIND_SANDWICH, KIND_MINI, KIND_COUNT } stats_kind_t;
 extern const char *const STATS_KIND_NAMES[KIND_COUNT];    /* "New puzzles", "Daily puzzle", "X-Sudoku", ... */
 extern const char *const STATS_KIND_PREFIX[KIND_COUNT];   /* "Generated", "Daily", "X-Sudoku", ... */
 /* the kind of a generated puzzle of a variant (daily ones: KIND_DAILY) */
@@ -310,6 +316,29 @@ typedef struct {
 } stats_board_t;
 void stats_db_query_board(const char *day);
 bool stats_db_take_board(stats_board_t *out);
+
+/* ---------------------------------------------------------------- imported puzzles */
+/* Files in puzzles/ on the card: .opensudoku (OpenSudoku's XML) and .sdm /
+ * .txt (a puzzle per line, 81 digits, 0 or . = empty). Each becomes a
+ * collection (up to 100 puzzles; more: "name 2", "name 3" ...), checked for
+ * exactly one solution. A file already imported is skipped. The result comes
+ * back as a message; stats_db_take_imports_changed() says to reload the list. */
+#define STATS_MAX_IMPORTS 24
+#define STATS_IMPORT_NAME 28
+typedef struct {
+    char name[STATS_IMPORT_NAME];
+    int first_gid;                       /* generated.id of its first puzzle (puzzle id: + PUZZLE_GEN_BASE) */
+    int count;
+} stats_import_t;
+void stats_db_import_puzzles(void);
+bool stats_db_take_imports_changed(void);
+/* The imported collections (waits for the database); -1 without one. */
+int stats_db_list_imports(stats_import_t *out);
+/* The current player's solved puzzles among ids first .. first + count - 1:
+ * bit i of solved (count bits). How many. Waits for the database. */
+int stats_db_solved_in(uint16_t first, int count, uint8_t *solved);
+/* An imported puzzle's collection and number; false if it isn't one. */
+bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number);
 
 /* ---------------------------------------------------------------- weekly challenge */
 /* The daily puzzles of a week (Monday to Sunday) added up: per player, how

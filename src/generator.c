@@ -6,7 +6,7 @@
 
 const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
 const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
-                                              "Anti-Knight", "Even-Odd", "Consecutive", "Thermo"};
+                                              "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich"};
 
 /* sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
 static uint8_t s_mask_sum[1024];
@@ -80,8 +80,11 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
     }
 }
 
+static void bread_tables(void);
+
 void sudoku_geom_init(void)
 {
+    bread_tables();                                 /* (Sandwich sums; before any task uses them) */
     if (s_geom) return;
     sudoku_geom_t *g = calloc(VAR_COUNT, sizeof(sudoku_geom_t));
     if (!g) abort();                                /* at start-up, with megabytes free */
@@ -109,6 +112,8 @@ void sudoku_geom_init(void)
     g[VAR_CONSEC].variant = VAR_CONSEC;
     g[VAR_THERMO] = g[VAR_CLASSIC];
     g[VAR_THERMO].variant = VAR_THERMO;
+    g[VAR_SANDWICH] = g[VAR_CLASSIC];
+    g[VAR_SANDWICH].variant = VAR_SANDWICH;
     g[VAR_JIGSAW] = g[VAR_CLASSIC];                 /* placeholders: these boards come with their puzzle */
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
     g[VAR_KILLER] = g[VAR_CLASSIC];
@@ -125,7 +130,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
 {
     sudoku_geom_init();
     if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER ||
-        variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO) {
+        variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -225,6 +230,62 @@ bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len)
         }
     }
     return true;
+}
+
+static bool geom_sandwich(const uint8_t sums[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_SANDWICH;
+    out->sandwich = true;
+    for (int i = 0; i < 18; i++) {
+        if (sums[i] > 35) return false;             /* 2+3+...+8 */
+        out->sandwich_sum[i] = sums[i];
+    }
+    return true;
+}
+
+bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out)
+{
+    bread_tables();
+    uint8_t sums[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        char *end;
+        long v = p ? strtol(p, &end, 10) : -1;
+        if (!p || end == p || v < 0 || v > 35) return false;
+        sums[i] = (uint8_t)v;
+        p = end;
+        if (i < 17) {
+            if (*p != ',') return false;
+            p++;
+        }
+    }
+    return *p == 0 && geom_sandwich(sums, out);
+}
+
+bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d", i ? "," : "", g->sandwich_sum[i]);
+        if (w < 0 || w >= len - pos) return false;
+        pos += w;
+    }
+    return true;
+}
+
+/* sums of k distinct digits from 2..8: bit s set if s can be made (k 0..7) */
+static uint64_t s_bread[8];
+
+static void bread_tables(void)
+{
+    if (s_bread[0]) return;
+    for (int m = 0; m < 128; m++) {                 /* subsets of 2..8 */
+        int k = __builtin_popcount(m), sum = 0;
+        for (int b = 0; b < 7; b++) if (m >> b & 1) sum += b + 2;
+        s_bread[k] |= 1ull << sum;
+    }
 }
 
 bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len)
@@ -428,6 +489,50 @@ static uint16_t grid_free(const grid_t *g, int i)
             free &= bar[k] ? near : (uint16_t)~near;
         }
     }
+    if (G->sandwich && free) {                      /* Sandwich: a digit that can't keep a line's sum goes */
+        for (int line = 0; line < 2 && free; line++) {
+            int lu = line ? 9 + i % 9 : i / 9, ki = line ? i / 9 : i % 9, vals[9], p1 = -1, p9 = -1;
+            for (int k = 0; k < 9; k++) {
+                int c = line ? k * 9 + i % 9 : (i / 9) * 9 + k;
+                vals[k] = c == i ? 0 : g->v[c];
+                if (vals[k] == 1) p1 = k;
+                if (vals[k] == 9) p9 = k;
+            }
+            if (p1 < 0 && p9 < 0) continue;            /* neither end placed: no 1 / 9 here can be judged yet */
+            /* with both ends already placed: what's between them so far */
+            int bsum = 0, bempty = 0, ba = -1, bb = -1;
+            if (p1 >= 0 && p9 >= 0) {
+                ba = p1 < p9 ? p1 : p9;
+                bb = p1 < p9 ? p9 : p1;
+                for (int k = ba + 1; k < bb; k++) {
+                    if (vals[k]) bsum += vals[k]; else bempty++;
+                }
+            }
+            for (int d = 1; d <= 9; d++) {
+                if (!(free >> d & 1)) continue;
+                int sum, empty;
+                if (d == 1 || d == 9) {                /* this cell becomes an end */
+                    int q1 = d == 1 ? ki : p1, q9 = d == 9 ? ki : p9;
+                    if (q1 < 0 || q9 < 0) continue;
+                    int a = q1 < q9 ? q1 : q9, b = q1 < q9 ? q9 : q1;
+                    sum = empty = 0;
+                    for (int k = a + 1; k < b; k++) {
+                        if (vals[k]) sum += vals[k]; else empty++;
+                    }
+                } else {
+                    if (ba < 0) continue;              /* an end still missing */
+                    sum = bsum;
+                    empty = bempty;
+                    if (ki > ba && ki < bb) {          /* this cell is between them */
+                        sum += d;
+                        empty--;
+                    }
+                }
+                int left = G->sandwich_sum[lu] - sum;
+                if (left < 0 || !(s_bread[empty] >> left & 1)) free &= (uint16_t)~(1u << d);
+            }
+        }
+    }
     int t = G->thermo_of[i];
     if (t != THERMO_NONE && free) {                 /* Thermo: above the cell before it, below the one after */
         int p = G->thermo_pos[i];
@@ -538,6 +643,14 @@ static int count_bounded(const sudoku_geom_t *G, const uint8_t cells[81], int li
 int sudoku_count_solutions(const sudoku_geom_t *G, const uint8_t cells[81], int limit)
 {
     return count_bounded(G, cells, limit, 0);
+}
+
+bool sudoku_classic_unique(const uint8_t cells[81])
+{
+    static grid_t g;                                 /* its own: another task than the generator's */
+    if (!grid_load(&g, sudoku_geom(VAR_CLASSIC), cells)) return false;
+    g.node_limit = 200000;                           /* (a broken puzzle can't hold the task for long) */
+    return search(&g, 2, NULL) == 1 && !g.aborted;
 }
 
 bool sudoku_solve(const sudoku_geom_t *G, const uint8_t cells[81], uint8_t out[81])
@@ -747,6 +860,55 @@ static bool thermo_logic(logic_t *L)
     return false;
 }
 
+/* Sandwich: in a line, the 1 and the 9 can only stand where some placement
+ * of the pair leaves cells between them that can make up the clue (counting
+ * only how many cells, and the digits 2-8): the 1 and the 9 go from every
+ * other cell of the line. */
+static bool sandwich_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int lu = 0; lu < 18; lu++) {
+        int cells[9], ps[10], pe[10], pbad[10];     /* prefix: sum placed, empty cells, placed 1s/9s */
+        uint16_t one = 0, nine = 0;                 /* bit k: cell k can be the 1 (the 9) */
+        ps[0] = pe[0] = pbad[0] = 0;
+        for (int k = 0; k < 9; k++) {
+            int c = cells[k] = lu < 9 ? lu * 9 + k : k * 9 + (lu - 9), v = L->v[c];
+            if (v == 1 || (!v && (L->cand[c] & 2))) one |= (uint16_t)(1u << k);
+            if (v == 9 || (!v && (L->cand[c] & 0x200))) nine |= (uint16_t)(1u << k);
+            ps[k + 1] = ps[k] + (v != 1 && v != 9 ? v : 0);
+            pe[k + 1] = pe[k] + !v;
+            pbad[k + 1] = pbad[k] + (v == 1 || v == 9);
+        }
+        uint16_t can1 = 0, can9 = 0;
+        for (int p = 0; p < 9; p++) {
+            if (!(one >> p & 1)) continue;
+            for (int q = 0; q < 9; q++) {
+                if (q == p || !(nine >> q & 1)) continue;
+                int a = p < q ? p : q, b = p < q ? q : p;
+                if (pbad[b] - pbad[a + 1]) continue;     /* a placed 1 or 9 between them */
+                int empty = pe[b] - pe[a + 1], left = G->sandwich_sum[lu] - (ps[b] - ps[a + 1]);
+                if (left < 0 || !(s_bread[empty] >> left & 1)) continue;
+                can1 |= (uint16_t)(1u << p);
+                can9 |= (uint16_t)(1u << q);
+            }
+        }
+        bool changed = false;
+        for (int k = 0; k < 9; k++) {
+            int c = cells[k];
+            if (L->v[c]) continue;
+            uint16_t drop = 0;
+            if (!(can1 >> k & 1)) drop |= 2;
+            if (!(can9 >> k & 1)) drop |= 0x200;
+            changed |= eliminate(L, c, drop);
+        }
+        if (changed) {
+            trace(TECH_SANDWICH, lu, -1, 0, 0, -1, -1);
+            return true;
+        }
+    }
+    return false;
+}
+
 /* pointing / claiming: a digit confined to one line within a box (or to one
  * box within a line) can't be elsewhere in that line (or box). Lines are
  * rows, columns and, on an X board, the diagonals. */
@@ -860,6 +1022,7 @@ static int technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->ncages && cage_logic(&L)) continue;  /* Killer: cage sums count as the simple step */
         if (G->consec_on && consec_logic(&L)) continue;   /* Consecutive: so do the bars */
         if (G->nthermos && thermo_logic(&L)) continue;     /* Thermo: and the thermometers */
+        if (G->sandwich && sandwich_logic(&L)) continue;   /* Sandwich: and where the 1 and 9 can be */
         if (locked_candidates(&L) || pairs(&L)) {
             tier = 2;
             continue;
@@ -878,6 +1041,7 @@ static int easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_EVENODD) return 30;
     if (G->variant == VAR_KNIGHT) return 32;
     if (G->nthermos) return 28;
+    if (G->sandwich) return 24;
     return G->n == 9 ? 36 : 16;
 }
 
@@ -1131,13 +1295,15 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     static sudoku_geom_t *jig;                      /* a board made with its puzzle, being tried (PSRAM) */
     const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
-    const bool thermo = variant == VAR_THERMO;
-    const bool own = jigsaw || killer || marks || thermo;
+    const bool thermo = variant == VAR_THERMO, sandwich = variant == VAR_SANDWICH;
+    const bool own = jigsaw || killer || marks || thermo || sandwich;
+    if (sandwich) bread_tables();
     if (own && !jig && !(jig = malloc(sizeof(*jig)))) return false;
     const sudoku_geom_t *G = own ? jig : sudoku_geom(variant);
     uint32_t rng = seed ? seed : 1;
     int tries = level == GEN_EXPERT ? 400 : (level == GEN_HARD ? 200 : 60);
     if (G->n == 6 && level == GEN_HARD) tries = 2000;   /* rare on 6x6, but an attempt is cheap there */
+    if (variant == VAR_SANDWICH && level == GEN_HARD) tries = 40;   /* slow attempts: bound the wait */
     uint8_t full[81], cand[81], map[81];
     int best = -1;
     memset(givens, 0, 81);
@@ -1172,6 +1338,21 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         } else if (thermo) {                        /* a grid, then thermometers along rising digits */
             random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!thermo_paths(full, &rng, level >= GEN_HARD ? 10 : 7, jig)) continue;
+        } else if (sandwich) {                      /* a grid, then its 18 sums */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t sums[18];
+            for (int lu = 0; lu < 18; lu++) {
+                int p1 = 0, p9 = 0, cells[9];
+                for (int k = 0; k < 9; k++) {
+                    cells[k] = lu < 9 ? lu * 9 + k : k * 9 + (lu - 9);
+                    if (full[cells[k]] == 1) p1 = k;
+                    if (full[cells[k]] == 9) p9 = k;
+                }
+                int a = p1 < p9 ? p1 : p9, b = p1 < p9 ? p9 : p1, sum = 0;
+                for (int k = a + 1; k < b; k++) sum += full[cells[k]];
+                sums[lu] = (uint8_t)sum;
+            }
+            geom_sandwich(sums, jig);
         } else if (variant == VAR_KNIGHT) {         /* not every fill works out: try again */
             if (!random_full_grid(G, full, &rng, 20000)) continue;
         } else {
@@ -1271,7 +1452,8 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
             return true;
         }
         if (!(G->ncages && cage_logic(&L)) && !(G->consec_on && consec_logic(&L)) &&
-            !(G->nthermos && thermo_logic(&L)) && !locked_candidates(&L) && !pairs(&L)) {
+            !(G->nthermos && thermo_logic(&L)) && !(G->sandwich && sandwich_logic(&L)) && !locked_candidates(&L) &&
+            !pairs(&L)) {
             break;                                                  /* the first one is in out->tech */
         }
     }

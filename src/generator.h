@@ -21,6 +21,8 @@
  *                bar: they don't); every puzzle has its own bars
  *   VAR_THERMO   Thermo: Classic rules, and along each thermometer the
  *                digits rise from its bulb; every puzzle has its own
+ *   VAR_SANDWICH Sandwich: Classic rules, and a clue by each row and column
+ *                gives the sum of the digits between its 1 and its 9
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -64,9 +66,10 @@ extern const char *const GEN_LEVEL_NAMES[GEN_LEVELS];   /* "Easy", "Medium", "Ha
 
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
-               VAR_CONSEC, VAR_THERMO, VAR_COUNT } sudoku_variant_t;
+               VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_COUNT } sudoku_variant_t;
 
-/* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo" */
+/* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
+ * "Thermo", "Sandwich" */
 extern const char *const VARIANT_NAMES[VAR_COUNT];
 
 /* ---------------------------------------------------------------- geometry */
@@ -120,6 +123,9 @@ typedef struct {
     uint8_t thermo_cell[THERMOS_MAX][9];
     uint8_t thermo_of[81];              /* THERMO_NONE = on none (a cell is on one at most) */
     uint8_t thermo_pos[81];             /* place along it, 0 = the bulb */
+    /* Sandwich: per row (0..8) and column (9..17), the sum between its 1 and 9 */
+    bool sandwich;
+    uint8_t sandwich_sum[18];
 } sudoku_geom_t;
 
 enum { PARITY_NONE = 0, PARITY_EVEN, PARITY_ODD };
@@ -149,6 +155,11 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
  * one thermometer at most); sudoku_thermos_text() writes it. */
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
+/* A Sandwich board from its clues as text: 18 numbers 0..35, the rows top
+ * to bottom then the columns left to right, comma-separated;
+ * sudoku_sandwich_text() writes it. */
+bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out);
+bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len);
 
 static inline bool sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 {
@@ -193,6 +204,9 @@ int sudoku_grade(const sudoku_geom_t *g, const uint8_t givens[81]);
 
 /* Number of solutions, counting up to limit. (Generator task.) */
 int sudoku_count_solutions(const sudoku_geom_t *g, const uint8_t cells[81], int limit);
+/* A classic puzzle has exactly one solution (its own scratch: for the
+ * database task, which checks imported puzzles while the generator may run). */
+bool sudoku_classic_unique(const uint8_t cells[81]);
 
 /* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
  * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.) */
@@ -202,12 +216,12 @@ bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[8
 int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cell (0..n-1) of a unit, or -1 */
 
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
-               TECH_CAGE, TECH_CONSEC, TECH_THERMO } tech_kind_t;
+               TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
     int unit, unit2;         /* pointing: box, line; claiming: line, box; pairs: the unit; cage: the cage;
                                 consecutive: the cell whose candidates its neighbours narrowed;
-                                thermo: the thermometer */
+                                thermo: the thermometer; sandwich: the row or column */
     int digit, digit2;       /* pointing/claiming: digit; pairs: the two digits; cage: bit mask of the
                                 digits its sum still allows in its empty cells */
     int cell1, cell2;        /* pairs: the two cells */
