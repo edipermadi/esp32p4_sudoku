@@ -7,7 +7,8 @@
  *     puzzles below it.
  *     Solved puzzles are green, the game in progress is orange.
  *   - statistics: per level and per puzzle best times, mistakes, solves.
- *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone.
+ *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone,
+ *     and formatting the microSD card (FAT32, one partition).
  *   - wifi: on/off, nearby networks, password keyboard (wifi_ui.c).
  *
  * Clock: with Wi-Fi connected the time comes from NTP (wifi_mgr.cpp starts
@@ -29,6 +30,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <lvgl.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "puzzles.h"
 #include "store.h"
 #include "sfx.h"
@@ -131,6 +134,7 @@ static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 /* settings screen */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
+static lv_obj_t *st_sd_btn;
 
 /* list screen */
 static lv_obj_t *l_total, *l_strip, *l_arrow_l, *l_arrow_r;
@@ -1250,6 +1254,169 @@ static void sleep_dd_cb(lv_event_t *e)
     store_set_screen_timeout_min(s_sleep_min);
 }
 
+/* ------------------------------------------------------------- microSD format */
+/* The card work runs in a short-lived task; sd_poll_cb (LVGL timer) follows
+ * its state and drives the dialogs. Only one job at a time.
+ *
+ * The card shares the SDMMC host with the Wi-Fi link, and initialising a card
+ * (400 kHz) disturbs that link badly enough that ESP-Hosted restarts the
+ * board. So the card is detected at boot, before Wi-Fi starts (sd_poll_cb
+ * starts Wi-Fi when that is done), and formatting then only transfers data at
+ * the link's own 40 MHz. A card inserted later can only be detected while
+ * Wi-Fi has not been started since boot. */
+typedef enum { SD_IDLE, SD_BOOT_PROBING, SD_BOOT_DONE, SD_PROBING, SD_FOUND, SD_NO_CARD,
+               SD_FORMATTING, SD_DONE, SD_FAILED } sd_state_t;
+typedef enum { SD_JOB_BOOT, SD_JOB_PROBE, SD_JOB_FORMAT } sd_job_t;
+static volatile sd_state_t s_sd_state = SD_IDLE;
+static volatile bool s_sd_present;
+static sd_state_t s_sd_seen = SD_IDLE;
+static uint64_t   s_sd_bytes;
+static char       s_sd_name[8];
+static esp_err_t  s_sd_err;
+static lv_obj_t  *s_sd_busy;          /* "Formatting..." box */
+
+static void sd_task(void *arg)
+{
+    sd_job_t job = (sd_job_t)(intptr_t)arg;
+    esp_err_t err;
+    switch (job) {
+    case SD_JOB_BOOT:
+    case SD_JOB_PROBE:
+        err = bsp_sdcard_probe(&s_sd_bytes, s_sd_name);
+        s_sd_present = err == ESP_OK;
+        s_sd_state = job == SD_JOB_BOOT ? SD_BOOT_DONE : (s_sd_present ? SD_FOUND : SD_NO_CARD);
+        break;
+    case SD_JOB_FORMAT:
+        err = bsp_sdcard_check();                  /* still the card found earlier? */
+        if (err == ESP_OK) err = bsp_sdcard_format_fat32();
+        s_sd_err = err;
+        s_sd_state = err == ESP_OK ? SD_DONE : SD_FAILED;
+        break;
+    }
+    vTaskDelete(NULL);
+}
+
+static bool sd_run(sd_job_t job)
+{
+    s_sd_state = job == SD_JOB_BOOT ? SD_BOOT_PROBING : job == SD_JOB_PROBE ? SD_PROBING : SD_FORMATTING;
+    if (xTaskCreate(sd_task, "sd_card", 8192, (void *)(intptr_t)job, 4, NULL) != pdPASS) {
+        s_sd_state = SD_IDLE;
+        return false;
+    }
+    return true;
+}
+
+static void fmt_gb(char *buf, size_t n, uint64_t bytes)
+{
+    uint32_t tenths = (uint32_t)((bytes + 50000000ULL) / 100000000ULL);   /* GB as printed on cards */
+    snprintf(buf, n, "%lu.%lu GB", (unsigned long)(tenths / 10), (unsigned long)(tenths % 10));
+}
+
+static void sd_btn_text(const char *t, bool enabled)
+{
+    if (!st_sd_btn) return;
+    lv_label_set_text(lv_obj_get_child(st_sd_btn, 0), t);
+    lv_obj_set_state(st_sd_btn, LV_STATE_DISABLED, !enabled);
+}
+
+static void sd_format_confirm_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    if (!sd_run(SD_JOB_FORMAT)) {
+        sudoku_ui_notice("Could not start formatting (out of memory).", 5000);
+        return;
+    }
+    s_sd_busy = make_msgbox("Formatting microSD card...", "Don't remove the card. This takes a few seconds.");
+}
+
+static void sd_format_cancel_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    s_sd_state = SD_IDLE;
+}
+
+static void sd_format_cb(lv_event_t *e)
+{
+    if (s_sd_state == SD_BOOT_PROBING) {
+        sudoku_ui_notice("Still looking for a microSD card. Try again in a moment.", 3000);
+        return;
+    }
+    if (s_sd_state != SD_IDLE) return;
+    if (s_sd_present) {
+        s_sd_state = SD_FOUND;                     /* found at boot: straight to the question */
+    } else if (!wifi_mgr_radio_started()) {
+        if (sd_run(SD_JOB_PROBE)) sd_btn_text("Checking...", false);
+    } else {
+        sudoku_ui_notice("No microSD card was found at start-up. Insert the card and restart the board "
+                         "(Wi-Fi shares the card's controller, so it can't be detected while Wi-Fi runs).", 8000);
+    }
+}
+
+static void sd_poll_cb(lv_timer_t *t)
+{
+    sd_state_t st = s_sd_state;
+    if (st == s_sd_seen) return;
+    s_sd_seen = st;
+    char sz[24], text[200];
+    switch (st) {
+    case SD_BOOT_DONE:
+        if (s_sd_present) {
+            fmt_gb(sz, sizeof(sz), s_sd_bytes);
+            printf("microSD: \"%s\", %s\n", s_sd_name, sz);
+        } else {
+            printf("microSD: no card\n");
+        }
+        wifi_mgr_start();                          /* now the card is done with the 400 kHz clock */
+        s_sd_state = s_sd_seen = SD_IDLE;
+        break;
+    case SD_FOUND: {
+        sd_btn_text("Format", true);
+        fmt_gb(sz, sizeof(sz), s_sd_bytes);
+        snprintf(text, sizeof(text),
+                 "Card \"%s\", %s.\nEverything on it will be erased. It gets one FAT32 "
+                 "partition using the whole card.", s_sd_name, sz);
+        lv_obj_t *m = make_msgbox("Format microSD card?", text);
+        msgbox_button(m, "Cancel", sd_format_cancel_cb, false);
+        msgbox_button(m, "Format", sd_format_confirm_cb, true);
+        break;
+    }
+    case SD_NO_CARD:
+        sd_btn_text("Format", true);
+        sudoku_ui_notice("No microSD card found. Insert one and try again.", 5000);
+        s_sd_state = s_sd_seen = SD_IDLE;
+        break;
+    case SD_FORMATTING:
+        sd_btn_text("Formatting...", false);
+        break;
+    case SD_DONE:
+    case SD_FAILED:
+        if (s_sd_busy) {
+            lv_msgbox_close(s_sd_busy);
+            s_sd_busy = NULL;
+        }
+        sd_btn_text("Format", true);
+        if (st == SD_DONE) {
+            fmt_gb(sz, sizeof(sz), s_sd_bytes);
+            snprintf(text, sizeof(text), "microSD card formatted: FAT32, one %s partition.", sz);
+        } else if (s_sd_err == ESP_ERR_TIMEOUT || s_sd_err == ESP_ERR_INVALID_CRC ||
+                   s_sd_err == ESP_ERR_INVALID_RESPONSE) {
+            s_sd_present = false;
+            snprintf(text, sizeof(text), "The microSD card isn't answering. If it was swapped, restart the "
+                                         "board with the card inserted.");
+        } else if (s_sd_err == ESP_ERR_INVALID_SIZE) {
+            snprintf(text, sizeof(text), "Format failed: the card is too small for FAT32.");
+        } else {
+            snprintf(text, sizeof(text), "Format failed (%s). The card may need formatting on a computer.",
+                     esp_err_to_name(s_sd_err));
+        }
+        sudoku_ui_notice(text, 6000);
+        s_sd_state = s_sd_seen = SD_IDLE;
+        break;
+    default:
+        break;
+    }
+}
+
 static void build_game(void);
 static void build_list(void);
 static void build_home(void);
@@ -1595,7 +1762,7 @@ static void build_stats(void)
 static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint)
 {
     lv_obj_t *r = lv_obj_create(parent);
-    lv_obj_set_size(r, LV_PCT(100), 92);
+    lv_obj_set_size(r, LV_PCT(100), 84);
     lv_obj_set_style_bg_color(r, C_CARD, 0);
     lv_obj_set_style_border_width(r, 0, 0);
     lv_obj_set_style_radius(r, 12, 0);
@@ -1636,7 +1803,7 @@ static void build_settings(void)
     lv_obj_set_pos(col, 40, 84);
     lv_obj_set_size(col, SCR_W - 80, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(col, 14, 0);
+    lv_obj_set_style_pad_row(col, 12, 0);
 
     lv_obj_t *r = settings_row(col, "Dark mode", "Light text on a dark background");
     st_theme_sw = settings_switch(r, s_dark, theme_sw_cb);
@@ -1716,6 +1883,13 @@ static void build_settings(void)
     lv_dropdown_set_selected(st_tz_dd, (uint32_t)tz_find(store_timezone()));
     tz_show_selected();
     lv_obj_add_event_cb(st_tz_dd, tz_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    r = settings_row(col, "microSD card", "Erase it: FAT32, one partition, whole card");
+    st_sd_btn = make_btn(r, 0, 0, 160, 52, "Format", &lv_font_montserrat_18, sd_format_cb, NULL);
+    lv_obj_set_style_bg_color(st_sd_btn, C_CARD2, 0);
+    lv_obj_set_style_bg_opa(st_sd_btn, LV_OPA_50, LV_STATE_DISABLED);
+    lv_obj_align(st_sd_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+    if (s_sd_state == SD_FORMATTING) sd_btn_text("Formatting...", false);
 }
 
 static void build_wifi(void)
@@ -1810,7 +1984,9 @@ esp_err_t sudoku_ui_start(void)
     }
 
     tz_apply(store_timezone());
-    wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
+    /* microSD detection first, then Wi-Fi (sd_poll_cb starts it; see the
+     * microSD section). Wi-Fi reconnects to the saved network if left on. */
+    if (!sd_run(SD_JOB_BOOT)) wifi_mgr_start();
 
     l_coll = store_last_collection();
     s_sleep_min = store_screen_timeout_min();
@@ -1820,6 +1996,7 @@ esp_err_t sudoku_ui_start(void)
     lv_timer_create(tick_cb, 200, NULL);
     lv_timer_create(saver_cb, 1000, NULL);
     lv_timer_create(clock_cb, 1000, NULL);
+    lv_timer_create(sd_poll_cb, 200, NULL);
     clock_cb(NULL);
     return ESP_OK;
 }

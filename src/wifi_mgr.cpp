@@ -34,6 +34,7 @@ static bool s_trying;                       /* a connect command is in progress 
 static uint32_t s_try_start;
 static volatile uint8_t s_last_reason;      /* from the disconnect event */
 static bool s_sntp_started;
+static volatile bool s_radio_started;       /* ESP-Hosted transport has been started */
 
 /* ------------------------------------------------------------------ NVS */
 static void nvs_load(bool *on, char *ssid, char *pass)
@@ -127,6 +128,7 @@ static bool radio_up(void)
     WiFi.setPins(BSP_HOSTED_SDIO_CLK, BSP_HOSTED_SDIO_CMD, BSP_HOSTED_SDIO_D0, BSP_HOSTED_SDIO_D1,
                  BSP_HOSTED_SDIO_D2, BSP_HOSTED_SDIO_D3, BSP_HOSTED_RESET);
 #endif
+    s_radio_started = true;
     WiFi.persistent(false);                  /* credentials live in our own NVS keys */
     WiFi.onEvent(on_disconnect, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     if (!WiFi.mode(WIFI_STA)) {              /* first call brings up ESP-Hosted / the C6 */
@@ -388,6 +390,11 @@ extern "C" void wifi_mgr_set_enabled(bool on)                  { send(on ? CMD_E
 extern "C" void wifi_mgr_scan(void)                            { send(CMD_SCAN); }
 extern "C" void wifi_mgr_connect(const char *ssid, const char *pass) { send(CMD_CONNECT, ssid, pass); }
 extern "C" void wifi_mgr_forget(void)                          { send(CMD_FORGET); }
+
+extern "C" bool wifi_mgr_radio_started(void)
+{
+    return s_radio_started;
+}
 
 extern "C" void wifi_mgr_get_status(wifi_status_t *out)
 {

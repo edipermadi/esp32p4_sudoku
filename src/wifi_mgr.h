@@ -58,6 +58,10 @@ void wifi_mgr_connect(const char *ssid, const char *pass);
 void wifi_mgr_forget(void);
 
 void wifi_mgr_get_status(wifi_status_t *out);
+/* True once the C6 link has been brought up (it stays up while the board runs).
+ * The microSD slot shares the SDMMC host: card (re)initialisation must not
+ * happen after this (see bsp_sdcard.c). */
+bool wifi_mgr_radio_started(void);
 /* Copies up to max scan results (strongest first, one per SSID); returns the count. */
 int wifi_mgr_get_aps(wifi_ap_t *out, int max);
 

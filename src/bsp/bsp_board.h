@@ -60,6 +60,27 @@ bsp_panel_kind_t bsp_display_panel_kind(void);
 /* Backlight brightness 0..100 % (implemented with the Arduino LEDC API). */
 void bsp_display_brightness_set(int percent);
 
+/* ---------------------------------------------------------------- microSD */
+/* SDMMC slot 0 (IO_MUX): CLK 43, CMD 44, D0..D3 = 39..42, no card-detect.
+ * The IO rail comes from on-chip LDO VO4 at 3.3 V. The SDMMC host is shared
+ * with ESP-Hosted (Wi-Fi via the C6 on slot 1). */
+#define BSP_SD_LDO_CHAN          4
+#define BSP_SD_LDO_MV            3300
+
+/* Powers the slot's IO rail and starts the SDMMC host. Call at boot, before
+ * Wi-Fi starts (same order as the esp32p4_86box project, where both work). */
+esp_err_t bsp_sdcard_host_init(void);
+/* Detects and initialises the card. Fills total bytes and the card's name
+ * (>= 8 chars). Card init runs at 400 kHz, which reprograms the SDMMC clock
+ * divider that the Wi-Fi link (ESP-Hosted, slot 1) also uses, so it must not
+ * run once Wi-Fi is up: do it at boot, before wifi_mgr_start(). */
+esp_err_t bsp_sdcard_probe(uint64_t *bytes, char *name);
+/* Is the card found by bsp_sdcard_probe() still answering? (CMD13, no clock change) */
+esp_err_t bsp_sdcard_check(void);
+/* Erases the card's layout: MBR with one primary FAT32 partition over the
+ * whole card (FatFs f_mkfs). Takes seconds; call from a worker task. */
+esp_err_t bsp_sdcard_format_fat32(void);
+
 /* GT911 touch, polled (INT is not routed to the SoC). */
 esp_err_t bsp_touch_init(void);
 /* Returns true while touched; fills the first contact point. */

@@ -37,6 +37,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 - **Light and dark mode**: switch between colour schemes under **Settings → Dark mode**.
 - **Wi-Fi and clock**: **Settings → Wi-Fi** opens a screen with an on/off switch, nearby networks (tap one; secured networks ask for the password on an on-screen keyboard) and **Forget**. Once connected, the time comes from NTP (pool.ntp.org) and the home screen shows it. The board remembers the network and reconnects at start-up. Wi-Fi goes through the board's ESP32-C6 co-processor (ESP-Hosted over SDIO); the Wi-Fi code is shared with the `esp32p4_86box` project.
 - **Time zone**: **Settings → Time zone** lists IANA names such as `Asia/Dubai`, with daylight saving where the zone has it.
+- **Format microSD card**: **Settings → microSD card → Format** erases the card and gives it a fresh MBR with one primary FAT32 partition spanning the whole card (FatFs `f_mkfs`, cluster size chosen automatically, data area aligned to 4 MiB). It shows the card's name and size in a confirmation dialog first. The game itself doesn't use the card.
+  - Insert the card before switching the board on. The card shares its SD controller with the Wi-Fi chip, and setting up a card while Wi-Fi runs breaks the Wi-Fi link and restarts the board. So the card is detected at start-up, before Wi-Fi starts, and a card inserted later is only picked up if Wi-Fi hasn't been switched on since start-up.
 - **Settings** (dark mode, sound effects, screen timeout, Wi-Fi network and time zone) are saved and kept across restarts. The Wi-Fi password is stored unencrypted in NVS.
 - **Saved state**: best times, mistakes and solve counts, and the game in progress (entries, notes, elapsed time and mistakes) are kept in NVS. The game is saved when you leave it or pause, and the statistics when you solve. Nothing is written to flash during play: a flash write briefly stalls the display's frame buffer in PSRAM and makes the panel blink. If power is cut mid-game, the moves since the last leave or pause are lost.
 
@@ -89,6 +91,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 | Screen timeout                  | **Settings → Screen off after**                  |
 | Connect to Wi-Fi                | **Settings → Wi-Fi**, switch on, tap a network   |
 | Time zone                       | **Settings → Time zone**                         |
+| Format the microSD card         | **Settings → microSD card → Format**, confirm    |
 
 The small number on each pad button is how many of that digit are still to place. Red digits break a row, column or box rule. The puzzle is solved when every cell is filled and nothing is red. Each puzzle has exactly one solution, so the solution is always the intended one.
 
@@ -133,7 +136,7 @@ src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
 src/fonts/              Montserrat 44 px digits / 36 px timer (lv_font_conv)
-src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, LVGL port
+src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/opensudoku/       the downloaded .opensudoku collections
 ```

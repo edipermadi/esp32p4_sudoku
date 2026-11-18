@@ -56,6 +56,10 @@ void setup()
   Serial.printf("Panel: %s\n", bsp_display_panel_kind() == BSP_PANEL_JD9365 ? "JD9365DA" : "ST7703");
 
   store_init();
+  err = bsp_sdcard_host_init();     /* before Wi-Fi: they share the SDMMC host */
+  if (err != ESP_OK) {
+    Serial.printf("microSD host init failed: %s\n", esp_err_to_name(err));
+  }
   err = sfx_init();
   if (err != ESP_OK) {
     Serial.printf("Speaker init failed, no sound: %s\n", esp_err_to_name(err));
