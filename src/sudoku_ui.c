@@ -1,9 +1,12 @@
 /*
  * Sudoku UI for a 720x720 touch screen (LVGL 9).
  *
- * Two screens:
+ * Screens:
+ *   - home: Continue (the game in progress), Puzzles and Settings.
  *   - list: collections on the left, a 10x10 grid of puzzles on the right.
  *     Solved puzzles are green, the game in progress is orange.
+ *   - statistics: per level and per puzzle best times, mistakes, solves.
+ *   - settings: dark mode, sound effects, screen timeout.
  *   - game: the 9x9 board, a 1..9 number pad on the right, a timer at the
  *     top, and Undo / Erase / Notes / Restart at the bottom. Conflicting
  *     digits turn red; a complete board without conflicts is solved (every
@@ -11,6 +14,9 @@
  *
  * Sounds: a tick on every touch, a buzz when a placed digit breaks a rule,
  * a chime when all nine of a digit are placed, a fanfare when solved.
+ *
+ * Screen saver: after the time chosen in Settings without a touch, the game pauses, the screen goes
+ * black and the backlight turns off. The next tap only wakes it.
  */
 #include "sudoku_ui.h"
 #include <stdio.h>
@@ -19,6 +25,12 @@
 #include "puzzles.h"
 #include "store.h"
 #include "sfx.h"
+#include "bsp/bsp_board.h"
+
+/* "Screen off" dropdown choices, in minutes (0 = never) */
+static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
+#define SLEEP_OPTIONS "1 min\n2 min\n5 min\n10 min\n15 min\n30 min\nNever"
+#define SLEEP_COUNT   (sizeof(SLEEP_MIN) / sizeof(SLEEP_MIN[0]))
 
 LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
 LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
@@ -51,6 +63,7 @@ static const palette_t PAL_LIGHT = {
 
 static const palette_t *P = &PAL_DARK;
 static bool s_dark = true;
+static uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
 
 #define C_BG          lv_color_hex(P->bg)
 #define C_CARD        lv_color_hex(P->card)
@@ -79,6 +92,9 @@ static bool s_dark = true;
 
 /* ------------------------------------------------------------- geometry */
 #define SCR_W       720
+#define COLL_W      252     /* left-hand collection column (list, statistics) */
+#define PANE_X      (12 + COLL_W + 12)
+#define PANE_W      (SCR_W - PANE_X - 12)   /* 432 */
 #define TOP_H       60
 #define CELL        64
 #define GRID_X      8
@@ -113,16 +129,29 @@ static bool     g_notes_mode;
 static bool     g_solved;
 static bool     g_paused;
 static uint32_t g_elapsed_ms;
+static uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
 static uint32_t g_last_tick;
 
 static board_t  g_undo[UNDO_MAX];
 static int      g_undo_head, g_undo_len;
 
 /* ------------------------------------------------------------- widgets */
-static lv_obj_t *scr_list, *scr_game;
+static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_game;
+
+/* home screen */
+static lv_obj_t *h_total, *h_continue, *h_continue_sub;
+
+/* statistics screen: row 0 of the left column is "All levels" */
+#define X_ROWS (PUZZLE_COLLECTION_COUNT + 1)
+static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
+static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty;
+static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
+
+/* settings screen */
+static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd;
 
 /* list screen */
-static lv_obj_t *l_total, *l_continue, *l_continue_lbl, *l_sound_lbl, *l_theme_lbl;
+static lv_obj_t *l_total;
 static lv_obj_t *l_coll_btn[PUZZLE_COLLECTION_COUNT], *l_coll_cnt[PUZZLE_COLLECTION_COUNT];
 static lv_obj_t *l_coll_name[PUZZLE_COLLECTION_COUNT];
 static lv_obj_t *l_name, *l_stats, *l_btnm;
@@ -135,7 +164,7 @@ static uint16_t  l_pending_id;
 static lv_obj_t *g_cells[81], *g_cell_lbl[81];
 static lv_obj_t *g_pad[9], *g_pad_cnt[9];
 static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
-static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best;
+static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss;
 
 static void show_list(void);
 static void open_puzzle(uint16_t id);
@@ -261,6 +290,7 @@ static void save_current(void)
     memcpy(sg.val, g_b.val, sizeof(sg.val));
     memcpy(sg.notes, g_b.notes, sizeof(sg.notes));
     sg.elapsed_ms = g_elapsed_ms;
+    sg.mistakes = g_mistakes;
     store_set_game(&sg);
     lv_timer_t *t = lv_timer_create(commit_cb, SAVE_DELAY_MS, NULL);
     lv_timer_set_repeat_count(t, 1);
@@ -348,11 +378,11 @@ static void refresh_board(void)
 }
 
 static uint16_t s_solve_id;
-static uint32_t s_solve_secs;
+static uint32_t s_solve_secs, s_solve_mistakes;
 
 static void solve_commit_cb(lv_timer_t *t)
 {
-    store_record_solve(s_solve_id, s_solve_secs);
+    store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
     if (store_saved_game()->id == s_solve_id) store_clear_game();
 }
 
@@ -368,6 +398,7 @@ static void on_solved(void)
     bool best = !prev || rec < prev;
     s_solve_id = g_id;
     s_solve_secs = secs;
+    s_solve_mistakes = g_mistakes;
     lv_timer_t *ct = lv_timer_create(solve_commit_cb, SAVE_DELAY_MS, NULL);   /* after the dialog is up */
     lv_timer_set_repeat_count(ct, 1);
 
@@ -385,6 +416,13 @@ static void on_solved(void)
         fmt_time(b, sizeof(b), prev);
         lv_label_set_text_fmt(g_win_best, "Best time %s", b);
         lv_obj_set_style_text_color(g_win_best, C_MUTED, 0);
+    }
+    if (g_mistakes == 0) {
+        lv_label_set_text(g_win_miss, "No mistakes");
+        lv_obj_set_style_text_color(g_win_miss, C_GREEN, 0);
+    } else {
+        lv_label_set_text_fmt(g_win_miss, "%u mistake%s", (unsigned)g_mistakes, g_mistakes == 1 ? "" : "s");
+        lv_obj_set_style_text_color(g_win_miss, C_MUTED, 0);
     }
     lv_obj_set_hidden(g_pause_ovl, true);
     lv_obj_set_hidden(g_win_ovl, false);
@@ -439,6 +477,7 @@ static void enter_digit(int d)
     if (!placed || g_solved) return;          /* on_solved() plays its own sound */
 
     if (g_conflict[i]) {
+        if (g_mistakes < 0xFFFF) g_mistakes++;
         sfx_play(SFX_ERROR);
         return;
     }
@@ -538,6 +577,7 @@ static void reset_game(void)
     memcpy(g_b.val, g_given, sizeof(g_b.val));
     memset(g_b.notes, 0, sizeof(g_b.notes));
     g_elapsed_ms = 0;
+    g_mistakes = 0;
     g_undo_len = g_undo_head = 0;
     g_sel = -1;
     g_solved = false;
@@ -641,6 +681,7 @@ static void start_game(uint16_t id, bool resume)
             if (g_b.val[i] > 9) g_b.val[i] = 0;
         }
         g_elapsed_ms = s->elapsed_ms;
+        g_mistakes = s->mistakes;
     }
     g_notes_mode = false;
     lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
@@ -779,7 +820,9 @@ static void build_game(void)
     g_win_time = make_label(card, &font_timer_36, C_TEXT);
     lv_obj_align(g_win_time, LV_ALIGN_TOP_MID, 0, 86);
     g_win_best = make_label(card, &lv_font_montserrat_18, C_MUTED);
-    lv_obj_align(g_win_best, LV_ALIGN_TOP_MID, 0, 140);
+    lv_obj_align(g_win_best, LV_ALIGN_TOP_MID, 0, 136);
+    g_win_miss = make_label(card, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_align(g_win_miss, LV_ALIGN_TOP_MID, 0, 164);
 
     lv_obj_t *b1 = make_btn(card, 0, 0, 196, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_18, win_list_cb, NULL);
     lv_obj_align(b1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -830,7 +873,7 @@ static void refresh_list(void)
                                                    : (n == p->count ? C_GREEN : C_MUTED), 0);
         lv_obj_set_style_text_opa(l_coll_cnt[c], sel ? LV_OPA_80 : LV_OPA_COVER, 0);
     }
-    lv_label_set_text_fmt(l_total, "%u of %u puzzles solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
+    lv_label_set_text_fmt(l_total, "%u of %u solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
 
     /* collection panel */
     uint32_t sum = 0, best = 0;
@@ -863,16 +906,6 @@ static void refresh_list(void)
     }
     l_map[m] = "";
     lv_buttonmatrix_set_map(l_btnm, l_map);
-
-    /* resume shortcut */
-    const saved_game_t *s = store_saved_game();
-    lv_obj_set_hidden(l_continue, s->id == STORE_NO_GAME);
-    if (s->id != STORE_NO_GAME) {
-        char name[40], t[16];
-        puzzle_name(s->id, name, sizeof(name));
-        fmt_time(t, sizeof(t), s->elapsed_ms / 1000);
-        lv_label_set_text_fmt(l_continue_lbl, LV_SYMBOL_PLAY "  Continue %s  (%s)", name, t);
-    }
 }
 
 static void show_list(void)
@@ -892,27 +925,242 @@ static void coll_click_cb(lv_event_t *e)
     refresh_list();
 }
 
-static void update_sound_btn(void)
+static void refresh_home(void)
 {
-    bool on = sfx_enabled();
-    lv_label_set_text(l_sound_lbl, on ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_MUTE);
-    lv_obj_set_style_text_color(l_sound_lbl, on ? C_TEXT : C_MUTED, 0);
+    uint16_t total = 0;
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+        total += store_solved_count(puzzle_collections[c].first, puzzle_collections[c].count);
+    }
+    lv_label_set_text_fmt(h_total, "%u of %u puzzles solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
+
+    const saved_game_t *s = store_saved_game();
+    lv_obj_set_hidden(h_continue, s->id == STORE_NO_GAME);
+    if (s->id != STORE_NO_GAME) {
+        char name[40], t[16];
+        puzzle_name(s->id, name, sizeof(name));
+        fmt_time(t, sizeof(t), s->elapsed_ms / 1000);
+        lv_label_set_text_fmt(h_continue_sub, "%s  -  %s", name, t);
+    }
 }
 
-static void sound_cb(lv_event_t *e)
+static void show_home(void)
 {
-    bool on = !sfx_enabled();
+    refresh_home();
+    lv_screen_load(scr_home);
+}
+
+static void home_cb(lv_event_t *e)
+{
+    show_home();
+}
+
+static void puzzles_cb(lv_event_t *e)
+{
+    refresh_list();
+    lv_screen_load(scr_list);
+}
+
+static void settings_cb(lv_event_t *e)
+{
+    lv_screen_load(scr_settings);
+}
+
+/* ------------------------------------------------------------- statistics */
+
+typedef struct {
+    uint16_t solved, perfect, known;     /* known: solves with a mistake count */
+    uint32_t solves, time_sum, fastest, miss_sum;
+} level_stat_t;
+
+static void add_puzzle_stat(level_stat_t *st, uint16_t id)
+{
+    uint32_t t = store_best_time(id);
+    if (!t) return;
+    st->solved++;
+    st->solves += store_solve_count(id);
+    st->time_sum += t;
+    if (!st->fastest || t < st->fastest) st->fastest = t;
+    uint8_t m = store_fewest_mistakes(id);
+    if (m != STORE_MISTAKES_UNKNOWN) {
+        st->known++;
+        st->miss_sum += m;
+        if (m == 0) st->perfect++;
+    }
+}
+
+static void level_stat(int c, level_stat_t *st)
+{
+    memset(st, 0, sizeof(*st));
+    const puzzle_collection_t *pc = &puzzle_collections[c];
+    for (uint16_t i = 0; i < pc->count; i++) add_puzzle_stat(st, pc->first + i);
+}
+
+/* "1.4", or "-" when nothing is known */
+static void fmt_avg_mistakes(char *buf, size_t n, const level_stat_t *st)
+{
+    if (!st->known) {
+        snprintf(buf, n, "-");
+        return;
+    }
+    uint32_t x10 = (st->miss_sum * 10 + st->known / 2) / st->known;
+    snprintf(buf, n, "%lu.%lu", (unsigned long)(x10 / 10), (unsigned long)(x10 % 10));
+}
+
+static void fmt_stat_times(char *fast, char *avg, size_t n, const level_stat_t *st)
+{
+    if (st->solved) {
+        fmt_time(fast, n, st->fastest);
+        fmt_time(avg, n, st->time_sum / st->solved);
+    } else {
+        snprintf(fast, n, "-");
+        snprintf(avg, n, "-");
+    }
+}
+
+static void stats_summary(const level_stat_t *st, uint16_t count)
+{
+    char f[16], a[16], m[16];
+    fmt_stat_times(f, a, sizeof(f), st);
+    fmt_avg_mistakes(m, sizeof(m), st);
+    lv_label_set_text_fmt(x_sum1, "Solved %u of %u   -   %u without mistakes   -   %lu solves",
+                          (unsigned)st->solved, (unsigned)count, (unsigned)st->perfect,
+                          (unsigned long)st->solves);
+    lv_label_set_text_fmt(x_sum2, "Fastest %s   -   average %s   -   mistakes %s per puzzle", f, a, m);
+}
+
+static void table_columns(int n, const int32_t *w, const char *const *head)
+{
+    lv_table_set_column_count(x_table, n);
+    for (int c = 0; c < n; c++) {
+        lv_table_set_column_width(x_table, c, w[c]);
+        lv_table_set_cell_value(x_table, 0, c, head[c]);
+    }
+}
+
+static void refresh_stats(void)
+{
+    level_stat_t all, st;
+    memset(&all, 0, sizeof(all));
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+        level_stat(c, &st);
+        lv_label_set_text_fmt(x_cnt_lbl[c + 1], "%u/%u", (unsigned)st.solved, (unsigned)puzzle_collections[c].count);
+    }
+    for (uint16_t i = 0; i < PUZZLE_COUNT; i++) add_puzzle_stat(&all, i);
+    lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)all.solved, (unsigned)PUZZLE_COUNT);
+    for (int r = 0; r < X_ROWS; r++) {
+        bool sel = r == x_sel;
+        lv_obj_set_state(x_btn[r], LV_STATE_CHECKED, sel);
+        lv_obj_set_style_text_color(x_name_lbl[r], sel ? lv_color_white() : C_TEXT, 0);
+        lv_obj_set_style_text_color(x_cnt_lbl[r], sel ? lv_color_white() : C_MUTED, 0);
+    }
+
+    char f[16], a[16], m[16];
+    lv_obj_scroll_to_y(x_table, 0, LV_ANIM_OFF);
+    if (x_sel == 0) {
+        /* one row per level */
+        lv_label_set_text(x_title, "All levels");
+        stats_summary(&all, PUZZLE_COUNT);
+        static const int32_t w[] = {140, 66, 72, 72, 82};   /* sums to PANE_W */
+        static const char *const h[] = {"Level", "Solved", "Fastest", "Average", "Mistakes"};
+        lv_table_set_row_count(x_table, PUZZLE_COLLECTION_COUNT + 1);
+        table_columns(5, w, h);
+        for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+            level_stat(c, &st);
+            fmt_stat_times(f, a, sizeof(f), &st);
+            fmt_avg_mistakes(m, sizeof(m), &st);
+            lv_table_set_cell_value(x_table, c + 1, 0, puzzle_collections[c].name);
+            lv_table_set_cell_value_fmt(x_table, c + 1, 1, "%u", (unsigned)st.solved);
+            lv_table_set_cell_value(x_table, c + 1, 2, f);
+            lv_table_set_cell_value(x_table, c + 1, 3, a);
+            lv_table_set_cell_value(x_table, c + 1, 4, m);
+        }
+        lv_obj_set_hidden(x_table, false);
+        lv_obj_set_hidden(x_empty, true);
+        return;
+    }
+
+    /* one row per solved puzzle of the level */
+    int c = x_sel - 1;
+    const puzzle_collection_t *pc = &puzzle_collections[c];
+    level_stat(c, &st);
+    lv_label_set_text(x_title, pc->name);
+    stats_summary(&st, pc->count);
+    static const int32_t w[] = {90, 130, 110, 102};     /* sums to PANE_W */
+    static const char *const h[] = {"Puzzle", "Best time", "Mistakes", "Solved"};
+    lv_table_set_row_count(x_table, st.solved + 1);
+    table_columns(4, w, h);
+    uint32_t row = 1;
+    for (uint16_t i = 0; i < pc->count; i++) {
+        uint16_t id = pc->first + i;
+        uint32_t t = store_best_time(id);
+        if (!t) continue;
+        uint8_t mk = store_fewest_mistakes(id);
+        fmt_time(f, sizeof(f), t);
+        lv_table_set_cell_value_fmt(x_table, row, 0, "#%u", (unsigned)(i + 1));
+        lv_table_set_cell_value(x_table, row, 1, f);
+        if (mk == STORE_MISTAKES_UNKNOWN) lv_table_set_cell_value(x_table, row, 2, "-");
+        else lv_table_set_cell_value_fmt(x_table, row, 2, "%u", (unsigned)mk);
+        lv_table_set_cell_value_fmt(x_table, row, 3, "%u", (unsigned)store_solve_count(id));
+        row++;
+    }
+    lv_obj_set_hidden(x_table, st.solved == 0);
+    lv_obj_set_hidden(x_empty, st.solved != 0);
+}
+
+static void stats_cb(lv_event_t *e)
+{
+    refresh_stats();
+    lv_screen_load(scr_stats);
+}
+
+static void stats_row_cb(lv_event_t *e)
+{
+    x_sel = (int)(intptr_t)lv_event_get_user_data(e);
+    refresh_stats();
+}
+
+/* header row in muted text on a darker band; numbers right-aligned */
+static void stats_table_draw_cb(lv_event_t *e)
+{
+    lv_draw_task_t *t = lv_event_get_draw_task(e);
+    lv_draw_dsc_base_t *base = (lv_draw_dsc_base_t *)lv_draw_task_get_draw_dsc(t);
+    if (base->part != LV_PART_ITEMS) return;
+    uint32_t row = base->id1, col = base->id2;
+    if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_FILL) {
+        lv_draw_fill_dsc_t *fd = lv_draw_task_get_fill_dsc(t);
+        fd->color = row == 0 ? C_CARD2 : C_CARD;
+    } else if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_LABEL) {
+        lv_draw_label_dsc_t *ld = lv_draw_task_get_label_dsc(t);
+        if (row == 0) ld->color = C_MUTED;
+        if (col > 0) ld->align = LV_TEXT_ALIGN_RIGHT;
+    }
+}
+
+static void sound_sw_cb(lv_event_t *e)
+{
+    bool on = lv_obj_has_state(st_sound_sw, LV_STATE_CHECKED);
     sfx_set_enabled(on);
     store_set_sound_enabled(on);
-    update_sound_btn();
-    sfx_play(SFX_TOUCH);      /* the tick for this press was skipped while muted */
+    if (on) sfx_play(SFX_TOUCH);   /* the tick for this press was skipped while muted */
+}
+
+static void sleep_dd_cb(lv_event_t *e)
+{
+    uint32_t sel = lv_dropdown_get_selected(st_sleep_dd);
+    if (sel >= SLEEP_COUNT) return;
+    s_sleep_min = SLEEP_MIN[sel];
+    store_set_screen_timeout_min(s_sleep_min);
 }
 
 static void build_game(void);
 static void build_list(void);
+static void build_home(void);
+static void build_stats(void);
+static void build_settings(void);
 
-/* Switches palette and LVGL theme, then rebuilds both screens around the
- * current game state (all of which lives outside the widgets). */
+/* Switches palette and LVGL theme, then rebuilds every screen around the
+ * current state (all of which lives outside the widgets) and shows the
+ * rebuilt copy of the screen that was open (home at start-up). */
 static void apply_theme(bool dark)
 {
     s_dark = dark;
@@ -920,11 +1168,15 @@ static void apply_theme(bool dark)
     lv_display_t *disp = lv_display_get_default();
     lv_display_set_theme(disp, lv_theme_default_init(disp, C_ACCENT, C_ORANGE, dark, &lv_font_montserrat_16));
 
-    lv_obj_t *old_list = scr_list, *old_game = scr_game;
-    bool in_game = old_game && lv_screen_active() == old_game;
+    lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
+    lv_obj_t *old_stats = scr_stats;
+    lv_obj_t *act = lv_screen_active();
 
     build_game();
     build_list();
+    build_home();
+    build_stats();
+    build_settings();
     if (g_id != STORE_NO_GAME) {
         lv_obj_set_state(g_notes_btn, LV_STATE_CHECKED, g_notes_mode);
         lv_obj_set_hidden(g_pause_ovl, !g_paused);
@@ -933,17 +1185,28 @@ static void apply_theme(bool dark)
         update_header();
     }
     refresh_list();
-    lv_screen_load(in_game ? scr_game : scr_list);
+    refresh_home();
+    refresh_stats();
+    lv_obj_t *to = act && act == old_game     ? scr_game
+                 : act && act == old_stats    ? scr_stats
+                 : act && act == old_list     ? scr_list
+                 : act && act == old_settings ? scr_settings
+                 : scr_home;
+    lv_screen_load(to);
 
     /* the old screens may be running this very event: delete them later */
+    if (old_home) lv_obj_delete_async(old_home);
     if (old_list) lv_obj_delete_async(old_list);
+    if (old_settings) lv_obj_delete_async(old_settings);
+    if (old_stats) lv_obj_delete_async(old_stats);
     if (old_game) lv_obj_delete_async(old_game);
 }
 
-static void theme_cb(lv_event_t *e)
+static void theme_sw_cb(lv_event_t *e)
 {
-    store_set_dark_mode(!s_dark);
-    apply_theme(!s_dark);
+    bool dark = lv_obj_has_state(st_theme_sw, LV_STATE_CHECKED);
+    store_set_dark_mode(dark);
+    apply_theme(dark);
 }
 
 static void continue_cb(lv_event_t *e)
@@ -991,64 +1254,64 @@ static void btnm_cb(lv_event_t *e)
     open_puzzle(puzzle_collections[l_coll].first + (uint16_t)idx);
 }
 
-static void build_list(void)
+/* Left-hand column card shared by the list and statistics screens. */
+static lv_obj_t *make_coll_column(lv_obj_t *parent)
 {
-    scr_list = make_screen();
-
-    lv_obj_t *t = make_label(scr_list, &lv_font_montserrat_28, C_TEXT);
-    lv_label_set_text(t, "Sudoku");
-    lv_obj_set_pos(t, 16, 8);
-    l_total = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
-    lv_obj_set_pos(l_total, 16, 44);
-
-    lv_obj_t *thm = make_btn(scr_list, SCR_W - 12 - 330 - 10 - 60 - 10 - 92, 10, 92, 52, NULL, NULL, theme_cb, NULL);
-    l_theme_lbl = make_label(thm, &lv_font_montserrat_16, C_TEXT);
-    lv_label_set_text(l_theme_lbl, s_dark ? "Light" : "Dark");
-    lv_obj_center(l_theme_lbl);
-
-    lv_obj_t *snd = make_btn(scr_list, SCR_W - 12 - 330 - 10 - 60, 10, 60, 52, NULL, NULL, sound_cb, NULL);
-    l_sound_lbl = make_label(snd, &lv_font_montserrat_22, C_TEXT);
-    lv_obj_center(l_sound_lbl);
-    update_sound_btn();
-
-    l_continue = make_btn(scr_list, SCR_W - 12 - 330, 10, 330, 52, NULL, NULL, continue_cb, NULL);
-    lv_obj_set_style_bg_color(l_continue, C_LIST_ACTIVE, 0);
-    l_continue_lbl = make_label(l_continue, &lv_font_montserrat_16, lv_color_white());
-    lv_obj_center(l_continue_lbl);
-
-    /* collections */
-    lv_obj_t *list = lv_obj_create(scr_list);
+    lv_obj_t *list = lv_obj_create(parent);
     lv_obj_set_pos(list, 12, 76);
-    lv_obj_set_size(list, 252, SCR_W - 76 - 12);
+    lv_obj_set_size(list, COLL_W, SCR_W - 76 - 12);
     lv_obj_set_style_bg_color(list, C_CARD, 0);
     lv_obj_set_style_border_width(list, 0, 0);
     lv_obj_set_style_radius(list, 12, 0);
     lv_obj_set_style_pad_all(list, 6, 0);
     lv_obj_set_style_pad_row(list, 4, 0);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    return list;
+}
+
+/* One row of that column: name on the left, a small count on the right. */
+static lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name_lbl, lv_obj_t **cnt_lbl,
+                               lv_event_cb_t cb, int user)
+{
+    lv_obj_t *b = lv_button_create(list);
+    lv_obj_set_size(b, LV_PCT(100), 50);
+    lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_CHECKED);
+    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(b, C_CARD2, LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_radius(b, 8, 0);
+    lv_obj_set_style_pad_hor(b, 12, 0);
+    *name_lbl = make_label(b, &lv_font_montserrat_16, C_TEXT);
+    lv_label_set_text(*name_lbl, name);
+    lv_obj_align(*name_lbl, LV_ALIGN_LEFT_MID, 0, 0);
+    *cnt_lbl = make_label(b, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_align(*cnt_lbl, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, (void *)(intptr_t)user);
+    return b;
+}
+
+static void build_list(void)
+{
+    scr_list = make_screen();
+
+    make_btn(scr_list, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
+    lv_obj_t *t = make_label(scr_list, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Puzzles");
+    lv_obj_set_pos(t, 150, 20);
+    l_total = make_label(scr_list, &lv_font_montserrat_16, C_MUTED);
+    lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -16, 28);
+
+    /* collections */
+    lv_obj_t *list = make_coll_column(scr_list);
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        lv_obj_t *b = lv_button_create(list);
-        lv_obj_set_size(b, LV_PCT(100), 50);
-        lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_CHECKED);
-        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_PRESSED);
-        lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_CHECKED);
-        lv_obj_set_style_bg_color(b, C_CARD2, LV_STATE_PRESSED);
-        lv_obj_set_style_shadow_width(b, 0, 0);
-        lv_obj_set_style_radius(b, 8, 0);
-        lv_obj_set_style_pad_hor(b, 12, 0);
-        lv_obj_t *n = make_label(b, &lv_font_montserrat_16, C_TEXT);
-        lv_label_set_text(n, puzzle_collections[c].name);
-        l_coll_name[c] = n;
-        lv_obj_align(n, LV_ALIGN_LEFT_MID, 0, 0);
-        l_coll_cnt[c] = make_label(b, &lv_font_montserrat_14, C_MUTED);
-        lv_obj_align(l_coll_cnt[c], LV_ALIGN_RIGHT_MID, 0, 0);
-        lv_obj_add_event_cb(b, coll_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)c);
-        l_coll_btn[c] = b;
+        l_coll_btn[c] = make_coll_btn(list, puzzle_collections[c].name, &l_coll_name[c], &l_coll_cnt[c],
+                                      coll_click_cb, c);
     }
 
     /* puzzles of the selected collection */
-    int px = 12 + 252 + 12, pw = SCR_W - px - 12;
+    int px = PANE_X, pw = PANE_W;
     l_name = make_label(scr_list, &lv_font_montserrat_22, C_TEXT);
     lv_obj_set_pos(l_name, px + 4, 80);
     l_stats = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
@@ -1075,6 +1338,194 @@ static void build_list(void)
     lv_obj_t *src = make_label(scr_list, &lv_font_montserrat_12, C_MUTED);
     lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
     lv_obj_align(src, LV_ALIGN_BOTTOM_RIGHT, -14, -2);
+}
+
+/* big menu button: icon + title, optional muted subtitle below */
+static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub)
+{
+    lv_obj_t *b = make_btn(parent, 0, 0, 440, 92, NULL, NULL, cb, NULL);
+    lv_obj_t *l = make_label(b, &lv_font_montserrat_24, C_TEXT);
+    lv_label_set_text(l, text);
+    if (sub) {
+        lv_obj_align(l, LV_ALIGN_CENTER, 0, -13);
+        *sub = make_label(b, &lv_font_montserrat_16, C_MUTED);
+        lv_obj_align(*sub, LV_ALIGN_CENTER, 0, 19);
+    } else {
+        lv_obj_center(l);
+    }
+    return b;
+}
+
+static void build_home(void)
+{
+    scr_home = make_screen();
+
+    lv_obj_t *col = lv_obj_create(scr_home);
+    lv_obj_remove_style_all(col);
+    lv_obj_set_size(col, 440, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(col, 18, 0);
+    lv_obj_center(col);
+
+    lv_obj_t *t = make_label(col, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Sudoku");
+    h_total = make_label(col, &lv_font_montserrat_16, C_MUTED);
+    lv_obj_set_style_margin_bottom(h_total, 22, 0);
+
+    /* hidden when there is no game in progress; the flex column closes up */
+    h_continue = home_btn(col, LV_SYMBOL_PLAY "  Continue", continue_cb, &h_continue_sub);
+    lv_obj_set_style_bg_color(h_continue, C_LIST_ACTIVE, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(h_continue, 0), lv_color_white(), 0);
+    lv_obj_set_style_text_color(h_continue_sub, lv_color_white(), 0);
+    lv_obj_set_style_text_opa(h_continue_sub, LV_OPA_80, 0);
+
+    home_btn(col, LV_SYMBOL_LIST "  Puzzles", puzzles_cb, NULL);
+    home_btn(col, LV_SYMBOL_BARS "  Statistics", stats_cb, NULL);
+    home_btn(col, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);
+
+    lv_obj_t *src = make_label(scr_home, &lv_font_montserrat_12, C_MUTED);
+    lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
+    lv_obj_align(src, LV_ALIGN_BOTTOM_MID, 0, -8);
+}
+
+static void build_stats(void)
+{
+    scr_stats = make_screen();
+
+    make_btn(scr_stats, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
+    lv_obj_t *t = make_label(scr_stats, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Statistics");
+    lv_obj_set_pos(t, 150, 20);
+
+    lv_obj_t *list = make_coll_column(scr_stats);
+    x_btn[0] = make_coll_btn(list, "All levels", &x_name_lbl[0], &x_cnt_lbl[0], stats_row_cb, 0);
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+        x_btn[c + 1] = make_coll_btn(list, puzzle_collections[c].name, &x_name_lbl[c + 1], &x_cnt_lbl[c + 1],
+                                     stats_row_cb, c + 1);
+    }
+
+    int px = PANE_X, pw = PANE_W;
+    x_title = make_label(scr_stats, &lv_font_montserrat_22, C_TEXT);
+    lv_obj_set_pos(x_title, px + 4, 80);
+    x_sum1 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_pos(x_sum1, px + 4, 110);
+    x_sum2 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_pos(x_sum2, px + 4, 130);
+
+    x_table = lv_table_create(scr_stats);
+    lv_obj_set_pos(x_table, px, 158);
+    lv_obj_set_size(x_table, pw, SCR_W - 158 - 48);
+    lv_obj_set_style_bg_color(x_table, C_CARD, 0);
+    lv_obj_set_style_border_width(x_table, 0, 0);
+    lv_obj_set_style_radius(x_table, 12, 0);
+    lv_obj_set_style_pad_all(x_table, 0, 0);
+    lv_obj_set_style_clip_corner(x_table, true, 0);
+    lv_obj_set_style_text_font(x_table, &lv_font_montserrat_14, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(x_table, C_TEXT, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(x_table, C_CARD, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(x_table, C_CARD, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(x_table, 1, LV_PART_ITEMS);
+    lv_obj_set_style_border_side(x_table, LV_BORDER_SIDE_BOTTOM, LV_PART_ITEMS);
+    lv_obj_set_style_border_color(x_table, C_BG, LV_PART_ITEMS);
+    lv_obj_set_style_pad_hor(x_table, 8, LV_PART_ITEMS);
+    lv_obj_set_style_pad_ver(x_table, 9, LV_PART_ITEMS);
+    lv_obj_set_send_draw_task_events(x_table, true);
+    lv_obj_add_event_cb(x_table, stats_table_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
+
+    x_empty = make_label(scr_stats, &lv_font_montserrat_18, C_MUTED);
+    lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
+    lv_obj_set_pos(x_empty, px + 4, 180);
+
+    lv_obj_t *note = make_label(scr_stats, &lv_font_montserrat_12, C_MUTED);
+    lv_label_set_text(note, "Mistake: a placed digit that broke a rule. Per puzzle: the fewest in any solve.\n"
+                            "\"-\": solved before mistakes were counted.");
+    lv_obj_set_width(note, pw - 4);
+    lv_label_set_long_mode(note, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_pos(note, px + 4, SCR_W - 40);
+}
+
+/* one settings row: a card with a title + hint on the left; returns the card
+ * so the caller can put a control on its right */
+static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint)
+{
+    lv_obj_t *r = lv_obj_create(parent);
+    lv_obj_set_size(r, LV_PCT(100), 92);
+    lv_obj_set_style_bg_color(r, C_CARD, 0);
+    lv_obj_set_style_border_width(r, 0, 0);
+    lv_obj_set_style_radius(r, 12, 0);
+    lv_obj_set_style_pad_hor(r, 22, 0);
+    lv_obj_set_scrollable(r, false);
+    lv_obj_t *l = make_label(r, &lv_font_montserrat_20, C_TEXT);
+    lv_label_set_text(l, title);
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, -12);
+    lv_obj_t *h = make_label(r, &lv_font_montserrat_14, C_MUTED);
+    lv_label_set_text(h, hint);
+    lv_obj_align(h, LV_ALIGN_LEFT_MID, 0, 16);
+    return r;
+}
+
+static lv_obj_t *settings_switch(lv_obj_t *row, bool on, lv_event_cb_t cb)
+{
+    lv_obj_t *sw = lv_switch_create(row);
+    lv_obj_set_size(sw, 84, 44);
+    lv_obj_align(sw, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_style_bg_color(sw, C_CARD2, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(sw, C_ACCENT, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_state(sw, LV_STATE_CHECKED, on);
+    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    return sw;
+}
+
+static void build_settings(void)
+{
+    scr_settings = make_screen();
+
+    make_btn(scr_settings, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
+    lv_obj_t *t = make_label(scr_settings, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Settings");
+    lv_obj_set_pos(t, 150, 20);
+
+    lv_obj_t *col = lv_obj_create(scr_settings);
+    lv_obj_remove_style_all(col);
+    lv_obj_set_pos(col, 40, 100);
+    lv_obj_set_size(col, SCR_W - 80, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(col, 14, 0);
+
+    lv_obj_t *r = settings_row(col, "Dark mode", "Light text on a dark background");
+    st_theme_sw = settings_switch(r, s_dark, theme_sw_cb);
+
+    r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
+    st_sound_sw = settings_switch(r, sfx_enabled(), sound_sw_cb);
+
+    r = settings_row(col, "Screen off after", "Without a touch. The game pauses; tap to wake.");
+    st_sleep_dd = lv_dropdown_create(r);
+    lv_obj_set_size(st_sleep_dd, 150, 52);
+    lv_obj_align(st_sleep_dd, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_dropdown_set_options_static(st_sleep_dd, SLEEP_OPTIONS);
+    lv_obj_set_style_text_font(st_sleep_dd, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(st_sleep_dd, C_TEXT, 0);
+    lv_obj_set_style_bg_color(st_sleep_dd, C_CARD2, 0);
+    lv_obj_set_style_border_width(st_sleep_dd, 0, 0);
+    lv_obj_set_style_shadow_width(st_sleep_dd, 0, 0);
+    lv_obj_set_style_radius(st_sleep_dd, 8, 0);
+    lv_obj_set_style_pad_hor(st_sleep_dd, 16, 0);
+    lv_obj_set_style_pad_ver(st_sleep_dd, 15, 0);
+    lv_obj_t *dl = lv_dropdown_get_list(st_sleep_dd);
+    lv_obj_set_style_text_font(dl, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(dl, C_TEXT, 0);
+    lv_obj_set_style_text_line_space(dl, 22, 0);   /* finger-sized rows */
+    lv_obj_set_style_bg_color(dl, C_CARD2, 0);
+    lv_obj_set_style_border_width(dl, 0, 0);
+    lv_obj_set_style_radius(dl, 8, 0);
+    lv_obj_set_style_max_height(dl, 480, 0);
+    lv_obj_set_style_bg_color(dl, C_ACCENT, LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(dl, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
+    uint32_t sel = 0;
+    while (sel < SLEEP_COUNT - 1 && SLEEP_MIN[sel] != s_sleep_min) sel++;
+    lv_dropdown_set_selected(st_sleep_dd, sel);
+    lv_obj_add_event_cb(st_sleep_dd, sleep_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
 }
 
 /* ============================================================= start */
@@ -1105,8 +1556,49 @@ void sudoku_ui_notice(const char *text, uint32_t ms)
     lv_timer_set_repeat_count(t, 1);
 }
 
+/* ============================================================= screen saver */
+
+static lv_obj_t *s_saver;   /* black cover on the system layer while the screen is off */
+
+static void saver_wake_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_PRESSED) {
+        bsp_display_brightness_set(100);
+    } else if (s_saver) {
+        /* removed only once the finger is up, so the waking tap reaches nothing below */
+        lv_obj_delete_async(s_saver);
+        s_saver = NULL;
+    }
+}
+
+static void saver_sleep(void)
+{
+    if (lv_screen_active() == scr_game && g_id != STORE_NO_GAME && !g_solved && !g_paused) {
+        set_paused(true);   /* stops the clock, hides the board, saves the game */
+    }
+    s_saver = lv_obj_create(lv_layer_sys());
+    lv_obj_remove_style_all(s_saver);
+    lv_obj_set_size(s_saver, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(s_saver, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_saver, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(s_saver, true);
+    lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESS_LOST, NULL);
+    lv_refr_now(NULL);                  /* panel shows black before the light goes off */
+    bsp_display_brightness_set(0);
+}
+
+static void saver_cb(lv_timer_t *t)
+{
+    if (!s_saver && s_sleep_min &&
+        lv_display_get_inactive_time(NULL) >= (uint32_t)s_sleep_min * 60 * 1000) saver_sleep();
+}
+
 static void touch_sound_cb(lv_event_t *e)
 {
+    if (s_saver) return;   /* waking tap is silent */
     sfx_play(SFX_TOUCH);
 }
 
@@ -1122,9 +1614,11 @@ esp_err_t sudoku_ui_start(void)
     }
 
     l_coll = store_last_collection();
+    s_sleep_min = store_screen_timeout_min();
     apply_theme(store_dark_mode());
 
     g_last_tick = lv_tick_get();
     lv_timer_create(tick_cb, 200, NULL);
+    lv_timer_create(saver_cb, 1000, NULL);
     return ESP_OK;
 }

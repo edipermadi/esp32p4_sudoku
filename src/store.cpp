@@ -1,16 +1,24 @@
 #include "store.h"
 #include <Preferences.h>
 #include <string.h>
+#include <stddef.h>
 #include "puzzles.h"
 
 /* Key layout in namespace "sudoku":
  *   "best" : uint16_t[PUZZLE_COUNT] best time in seconds (0 = unsolved, capped at 65535)
- *   "game" : saved_game_t
+ *   "stat" : store_stat_t: fewest mistakes + times solved per puzzle
+ *   "game" : saved_game_t (older saves lack the trailing "mistakes")
  *   "coll" : uint8_t last collection
  *   "snd"  : bool sound effects on
- *   "dark" : bool dark colour scheme */
+ *   "dark" : bool dark colour scheme
+ *   "sleep": uint8_t screen timeout in minutes (0 = never) */
 static Preferences s_prefs;
 static uint16_t s_best[PUZZLE_COUNT];
+typedef struct {
+    uint8_t fewest[PUZZLE_COUNT];   /* STORE_MISTAKES_UNKNOWN = not known */
+    uint8_t solves[PUZZLE_COUNT];
+} store_stat_t;
+static store_stat_t s_stat;
 static saved_game_t s_game;
 
 void store_init(void)
@@ -20,9 +28,18 @@ void store_init(void)
     if (s_prefs.getBytesLength("best") == sizeof(s_best)) {
         s_prefs.getBytes("best", s_best, sizeof(s_best));
     }
+    if (s_prefs.getBytesLength("stat") == sizeof(s_stat)) {
+        s_prefs.getBytes("stat", &s_stat, sizeof(s_stat));
+    } else {
+        /* first start with statistics: earlier solves count once, mistakes unknown */
+        memset(s_stat.fewest, STORE_MISTAKES_UNKNOWN, sizeof(s_stat.fewest));
+        for (int i = 0; i < PUZZLE_COUNT; i++) s_stat.solves[i] = s_best[i] ? 1 : 0;
+    }
+    memset(&s_game, 0, sizeof(s_game));
     s_game.id = STORE_NO_GAME;
-    if (s_prefs.getBytesLength("game") == sizeof(s_game)) {
-        s_prefs.getBytes("game", &s_game, sizeof(s_game));
+    size_t len = s_prefs.getBytesLength("game");
+    if (len == sizeof(s_game) || len == offsetof(saved_game_t, mistakes)) {
+        s_prefs.getBytes("game", &s_game, len);
         if (s_game.id >= PUZZLE_COUNT) s_game.id = STORE_NO_GAME;
     }
 }
@@ -32,15 +49,33 @@ uint32_t store_best_time(uint16_t id)
     return id < PUZZLE_COUNT ? s_best[id] : 0;
 }
 
-bool store_record_solve(uint16_t id, uint32_t seconds)
+bool store_record_solve(uint16_t id, uint32_t seconds, uint32_t mistakes)
 {
     if (id >= PUZZLE_COUNT) return false;
     if (seconds == 0) seconds = 1;           /* 0 means "unsolved" */
     if (seconds > 0xFFFF) seconds = 0xFFFF;
+    if (mistakes > 254) mistakes = 254;
+
+    if (s_stat.solves[id] < 255) s_stat.solves[id]++;
+    if (s_stat.fewest[id] == STORE_MISTAKES_UNKNOWN || mistakes < s_stat.fewest[id]) {
+        s_stat.fewest[id] = (uint8_t)mistakes;
+    }
+    s_prefs.putBytes("stat", &s_stat, sizeof(s_stat));
+
     if (s_best[id] != 0 && s_best[id] <= seconds) return false;
     s_best[id] = (uint16_t)seconds;
     s_prefs.putBytes("best", s_best, sizeof(s_best));
     return true;
+}
+
+uint8_t store_fewest_mistakes(uint16_t id)
+{
+    return id < PUZZLE_COUNT ? s_stat.fewest[id] : STORE_MISTAKES_UNKNOWN;
+}
+
+uint8_t store_solve_count(uint16_t id)
+{
+    return id < PUZZLE_COUNT ? s_stat.solves[id] : 0;
 }
 
 uint16_t store_solved_count(uint16_t first, uint16_t count)
@@ -104,4 +139,14 @@ bool store_sound_enabled(void)
 void store_set_sound_enabled(bool on)
 {
     s_prefs.putBool("snd", on);
+}
+
+uint8_t store_screen_timeout_min(void)
+{
+    return s_prefs.getUChar("sleep", 5);
+}
+
+void store_set_screen_timeout_min(uint8_t min)
+{
+    if (min != s_prefs.getUChar("sleep", 0xFF)) s_prefs.putUChar("sleep", min);
 }
