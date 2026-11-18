@@ -9,9 +9,13 @@
  *                columns 2-4 and 6-8, hold 1-9 once each
  *   VAR_JIGSAW   9x9 with nine irregular regions of 9 connected cells in
  *                place of the boxes; every puzzle has its own regions
+ *   VAR_KILLER   Classic rules, plus cages: groups of 2-5 connected cells
+ *                whose digits add up to the cage's sum, none repeated;
+ *                few or no givens; every puzzle has its own cages
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
- * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map.
+ * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
+ * sudoku_geom_killer_text() for a Killer puzzle's cages.
  *
  * Every board is kept in 81 cells, row by row (cell = row * 9 + column); a
  * 6x6 board uses the top-left 6x6 of them and leaves the rest 0. Saved games,
@@ -48,15 +52,17 @@ typedef enum { GEN_EASY = 0, GEN_MEDIUM, GEN_HARD, GEN_EXPERT, GEN_LEVELS } gen_
 extern const char *const GEN_LEVEL_NAMES[GEN_LEVELS];   /* "Easy", "Medium", "Hard", "Expert" */
 
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
-typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_COUNT } sudoku_variant_t;
+typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_COUNT } sudoku_variant_t;
 
-extern const char *const VARIANT_NAMES[VAR_COUNT];      /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw" */
+extern const char *const VARIANT_NAMES[VAR_COUNT];      /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer" */
 
 /* ---------------------------------------------------------------- geometry */
 #define UNIT_DIAG_MAIN 27
 #define UNIT_DIAG_ANTI 28
 #define UNIT_WINDOW    29               /* 29..32 */
 #define UNITS_MAX      33
+#define CAGES_MAX      81               /* Killer: cages per board (1 cell each at most) */
+#define CAGE_NONE      0xFF
 
 typedef struct {
     uint8_t variant;                    /* sudoku_variant_t */
@@ -78,6 +84,12 @@ typedef struct {
     uint8_t npeers[81];
     uint8_t peers[81][32];              /* cells sharing a unit */
     uint32_t peer_bits[81][3];          /* the same as bits (cell / 32, cell % 32) */
+    /* Killer: cages (their cells are peers too: no digit twice in a cage) */
+    uint8_t ncages;
+    uint8_t cage_of[81];                /* CAGE_NONE = not in a cage */
+    uint8_t cage_sum[CAGES_MAX];
+    uint8_t cage_n[CAGES_MAX];
+    uint8_t cage_cell[CAGES_MAX][9];    /* cells of each cage, the top-left one first */
 } sudoku_geom_t;
 
 /* Builds the tables (once); call early, before tasks use them. */
@@ -87,6 +99,11 @@ const sudoku_geom_t *sudoku_geom(int variant);
 /* A Jigsaw board from its region map (81 cells, region 0..8 each, 9 cells
  * per region) into out; false if the map isn't one. */
 bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
+/* A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
+ * (cells 0..80 row by row, each in one cage at most), into out; false if
+ * the text isn't one. sudoku_cages_text() writes it (false: buf too small). */
+bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out);
+bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
 
 static inline bool sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 {
@@ -116,12 +133,13 @@ static inline bool sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 /* ---------------------------------------------------------------- generating */
 
 /* Fills givens (81, 0 = empty) with a new puzzle of that variant and level.
- * seed: any random number. Jigsaw: its region map goes into regions (81;
- * may be NULL for the other variants, which leave it untouched). Gives up
- * after a number of tries and returns the closest one found (*got_level
- * says what it is). False only if out of tries for anything at all
- * (shouldn't happen). Not reentrant: one generator at a time. */
-bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], uint8_t regions[81],
+ * seed: any random number. board (may be NULL) gets the puzzle's geometry:
+ * for Jigsaw its regions (board->region), for Killer its cages
+ * (sudoku_cages_text()). Gives up after a number of tries and returns the
+ * closest one found (*got_level says what it is). False only if out of
+ * tries for anything at all (shouldn't happen). Not reentrant: one
+ * generator at a time. */
+bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], sudoku_geom_t *board,
                      gen_level_t *got_level);
 
 /* Level of a puzzle by the techniques it needs; -1 if it doesn't have
@@ -138,11 +156,13 @@ bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[8
 /* ---------------------------------------------------------------- hints */
 int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cell (0..n-1) of a unit, or -1 */
 
-typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR } tech_kind_t;
+typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
+               TECH_CAGE } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
-    int unit, unit2;         /* pointing: box, line; claiming: line, box; pairs: the unit */
-    int digit, digit2;       /* pointing/claiming: digit; pairs: the two digits */
+    int unit, unit2;         /* pointing: box, line; claiming: line, box; pairs: the unit; cage: the cage */
+    int digit, digit2;       /* pointing/claiming: digit; pairs: the two digits; cage: bit mask of the
+                                digits its sum still allows in its empty cells */
     int cell1, cell2;        /* pairs: the two cells */
 } sudoku_tech_t;
 

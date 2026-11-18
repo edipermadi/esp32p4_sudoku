@@ -191,16 +191,16 @@ void store_load_game_moves(void)
 
 void store_commit_game(void)
 {
-    if (s_game.id != STORE_NO_GAME) stats_db_set_game_moves(s_game.id, s_moves, s_moves ? s_nmoves : 0);
-    stats_db_save_game(s_game.id == STORE_NO_GAME ? NULL : &s_game);
+    if (s_game.id != STORE_NO_GAME) stats_db_save_game(&s_game, s_moves, s_moves ? s_nmoves : 0);
 }
 
 void store_clear_game(void)
 {
     s_nmoves = 0;
     if (s_game.id == STORE_NO_GAME) return;
+    uint16_t id = s_game.id;
     s_game.id = STORE_NO_GAME;
-    stats_db_save_game(NULL);
+    stats_db_clear_game(id);                  /* the other unfinished games stay in sudoku.db */
 }
 
 void store_get_prefs(store_prefs_t *out)

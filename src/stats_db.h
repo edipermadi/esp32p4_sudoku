@@ -17,16 +17,19 @@
  *       before mistakes were counted
  *   level_stats (view): per player and level: solved / fastest / average / mistakes
  *   saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms,
- *              mistakes, saved_at, started_at, hints, moves)    saved after every move
- *       the one unfinished game; cells = 81 digits row by row (0 = empty,
- *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
- *   generated(id, level, givens, created_at, day, variant, regions): puzzles
+ *              mistakes, saved_at, started_at, hints, moves, seq)    saved after every move
+ *       unfinished games, up to STATS_MAX_GAMES per player (the one played
+ *       longest ago goes); seq orders them, the highest is the one played
+ *       last; cells = 81 digits row by row (0 = empty, givens included),
+ *       notes = 81 x uint16 little-endian (bit d = mark d)
+ *   generated(id, level, givens, created_at, day, variant, regions, cages): puzzles
  *       made on the board; their puzzle id elsewhere is 2000 + id, level
  *       "Generated Easy", "X-Sudoku Easy", "Mini Easy", "Hyper Easy" or
  *       "Jigsaw Easy" etc. by variant (generator.h: 0 classic, 1 X-Sudoku,
  *       2 mini 6x6, 3 Hyper, 4 Jigsaw). day = the date of a daily puzzle
  *       (level "Daily Easy" etc.). regions = a Jigsaw puzzle's region map,
- *       81 digits 0-8 row by row (NULL for the others)
+ *       81 digits 0-8 row by row; cages = a Killer puzzle's cages,
+ *       "sum:cell,cell,...;sum:..." (sudoku_cages_text()); NULL for the others
  *   achievements(player_id, key, unlocked_at): achievements each player has
  *       unlocked (see stats_db_query_achievements()); unlocked_at NULL =
  *       found already done when the table was first filled, or clock not set
@@ -69,7 +72,7 @@ typedef struct {
 
 /* Statistics rows after the 16 collections: puzzles made on the board, by
  * kind. Their solves are logged with level "<prefix> <Easy|Medium|Hard|Expert>". */
-typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_MINI, KIND_COUNT } stats_kind_t;
+typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_KILLER, KIND_MINI, KIND_COUNT } stats_kind_t;
 extern const char *const STATS_KIND_NAMES[KIND_COUNT];    /* "New puzzles", "Daily puzzle", "X-Sudoku", ... */
 extern const char *const STATS_KIND_PREFIX[KIND_COUNT];   /* "Generated", "Daily", "X-Sudoku", ... */
 /* the kind of a generated puzzle of a variant (daily ones: KIND_DAILY) */
@@ -109,18 +112,36 @@ bool stats_db_take_prefs(store_prefs_t *out);
 /* Settings and the game in progress (queued; dropped without a database). */
 void stats_db_set_int(const char *key, int value);
 void stats_db_set_text(const char *key, const char *value);
-/* Cheap to call after every move: only the newest game is written, so a
- * burst of moves never queues up behind the card. */
-void stats_db_save_game(const saved_game_t *g);   /* NULL: no game in progress */
+/* Saves an unfinished game (g->id = the puzzle) with its move log (copied).
+ * Cheap to call after every move: only the newest save of a game is written,
+ * so a burst of moves never queues up behind the card. A player keeps up to
+ * STATS_MAX_GAMES; saving one more drops the one played longest ago (and
+ * says so through stats_db_take_message()). */
+#define STATS_MAX_GAMES 5
+void stats_db_save_game(const saved_game_t *g, const game_move_t *moves, int nmoves);
+/* The current player's unfinished game of that puzzle is gone (solved, restarted, discarded). */
+void stats_db_clear_game(uint16_t puzzle);
+
+/* The current player's unfinished games, played last first (up to
+ * STATS_MAX_GAMES); -1 without a database. Waits for the database. */
+typedef struct {
+    uint16_t puzzle;
+    uint32_t elapsed_ms;
+    uint16_t mistakes, hints;
+    uint8_t filled;                      /* cells with a digit, givens included */
+    int64_t started_at, saved_at;        /* Unix time, 0 = unknown */
+} stats_game_row_t;
+int stats_db_list_games(stats_game_row_t *out);
+/* One of them, with its move log (then store_load_game_moves() picks the log
+ * up). False if there's no such game. Waits for the database. */
+bool stats_db_load_game(uint16_t puzzle, saved_game_t *out);
 
 /* Logs a finished puzzle (finished now) and updates its puzzle_stats row.
  * started_at: Unix time it was opened, 0 = unknown. */
 void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,
                            int64_t started_at, const game_move_t *moves, int nmoves);
-/* The move log to save with the next stats_db_save_game() of that puzzle
- * (copied). And the log sudoku.db had for the saved game it loaded last (at
- * start-up or a player switch): count, puzzle = which game it belongs to. */
-void stats_db_set_game_moves(uint16_t puzzle, const game_move_t *moves, int n);
+/* The log sudoku.db had for the saved game it loaded last (at start-up, a
+ * player switch or stats_db_load_game()): count, puzzle = which game it belongs to. */
 int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max);
 
 /* A solve with its move log, for the Replay screen (asked for by solves.id). */
@@ -224,10 +245,15 @@ typedef struct {
 /* Puzzles made on the board (generator.h): stores one and returns its id in
  * the generated table (puzzle id = PUZZLE_GEN_BASE + it), or -1 without a
  * database; reads one back. Both wait for the database (milliseconds). */
-/* regions: a Jigsaw puzzle's region map (81), else NULL; day: a daily puzzle's date, else NULL */
-int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *day);
-/* day "" if not a daily; regions (may be NULL) only filled for a Jigsaw puzzle */
-bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, int *variant, int *level, char day[12]);
+/* regions: a Jigsaw puzzle's region map (81), else NULL; cages: a Killer
+ * puzzle's cages (sudoku_cages_text()), else NULL; day: a daily puzzle's date, else NULL */
+#define STATS_CAGES_LEN 1024
+int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages,
+                     const char *day);
+/* day "" if not a daily; regions (may be NULL) only filled for a Jigsaw
+ * puzzle, cages (STATS_CAGES_LEN, may be NULL) for a Killer one ("" otherwise) */
+bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, char *cages, int *variant, int *level,
+                      char day[12]);
 /* Daily puzzle of day ('YYYY-MM-DD'): id in the generated table (0 = not
  * made yet), whether the current player solved it, and their streak of
  * days in a row with the daily solved (ending today, or yesterday if not
@@ -254,6 +280,7 @@ typedef struct {
     char day[12];                        /* 'YYYY-MM-DD' */
     bool exists;                         /* that day's puzzle has been made (opened by someone) */
     int level;                           /* gen_level_t of the puzzle */
+    int variant;                         /* sudoku_variant_t of the puzzle */
     int n, solved;                       /* rows, and how many of them solved it */
     stats_board_row_t rows[STATS_MAX_PLAYERS];
 } stats_board_t;
@@ -288,6 +315,26 @@ void stats_db_query_achievements(void);
 bool stats_db_take_achievements(stats_achievements_t *out);
 /* Titles of achievements the last solve unlocked, comma-separated; false if none. */
 bool stats_db_take_unlocked(char *buf, int len, int *count);
+
+/* ---------------------------------------------------------------- personal records */
+/* The current player's bests (Trophies > Records). */
+typedef enum { REC_TIME = 0, REC_COUNT, REC_DAYS, REC_MINUTES } rec_unit_t;
+#define STATS_MAX_RECORDS 16
+typedef struct {
+    const char *title;                   /* static string */
+    uint8_t unit;                        /* rec_unit_t */
+    bool has;                            /* false: nothing yet */
+    int32_t value;                       /* seconds, a count, days or minutes */
+    uint16_t puzzle;                     /* the puzzle it was set on, STORE_NO_GAME = none */
+    int64_t when;                        /* when it was set (Unix time), 0 = unknown */
+} stats_record_t;
+typedef struct {
+    int32_t player_id;
+    int n;
+    stats_record_t r[STATS_MAX_RECORDS];
+} stats_records_t;
+void stats_db_query_records(void);
+bool stats_db_take_records(stats_records_t *out);
 
 void stats_db_query_plays(int offset);
 bool stats_db_take_plays(stats_plays_t *out);

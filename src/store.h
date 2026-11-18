@@ -52,7 +52,8 @@ uint8_t store_solve_count(uint16_t id);
 /* Number of solved puzzles among [first, first+count). */
 uint16_t store_solved_count(uint16_t first, uint16_t count);
 
-/* Game in progress (one slot). */
+/* The game being played (sudoku.db keeps a few more unfinished ones, see
+ * stats_db_list_games(); without a card this is the only one). */
 const saved_game_t *store_saved_game(void);   /* id == STORE_NO_GAME if none */
 /* Updates the in-memory copy only; store_commit_game() queues the save. */
 void store_set_game(const saved_game_t *g);

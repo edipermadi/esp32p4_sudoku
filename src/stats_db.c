@@ -40,8 +40,16 @@ typedef enum {
     CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
-    CMD_RANK, CMD_BOARD, CMD_ACH,
+    CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
 } cmd_type_t;
+
+/* CMD_GAME_SPILL: a game whose last save was still waiting when another game
+ * was saved (the slot holds one game): written on its own (freed by the worker) */
+typedef struct {
+    saved_game_t g;
+    int n;
+    game_move_t moves[];
+} game_spill_t;
 typedef struct {
     cmd_type_t type;
     uint16_t puzzle;
@@ -58,6 +66,7 @@ typedef struct {
     bool is_text;
     int ival;                   /* CMD_SET value; player id for the player commands */
     char text[STORE_TZ_LEN];    /* CMD_SET text; player name */
+    game_spill_t *spill;        /* CMD_GAME_SPILL */
 } cmd_t;
 
 typedef enum { ST_OFF, ST_OPENING, ST_READY, ST_NOT_FAT, ST_ERROR } db_state_t;
@@ -99,17 +108,24 @@ static stats_replay_t *s_replay;     /* CMD_REPLAY result */
 static bool s_replay_new;
 static stats_plays_t *s_plays;       /* CMD_PLAYS result (PSRAM) */
 /* CMD_GEN_ADD / CMD_GEN_GET: one call at a time, from the UI task, which waits */
-static struct {
+typedef struct {
     int level, id, variant;
     uint8_t givens[81];
     uint8_t regions[81];
     bool has_regions;            /* a Jigsaw puzzle: regions is its map */
+    char cages[STATS_CAGES_LEN]; /* a Killer puzzle's cages, "" = none */
     char day[12];                /* daily: 'YYYY-MM-DD', "" otherwise */
     bool ok;
     bool solved_today;           /* CMD_DAILY results */
     int streak;
     int rank, of;                /* CMD_RANK results */
-} s_gen;
+    uint16_t puzzle;             /* CMD_LOAD_GAME: which one */
+    saved_game_t game;           /* CMD_LOAD_GAME result */
+    int ngames;                  /* CMD_LIST_GAMES result */
+    stats_game_row_t games[STATS_MAX_GAMES];
+} gen_call_t;
+static gen_call_t *s_genp;               /* PSRAM (internal RAM is tight), made with s_gen_done */
+#define s_gen (*s_genp)
 static SemaphoreHandle_t s_gen_done;
 static bool s_plays_new;
 static stats_board_t *s_board;       /* CMD_BOARD result (PSRAM, like the ones below) */
@@ -117,6 +133,8 @@ static bool s_board_new;
 static stats_achievements_t *s_ach;  /* CMD_ACH result */
 static bool s_ach_new;
 static char s_unlocked[160];         /* titles unlocked by the last solve */
+static stats_records_t *s_records;   /* CMD_RECORDS result (PSRAM) */
+static bool s_records_new;
 static int s_unlocked_n;
 
 /* a result buffer in PSRAM (internal RAM is kept for Wi-Fi and the video encoder) */
@@ -179,8 +197,8 @@ static bool exec(const char *sql)
     "  solves INTEGER NOT NULL,"                                                \
     "  PRIMARY KEY (player_id, puzzle))"
 #define T_SAVED_GAME \
-    "saved_game("                           /* one unfinished game per player */ \
-    "  player_id INTEGER PRIMARY KEY REFERENCES players(id),"                   \
+    "saved_game("                           /* unfinished games, STATS_MAX_GAMES per player */ \
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"                      \
     "  puzzle INTEGER NOT NULL,"                                                \
     "  level TEXT NOT NULL,"                                                    \
     "  number INTEGER NOT NULL,"                                                \
@@ -191,7 +209,9 @@ static bool exec(const char *sql)
     "  saved_at INTEGER,"                   /* Unix time UTC; NULL = clock not set */ \
     "  started_at INTEGER,"                                                     \
     "  hints INTEGER NOT NULL DEFAULT 0,"                                       \
-    "  moves BLOB)"                         /* move log so far (moves.h) */
+    "  moves BLOB,"                         /* move log so far (moves.h) */    \
+    "  seq INTEGER NOT NULL DEFAULT 0,"     /* higher = played more recently */ \
+    "  PRIMARY KEY (player_id, puzzle))"
 
 static const char SCHEMA[] =
     "CREATE TABLE IF NOT EXISTS " T_PLAYERS ";"
@@ -211,7 +231,8 @@ static const char SCHEMA[] =
     "  created_at INTEGER,"
     "  day TEXT,"                                        /* daily puzzle: its date 'YYYY-MM-DD', else NULL */
     "  variant INTEGER NOT NULL DEFAULT 0,"              /* 0 classic, 1 X-Sudoku, 2 mini 6x6, 3 Hyper, 4 Jigsaw */
-    "  regions TEXT);";                                  /* Jigsaw: 81 digits 0-8, the region of each cell */
+    "  regions TEXT,"                                    /* Jigsaw: 81 digits 0-8, the region of each cell */
+    "  cages TEXT);";                                    /* Killer: "sum:cell,cell,...;sum:..." */
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -250,8 +271,9 @@ static const char SQL_SOLVE_INSERT[] =
     " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10)";
 
 const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
-                                                  "Mini 6x6"};
-const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Mini"};
+                                                  "Killer", "Mini 6x6"};
+const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
+                                                   "Mini"};
 
 int stats_kind_of(int variant, bool daily)
 {
@@ -260,6 +282,7 @@ int stats_kind_of(int variant, bool daily)
     case VAR_X: return KIND_X;
     case VAR_HYPER: return KIND_HYPER;
     case VAR_JIGSAW: return KIND_JIGSAW;
+    case VAR_KILLER: return KIND_KILLER;
     case VAR_MINI: return KIND_MINI;
     default: return KIND_NEW;
     }
@@ -317,6 +340,8 @@ static bool step_done(sqlite3_stmt *st, const char *what)
     return true;
 }
 
+static int query_int_player(const char *sql);
+
 static int query_int(const char *sql)
 {
     int v = -1;
@@ -344,17 +369,26 @@ static void set_setting(const char *key, bool is_text, int ival, const char *tex
     sqlite3_finalize(st);
 }
 
+/* the current player's unfinished game of a puzzle is gone */
+static void clear_game(uint16_t puzzle)
+{
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "DELETE FROM saved_game WHERE player_id = ?1 AND puzzle = ?2", -1, &st,
+                                   NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_int(st, 2, puzzle);
+        step_done(st, "clear game");
+        sqlite3_finalize(st);
+    }
+}
+
+static void post_message(const char *msg);
+
+/* saves one of the current player's unfinished games (the newest of them now);
+ * keeps STATS_MAX_GAMES, dropping the one played longest ago */
 static void save_game(const saved_game_t *g, const game_move_t *moves, int nmoves)
 {
     sqlite3_stmt *st;
-    if (!g) {
-        if (sqlite3_prepare_v2(s_db, "DELETE FROM saved_game WHERE player_id = ?1", -1, &st, NULL) == SQLITE_OK) {
-            sqlite3_bind_int(st, 1, s_player);
-            step_done(st, "clear game");
-            sqlite3_finalize(st);
-        }
-        return;
-    }
     char cells[82];
     uint8_t notes[162];
     for (int i = 0; i < 81; i++) {
@@ -366,8 +400,9 @@ static void save_game(const saved_game_t *g, const game_move_t *moves, int nmove
     time_t now = time(NULL);
     if (sqlite3_prepare_v2(s_db,
             "INSERT OR REPLACE INTO saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms,"
-            " mistakes, saved_at, started_at, hints, moves)"
-            " VALUES(?10, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?11, ?12)",
+            " mistakes, saved_at, started_at, hints, moves, seq)"
+            " VALUES(?10, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?11, ?12,"
+            "  (SELECT COALESCE(MAX(seq), 0) + 1 FROM saved_game WHERE player_id = ?10))",
             -1, &st, NULL) != SQLITE_OK) {
         return;
     }
@@ -386,23 +421,39 @@ static void save_game(const saved_game_t *g, const game_move_t *moves, int nmove
     if (moves && nmoves > 0) blob = heap_caps_malloc((size_t)nmoves * MOVE_BLOB_BYTES, MALLOC_CAP_SPIRAM);
     if (blob) sqlite3_bind_blob(st, 12, blob, (int)moves_pack(moves, nmoves, blob), SQLITE_STATIC);
     else sqlite3_bind_null(st, 12);
-    step_done(st, "save game");
+    bool ok = step_done(st, "save game");
     sqlite3_finalize(st);
     free(blob);
+    if (ok && sqlite3_prepare_v2(s_db, "DELETE FROM saved_game WHERE player_id = ?1 AND puzzle NOT IN"
+                                       " (SELECT puzzle FROM saved_game WHERE player_id = ?1 ORDER BY seq DESC LIMIT ?2)",
+                                 -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_int(st, 2, STATS_MAX_GAMES);
+        if (step_done(st, "trim games") && sqlite3_changes(s_db) > 0) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "Up to %d unfinished games are kept: the one played longest ago was "
+                     "dropped.", STATS_MAX_GAMES);
+            post_message(msg);
+        }
+        sqlite3_finalize(st);
+    }
 }
 
-/* the current player's unfinished game; g->id = STORE_NO_GAME if none */
-static void load_game(saved_game_t *g)
+/* the current player's unfinished game of a puzzle (STORE_NO_GAME: the one
+ * played last); g->id = STORE_NO_GAME if none. Its moves go to s_moves_loaded. */
+static void load_game_of(saved_game_t *g, uint16_t puzzle)
 {
     memset(g, 0, sizeof(*g));
     g->id = STORE_NO_GAME;
     sqlite3_stmt *st;
     int nmoves = 0;
     if (sqlite3_prepare_v2(s_db, "SELECT puzzle, cells, notes, elapsed_ms, mistakes, started_at, hints, moves FROM saved_game"
-                                 " WHERE player_id = ?1", -1, &st, NULL) != SQLITE_OK) {
+                                 " WHERE player_id = ?1 AND (?2 < 0 OR puzzle = ?2) ORDER BY seq DESC LIMIT 1",
+                           -1, &st, NULL) != SQLITE_OK) {
         return;
     }
     sqlite3_bind_int(st, 1, s_player);
+    sqlite3_bind_int(st, 2, puzzle == STORE_NO_GAME ? -1 : puzzle);
     if (sqlite3_step(st) == SQLITE_ROW) {
         int id = sqlite3_column_int(st, 0);
         const char *cells = (const char *)sqlite3_column_text(st, 1);
@@ -431,6 +482,11 @@ static void load_game(saved_game_t *g)
     s_moves_loaded_n = nmoves;
     s_moves_loaded_puzzle = g->id;
     xSemaphoreGive(s_lock);
+}
+
+static void load_game(saved_game_t *g)
+{
+    load_game_of(g, STORE_NO_GAME);
 }
 
 /* seed's prefs, overridden by whatever sudoku.db holds */
@@ -495,6 +551,19 @@ static bool upgrade_schema(void)
     if (!has_column("generated", "day")) ok &= exec("ALTER TABLE generated ADD COLUMN day TEXT");
     if (!has_column("generated", "variant")) ok &= exec("ALTER TABLE generated ADD COLUMN variant INTEGER NOT NULL DEFAULT 0");
     if (!has_column("generated", "regions")) ok &= exec("ALTER TABLE generated ADD COLUMN regions TEXT");
+    if (!has_column("generated", "cages")) ok &= exec("ALTER TABLE generated ADD COLUMN cages TEXT");
+    if (has_column("saved_game", "player_id") && !has_column("saved_game", "seq")) {
+        /* one game per player -> several: the key becomes (player, puzzle) */
+        ok &= exec("BEGIN");
+        ok &= exec("ALTER TABLE saved_game RENAME TO saved_game_v8");
+        ok &= exec("CREATE TABLE " T_SAVED_GAME);
+        ok &= exec("INSERT INTO saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms, mistakes,"
+                   " saved_at, started_at, hints, moves, seq) SELECT player_id, puzzle, level, number, cells,"
+                   " notes, elapsed_ms, mistakes, saved_at, started_at, hints, moves, 1 FROM saved_game_v8");
+        ok &= exec("DROP TABLE saved_game_v8");
+        ok &= exec(ok ? "COMMIT" : "ROLLBACK");
+        if (ok) printf("stats_db: saved_game now keeps up to %d games per player\n", STATS_MAX_GAMES);
+    }
 
     bool old_solves = !has_column("solves", "player_id");
     bool old_stats = !has_column("puzzle_stats", "player_id");
@@ -915,7 +984,7 @@ static void flush_game(void)
     }
     s_game_dirty = false;
     xSemaphoreGive(s_lock);
-    if (dirty && s_db) save_game(has ? &g : NULL, m, n);
+    if (dirty && has && s_db) save_game(&g, m, n);
 }
 
 static void do_switch(int32_t id)
@@ -1119,8 +1188,10 @@ static void do_gen_add(void)
     char reg[82];
     for (int i = 0; i < 81; i++) reg[i] = (char)('0' + (s_gen.regions[i] <= 8 ? s_gen.regions[i] : 0));
     reg[81] = 0;
-    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant, regions)"
-                                         " VALUES(?1, ?2, ?3, ?4, ?5, ?6)", -1, &st, NULL) == SQLITE_OK) {
+    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant, regions, cages)"
+                                         " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)", -1, &st, NULL) == SQLITE_OK) {
+        if (s_gen.cages[0]) sqlite3_bind_text(st, 7, s_gen.cages, -1, SQLITE_STATIC);
+        else sqlite3_bind_null(st, 7);
         sqlite3_bind_int(st, 1, s_gen.level);
         sqlite3_bind_int(st, 5, s_gen.variant);
         if (s_gen.has_regions) sqlite3_bind_text(st, 6, reg, 81, SQLITE_STATIC);
@@ -1144,7 +1215,8 @@ static void do_gen_get(void)
     s_gen.ok = false;
     sqlite3_stmt *st;
     s_gen.has_regions = false;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day, variant, regions FROM generated WHERE id = ?1",
+    s_gen.cages[0] = 0;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day, variant, regions, cages FROM generated WHERE id = ?1",
                                    -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.id);
         if (sqlite3_step(st) == SQLITE_ROW) {
@@ -1160,6 +1232,8 @@ static void do_gen_get(void)
                     for (int i = 0; i < 81; i++) s_gen.regions[i] = (r[i] >= '0' && r[i] <= '8') ? r[i] - '0' : 0;
                     s_gen.has_regions = true;
                 }
+                const char *k = (const char *)sqlite3_column_text(st, 5);
+                snprintf(s_gen.cages, sizeof(s_gen.cages), "%s", k ? k : "");
                 s_gen.ok = true;
             }
         }
@@ -1223,6 +1297,37 @@ static void do_daily(void)
     xSemaphoreGive(s_gen_done);
 }
 
+/* ------------------------------------------------------------- unfinished games */
+
+static void do_list_games(void)
+{
+    s_gen.ngames = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT puzzle, elapsed_ms, mistakes, hints, cells, started_at, saved_at"
+                                         " FROM saved_game WHERE player_id = ?1 ORDER BY seq DESC LIMIT ?2",
+                                   -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_int(st, 2, STATS_MAX_GAMES);
+        while (s_gen.ngames < STATS_MAX_GAMES && sqlite3_step(st) == SQLITE_ROW) {
+            int id = sqlite3_column_int(st, 0);
+            if (!puzzle_id_valid(id)) continue;
+            stats_game_row_t *r = &s_gen.games[s_gen.ngames++];
+            r->puzzle = (uint16_t)id;
+            r->elapsed_ms = (uint32_t)sqlite3_column_int64(st, 1);
+            r->mistakes = (uint16_t)sqlite3_column_int(st, 2);
+            r->hints = (uint16_t)sqlite3_column_int(st, 3);
+            const char *cells = (const char *)sqlite3_column_text(st, 4);
+            r->filled = 0;
+            for (int i = 0; cells && cells[i] && i < 81; i++) r->filled += cells[i] > '0' && cells[i] <= '9';
+            r->started_at = sqlite3_column_int64(st, 5);
+            r->saved_at = sqlite3_column_int64(st, 6);
+        }
+        sqlite3_finalize(st);
+    }
+    s_gen.ok = s_db != NULL;
+    xSemaphoreGive(s_gen_done);
+}
+
 /* ------------------------------------------------------------- daily rank and leaderboard */
 
 /* everyone's best solve of the daily puzzle of s_gen.day (or *board's day), fastest first */
@@ -1232,17 +1337,18 @@ static void do_daily(void)
     "   WHERE puzzle = ?1 GROUP BY player_id) b ON b.player_id = p.id" \
     " ORDER BY b.best IS NULL, b.best, b.mistakes, b.hints, p.id"
 
-/* the daily puzzle of a day: its generated.id (0 = not made) and level */
-static int daily_id_of(const char *day, int *level)
+/* the daily puzzle of a day: its generated.id (0 = not made), level and variant */
+static int daily_id_of(const char *day, int *level, int *variant)
 {
     int id = 0;
     sqlite3_stmt *st;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT id, level FROM generated WHERE day = ?1 ORDER BY id LIMIT 1",
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT id, level, variant FROM generated WHERE day = ?1 ORDER BY id LIMIT 1",
                                    -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_text(st, 1, day, -1, SQLITE_STATIC);
         if (sqlite3_step(st) == SQLITE_ROW) {
             id = sqlite3_column_int(st, 0);
             if (level) *level = sqlite3_column_int(st, 1);
+            if (variant) *variant = sqlite3_column_int(st, 2);
         }
         sqlite3_finalize(st);
     }
@@ -1253,7 +1359,7 @@ static void board_fill(stats_board_t *b, const char *day)
 {
     memset(b, 0, sizeof(*b));
     snprintf(b->day, sizeof(b->day), "%s", day);
-    int gid = daily_id_of(day, &b->level);
+    int gid = daily_id_of(day, &b->level, &b->variant);
     b->exists = gid > 0;
     sqlite3_stmt *st;
     if (!s_db || sqlite3_prepare_v2(s_db, BOARD_SQL, -1, &st, NULL) != SQLITE_OK) return;
@@ -1309,8 +1415,9 @@ static void do_rank(void)
  * The keys are stored in the achievements table: don't rename them.
  */
 #define HARD_OR_MORE "(level LIKE '%Hard' OR level LIKE '%Expert')"
-#define CLASSIC_9X9  "(level NOT LIKE 'Mini %' AND level NOT LIKE 'X-Sudoku %' AND level NOT LIKE 'Hyper %'" \
-                     " AND level NOT LIKE 'Jigsaw %')"
+/* puzzles made on the board of a variant (daily ones included: they can be any variant) */
+#define OF_VARIANT(v) "puzzle IN (SELECT 2000 + id FROM generated WHERE variant = " #v ")"
+#define CLASSIC_9X9  "(puzzle < 2000 OR " OF_VARIANT(0) ")"
 #define DAILY_DAYS \
     "SELECT DISTINCT g.day FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id" \
     " WHERE s.player_id = ?1 AND g.day IS NOT NULL ORDER BY g.day"
@@ -1341,29 +1448,32 @@ static const ach_def_t ACH[] = {
     {"expert", "Expert", "Solve an Expert puzzle (New puzzle or the Sunday daily).", 1, ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE '%Expert'"},
     {"quick", "Quick thinker", "Solve a 9x9 puzzle in under 5 minutes.", 1, ACH_UNIT_COUNT,
-     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND seconds < 300 AND level NOT LIKE 'Mini %'"},
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND seconds < 300 AND NOT " OF_VARIANT(2)},
     {"fast_hard", "Speed demon", "Solve a Hard or harder puzzle in under 10 minutes, without hints.", 1,
      ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND seconds < 600 AND hints = 0 AND " HARD_OR_MORE},
     {"x_sudoku", "Crossed lines", "Solve an X-Sudoku.", 1, ACH_UNIT_COUNT,
-     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'X-Sudoku %'"},
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(1)},
     {"mini", "Small wonder", "Solve a Mini 6x6.", 1, ACH_UNIT_COUNT,
-     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'Mini %'"},
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(2)},
     {"variety", "Variety", "Solve a Classic, an X-Sudoku and a Mini 6x6.", 3, ACH_UNIT_COUNT,
      "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
-     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'X-Sudoku %')"
-     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Mini %')"},
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(1) ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(2) ")"},
     {"hyper", "Window cleaner", "Solve a Hyper Sudoku.", 1, ACH_UNIT_COUNT,
-     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'Hyper %'"},
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(3)},
     {"jigsaw", "Puzzle pieces", "Solve a Jigsaw Sudoku.", 1, ACH_UNIT_COUNT,
-     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'Jigsaw %'"},
-    {"variety_5", "Collector", "Solve all five kinds: Classic, X-Sudoku, Hyper, Jigsaw and Mini 6x6.", 5,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(4)},
+    {"killer", "Killer instinct", "Solve a Killer Sudoku.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(5)},
+    {"variety_5", "Collector", "Solve every kind: Classic, X-Sudoku, Hyper, Jigsaw, Killer and Mini 6x6.", 6,
      ACH_UNIT_COUNT,
      "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
-     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'X-Sudoku %')"
-     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Hyper %')"
-     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Jigsaw %')"
-     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Mini %')"},
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(1) ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(3) ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(4) ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(5) ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(2) ")"},
     {"fresh_10", "Fresh off the press", "Solve 10 puzzles made with New puzzle.", 10, ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id"
      " WHERE s.player_id = ?1 AND g.day IS NULL"},
@@ -1539,6 +1649,119 @@ static void do_achievements(void)
     xSemaphoreTake(s_lock, portMAX_DELAY);
     *s_ach = *a;
     s_ach_new = true;
+    xSemaphoreGive(s_lock);
+}
+
+/* ------------------------------------------------------------- personal records */
+
+/* fastest solves, of everything and of each kind (daily ones of a variant count for it too) */
+typedef struct {
+    const char *title, *where;          /* where: a condition on solves */
+} rec_fast_t;
+static const rec_fast_t REC_FAST[] = {
+    {"Fastest solve", "1"},
+    {"Fastest without a mistake or a hint", "mistakes = 0 AND hints = 0"},
+    {"Fastest from the collections", "puzzle < 2000"},
+    {"Fastest New puzzle (Classic)", "puzzle IN (SELECT 2000 + id FROM generated WHERE variant = 0 AND day IS NULL)"},
+    {"Fastest daily puzzle", "puzzle IN (SELECT 2000 + id FROM generated WHERE day IS NOT NULL)"},
+    {"Fastest X-Sudoku", OF_VARIANT(1)},
+    {"Fastest Hyper", OF_VARIANT(3)},
+    {"Fastest Jigsaw", OF_VARIANT(4)},
+    {"Fastest Killer", OF_VARIANT(5)},
+    {"Fastest Mini 6x6", OF_VARIANT(2)},
+};
+
+static void do_records(void)
+{
+    static stats_records_t *rp;
+    static stats_records_t *out;
+    if (!psram_buf((void **)&rp, sizeof(*rp)) || !psram_buf((void **)&out, sizeof(*out))) return;
+    stats_records_t *const R = rp;
+    memset(R, 0, sizeof(*R));
+    R->player_id = s_player;
+    sqlite3_stmt *st;
+    char sql[320];
+    for (size_t i = 0; i < sizeof(REC_FAST) / sizeof(REC_FAST[0]); i++) {
+        stats_record_t *r = &R->r[R->n++];
+        r->title = REC_FAST[i].title;
+        r->unit = REC_TIME;
+        r->puzzle = STORE_NO_GAME;
+        snprintf(sql, sizeof(sql), "SELECT seconds, puzzle, finished_at FROM solves WHERE player_id = ?1 AND %s"
+                 " ORDER BY seconds, id LIMIT 1", REC_FAST[i].where);
+        if (!s_db || sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) != SQLITE_OK) continue;
+        sqlite3_bind_int(st, 1, s_player);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            r->has = true;
+            r->value = sqlite3_column_int(st, 0);
+            r->puzzle = (uint16_t)sqlite3_column_int(st, 1);
+            r->when = sqlite3_column_int64(st, 2);
+        }
+        sqlite3_finalize(st);
+    }
+
+    /* most solves in one day (local date) */
+    stats_record_t *r = &R->r[R->n++];
+    r->title = "Most solves in a day";
+    r->unit = REC_COUNT;
+    r->puzzle = STORE_NO_GAME;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT COUNT(*) AS n, MIN(finished_at) FROM solves"
+                                         " WHERE player_id = ?1 AND finished_at IS NOT NULL"
+                                         " GROUP BY date(finished_at, 'unixepoch', 'localtime') ORDER BY n DESC, 2 DESC"
+                                         " LIMIT 1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            r->has = true;
+            r->value = sqlite3_column_int(st, 0);
+            r->when = sqlite3_column_int64(st, 1);
+        }
+        sqlite3_finalize(st);
+    }
+
+    /* longest run of clean solves (no mistake, no hint), in the order they were solved */
+    r = &R->r[R->n++];
+    r->title = "Clean solves in a row";
+    r->unit = REC_COUNT;
+    r->puzzle = STORE_NO_GAME;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT mistakes = 0 AND hints = 0, finished_at FROM solves"
+                                         " WHERE player_id = ?1 ORDER BY id", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        int run = 0;
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            run = sqlite3_column_int(st, 0) ? run + 1 : 0;
+            if (run > r->value) {
+                r->value = run;
+                r->when = sqlite3_column_int64(st, 1);     /* when the best run reached its length */
+            }
+        }
+        r->has = r->value > 0;
+        sqlite3_finalize(st);
+    }
+
+    /* longest daily streak, total solves, total time */
+    r = &R->r[R->n++];
+    r->title = "Longest daily streak";
+    r->unit = REC_DAYS;
+    r->puzzle = STORE_NO_GAME;
+    r->value = s_db ? longest_daily_streak(s_player) : 0;
+    r->has = r->value > 0;
+    r = &R->r[R->n++];
+    r->title = "Puzzles solved";
+    r->unit = REC_COUNT;
+    r->puzzle = STORE_NO_GAME;
+    r->value = s_db ? query_int_player("SELECT COUNT(*) FROM solves WHERE player_id = ?1") : 0;
+    r->has = r->value > 0;
+    r = &R->r[R->n++];
+    r->title = "Time spent solving";
+    r->unit = REC_MINUTES;
+    r->puzzle = STORE_NO_GAME;
+    r->value = s_db ? query_int_player("SELECT CAST(TOTAL(seconds) / 60 AS INTEGER) FROM solves WHERE player_id = ?1")
+                    : 0;
+    r->has = r->value > 0;
+
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    *out = *R;
+    s_records = out;
+    s_records_new = true;
     xSemaphoreGive(s_lock);
 }
 
@@ -1747,6 +1970,26 @@ static void worker(void *arg)
         case CMD_ACH:
             do_achievements();
             break;
+        case CMD_GAME_SPILL:
+            if (s_db && c.spill) save_game(&c.spill->g, c.spill->moves, c.spill->n);
+            free(c.spill);
+            break;
+        case CMD_CLEAR_GAME:
+            clear_game(c.puzzle);
+            break;
+        case CMD_LIST_GAMES:
+            flush_game();
+            do_list_games();
+            break;
+        case CMD_LOAD_GAME:
+            flush_game();
+            load_game_of(&s_gen.game, s_gen.puzzle);
+            s_gen.ok = s_db != NULL && s_gen.game.id != STORE_NO_GAME;
+            xSemaphoreGive(s_gen_done);
+            break;
+        case CMD_RECORDS:
+            do_records();
+            break;
         case CMD_SUSPEND:
             flush_game();
             db_close();
@@ -1782,7 +2025,8 @@ static void start(bool fresh)
     if (!s_q) {
         s_q = xQueueCreate(16, sizeof(cmd_t));
         s_suspended = xSemaphoreCreateBinary();
-        s_gen_done = xSemaphoreCreateBinary();
+        s_genp = heap_caps_calloc(1, sizeof(gen_call_t), MALLOC_CAP_SPIRAM);
+        if (s_genp) s_gen_done = xSemaphoreCreateBinary();
         s_opened = xSemaphoreCreateBinary();
         s_lock = xSemaphoreCreateMutex();
         /* SQLite wants a deep stack (parser, B-tree balancing) */
@@ -1844,12 +2088,29 @@ void stats_db_set_text(const char *key, const char *value)
     send(&c);
 }
 
-void stats_db_save_game(const saved_game_t *g)
+void stats_db_save_game(const saved_game_t *g, const game_move_t *moves, int nmoves)
 {
-    if (!s_lock || !s_q) return;                          /* no database this session */
+    if (!s_lock || !s_q || !g || !moves_bufs()) return;  /* no database this session */
+    if (nmoves > GAME_MOVES_MAX) nmoves = GAME_MOVES_MAX;
+    if (nmoves < 0 || !moves) nmoves = 0;
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    s_game_next_has = g != NULL;
-    if (g) s_game_next = *g;
+    if (s_game_dirty && s_game_next_has && s_game_next.id != g->id) {
+        /* another game's last save hasn't been written yet: it goes on its own */
+        int n = s_moves_next_puzzle == s_game_next.id ? s_moves_next_n : 0;
+        game_spill_t *sp = heap_caps_malloc(sizeof(*sp) + sizeof(game_move_t) * (size_t)n, MALLOC_CAP_SPIRAM);
+        if (sp) {
+            sp->g = s_game_next;
+            sp->n = n;
+            if (n) memcpy(sp->moves, s_moves_next, sizeof(game_move_t) * (size_t)n);
+            cmd_t c = {.type = CMD_GAME_SPILL, .spill = sp};
+            if (!send(&c)) free(sp);
+        }
+    }
+    s_game_next_has = true;
+    s_game_next = *g;
+    if (nmoves) memcpy(s_moves_next, moves, sizeof(game_move_t) * (size_t)nmoves);
+    s_moves_next_n = nmoves;
+    s_moves_next_puzzle = g->id;
     bool queued = s_game_dirty;
     s_game_dirty = true;
     xSemaphoreGive(s_lock);
@@ -1892,16 +2153,33 @@ void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes,
     if (!send(&c)) free(blob);
 }
 
-void stats_db_set_game_moves(uint16_t puzzle, const game_move_t *moves, int n)
+void stats_db_clear_game(uint16_t puzzle)
 {
-    if (!s_lock || !moves_bufs()) return;
-    if (n > GAME_MOVES_MAX) n = GAME_MOVES_MAX;
-    if (n < 0 || !moves) n = 0;
+    if (!s_lock || !s_q || puzzle == STORE_NO_GAME) return;
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    if (n) memcpy(s_moves_next, moves, sizeof(game_move_t) * n);
-    s_moves_next_n = n;
-    s_moves_next_puzzle = puzzle;
+    if (s_game_dirty && s_game_next.id == puzzle) s_game_dirty = false;   /* its pending save is moot */
     xSemaphoreGive(s_lock);
+    cmd_t c = {.type = CMD_CLEAR_GAME, .puzzle = puzzle};
+    send(&c);
+}
+
+static bool gen_call(cmd_type_t type);
+
+int stats_db_list_games(stats_game_row_t *out)
+{
+    if (!s_genp) return -1;                              /* no database this session */
+    if (!gen_call(CMD_LIST_GAMES)) return -1;
+    memcpy(out, s_gen.games, sizeof(stats_game_row_t) * (size_t)s_gen.ngames);
+    return s_gen.ngames;
+}
+
+bool stats_db_load_game(uint16_t puzzle, saved_game_t *out)
+{
+    if (!s_genp) return false;                              /* no database this session */
+    s_gen.puzzle = puzzle;
+    if (!gen_call(CMD_LOAD_GAME)) return false;
+    *out = s_gen.game;
+    return true;
 }
 
 int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max)
@@ -1926,8 +2204,11 @@ static bool gen_call(cmd_type_t type)
     return xSemaphoreTake(s_gen_done, pdMS_TO_TICKS(3000)) == pdTRUE && s_gen.ok;
 }
 
-int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *day)
+int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages,
+                     const char *day)
 {
+    if (!s_genp) return -1;                              /* no database this session */
+    snprintf(s_gen.cages, sizeof(s_gen.cages), "%s", cages ? cages : "");
     s_gen.variant = variant;
     s_gen.level = level;
     memcpy(s_gen.givens, givens, 81);
@@ -1937,11 +2218,14 @@ int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uin
     return gen_call(CMD_GEN_ADD) ? s_gen.id : -1;
 }
 
-bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, int *variant, int *level, char day[12])
+bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, char *cages, int *variant, int *level,
+                      char day[12])
 {
+    if (!s_genp) return false;                              /* no database this session */
     s_gen.id = id;
     if (!gen_call(CMD_GEN_GET)) return false;
     memcpy(givens, s_gen.givens, 81);
+    if (cages) snprintf(cages, STATS_CAGES_LEN, "%s", s_gen.cages);
     if (regions && s_gen.has_regions) memcpy(regions, s_gen.regions, 81);
     if (variant) *variant = s_gen.variant;
     if (level) *level = s_gen.level;
@@ -1951,6 +2235,7 @@ bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, int *variant
 
 bool stats_db_daily_status(const char *day, int *id, bool *solved_today, int *streak)
 {
+    if (!s_genp) return false;                              /* no database this session */
     snprintf(s_gen.day, sizeof(s_gen.day), "%s", day);
     if (!gen_call(CMD_DAILY)) return false;
     *id = s_gen.id;
@@ -1961,6 +2246,7 @@ bool stats_db_daily_status(const char *day, int *id, bool *solved_today, int *st
 
 bool stats_db_daily_rank(const char *day, int *rank, int *of)
 {
+    if (!s_genp) return false;                              /* no database this session */
     snprintf(s_gen.day, sizeof(s_gen.day), "%s", day);
     if (!gen_call(CMD_RANK)) return false;
     *rank = s_gen.rank;
@@ -1999,6 +2285,36 @@ bool stats_db_take_achievements(stats_achievements_t *out)
     bool fresh = s_ach_new;
     if (fresh) *out = *s_ach;
     s_ach_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
+}
+
+/* one number from a query on the current player (?1) */
+static int query_int_player(const char *sql)
+{
+    int v = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        if (sqlite3_step(st) == SQLITE_ROW) v = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+    }
+    return v;
+}
+
+void stats_db_query_records(void)
+{
+    cmd_t c = {.type = CMD_RECORDS};
+    send(&c);
+}
+
+bool stats_db_take_records(stats_records_t *out)
+{
+    if (!s_lock || !s_records) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_records_new;
+    if (fresh) *out = *s_records;
+    s_records_new = false;
     xSemaphoreGive(s_lock);
     return fresh;
 }
