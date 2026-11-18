@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "stats_db.h"
 #include "puzzles.h"
+#include "esp_heap_caps.h"
 
 /* Legacy NVS layout, namespace "sudoku" (read once at start-up, never written):
  *   "best" : uint16_t[PUZZLE_COUNT] best time in seconds (0 = unsolved, capped at 65535)
@@ -34,6 +35,8 @@ static const store_prefs_t DEFAULT_PREFS = {
     .player_name = "Player 1",
 };
 static store_prefs_t s_p = DEFAULT_PREFS;
+static game_move_t *s_moves;          /* move log of the game in progress, PSRAM, GAME_MOVES_MAX */
+static int s_nmoves;
 #define s_game (s_p.game)
 
 void store_init(void)
@@ -102,6 +105,7 @@ void store_merge_stats(const uint16_t *best, const uint8_t *fewest, const uint8_
 void store_factory_reset(void)
 {
     s_p = DEFAULT_PREFS;
+    s_nmoves = 0;
     store_reset_stats();
     Preferences prefs;
     if (prefs.begin("sudoku", false)) {        /* the one NVS write left: erase the old keys */
@@ -153,13 +157,44 @@ void store_set_game(const saved_game_t *g)
     s_game = *g;
 }
 
+static bool moves_buf(void)
+{
+    if (!s_moves) s_moves = (game_move_t *)heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    return s_moves != NULL;
+}
+
+void store_set_game_moves(const game_move_t *m, int n)
+{
+    if (!moves_buf()) return;
+    if (n > GAME_MOVES_MAX) n = GAME_MOVES_MAX;
+    if (n > 0) memcpy(s_moves, m, sizeof(game_move_t) * n);
+    s_nmoves = n > 0 ? n : 0;
+}
+
+int store_game_moves(const game_move_t **out)
+{
+    *out = s_moves;
+    return s_moves ? s_nmoves : 0;
+}
+
+void store_load_game_moves(void)
+{
+    s_nmoves = 0;
+    if (s_game.id == STORE_NO_GAME || !moves_buf()) return;
+    uint16_t puzzle = STORE_NO_GAME;
+    int n = stats_db_copy_saved_moves(&puzzle, s_moves, GAME_MOVES_MAX);
+    if (n > 0 && puzzle == s_game.id) s_nmoves = n;
+}
+
 void store_commit_game(void)
 {
+    if (s_game.id != STORE_NO_GAME) stats_db_set_game_moves(s_game.id, s_moves, s_moves ? s_nmoves : 0);
     stats_db_save_game(s_game.id == STORE_NO_GAME ? NULL : &s_game);
 }
 
 void store_clear_game(void)
 {
+    s_nmoves = 0;
     if (s_game.id == STORE_NO_GAME) return;
     s_game.id = STORE_NO_GAME;
     stats_db_save_game(NULL);
@@ -174,6 +209,7 @@ void store_apply_prefs(const store_prefs_t *in)
 {
     s_p = *in;
     if (s_game.id >= PUZZLE_COUNT) s_game.id = STORE_NO_GAME;
+    store_load_game_moves();
     if (s_p.last_collection >= PUZZLE_COLLECTION_COUNT) s_p.last_collection = 0;
 }
 

@@ -10,7 +10,12 @@
  *   - statistics: per level and per puzzle best times, mistakes, solves,
  *     read from sudoku.db on the microSD card (stats_db.c).
  *   - history: a calendar of the days anyone played; tap a day for who
- *     played what (from sudoku.db, opened from Statistics).
+ *     played what (from sudoku.db, opened from Statistics); tap a solve to
+ *     replay it.
+ *   - replay: a solve's move log played back over the givens, with play /
+ *     pause, step, start / end, a slider and 1x-8x speed (also from the
+ *     Solved dialog). Every digit change is logged (moves.h): number pad,
+ *     Fill, Erase, Undo.
  *   - players: who is playing; switch, add or rename (statistics and the
  *     game in progress are per player, in sudoku.db).
  *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone,
@@ -51,6 +56,8 @@
 #include "stats_db.h"
 #include "usb_msc.h"
 #include "solver.h"
+#include "moves.h"
+#include "esp_heap_caps.h"
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
@@ -132,6 +139,8 @@ static uint32_t g_elapsed_ms;
 static uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
 static uint16_t g_hints;         /* cells filled with Fill (undo doesn't remove them either) */
 static uint8_t  g_sol[81];       /* the solution, for Fill */
+static game_move_t *g_moves;     /* move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
+static int      g_nmoves;
 static bool     g_sol_ok;
 static int64_t  g_started_at;    /* Unix time the puzzle was opened/restarted, 0 = not known yet */
 static uint32_t g_started_tick;  /* lv_tick_get() then, to work it out once NTP sets the clock;
@@ -202,6 +211,7 @@ static void usb_btn_update(void);
 static void history_poll(void);
 static void history_cb(lv_event_t *e);
 static void apply_loaded_prefs(void);
+static void win_replay_cb(lv_event_t *e);
 static void apply_theme(bool dark);
 
 /* ============================================================= helpers */
@@ -369,6 +379,7 @@ static void save_current(void)
     sg.hints = g_hints;
     sg.started_at = game_started_at();
     store_set_game(&sg);
+    store_set_game_moves(g_moves, g_nmoves);
     store_commit_game();
 }
 
@@ -464,7 +475,7 @@ static void solve_commit_cb(lv_timer_t *t)
 {
     store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
     stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_hints,
-                          s_solve_started);                                  /* finished: now */
+                          s_solve_started, g_moves, g_nmoves);               /* finished: now */
     if (store_saved_game()->id == s_solve_id) store_clear_game();
 }
 
@@ -550,6 +561,15 @@ static bool can_edit(void)
 static void place_digit(int i, int d);
 static void placed_sounds(int i, int d);
 
+/* one entry in the move log (a cell's digit changed) */
+static void record_move(int cell, int digit, move_kind_t kind)
+{
+    if (!g_moves) g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    if (!g_moves || g_nmoves >= GAME_MOVES_MAX) return;
+    g_moves[g_nmoves++] = (game_move_t){.t_ms = g_elapsed_ms, .cell = (uint8_t)cell, .digit = (uint8_t)digit,
+                                        .kind = (uint8_t)kind};
+}
+
 static void enter_digit(int d)
 {
     if (!can_edit()) return;
@@ -563,8 +583,10 @@ static void enter_digit(int d)
         push_undo();
         if (g_b.val[i] == d) {
             g_b.val[i] = 0;
+            record_move(i, 0, MOVE_HAND);
         } else {
             place_digit(i, d);
+            record_move(i, d, MOVE_HAND);
             placed = true;
         }
     }
@@ -598,6 +620,7 @@ static void fill_cb(lv_event_t *e)
     }
     push_undo();
     place_digit(i, d);
+    record_move(i, d, MOVE_FILL);
     if (g_hints < 0xFFFF) g_hints++;
     after_move();
     if (!g_solved) placed_sounds(i, d);
@@ -677,6 +700,7 @@ static void erase_cb(lv_event_t *e)
     if (!can_edit()) return;
     if (!g_b.val[g_sel] && !g_b.notes[g_sel]) return;
     push_undo();
+    if (g_b.val[g_sel]) record_move(g_sel, 0, MOVE_ERASE);
     g_b.val[g_sel] = 0;
     g_b.notes[g_sel] = 0;
     after_move();
@@ -687,7 +711,12 @@ static void undo_cb(lv_event_t *e)
     if (g_solved || g_paused || g_undo_len == 0) return;
     g_undo_head = (g_undo_head + UNDO_MAX - 1) % UNDO_MAX;
     g_undo_len--;
+    uint8_t before[81];
+    memcpy(before, g_b.val, sizeof(before));
     g_b = g_undo[g_undo_head];
+    for (int i = 0; i < 81; i++) {
+        if (g_b.val[i] != before[i]) record_move(i, g_b.val[i], MOVE_UNDO);
+    }
     after_move();
 }
 
@@ -717,6 +746,7 @@ static void reset_game(void)
     g_elapsed_ms = 0;
     g_mistakes = 0;
     g_hints = 0;
+    g_nmoves = 0;                                   /* a new attempt, a new log */
     mark_started();                                 /* opened or restarted: a new attempt */
     g_undo_len = g_undo_head = 0;
     g_sel = -1;
@@ -830,6 +860,13 @@ static void start_game(uint16_t id, bool resume)
         g_elapsed_ms = s->elapsed_ms;
         g_mistakes = s->mistakes;
         g_hints = s->hints;
+        const game_move_t *sm;
+        int sn = store_game_moves(&sm);
+        if (sn > 0 && (g_moves || (g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX,
+                                                              MALLOC_CAP_SPIRAM)))) {
+            memcpy(g_moves, sm, sizeof(game_move_t) * sn);
+            g_nmoves = sn;
+        }
         g_started_at = s->started_at;               /* from when it was first opened */
         if (!g_started_at) g_started_tick = 0;      /* unknown, and not worked out from this session */
     }
@@ -982,12 +1019,271 @@ static void build_game(void)
     g_win_hint = make_label(card, &lv_font_montserrat_18, C_MUTED);
     lv_obj_align(g_win_hint, LV_ALIGN_TOP_MID, 0, 190);
 
-    lv_obj_t *b1 = make_btn(card, 0, 0, 196, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_18, win_list_cb, NULL);
+    lv_obj_t *b1 = make_btn(card, 0, 0, 128, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_16, win_list_cb, NULL);
     lv_obj_align(b1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_obj_set_style_bg_color(b1, C_CARD2, 0);
-    lv_obj_t *b2 = make_btn(card, 0, 0, 196, 60, "Next  " LV_SYMBOL_RIGHT, &lv_font_montserrat_18, win_next_cb, NULL);
+    lv_obj_t *b3 = make_btn(card, 0, 0, 128, 60, LV_SYMBOL_PLAY "  Replay", &lv_font_montserrat_16, win_replay_cb, NULL);
+    lv_obj_align(b3, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(b3, C_CARD2, 0);
+    lv_obj_t *b2 = make_btn(card, 0, 0, 128, 60, "Next  " LV_SYMBOL_RIGHT, &lv_font_montserrat_16, win_next_cb, NULL);
     lv_obj_align(b2, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_set_style_bg_color(b2, C_ACCENT, 0);
+}
+
+/* ============================================================= replay */
+/*
+ * Plays a move log (moves.h) back over the puzzle's givens. The board at
+ * step k is the givens plus moves 0..k-1, so any point can be shown at once:
+ * step back and forth, jump to the start or end, or drag the slider. Playing
+ * follows the game clock (pauses longer than RP_MAX_GAP_MS are shortened),
+ * at 1x, 2x, 4x or 8x. Digits from Fill are orange, the last move is
+ * highlighted, and digits that break a rule are red.
+ */
+#define RP_MAX_GAP_MS 2000
+static const uint8_t RP_SPEEDS[] = {1, 2, 4, 8};
+
+static lv_obj_t *scr_replay, *rp_return;            /* the screen, and where Back goes */
+static lv_obj_t *rp_cells[81], *rp_lbl[81];
+static lv_obj_t *rp_play_lbl, *rp_speed_lbl, *rp_slider, *rp_pos, *rp_title, *rp_sub;
+static lv_timer_t *rp_timer;
+static uint8_t rp_given[81];
+static game_move_t *rp_moves;                       /* PSRAM, GAME_MOVES_MAX */
+static uint32_t *rp_vt;                             /* when each move plays, gaps shortened */
+static int rp_n, rp_k;
+static uint32_t rp_clock, rp_last_tick;
+static bool rp_playing;
+static int rp_speed;
+static stats_replay_t *rp_loaded;                   /* from sudoku.db (History) */
+
+static void rp_render(void)
+{
+    uint8_t val[81];
+    uint8_t kind[81];
+    memcpy(val, rp_given, sizeof(val));
+    memset(kind, MOVE_HAND, sizeof(kind));
+    for (int i = 0; i < rp_k; i++) {
+        val[rp_moves[i].cell] = rp_moves[i].digit;
+        kind[rp_moves[i].cell] = rp_moves[i].kind;
+    }
+    int last = rp_k ? rp_moves[rp_k - 1].cell : -1;
+    for (int i = 0; i < 81; i++) {
+        bool bad = false;
+        for (int j = 0; j < 81 && val[i] && !bad; j++) bad = j != i && val[j] == val[i] && is_peer(i, j);
+        lv_color_t bg = rp_given[i] ? C_CELL_GIVEN : C_CELL;
+        if (i == last) bg = C_CELL_SEL;
+        lv_obj_set_style_bg_color(rp_cells[i], bg, 0);
+        lv_color_t fg = rp_given[i] ? C_TEXT : (kind[i] == MOVE_FILL ? C_ORANGE : C_DIGIT_USER);
+        if (bad && !rp_given[i]) fg = C_RED;
+        lv_obj_set_style_text_color(rp_lbl[i], fg, 0);
+        lv_label_set_text_static(rp_lbl[i], DIGITS[val[i]]);
+    }
+    char now[16], total[16];
+    fmt_time(now, sizeof(now), (rp_k ? rp_moves[rp_k - 1].t_ms : 0) / 1000);
+    fmt_time(total, sizeof(total), (rp_n ? rp_moves[rp_n - 1].t_ms : 0) / 1000);
+    lv_label_set_text_fmt(rp_pos, "Move %d / %d   %s / %s", rp_k, rp_n, now, total);
+    lv_slider_set_value(rp_slider, rp_k, LV_ANIM_OFF);
+    lv_label_set_text(rp_play_lbl, rp_playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+}
+
+static void rp_seek(int k, bool keep_playing)
+{
+    rp_k = k < 0 ? 0 : (k > rp_n ? rp_n : k);
+    rp_clock = rp_k ? rp_vt[rp_k - 1] : 0;
+    if (!keep_playing) rp_playing = false;
+    rp_render();
+}
+
+static void rp_timer_cb(lv_timer_t *t)
+{
+    uint32_t now = lv_tick_get(), dt = now - rp_last_tick;
+    rp_last_tick = now;
+    if (!rp_playing) return;
+    rp_clock += dt * RP_SPEEDS[rp_speed];
+    int k = rp_k;
+    while (k < rp_n && rp_vt[k] <= rp_clock) k++;
+    if (k == rp_n) rp_playing = false;
+    if (k != rp_k || !rp_playing) {
+        rp_k = k;
+        rp_render();
+    }
+}
+
+static void rp_btn_cb(lv_event_t *e)
+{
+    switch ((int)(intptr_t)lv_event_get_user_data(e)) {
+    case 0: rp_seek(0, false); break;                         /* start */
+    case 1: rp_seek(rp_k - 1, false); break;                  /* one back */
+    case 2:                                                   /* play / pause */
+        if (!rp_playing && rp_k >= rp_n) rp_seek(0, false);   /* at the end: from the start */
+        rp_playing = !rp_playing;
+        rp_last_tick = lv_tick_get();
+        rp_render();
+        break;
+    case 3: rp_seek(rp_k + 1, false); break;                  /* one forward */
+    case 4: rp_seek(rp_n, false); break;                      /* end */
+    case 5:                                                   /* speed */
+        rp_speed = (rp_speed + 1) % (int)sizeof(RP_SPEEDS);
+        lv_label_set_text_fmt(rp_speed_lbl, "%ux", RP_SPEEDS[rp_speed]);
+        break;
+    }
+}
+
+static void rp_slider_cb(lv_event_t *e)
+{
+    rp_seek(lv_slider_get_value(rp_slider), rp_playing);
+}
+
+static void rp_close(void)
+{
+    if (rp_timer) lv_timer_delete(rp_timer);
+    rp_timer = NULL;
+    lv_screen_load(rp_return ? rp_return : scr_home);
+    lv_obj_delete_async(scr_replay);
+    scr_replay = NULL;
+}
+
+static void rp_back_cb(lv_event_t *e)
+{
+    rp_close();
+}
+
+/* Opens the Replay screen for a log of puzzle `id`; sub = the line under the title. */
+static void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub)
+{
+    if (!rp_moves) rp_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    if (!rp_vt) rp_vt = heap_caps_malloc(sizeof(uint32_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    if (!rp_moves || !rp_vt) return;
+    if (n > GAME_MOVES_MAX) n = GAME_MOVES_MAX;
+    if (n > 0 && moves != rp_moves) memcpy(rp_moves, moves, sizeof(game_move_t) * n);
+    rp_n = n;
+    uint32_t prev_t = 0, vt = 0;
+    for (int i = 0; i < n; i++) {
+        uint32_t gap = rp_moves[i].t_ms >= prev_t ? rp_moves[i].t_ms - prev_t : 0;
+        vt += gap > RP_MAX_GAP_MS ? RP_MAX_GAP_MS : gap;
+        rp_vt[i] = vt;
+        prev_t = rp_moves[i].t_ms;
+    }
+    puzzle_load(id, rp_given);
+    if (scr_replay) rp_close();
+    rp_return = lv_screen_active();
+
+    scr_replay = make_screen();
+    make_btn(scr_replay, 8, 6, 104, 48, LV_SYMBOL_LEFT "  Back", &lv_font_montserrat_18, rp_back_cb, NULL);
+    char name[40];
+    puzzle_name(id, name, sizeof(name));
+    rp_title = make_label(scr_replay, &lv_font_montserrat_22, C_TEXT);
+    lv_label_set_text_fmt(rp_title, "Replay  -  %s", name);
+    lv_obj_set_pos(rp_title, 126, 6);
+    rp_sub = make_label(scr_replay, &lv_font_montserrat_14, C_MUTED);
+    lv_label_set_text(rp_sub, sub);
+    lv_obj_set_pos(rp_sub, 126, 36);
+
+    lv_obj_t *grid = lv_obj_create(scr_replay);
+    lv_obj_remove_style_all(grid);
+    lv_obj_set_pos(grid, GRID_X, GRID_Y);
+    lv_obj_set_size(grid, GRID_SIZE, GRID_SIZE);
+    lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(grid, false);
+    for (int b = 0; b < 9; b++) {
+        lv_obj_t *box = lv_obj_create(grid);
+        lv_obj_remove_style_all(box);
+        lv_obj_set_pos(box, 4 + (b % 3) * (BOX_SIZE + 4), 4 + (b / 3) * (BOX_SIZE + 4));
+        lv_obj_set_size(box, BOX_SIZE, BOX_SIZE);
+        lv_obj_set_style_bg_color(box, C_GRID_THIN, 0);
+        lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+        lv_obj_set_scrollable(box, false);
+    }
+    for (int i = 0; i < 81; i++) {
+        int row = i / 9, c = i % 9;
+        lv_obj_t *cell = lv_obj_create(grid);
+        lv_obj_remove_style_all(cell);
+        lv_obj_set_pos(cell, 4 + (c / 3) * (BOX_SIZE + 4) + (c % 3) * (CELL + 2),
+                             4 + (row / 3) * (BOX_SIZE + 4) + (row % 3) * (CELL + 2));
+        lv_obj_set_size(cell, CELL, CELL);
+        lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
+        lv_obj_set_scrollable(cell, false);
+        rp_cells[i] = cell;
+        rp_lbl[i] = make_label(cell, &font_digits_44, C_TEXT);
+        lv_obj_center(rp_lbl[i]);
+    }
+
+    /* controls down the right: start, back, play, forward, end, speed */
+    static const char *const SYM[] = {LV_SYMBOL_PREV, LV_SYMBOL_LEFT, LV_SYMBOL_PLAY, LV_SYMBOL_RIGHT,
+                                      LV_SYMBOL_NEXT, "1x"};
+    const int bh = 92, gap = (GRID_SIZE - 6 * bh) / 5;
+    for (int i = 0; i < 6; i++) {
+        lv_obj_t *b = make_btn(scr_replay, PAD_X, GRID_Y + i * (bh + gap), PAD_W, bh, SYM[i],
+                               &lv_font_montserrat_28, rp_btn_cb, (void *)(intptr_t)i);
+        if (i == 2) {
+            lv_obj_set_style_bg_color(b, C_ACCENT, 0);
+            rp_play_lbl = lv_obj_get_child(b, 0);
+            lv_obj_set_style_text_color(rp_play_lbl, lv_color_white(), 0);
+        }
+        if (i == 5) {
+            rp_speed_lbl = lv_obj_get_child(b, 0);
+            lv_obj_set_style_text_font(rp_speed_lbl, &lv_font_montserrat_22, 0);
+            lv_label_set_text_fmt(rp_speed_lbl, "%ux", RP_SPEEDS[rp_speed]);
+        }
+    }
+
+    /* bottom: slider + position */
+    rp_slider = lv_slider_create(scr_replay);
+    lv_obj_set_size(rp_slider, 340, 12);
+    lv_obj_set_pos(rp_slider, 24, BOT_Y + (BOT_H - 12) / 2);
+    lv_slider_set_range(rp_slider, 0, n > 0 ? n : 1);
+    lv_obj_set_style_bg_color(rp_slider, C_CARD2, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(rp_slider, C_ACCENT, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(rp_slider, C_ACCENT, LV_PART_KNOB);
+    lv_obj_set_ext_click_area(rp_slider, 16);
+    lv_obj_add_event_cb(rp_slider, rp_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    rp_pos = make_label(scr_replay, &lv_font_montserrat_16, C_MUTED);
+    lv_obj_set_width(rp_pos, SCR_W - 8 - 390);
+    lv_obj_set_style_text_align(rp_pos, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(rp_pos, 390, BOT_Y + (BOT_H - 20) / 2);
+
+    rp_playing = false;
+    rp_seek(0, false);
+    rp_last_tick = lv_tick_get();
+    rp_timer = lv_timer_create(rp_timer_cb, 40, NULL);
+    lv_screen_load(scr_replay);
+    if (n == 0) sudoku_ui_notice("No moves were recorded for this game.", 3000);
+}
+
+/* the game just solved (from the Solved dialog) */
+static void win_replay_cb(lv_event_t *e)
+{
+    char t[16], sub[96];
+    fmt_time(t, sizeof(t), s_solve_secs);
+    snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
+             store_player_name(), t, (unsigned)g_hints, g_hints == 1 ? "" : "s");
+    open_replay(g_id, g_moves, g_moves ? g_nmoves : 0, sub);
+}
+
+/* a solve from History: ask sudoku.db, history_poll() opens it */
+static int64_t hz_row_solve[STATS_MAX_DAY_ROWS];
+
+static void history_row_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) return;
+    stats_db_query_replay(hz_row_solve[i]);
+}
+
+static void history_replay_poll(void)
+{
+    if (!rp_loaded) rp_loaded = heap_caps_malloc(sizeof(*rp_loaded), MALLOC_CAP_SPIRAM);
+    if (!rp_loaded || !stats_db_take_replay(rp_loaded)) return;
+    if (lv_screen_active() != scr_history) return;          /* left meanwhile */
+    if (!rp_loaded->found) {
+        sudoku_ui_notice("This solve has no recorded moves.", 3000);
+        return;
+    }
+    char t[16], sub[96];
+    fmt_time(t, sizeof(t), rp_loaded->seconds);
+    snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
+             rp_loaded->player, t, (unsigned)rp_loaded->hints, rp_loaded->hints == 1 ? "" : "s");
+    open_replay(rp_loaded->puzzle, rp_loaded->moves, rp_loaded->n, sub);
 }
 
 /* ============================================================= list screen */
@@ -1635,6 +1931,7 @@ static void sd_poll_cb(lv_timer_t *t)
         store_set_player(ch.id, ch.name);
         if (ch.switched) {
             store_set_game(&ch.game);                      /* their game in progress (RAM only) */
+            store_load_game_moves();                       /* and its move log */
             g_id = STORE_NO_GAME;                          /* the game screen held someone else's */
             char msg[64];
             snprintf(msg, sizeof(msg), "Now playing: %s", ch.name);
@@ -1941,6 +2238,15 @@ static void render_day(const stats_day_t *d)
                      (unsigned)r->hints, r->hints == 1 ? "" : "s");
         }
         lv_label_set_text(what, line);
+        hz_row_solve[i] = 0;
+        if (!r->in_progress && r->has_moves && r->solve_id) {     /* tap to watch it again */
+            hz_row_solve[i] = r->solve_id;
+            lv_obj_set_clickable(card, true);
+            lv_obj_set_style_bg_color(card, C_CARD2, LV_STATE_PRESSED);
+            lv_obj_add_event_cb(card, history_row_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+            lv_obj_t *rp = make_label(card, &lv_font_montserrat_14, C_ACCENT);
+            lv_label_set_text(rp, LV_SYMBOL_PLAY "  Tap to replay");
+        }
     }
     if (d->total > d->n) {
         char more[48];
@@ -2085,6 +2391,7 @@ static void history_poll(void)
     }
     static stats_day_t d;
     if (stats_db_take_day(&d)) render_day(&d);
+    history_replay_poll();
     if (lv_screen_active() == scr_history && stats_db_ready() && !hz_latest_pending) {
         const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
         if (sh->year != hz_year || sh->month != hz_month) history_ask_month(sh->year, sh->month);

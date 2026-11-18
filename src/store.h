@@ -11,6 +11,7 @@
  */
 #include <stdbool.h>
 #include <stdint.h>
+#include "moves.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,6 +58,12 @@ const saved_game_t *store_saved_game(void);   /* id == STORE_NO_GAME if none */
 void store_set_game(const saved_game_t *g);
 void store_commit_game(void);
 void store_clear_game(void);                  /* memory + queued delete */
+/* Move log of the game in progress (RAM; store_commit_game() saves it with
+ * the game). store_load_game_moves(): the log sudoku.db has for the saved
+ * game, after the game itself came from there (start-up, another player). */
+void store_set_game_moves(const game_move_t *m, int n);
+int store_game_moves(const game_move_t **out);
+void store_load_game_moves(void);
 
 /* Everything except statistics, as one block: what sudoku.db is seeded with
  * on first use, and what it hands back at start-up. */
