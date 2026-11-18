@@ -20,11 +20,13 @@
  *              mistakes, saved_at, started_at, hints, moves)    saved after every move
  *       the one unfinished game; cells = 81 digits row by row (0 = empty,
  *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
- *   generated(id, level, givens, created_at, day, variant): puzzles made on
- *       the board; their puzzle id elsewhere is 2000 + id, level "Generated
- *       Easy", "X-Sudoku Easy" or "Mini Easy" etc. by variant (generator.h:
- *       0 classic, 1 X-Sudoku, 2 mini 6x6). day = the date of a daily puzzle
- *       (level "Daily Easy" etc.)
+ *   generated(id, level, givens, created_at, day, variant, regions): puzzles
+ *       made on the board; their puzzle id elsewhere is 2000 + id, level
+ *       "Generated Easy", "X-Sudoku Easy", "Mini Easy", "Hyper Easy" or
+ *       "Jigsaw Easy" etc. by variant (generator.h: 0 classic, 1 X-Sudoku,
+ *       2 mini 6x6, 3 Hyper, 4 Jigsaw). day = the date of a daily puzzle
+ *       (level "Daily Easy" etc.). regions = a Jigsaw puzzle's region map,
+ *       81 digits 0-8 row by row (NULL for the others)
  *   achievements(player_id, key, unlocked_at): achievements each player has
  *       unlocked (see stats_db_query_achievements()); unlocked_at NULL =
  *       found already done when the table was first filled, or clock not set
@@ -44,6 +46,7 @@
 #include <stdint.h>
 #include "puzzles.h"
 #include "store.h"
+#include "generator.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,11 +67,21 @@ typedef struct {
     uint16_t solves;
 } stats_puzzle_t;
 
+/* Statistics rows after the 16 collections: puzzles made on the board, by
+ * kind. Their solves are logged with level "<prefix> <Easy|Medium|Hard|Expert>". */
+typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_MINI, KIND_COUNT } stats_kind_t;
+extern const char *const STATS_KIND_NAMES[KIND_COUNT];    /* "New puzzles", "Daily puzzle", "X-Sudoku", ... */
+extern const char *const STATS_KIND_PREFIX[KIND_COUNT];   /* "Generated", "Daily", "X-Sudoku", ... */
+/* the kind of a generated puzzle of a variant (daily ones: KIND_DAILY) */
+int stats_kind_of(int variant, bool daily);
+#define STATS_LEVEL_KIND(k) (PUZZLE_COLLECTION_COUNT + (k))   /* stats_db_query() level of a kind */
+
 typedef struct {
-    int level;                           /* -1 = all levels, else collection index */
+    int level;                           /* -1 = all levels, collection index, or STATS_LEVEL_KIND() */
     int32_t player_id;                   /* whose statistics these are */
     stats_level_t levels[PUZZLE_COLLECTION_COUNT];
-    stats_level_t total;
+    stats_level_t total;                 /* the collections */
+    stats_level_t kinds[KIND_COUNT][GEN_LEVELS];   /* puzzles made on the board, by kind and level */
     int n_puzzles;                       /* rows in puzzles (level >= 0 only) */
     stats_puzzle_t puzzles[STATS_MAX_PUZZLES];
     /* progress chart: seconds of this player's newest solves at the level
@@ -211,8 +224,10 @@ typedef struct {
 /* Puzzles made on the board (generator.h): stores one and returns its id in
  * the generated table (puzzle id = PUZZLE_GEN_BASE + it), or -1 without a
  * database; reads one back. Both wait for the database (milliseconds). */
-int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const char *day);   /* day: daily's date, else NULL */
-bool stats_db_gen_get(int id, uint8_t givens[81], int *variant, int *level, char day[12]); /* day "" if not a daily */
+/* regions: a Jigsaw puzzle's region map (81), else NULL; day: a daily puzzle's date, else NULL */
+int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *day);
+/* day "" if not a daily; regions (may be NULL) only filled for a Jigsaw puzzle */
+bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, int *variant, int *level, char day[12]);
 /* Daily puzzle of day ('YYYY-MM-DD'): id in the generated table (0 = not
  * made yet), whether the current player solved it, and their streak of
  * days in a row with the daily solved (ending today, or yesterday if not
@@ -250,7 +265,7 @@ bool stats_db_take_board(stats_board_t *out);
  * They are checked after every solve; newly unlocked ones come back through
  * stats_db_take_unlocked(). Achievements already earned when this firmware
  * first opens a database are recorded quietly. */
-#define STATS_ACH_MAX 24
+#define STATS_ACH_MAX 32
 
 typedef enum { ACH_UNIT_COUNT = 0, ACH_UNIT_MINUTES, ACH_UNIT_DAYS } ach_unit_t;
 

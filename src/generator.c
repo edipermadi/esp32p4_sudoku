@@ -4,21 +4,25 @@
 #include <stdlib.h>
 
 const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
-const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6"};
+const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw"};
 
 /* ---------------------------------------------------------------- geometry */
 
-/* ~14 KB: from malloc, which the sketch sends to PSRAM (internal RAM is
+/* ~25 KB: from malloc, which the sketch sends to PSRAM (internal RAM is
  * kept for Wi-Fi and the video encoder) */
 static sudoku_geom_t *s_geom;
 
-static void geom_build(sudoku_geom_t *g, int n, int box_h, int box_w, bool diag)
+/* regions: Jigsaw's region map, NULL = boxes of box_h x box_w */
+static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_w, bool diag, bool windows,
+                       const uint8_t *regions)
 {
     memset(g, 0, sizeof(*g));
+    g->variant = (uint8_t)variant;
     g->n = (uint8_t)n;
     g->box_h = (uint8_t)box_h;
     g->box_w = (uint8_t)box_w;
     g->diag = diag;
+    g->windows = windows;
     g->all = (uint16_t)(((1u << (n + 1)) - 1) & ~1u);
     for (int r = 0; r < n; r++) {
         for (int c = 0; c < n; c++) {
@@ -34,9 +38,12 @@ static void geom_build(sudoku_geom_t *g, int n, int box_h, int box_w, bool diag)
         int ids[5], nid = 0;
         ids[nid++] = r;
         ids[nid++] = 9 + c;
-        ids[nid++] = 18 + (r / box_h) * boxes_across + c / box_w;
+        g->region[cell] = (uint8_t)(regions ? regions[cell] : (r / box_h) * boxes_across + c / box_w);
+        ids[nid++] = 18 + g->region[cell];
         if (diag && r == c) ids[nid++] = UNIT_DIAG_MAIN;
         if (diag && r + c == n - 1) ids[nid++] = UNIT_DIAG_ANTI;   /* centre cell: both (5 units) */
+        int w = sudoku_geom_window(g, cell);
+        if (w >= 0) ids[nid++] = UNIT_WINDOW + w;
         for (int i = 0; i < nid; i++) {
             int u = ids[i];
             g->unit[u][fill[u]++] = (uint8_t)cell;
@@ -70,16 +77,33 @@ void sudoku_geom_init(void)
     if (s_geom) return;
     sudoku_geom_t *g = calloc(VAR_COUNT, sizeof(sudoku_geom_t));
     if (!g) abort();                                /* at start-up, with megabytes free */
-    geom_build(&g[VAR_CLASSIC], 9, 3, 3, false);
-    geom_build(&g[VAR_X], 9, 3, 3, true);
-    geom_build(&g[VAR_MINI], 6, 2, 3, false);
+    geom_build(&g[VAR_CLASSIC], VAR_CLASSIC, 9, 3, 3, false, false, NULL);
+    geom_build(&g[VAR_X], VAR_X, 9, 3, 3, true, false, NULL);
+    geom_build(&g[VAR_MINI], VAR_MINI, 6, 2, 3, false, false, NULL);
+    geom_build(&g[VAR_HYPER], VAR_HYPER, 9, 3, 3, false, true, NULL);
+    g[VAR_JIGSAW] = g[VAR_CLASSIC];                 /* placeholder: a Jigsaw board needs its regions */
     s_geom = g;
 }
 
 const sudoku_geom_t *sudoku_geom(int variant)
 {
     sudoku_geom_init();
-    return &s_geom[variant >= 0 && variant < VAR_COUNT ? variant : VAR_CLASSIC];
+    if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW) variant = VAR_CLASSIC;
+    return &s_geom[variant];
+}
+
+bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out)
+{
+    int count[9] = {0};
+    for (int c = 0; c < 81; c++) {
+        if (regions[c] > 8) return false;
+        count[regions[c]]++;
+    }
+    for (int i = 0; i < 9; i++) {
+        if (count[i] != 9) return false;
+    }
+    geom_build(out, VAR_JIGSAW, 9, 3, 3, false, false, regions);
+    return true;
 }
 
 /* the units of a cell (3, 4 or, at the centre of an X board, 5) */
@@ -115,6 +139,8 @@ typedef struct {
     uint8_t v[81];
     uint16_t um[UNITS_MAX];             /* bit d = digit d used in the unit */
     int8_t units[81][5];                /* the cell's units, -1 terminated */
+    uint32_t nodes, node_limit;         /* node_limit 0 = no limit; reached: aborted */
+    bool aborted;
 } grid_t;
 
 static void grid_set(grid_t *g, int i, int d)
@@ -161,6 +187,10 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
 static int search(grid_t *g, int limit, uint32_t *rng)
 {
     const sudoku_geom_t *G = g->G;
+    if (g->node_limit && ++g->nodes > g->node_limit) {   /* a Jigsaw layout that's hard to fill: give up */
+        g->aborted = true;
+        return limit;
+    }
     int best = -1, best_n = 10;
     uint16_t best_free = 0;
     for (int k = 0; k < G->ncells; k++) {
@@ -195,28 +225,39 @@ static int search(grid_t *g, int limit, uint32_t *rng)
     return count;
 }
 
-int sudoku_count_solutions(int variant, const uint8_t cells[81], int limit)
+/* solutions up to limit, giving up after node_limit search steps (0 = never): -1 then */
+static int count_bounded(const sudoku_geom_t *G, const uint8_t cells[81], int limit, uint32_t node_limit)
 {
     static grid_t g;                                 /* off the caller's stack (one caller at a time) */
-    if (!grid_load(&g, sudoku_geom(variant), cells)) return 0;
-    return search(&g, limit, NULL);
+    if (!grid_load(&g, G, cells)) return 0;
+    g.node_limit = node_limit;
+    int n = search(&g, limit, NULL);
+    return g.aborted ? -1 : n;
 }
 
-bool sudoku_solve(int variant, const uint8_t cells[81], uint8_t out[81])
+int sudoku_count_solutions(const sudoku_geom_t *G, const uint8_t cells[81], int limit)
+{
+    return count_bounded(G, cells, limit, 0);
+}
+
+bool sudoku_solve(const sudoku_geom_t *G, const uint8_t cells[81], uint8_t out[81])
 {
     static grid_t g;                                 /* off the (small) LVGL task stack */
-    if (!grid_load(&g, sudoku_geom(variant), cells)) return false;
+    if (!grid_load(&g, G, cells)) return false;
     if (search(&g, 1, NULL) < 1) return false;
     memcpy(out, g.v, 81);
     return true;
 }
 
-static void random_full_grid(const sudoku_geom_t *G, uint8_t out[81], uint32_t *rng)
+/* false if node_limit (0 = none) was reached first */
+static bool random_full_grid(const sudoku_geom_t *G, uint8_t out[81], uint32_t *rng, uint32_t node_limit)
 {
     static grid_t g;
     grid_load(&g, G, NULL);
-    search(&g, 1, rng);
+    g.node_limit = node_limit;
+    int n = search(&g, 1, rng);
     memcpy(out, g.v, 81);
+    return n >= 1 && !g.aborted;
 }
 
 /* ---------------------------------------------------------------- human-style grading */
@@ -312,11 +353,12 @@ static bool locked_candidates(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
     bool changed = false;
-    for (int b = 18; b < 27; b++) {
+    for (int bi = 0; bi < 9 + 4; bi++) {               /* boxes (regions), then Hyper windows */
+        int b = bi < 9 ? 18 + bi : UNIT_WINDOW + bi - 9;
         if (!G->active[b]) continue;
         for (int oi = 0; oi < G->nunits; oi++) {
             int other = G->unit_ids[oi];
-            if (other >= 18 && other < 27) continue;           /* boxes don't overlap each other */
+            if (other == b || (b < 27 && other >= 18 && other < 27)) continue;   /* boxes don't overlap */
             for (int d = 1; d <= G->n; d++) {
                 uint16_t m = (uint16_t)(1u << d);
                 int in_both = 0, box_only = 0, line_only = 0;
@@ -429,10 +471,9 @@ static int easy_min_clues(const sudoku_geom_t *G)
     return G->n == 9 ? 36 : 16;
 }
 
-int sudoku_grade(int variant, const uint8_t givens[81])
+int sudoku_grade(const sudoku_geom_t *G, const uint8_t givens[81])
 {
-    const sudoku_geom_t *G = sudoku_geom(variant);
-    if (sudoku_count_solutions(variant, givens, 2) != 1) return -1;
+    if (sudoku_count_solutions(G, givens, 2) != 1) return -1;   /* exact, also for Jigsaw */
     int clues = 0;
     for (int k = 0; k < G->ncells; k++) clues += givens[G->cells[k]] != 0;
     switch (technique_tier(G, givens)) {
@@ -447,8 +488,7 @@ int sudoku_grade(int variant, const uint8_t givens[81])
 /* one attempt: clues taken away in random symmetric pairs (a cell and its
  * 180-degree turn) while the solution stays unique; for Easy, stops at a
  * random few clues above the Easy minimum */
-static void dig(int variant, const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81], gen_level_t level,
-                uint32_t *rng)
+static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81], gen_level_t level, uint32_t *rng)
 {
     memcpy(out, full, 81);
     const int n = G->n;
@@ -470,13 +510,16 @@ static void dig(int variant, const sudoku_geom_t *G, const uint8_t full[81], uin
      * mostly gives Expert there). Classic digs as it always has, so its
      * puzzles for a seed (the daily puzzle) stay the same. */
     int max_tier = 3;
-    if (variant != VAR_CLASSIC && level == GEN_MEDIUM) max_tier = 1;
-    if (variant != VAR_CLASSIC && level == GEN_HARD) max_tier = 2;
+    if (G->variant != VAR_CLASSIC && level == GEN_MEDIUM) max_tier = 1;
+    if (G->variant != VAR_CLASSIC && level == GEN_HARD) max_tier = 2;
+    /* Jigsaw: a uniqueness check that takes too long keeps the clue (near the
+     * minimum, its plain search can take thousands of times longer) */
+    const uint32_t node_limit = G->variant == VAR_JIGSAW ? 4000 : 0;
     for (int k = 0; k < no && clues > stop; k++) {
         int a = order[k], b = (n - 1 - a / 9) * 9 + (n - 1 - a % 9);
         uint8_t va = out[a], vb = out[b];
         out[a] = out[b] = 0;
-        if (sudoku_count_solutions(variant, out, 2) == 1 && (max_tier == 3 || technique_tier(G, out) <= max_tier)) {
+        if (count_bounded(G, out, 2, node_limit) == 1 && (max_tier == 3 || technique_tier(G, out) <= max_tier)) {
             clues -= a == b ? 1 : 2;
         } else {
             out[a] = va;
@@ -485,25 +528,114 @@ static void dig(int variant, const sudoku_geom_t *G, const uint8_t full[81], uin
     }
 }
 
-bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], gen_level_t *got_level)
+/* ---------------------------------------------------------------- Jigsaw regions */
+
+/* is region `reg` of the map one connected piece (4-neighbours)? */
+static bool region_connected(const uint8_t map[81], int reg)
 {
-    const sudoku_geom_t *G = sudoku_geom(variant);
+    uint8_t seen[81] = {0}, stack[81];
+    int sp = 0, start = -1, total = 0, reached = 0;
+    for (int c = 0; c < 81; c++) {
+        if (map[c] != reg) continue;
+        total++;
+        if (start < 0) start = c;
+    }
+    if (start < 0) return false;
+    stack[sp++] = (uint8_t)start;
+    seen[start] = 1;
+    while (sp) {
+        int c = stack[--sp], r = c / 9, k = c % 9;
+        reached++;
+        const int nb[4] = {k > 0 ? c - 1 : -1, k < 8 ? c + 1 : -1, r > 0 ? c - 9 : -1, r < 8 ? c + 9 : -1};
+        for (int i = 0; i < 4; i++) {
+            int o = nb[i];
+            if (o >= 0 && !seen[o] && map[o] == reg) {
+                seen[o] = 1;
+                stack[sp++] = (uint8_t)o;
+            }
+        }
+    }
+    return reached == total;
+}
+
+/* A random Jigsaw map: the 3x3 boxes, reshaped by trading cells across
+ * region borders (a cell of A goes to B, a cell of B next to A goes to A)
+ * while both regions stay in one piece. */
+static void jigsaw_map(uint8_t map[81], uint32_t *rng)
+{
+    for (int c = 0; c < 81; c++) map[c] = (uint8_t)((c / 27) * 3 + (c % 9) / 3);
+    int done = 0;
+    for (int tries = 0; tries < 20000 && done < 90; tries++) {
+        int a = (int)(rnd(rng) % 81), r = a / 9, k = a % 9;
+        int dir = (int)(rnd(rng) % 4);
+        int b = dir == 0 ? (k > 0 ? a - 1 : -1) : dir == 1 ? (k < 8 ? a + 1 : -1)
+              : dir == 2 ? (r > 0 ? a - 9 : -1) : (r < 8 ? a + 9 : -1);
+        if (b < 0 || map[a] == map[b]) continue;
+        int A = map[a], B = map[b];
+        /* a cell of B (not a) that touches A elsewhere: it goes to A */
+        uint8_t cand[81];
+        int nc = 0;
+        for (int c = 0; c < 81; c++) {
+            if (map[c] != B) continue;
+            int cr = c / 9, ck = c % 9;
+            const int nb[4] = {ck > 0 ? c - 1 : -1, ck < 8 ? c + 1 : -1, cr > 0 ? c - 9 : -1, cr < 8 ? c + 9 : -1};
+            for (int i = 0; i < 4; i++) {
+                if (nb[i] >= 0 && nb[i] != a && map[nb[i]] == A) {
+                    cand[nc++] = (uint8_t)c;
+                    break;
+                }
+            }
+        }
+        if (!nc) continue;
+        int c = cand[rnd(rng) % (uint32_t)nc];
+        map[a] = (uint8_t)B;
+        map[c] = (uint8_t)A;
+        if (region_connected(map, A) && region_connected(map, B)) {
+            done++;
+        } else {
+            map[a] = (uint8_t)A;
+            map[c] = (uint8_t)B;
+        }
+    }
+}
+
+/* ---------------------------------------------------------------- generating (all variants) */
+
+bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], uint8_t regions[81],
+                     gen_level_t *got_level)
+{
+    static sudoku_geom_t *jig;                      /* the Jigsaw board being tried (PSRAM) */
+    const bool jigsaw = variant == VAR_JIGSAW;
+    if (jigsaw && !jig && !(jig = malloc(sizeof(*jig)))) return false;
+    const sudoku_geom_t *G = jigsaw ? jig : sudoku_geom(variant);
     uint32_t rng = seed ? seed : 1;
     int tries = level == GEN_EXPERT ? 400 : (level == GEN_HARD ? 200 : 60);
     if (G->n == 6 && level == GEN_HARD) tries = 2000;   /* rare on 6x6, but an attempt is cheap there */
-    uint8_t full[81], cand[81];
+    uint8_t full[81], cand[81], map[81];
     int best = -1;
     memset(givens, 0, 81);
     for (int t = 0; t < tries; t++) {
-        random_full_grid(G, full, &rng);
-        dig(variant, G, full, cand, level, &rng);
-        int g = sudoku_grade(variant, cand);
+        if (jigsaw) {                               /* a new shape every few tries */
+            if (t % 4 == 0) {
+                jigsaw_map(map, &rng);
+                sudoku_geom_jigsaw(map, jig);
+            }
+            if (!random_full_grid(G, full, &rng, 20000)) {   /* no quick fill: another shape */
+                t += 3 - t % 4;
+                continue;
+            }
+        } else {
+            random_full_grid(G, full, &rng, 0);
+        }
+        dig(G, full, cand, level, &rng);
+        int g = sudoku_grade(G, cand);
         if (g < 0) continue;
         /* closest to the level asked for, preferring the easier side */
         if (best < 0 || (g <= (int)level && (g > best || best > (int)level)) ||
             (best > (int)level && g < best)) {
             best = g;
             memcpy(givens, cand, 81);
+            if (jigsaw && regions) memcpy(regions, G->region, 81);
         }
         if (g == (int)level) break;
     }
@@ -517,8 +649,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
 static int find_hidden_single(const logic_t *L, int *digit, int *unit)
 {
     const sudoku_geom_t *G = L->G;
-    static const int order[4][2] = {{18, 27}, {0, 9}, {9, 18}, {27, 29}};
-    for (int o = 0; o < 4; o++) {
+    static const int order[5][2] = {{18, 27}, {0, 9}, {9, 18}, {27, 29}, {UNIT_WINDOW, UNIT_WINDOW + 4}};
+    for (int o = 0; o < 5; o++) {
         for (int u = order[o][0]; u < order[o][1]; u++) {
             if (!G->active[u]) continue;
             for (int d = 1; d <= G->n; d++) {
@@ -552,9 +684,8 @@ static int find_naked_single(const logic_t *L, int *digit)
     return -1;
 }
 
-bool sudoku_next_step(int variant, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out)
+bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out)
 {
-    const sudoku_geom_t *G = sudoku_geom(variant);
     memset(out, 0, sizeof(*out));
     out->cell = -1;
     out->unit = -1;
@@ -607,9 +738,8 @@ bool sudoku_next_step(int variant, const uint8_t vals[81], const uint8_t solutio
     return best >= 0;
 }
 
-int sudoku_unit_cell(int variant, int unit, int k)
+int sudoku_unit_cell(const sudoku_geom_t *G, int unit, int k)
 {
-    const sudoku_geom_t *G = sudoku_geom(variant);
     if (unit < 0 || unit >= UNITS_MAX || !G->active[unit] || k < 0 || k >= G->n) return -1;
     return G->unit[unit][k];
 }

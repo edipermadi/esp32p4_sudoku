@@ -72,7 +72,7 @@ static int32_t s_player;                      /* worker: who is playing (players
 static char s_player_name[STORE_NAME_LEN];
 
 /* results handed to the LVGL task */
-static stats_view_t s_view;
+static stats_view_t *s_view;                  /* PSRAM */
 static bool s_view_new;
 static stats_arrays_t *s_cache;               /* set after open / switch, taken once */
 static store_prefs_t s_prefs_out;
@@ -102,6 +102,8 @@ static stats_plays_t *s_plays;       /* CMD_PLAYS result (PSRAM) */
 static struct {
     int level, id, variant;
     uint8_t givens[81];
+    uint8_t regions[81];
+    bool has_regions;            /* a Jigsaw puzzle: regions is its map */
     char day[12];                /* daily: 'YYYY-MM-DD', "" otherwise */
     bool ok;
     bool solved_today;           /* CMD_DAILY results */
@@ -116,6 +118,13 @@ static stats_achievements_t *s_ach;  /* CMD_ACH result */
 static bool s_ach_new;
 static char s_unlocked[160];         /* titles unlocked by the last solve */
 static int s_unlocked_n;
+
+/* a result buffer in PSRAM (internal RAM is kept for Wi-Fi and the video encoder) */
+static void *psram_buf(void **p, size_t size)
+{
+    if (!*p) *p = heap_caps_calloc(1, size, MALLOC_CAP_SPIRAM);
+    return *p;
+}
 
 static bool moves_bufs(void)
 {
@@ -201,7 +210,8 @@ static const char SCHEMA[] =
     "  givens TEXT NOT NULL,"                            /* 81 digits row by row, 0 = empty */
     "  created_at INTEGER,"
     "  day TEXT,"                                        /* daily puzzle: its date 'YYYY-MM-DD', else NULL */
-    "  variant INTEGER NOT NULL DEFAULT 0);";            /* 0 classic, 1 X-Sudoku, 2 mini 6x6 */
+    "  variant INTEGER NOT NULL DEFAULT 0,"              /* 0 classic, 1 X-Sudoku, 2 mini 6x6, 3 Hyper, 4 Jigsaw */
+    "  regions TEXT);";                                  /* Jigsaw: 81 digits 0-8, the region of each cell */
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -239,6 +249,39 @@ static const char SQL_SOLVE_INSERT[] =
     "INSERT INTO solves(player_id, puzzle, level, number, seconds, mistakes, finished_at, started_at, hints, moves)"
     " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10)";
 
+const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
+                                                  "Mini 6x6"};
+const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Mini"};
+
+int stats_kind_of(int variant, bool daily)
+{
+    if (daily) return KIND_DAILY;
+    switch (variant) {
+    case VAR_X: return KIND_X;
+    case VAR_HYPER: return KIND_HYPER;
+    case VAR_JIGSAW: return KIND_JIGSAW;
+    case VAR_MINI: return KIND_MINI;
+    default: return KIND_NEW;
+    }
+}
+
+/* "X-Sudoku Hard" -> KIND_X, GEN_HARD; false for any other level name */
+static bool kind_level_of(const char *name, int *kind, int *level)
+{
+    for (int k = 0; name && k < KIND_COUNT; k++) {
+        size_t n = strlen(STATS_KIND_PREFIX[k]);
+        if (strncmp(name, STATS_KIND_PREFIX[k], n) != 0 || name[n] != ' ') continue;
+        for (int l = 0; l < GEN_LEVELS; l++) {
+            if (strcmp(name + n + 1, GEN_LEVEL_NAMES[l]) == 0) {
+                *kind = k;
+                *level = l;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static int query_int(const char *sql);
 static int gen_level_of(int gid, bool *daily, int *variant);
 static void ach_sync(int32_t player, bool announce);
@@ -252,8 +295,8 @@ static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
         bool daily = false;
         int variant = VAR_CLASSIC;
         int g = gen_level_of(id - PUZZLE_GEN_BASE, &daily, &variant);
-        const char *kind = daily ? "Daily" : (variant == VAR_X ? "X-Sudoku" : (variant == VAR_MINI ? "Mini" : "Generated"));
-        snprintf(lv, sizeof(lv), "%s %s", kind, g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
+        snprintf(lv, sizeof(lv), "%s %s", STATS_KIND_PREFIX[stats_kind_of(variant, daily)],
+                 g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
         sqlite3_bind_text(st, 2, lv, -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(st, 3, id - PUZZLE_GEN_BASE);
         return;
@@ -451,6 +494,7 @@ static bool upgrade_schema(void)
     if (!has_column("saved_game", "moves")) ok &= exec("ALTER TABLE saved_game ADD COLUMN moves BLOB");
     if (!has_column("generated", "day")) ok &= exec("ALTER TABLE generated ADD COLUMN day TEXT");
     if (!has_column("generated", "variant")) ok &= exec("ALTER TABLE generated ADD COLUMN variant INTEGER NOT NULL DEFAULT 0");
+    if (!has_column("generated", "regions")) ok &= exec("ALTER TABLE generated ADD COLUMN regions TEXT");
 
     bool old_solves = !has_column("solves", "player_id");
     bool old_stats = !has_column("puzzle_stats", "player_id");
@@ -757,10 +801,12 @@ static void do_solve(const cmd_t *c)
 
 static void do_query(int level)
 {
-    static stats_view_t v;                    /* worker-side scratch */
-    memset(&v, 0, sizeof(v));
-    v.level = level;
-    v.player_id = s_player;
+    static stats_view_t *vp;                  /* worker-side scratch (PSRAM) */
+    if (!psram_buf((void **)&vp, sizeof(*vp)) || !psram_buf((void **)&s_view, sizeof(*s_view))) return;
+    stats_view_t *const v = vp;
+    memset(v, 0, sizeof(*v));
+    v->level = level;
+    v->player_id = s_player;
 
     /* per level: same aggregates the screen shows (closed database: empty result) */
     sqlite3_stmt *st;
@@ -771,10 +817,12 @@ static void do_query(int level)
         sqlite3_bind_int(st, 1, s_player);
         while (sqlite3_step(st) == SQLITE_ROW) {
             const char *name = (const char *)sqlite3_column_text(st, 0);
-            int c = 0;
+            int c = 0, kind, klevel;
             while (c < PUZZLE_COLLECTION_COUNT && strcmp(puzzle_collections[c].name, name ? name : "") != 0) c++;
-            if (c == PUZZLE_COLLECTION_COUNT) continue;   /* a level this firmware doesn't have */
-            stats_level_t *l = &v.levels[c];
+            stats_level_t *l;
+            if (c < PUZZLE_COLLECTION_COUNT) l = &v->levels[c];
+            else if (kind_level_of(name, &kind, &klevel)) l = &v->kinds[kind][klevel];   /* made on the board */
+            else continue;                                /* a level this firmware doesn't have */
             l->solved = sqlite3_column_int(st, 1);
             l->perfect = (uint16_t)sqlite3_column_int(st, 2);
             l->known = sqlite3_column_int(st, 3);
@@ -786,7 +834,7 @@ static void do_query(int level)
         sqlite3_finalize(st);
     }
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        stats_level_t *l = &v.levels[c], *t = &v.total;
+        stats_level_t *l = &v->levels[c], *t = &v->total;
         t->solved += l->solved;
         t->perfect += l->perfect;
         t->known += l->known;
@@ -803,8 +851,8 @@ static void do_query(int level)
             " WHERE player_id = ?1 AND level = ?2 ORDER BY number", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_player);
         sqlite3_bind_text(st, 2, puzzle_collections[level].name, -1, SQLITE_STATIC);
-        while (v.n_puzzles < STATS_MAX_PUZZLES && sqlite3_step(st) == SQLITE_ROW) {
-            stats_puzzle_t *p = &v.puzzles[v.n_puzzles++];
+        while (v->n_puzzles < STATS_MAX_PUZZLES && sqlite3_step(st) == SQLITE_ROW) {
+            stats_puzzle_t *p = &v->puzzles[v->n_puzzles++];
             p->number = sqlite3_column_int(st, 0);
             int best = sqlite3_column_int(st, 1);
             p->best = best > 0xFFFF ? 0xFFFF : best;
@@ -820,16 +868,20 @@ static void do_query(int level)
         sqlite3_finalize(st);
     }
 
-    /* progress chart: the newest solves at this level (all levels: any), oldest first */
-    if (s_db && sqlite3_prepare_v2(s_db, level >= 0 && level < PUZZLE_COLLECTION_COUNT
+    /* progress chart: the newest solves at this level (a kind: its levels; all levels: any), oldest first */
+    char like[24];
+    bool coll = level >= 0 && level < PUZZLE_COLLECTION_COUNT;
+    bool kind = level >= PUZZLE_COLLECTION_COUNT && level < STATS_LEVEL_KIND(KIND_COUNT);
+    if (kind) snprintf(like, sizeof(like), "%s %%", STATS_KIND_PREFIX[level - PUZZLE_COLLECTION_COUNT]);
+    if (s_db && sqlite3_prepare_v2(s_db, coll
                 ? "SELECT seconds FROM solves WHERE player_id = ?1 AND level = ?3 ORDER BY id DESC LIMIT ?2"
+                : kind ? "SELECT seconds FROM solves WHERE player_id = ?1 AND level LIKE ?3 ORDER BY id DESC LIMIT ?2"
                 : "SELECT seconds FROM solves WHERE player_id = ?1 ORDER BY id DESC LIMIT ?2",
                 -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_player);
         sqlite3_bind_int(st, 2, STATS_RECENT);
-        if (level >= 0 && level < PUZZLE_COLLECTION_COUNT) {
-            sqlite3_bind_text(st, 3, puzzle_collections[level].name, -1, SQLITE_STATIC);
-        }
+        if (coll) sqlite3_bind_text(st, 3, puzzle_collections[level].name, -1, SQLITE_STATIC);
+        if (kind) sqlite3_bind_text(st, 3, like, -1, SQLITE_TRANSIENT);
         uint16_t newest_first[STATS_RECENT];
         int n = 0;
         while (n < STATS_RECENT && sqlite3_step(st) == SQLITE_ROW) {
@@ -837,12 +889,12 @@ static void do_query(int level)
             newest_first[n++] = (uint16_t)(sec > 0xFFFF ? 0xFFFF : (sec < 1 ? 1 : sec));
         }
         sqlite3_finalize(st);
-        for (int i = 0; i < n; i++) v.recent[i] = newest_first[n - 1 - i];
-        v.n_recent = n;
+        for (int i = 0; i < n; i++) v->recent[i] = newest_first[n - 1 - i];
+        v->n_recent = n;
     }
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    s_view = v;
+    *s_view = *v;
     s_view_new = true;
     xSemaphoreGive(s_lock);
 }
@@ -1064,10 +1116,15 @@ static void do_gen_add(void)
     for (int i = 0; i < 81; i++) cells[i] = (char)('0' + (s_gen.givens[i] <= 9 ? s_gen.givens[i] : 0));
     cells[81] = 0;
     time_t now = time(NULL);
-    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant)"
-                                         " VALUES(?1, ?2, ?3, ?4, ?5)", -1, &st, NULL) == SQLITE_OK) {
+    char reg[82];
+    for (int i = 0; i < 81; i++) reg[i] = (char)('0' + (s_gen.regions[i] <= 8 ? s_gen.regions[i] : 0));
+    reg[81] = 0;
+    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant, regions)"
+                                         " VALUES(?1, ?2, ?3, ?4, ?5, ?6)", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.level);
         sqlite3_bind_int(st, 5, s_gen.variant);
+        if (s_gen.has_regions) sqlite3_bind_text(st, 6, reg, 81, SQLITE_STATIC);
+        else sqlite3_bind_null(st, 6);
         sqlite3_bind_text(st, 2, cells, 81, SQLITE_STATIC);
         if (s_gen.day[0]) sqlite3_bind_text(st, 4, s_gen.day, -1, SQLITE_STATIC);
         else sqlite3_bind_null(st, 4);
@@ -1086,8 +1143,9 @@ static void do_gen_get(void)
 {
     s_gen.ok = false;
     sqlite3_stmt *st;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day, variant FROM generated WHERE id = ?1", -1, &st,
-                                   NULL) == SQLITE_OK) {
+    s_gen.has_regions = false;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day, variant, regions FROM generated WHERE id = ?1",
+                                   -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.id);
         if (sqlite3_step(st) == SQLITE_ROW) {
             const char *g = (const char *)sqlite3_column_text(st, 1);
@@ -1097,6 +1155,11 @@ static void do_gen_get(void)
                 s_gen.level = sqlite3_column_int(st, 0);
                 s_gen.variant = sqlite3_column_int(st, 3);
                 for (int i = 0; i < 81; i++) s_gen.givens[i] = (g[i] >= '0' && g[i] <= '9') ? g[i] - '0' : 0;
+                const char *r = (const char *)sqlite3_column_text(st, 4);
+                if (r && strlen(r) == 81) {
+                    for (int i = 0; i < 81; i++) s_gen.regions[i] = (r[i] >= '0' && r[i] <= '8') ? r[i] - '0' : 0;
+                    s_gen.has_regions = true;
+                }
                 s_gen.ok = true;
             }
         }
@@ -1211,13 +1274,6 @@ static void board_fill(stats_board_t *b, const char *day)
     sqlite3_finalize(st);
 }
 
-/* a result buffer in PSRAM (internal RAM is kept for Wi-Fi and the video encoder) */
-static void *psram_buf(void **p, size_t size)
-{
-    if (!*p) *p = heap_caps_calloc(1, size, MALLOC_CAP_SPIRAM);
-    return *p;
-}
-
 static void do_board(const char *day)
 {
     static stats_board_t *b;
@@ -1253,7 +1309,8 @@ static void do_rank(void)
  * The keys are stored in the achievements table: don't rename them.
  */
 #define HARD_OR_MORE "(level LIKE '%Hard' OR level LIKE '%Expert')"
-#define CLASSIC_9X9  "(level NOT LIKE 'Mini %' AND level NOT LIKE 'X-Sudoku %')"
+#define CLASSIC_9X9  "(level NOT LIKE 'Mini %' AND level NOT LIKE 'X-Sudoku %' AND level NOT LIKE 'Hyper %'" \
+                     " AND level NOT LIKE 'Jigsaw %')"
 #define DAILY_DAYS \
     "SELECT DISTINCT g.day FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id" \
     " WHERE s.player_id = ?1 AND g.day IS NOT NULL ORDER BY g.day"
@@ -1295,6 +1352,17 @@ static const ach_def_t ACH[] = {
     {"variety", "Variety", "Solve a Classic, an X-Sudoku and a Mini 6x6.", 3, ACH_UNIT_COUNT,
      "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
      " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'X-Sudoku %')"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Mini %')"},
+    {"hyper", "Window cleaner", "Solve a Hyper Sudoku.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'Hyper %'"},
+    {"jigsaw", "Puzzle pieces", "Solve a Jigsaw Sudoku.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'Jigsaw %'"},
+    {"variety_5", "Collector", "Solve all five kinds: Classic, X-Sudoku, Hyper, Jigsaw and Mini 6x6.", 5,
+     ACH_UNIT_COUNT,
+     "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'X-Sudoku %')"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Hyper %')"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Jigsaw %')"
      " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Mini %')"},
     {"fresh_10", "Fresh off the press", "Solve 10 puzzles made with New puzzle.", 10, ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id"
@@ -1858,20 +1926,23 @@ static bool gen_call(cmd_type_t type)
     return xSemaphoreTake(s_gen_done, pdMS_TO_TICKS(3000)) == pdTRUE && s_gen.ok;
 }
 
-int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const char *day)
+int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *day)
 {
     s_gen.variant = variant;
     s_gen.level = level;
     memcpy(s_gen.givens, givens, 81);
+    s_gen.has_regions = regions != NULL;
+    if (regions) memcpy(s_gen.regions, regions, 81);
     snprintf(s_gen.day, sizeof(s_gen.day), "%s", day ? day : "");
     return gen_call(CMD_GEN_ADD) ? s_gen.id : -1;
 }
 
-bool stats_db_gen_get(int id, uint8_t givens[81], int *variant, int *level, char day[12])
+bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, int *variant, int *level, char day[12])
 {
     s_gen.id = id;
     if (!gen_call(CMD_GEN_GET)) return false;
     memcpy(givens, s_gen.givens, 81);
+    if (regions && s_gen.has_regions) memcpy(regions, s_gen.regions, 81);
     if (variant) *variant = s_gen.variant;
     if (level) *level = s_gen.level;
     if (day) snprintf(day, 12, "%s", s_gen.day);
@@ -1993,10 +2064,10 @@ void stats_db_query(int level)
 
 bool stats_db_take_view(stats_view_t *out)
 {
-    if (!s_lock) return false;
+    if (!s_lock || !s_view) return false;
     xSemaphoreTake(s_lock, portMAX_DELAY);
     bool fresh = s_view_new;
-    if (fresh) *out = s_view;
+    if (fresh) *out = *s_view;
     s_view_new = false;
     xSemaphoreGive(s_lock);
     return fresh;

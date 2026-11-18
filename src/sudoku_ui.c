@@ -141,6 +141,7 @@ typedef struct {
 static uint16_t g_id = STORE_NO_GAME;
 static int      g_var = VAR_CLASSIC;     /* the puzzle's variant (generator.h) */
 static const sudoku_geom_t *g_geo;       /* and its geometry: units, peers, size */
+static sudoku_geom_t *g_geo_buf;         /* PSRAM: a Jigsaw puzzle's geometry (its regions) */
 static uint8_t  g_given[81];
 static board_t  g_b;
 static bool     g_conflict[81];
@@ -200,14 +201,14 @@ static stats_player_t p_players[STATS_MAX_PLAYERS];
 static int p_count = -1;                 /* last list from sudoku.db, -1 = none yet */
 
 /* statistics screen: row 0 of the left column is "All levels" */
-#define X_ROWS (PUZZLE_COLLECTION_COUNT + 1)
+#define X_ROWS (PUZZLE_COLLECTION_COUNT + 1 + KIND_COUNT)   /* all, collections, kinds made on the board */
 static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
 static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_player_dd;
 static lv_obj_t *x_chart, *x_plot, *x_trend, *x_chart_btn;   /* progress chart (instead of the table) */
 static bool      x_chart_mode;            /* chart shown (kept until power-off) */
 static bool      x_from_db;               /* what the info popup says the numbers come from */
 static char      x_player_txt[STORE_NAME_LEN + 8];    /* closed dropdown: icon + name */
-static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
+static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, then the kinds (STATS_LEVEL_KIND) */
 
 /* settings screen */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
@@ -277,22 +278,27 @@ static const char *ordinal(int n)
 /* The puzzles made on the board live in sudoku.db (stats_db_gen_*); the last
  * few are cached here, and without a card that's the only place they are. */
 #define GEN_CACHE 24
-static struct {
+typedef struct {
     uint16_t id;                        /* 0 = free slot */
     uint8_t variant;                    /* sudoku_variant_t */
     uint8_t level;
+    uint8_t regions[81];                /* Jigsaw: the region map */
     uint8_t givens[81];
     char day[12];                       /* daily puzzle's date, "" otherwise */
-} s_gen_cache[GEN_CACHE];
+} gen_cache_t;
+static gen_cache_t *s_gen_cache;          /* GEN_CACHE entries, PSRAM */
 static int s_gen_cache_next;
 static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
 
-static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const char *day)
+static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions,
+                          const char *day)
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) return;
     }
     s_gen_cache[s_gen_cache_next].id = id;
+    if (regions) memcpy(s_gen_cache[s_gen_cache_next].regions, regions, 81);
+    else memset(s_gen_cache[s_gen_cache_next].regions, 0, 81);
     s_gen_cache[s_gen_cache_next].variant = (uint8_t)variant;
     s_gen_cache[s_gen_cache_next].level = (uint8_t)level;
     memcpy(s_gen_cache[s_gen_cache_next].givens, givens, 81);
@@ -301,11 +307,12 @@ static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t giv
 }
 
 /* givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown */
-static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12])
+static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, int *variant, int *level, char day[12])
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) {
             if (givens) memcpy(givens, s_gen_cache[i].givens, 81);
+            if (regions) memcpy(regions, s_gen_cache[i].regions, 81);
             if (variant) *variant = s_gen_cache[i].variant;
             if (level) *level = s_gen_cache[i].level;
             if (day) snprintf(day, 12, "%s", s_gen_cache[i].day);
@@ -313,22 +320,28 @@ static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *leve
         }
     }
     if (id >= PUZZLE_GEN_RAM_BASE) return false;          /* RAM-only, and gone */
-    uint8_t g[81];
+    uint8_t g[81], reg[81] = {0};
     int lv, var = VAR_CLASSIC;
     char d[12];
-    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, &var, &lv, d)) return false;
+    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, reg, &var, &lv, d)) return false;
     if (var < 0 || var >= VAR_COUNT) var = VAR_CLASSIC;
-    gen_cache_put(id, var, lv, g, d);
+    gen_cache_put(id, var, lv, g, reg, d);
     if (givens) memcpy(givens, g, 81);
+    if (regions) memcpy(regions, reg, 81);
     if (variant) *variant = var;
     if (level) *level = lv;
     if (day) snprintf(day, 12, "%s", d);
     return true;
 }
 
+static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12])
+{
+    return gen_lookup_full(id, givens, NULL, variant, level, day);
+}
+
 static bool gen_lookup(uint16_t id, uint8_t *givens, int *variant, int *level)
 {
-    return gen_lookup_day(id, givens, variant, level, NULL);
+    return gen_lookup_full(id, givens, NULL, variant, level, NULL);
 }
 
 /* variant of any puzzle: the built-in ones are classic */
@@ -337,6 +350,18 @@ static int puzzle_variant(uint16_t id)
     int v = VAR_CLASSIC;
     if (puzzle_is_generated(id)) gen_lookup(id, NULL, &v, NULL);
     return v;
+}
+
+/* The board of any puzzle: a fixed variant's geometry, or for a Jigsaw
+ * puzzle its regions built into buf. *variant (may be NULL) is set too. */
+static const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
+{
+    int v = VAR_CLASSIC;
+    uint8_t reg[81];
+    if (puzzle_is_generated(id)) gen_lookup_full(id, NULL, reg, &v, NULL, NULL);
+    if (variant) *variant = v;
+    if (v == VAR_JIGSAW && buf && sudoku_geom_jigsaw(reg, buf)) return buf;
+    return sudoku_geom(v);                          /* (a broken Jigsaw map: classic boxes) */
 }
 
 /* the givens of any puzzle, built-in or generated */
@@ -369,8 +394,8 @@ static void puzzle_name(uint16_t id, char *buf, size_t n)
         }
         unsigned num = id >= PUZZLE_GEN_RAM_BASE ? (unsigned)(id - PUZZLE_GEN_RAM_BASE + 1)
                                                  : (unsigned)(id - PUZZLE_GEN_BASE);
-        const char *kind = var == VAR_X ? "X-Sudoku" : (var == VAR_MINI ? "Mini" : "Generated");
-        snprintf(buf, n, "%s %s #%u", kind, lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", num);
+        snprintf(buf, n, "%s %s #%u", STATS_KIND_PREFIX[stats_kind_of(var, false)],
+                 lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", num);
         return;
     }
     int c = puzzle_collection_of(id);
@@ -645,7 +670,7 @@ static int units_completed_by(int i)
 static lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given)
 {
     lv_color_t bg = given ? C_CELL_GIVEN : C_CELL;
-    return sudoku_geom_on_diag(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
+    return sudoku_geom_tinted(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
 }
 
 static int filled_count(void)
@@ -1189,20 +1214,27 @@ static void unit_name(int u, char *buf, size_t n)
 {
     if (u < 9) snprintf(buf, n, "row %d", u + 1);
     else if (u < 18) snprintf(buf, n, "column %d", u - 9 + 1);
-    else if (u < 27) snprintf(buf, n, "box %d", u - 18 + 1);
-    else snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");   /* from that corner */
+    else if (u < 27) snprintf(buf, n, "%s %d", g_geo->variant == VAR_JIGSAW ? "region" : "box", u - 18 + 1);
+    else if (u < UNIT_WINDOW) snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");
+    else {                                          /* Hyper windows */
+        static const char *const W[4] = {"top-left", "top-right", "bottom-left", "bottom-right"};
+        snprintf(buf, n, "the %s window", W[(u - UNIT_WINDOW) & 3]);
+    }
 }
 
-/* "row, column or box" (and diagonal on X-Sudoku) */
+/* "row, column or box" (and diagonal, window, or region for a Jigsaw) */
 static const char *units_word(void)
 {
-    return g_geo->diag ? "row, column, box or diagonal" : "row, column or box";
+    if (g_geo->diag) return "row, column, box or diagonal";
+    if (g_geo->windows) return "row, column, box or window";
+    if (g_geo->variant == VAR_JIGSAW) return "row, column or region";
+    return "row, column or box";
 }
 
 static void mark_unit(int u, uint8_t v)
 {
     for (int k = 0; k < g_geo->n; k++) {
-        int c = sudoku_unit_cell(g_var, u, k);
+        int c = sudoku_unit_cell(g_geo, u, k);
         if (c >= 0 && h_mark[c] < v) h_mark[c] = v;
     }
 }
@@ -1343,7 +1375,7 @@ static void hint_cb(lv_event_t *e)
         hint_act_cb(e);
         return;
     }
-    if (!sudoku_next_step(g_var, g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
+    if (!sudoku_next_step(g_geo, g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
     if (g_hints < 0xFFFF) g_hints++;               /* every hint opened counts once */
     refresh_board();                                /* the hint count on the Fill button */
     save_current();
@@ -1481,8 +1513,58 @@ static void tick_cb(lv_timer_t *t)
 #define LINE_THICK 4
 #define LINE_THIN  2
 
+/* Jigsaw: the thick lines between regions, drawn over the cells (the grid's
+ * children: the 9 boxes, then the 81 cells) */
+static void board_regions_draw_cb(lv_event_t *e)
+{
+    lv_obj_t *grid = lv_event_get_current_target_obj(e);
+    const sudoku_geom_t *geo = lv_obj_get_user_data(grid);
+    if (!geo || geo->variant != VAR_JIGSAW) return;
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_color = C_GRID_THICK;
+    d.bg_opa = LV_OPA_COVER;
+    for (int i = 0; i < 81; i++) {
+        lv_area_t a, b, r;
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
+        if (i % 9 < 8 && geo->region[i] != geo->region[i + 1]) {          /* border on the right */
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 1), &b);
+            r = (lv_area_t){.x1 = a.x2 - 1, .x2 = b.x1 + 1, .y1 = a.y1 - LINE_THIN, .y2 = a.y2 + LINE_THIN};
+            lv_draw_rect(layer, &d, &r);
+        }
+        if (i / 9 < 8 && geo->region[i] != geo->region[i + 9]) {          /* border below */
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 9), &b);
+            r = (lv_area_t){.x1 = a.x1 - LINE_THIN, .x2 = a.x2 + LINE_THIN, .y1 = a.y2 - 1, .y2 = b.y1 + 1};
+            lv_draw_rect(layer, &d, &r);
+        }
+    }
+}
+
 static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells)
 {
+    lv_obj_set_user_data(grid, (void *)geo);
+    if (geo->variant == VAR_JIGSAW) {
+        /* evenly spaced cells on the thin-line colour in a thick frame; the
+         * region borders are drawn over them (board_regions_draw_cb) */
+        const int cs = (GRID_SIZE - 2 * LINE_THICK - 8 * LINE_THIN) / 9;
+        const int w = 2 * LINE_THICK + 9 * cs + 8 * LINE_THIN;
+        lv_obj_set_pos(grid, GRID_X + (GRID_SIZE - w) / 2, GRID_Y + (GRID_SIZE - w) / 2);
+        lv_obj_set_size(grid, w, w);
+        lv_obj_set_style_bg_color(grid, C_GRID_THIN, 0);
+        lv_obj_set_style_border_color(grid, C_GRID_THICK, 0);
+        lv_obj_set_style_border_width(grid, LINE_THICK, 0);
+        for (int b = 0; b < 9; b++) lv_obj_set_hidden(boxes[b], true);
+        for (int i = 0; i < 81; i++) {
+            lv_obj_set_hidden(cells[i], false);
+            lv_obj_set_pos(cells[i], LINE_THICK + (i % 9) * (cs + LINE_THIN), LINE_THICK + (i / 9) * (cs + LINE_THIN));
+            lv_obj_set_size(cells[i], cs, cs);
+        }
+        lv_obj_invalidate(grid);
+        return;
+    }
+    lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
+    lv_obj_set_style_border_width(grid, 0, 0);
     const int n = geo->n, bw = geo->box_w, bh = geo->box_h;
     const int across = n / bw, down = n / bh;                  /* boxes */
     int cw = (GRID_SIZE - (across + 1) * LINE_THICK - across * (bw - 1) * LINE_THIN) / n;
@@ -1514,7 +1596,7 @@ static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *con
 static void game_layout(void)
 {
     if (!g_geo) g_geo = sudoku_geom(g_var);
-    if (g_layout_var == g_var) return;
+    if (g_layout_var == g_var && g_var != VAR_JIGSAW) return;   /* every Jigsaw has its own regions */
     g_layout_var = g_var;
     board_layout(g_geo, g_grid, g_boxes, g_cells);
     const int n = g_geo->n, span = GRID_SIZE - 6;              /* 598: the 9 x 62 px pad, as before */
@@ -1536,14 +1618,13 @@ static void start_game(uint16_t id, bool resume)
         return;
     }
     g_id = id;
-    g_var = puzzle_variant(id);
-    g_geo = sudoku_geom(g_var);
+    g_geo = puzzle_geom(id, g_geo_buf, &g_var);
     game_layout();
     for (int i = 0; i < 81; i++) {                  /* only the board's cells, digits 1..n */
         if (!g_geo->used[i] || given[i] > g_geo->n) given[i] = 0;
     }
     memcpy(g_given, given, sizeof(g_given));
-    g_sol_ok = sudoku_solve(g_var, g_given, g_sol);
+    g_sol_ok = sudoku_solve(g_geo, g_given, g_sol);
     reset_game();
     const saved_game_t *s = store_saved_game();
     if (resume && s->id == id) {
@@ -1606,6 +1687,7 @@ static void build_game(void)
     lv_obj_t *grid = lv_obj_create(scr_game);
     g_grid = grid;
     lv_obj_remove_style_all(grid);
+    lv_obj_add_event_cb(grid, board_regions_draw_cb, LV_EVENT_DRAW_POST_END, NULL);   /* Jigsaw borders */
     lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
     lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
     lv_obj_set_scrollable(grid, false);
@@ -1777,6 +1859,7 @@ static const uint8_t RP_SPEEDS[] = {1, 2, 4, 8};
 static lv_obj_t *scr_replay, *rp_return;            /* the screen, and where Back goes */
 static lv_obj_t *rp_cells[81], *rp_lbl[81];
 static const sudoku_geom_t *rp_geo;                 /* the replayed puzzle's variant */
+static sudoku_geom_t *rp_geo_buf;                   /* PSRAM: a replayed Jigsaw's regions */
 static lv_obj_t *rp_play_lbl, *rp_speed_lbl, *rp_slider, *rp_pos, *rp_title, *rp_sub;
 static lv_timer_t *rp_timer;
 static uint8_t rp_given[81];
@@ -1898,7 +1981,8 @@ static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
         prev_t = rp_moves[i].t_ms;
     }
     if (!puzzle_get(id, rp_given)) return false;
-    rp_geo = sudoku_geom(puzzle_variant(id));
+    if (!rp_geo_buf) rp_geo_buf = heap_caps_malloc(sizeof(*rp_geo_buf), MALLOC_CAP_SPIRAM);
+    rp_geo = puzzle_geom(id, rp_geo_buf, NULL);
     return true;
 }
 
@@ -1918,6 +2002,7 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
 
     lv_obj_t *grid = lv_obj_create(scr);
     lv_obj_remove_style_all(grid);
+    lv_obj_add_event_cb(grid, board_regions_draw_cb, LV_EVENT_DRAW_POST_END, NULL);   /* Jigsaw borders */
     lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
     lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
     lv_obj_set_scrollable(grid, false);
@@ -2284,7 +2369,7 @@ static lv_timer_t *gen_timer;
 static volatile bool gen_done;
 static int gen_var_req;                             /* variant being made (generator.h) */
 static int gen_level_req, gen_level_got;
-static uint8_t gen_givens[81];
+static uint8_t gen_givens[81], gen_regions[81];
 static uint32_t gen_seed;                           /* 0 = random */
 static char gen_day[12];                            /* making a daily puzzle: its date */
 
@@ -2292,7 +2377,8 @@ static void gen_task(void *arg)
 {
     gen_level_t got = (gen_level_t)gen_level_req;
     uint32_t t0 = (uint32_t)(esp_timer_get_time() / 1000);
-    sudoku_generate(gen_var_req, (gen_level_t)gen_level_req, gen_seed ? gen_seed : esp_random(), gen_givens, &got);
+    sudoku_generate(gen_var_req, (gen_level_t)gen_level_req, gen_seed ? gen_seed : esp_random(), gen_givens,
+                    gen_regions, &got);
     int clues = 0;
     for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
     printf("generator: %s %s asked, %s made, %d clues, %u ms\n", VARIANT_NAMES[gen_var_req],
@@ -2311,7 +2397,9 @@ static void gen_poll_cb(lv_timer_t *t)
     if (gen_box) lv_msgbox_close(gen_box);
     gen_box = NULL;
     uint16_t id;
-    int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, gen_day[0] ? gen_day : NULL)
+    const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_regions : NULL;
+    int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions,
+                                                  gen_day[0] ? gen_day : NULL)
                                : -1;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
@@ -2319,7 +2407,7 @@ static void gen_poll_cb(lv_timer_t *t)
         id = s_gen_ram_next++;                       /* no card: until power-off */
         if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
     }
-    gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, gen_day);
+    gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, regions, gen_day);
     if (gen_level_got != gen_level_req && !gen_day[0]) {
         char msg[96];
         snprintf(msg, sizeof(msg), "Couldn't make a %s %s quickly; this one is %s.", GEN_LEVEL_NAMES[gen_level_req],
@@ -2445,10 +2533,14 @@ static lv_obj_t *gen_pick;                          /* the level dialog */
 static lv_obj_t *gen_pick_desc;                     /* its line about the variant chosen */
 static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kept until power-off) */
 
+/* the variants in the New puzzle dialog, in button order */
+static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_MINI};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
-    "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
-    "9x9, and the two tinted diagonals also hold 1-9 once each.",
-    "6x6 with 2x3 boxes: rows, columns and boxes hold 1-6 once each.",
+    [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
+    [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
+    [VAR_MINI] = "6x6 with 2x3 boxes: rows, columns and boxes hold 1-6 once each.",
+    [VAR_HYPER] = "9x9, and the four tinted 3x3 windows also hold 1-9 once each.",
+    [VAR_JIGSAW] = "9x9 with nine irregular regions (thick borders) instead of boxes; each holds 1-9 once.",
 };
 
 static void gen_pick_close(void)
@@ -2469,7 +2561,7 @@ static void gen_var_cb(lv_event_t *e)
     lv_obj_t *bm = lv_event_get_target_obj(e);
     uint32_t sel = lv_buttonmatrix_get_selected_button(bm);
     if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= VAR_COUNT) return;
-    gen_pick_var = (int)sel;
+    gen_pick_var = GEN_VAR_ORDER[sel];
     just_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
 }
 
@@ -2494,19 +2586,21 @@ static void new_puzzle_cb(lv_event_t *e)
                    "singles; Hard needs pairs or locked candidates; Expert needs more than that.");
 
     /* the variant: Classic, X-Sudoku or Mini 6x6 (one of them checked) */
-    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Mini 6x6", ""};
+    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "Jigsaw", "Mini 6x6", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
     lv_buttonmatrix_set_one_checked(vm, true);
-    lv_buttonmatrix_set_button_ctrl(vm, (uint32_t)gen_pick_var, LV_BUTTONMATRIX_CTRL_CHECKED);
+    for (uint32_t i = 0; i < VAR_COUNT; i++) {
+        if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+    }
     lv_obj_set_size(vm, LV_PCT(100), 64);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);
     lv_obj_set_style_margin_top(vm, 14, 0);
     lv_obj_set_style_border_width(vm, 0, 0);
     lv_obj_set_style_bg_opa(vm, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_text_font(vm, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(vm, &lv_font_montserrat_18, 0);
     lv_obj_set_style_bg_color(vm, C_CARD2, LV_PART_ITEMS);
     lv_obj_set_style_text_color(vm, C_TEXT, LV_PART_ITEMS);
     lv_obj_set_style_bg_color(vm, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
@@ -2941,7 +3035,8 @@ static void stats_player_dd_cb(lv_event_t *e)
     }
 }
 
-static stats_view_t x_view;
+static stats_view_t *x_view_p;           /* PSRAM (internal RAM is tight): the view shown */
+#define x_view (*x_view_p)
 
 static void stats_select_rows(void)
 {
@@ -2955,6 +3050,22 @@ static void stats_select_rows(void)
 
 static void chart_render(const stats_view_t *v, bool from_db);
 
+/* a kind's four levels added up (fastest: the lowest) */
+static void kind_total(const stats_view_t *v, int k, stats_level_t *t)
+{
+    memset(t, 0, sizeof(*t));
+    for (int l = 0; l < GEN_LEVELS; l++) {
+        const stats_level_t *x = &v->kinds[k][l];
+        t->solved += x->solved;
+        t->perfect += x->perfect;
+        t->known += x->known;
+        t->solves += x->solves;
+        t->time_sum += x->time_sum;
+        t->miss_sum += x->miss_sum;
+        if (x->fastest && (!t->fastest || x->fastest < t->fastest)) t->fastest = x->fastest;
+    }
+}
+
 static void render_stats(const stats_view_t *v, bool from_db)
 {
     chart_render(v, from_db);
@@ -2963,6 +3074,11 @@ static void render_stats(const stats_view_t *v, bool from_db)
                               (unsigned)puzzle_collections[c].count);
     }
     lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)v->total.solved, (unsigned)PUZZLE_COUNT);
+    stats_level_t kt[KIND_COUNT];
+    for (int k = 0; k < KIND_COUNT; k++) {          /* kinds made on the board: puzzles solved */
+        kind_total(v, k, &kt[k]);
+        lv_label_set_text_fmt(x_cnt_lbl[1 + PUZZLE_COLLECTION_COUNT + k], "%u", (unsigned)kt[k].solved);
+    }
     stats_player_dd_update();
     stats_select_rows();
     x_from_db = from_db;
@@ -2975,13 +3091,15 @@ static void render_stats(const stats_view_t *v, bool from_db)
         stats_summary(&v->total, PUZZLE_COUNT);
         static const int32_t w[] = {140, 66, 72, 72, 82};   /* sums to PANE_W */
         static const char *const h[] = {"Level", "Solved", "Fastest", "Average", "Mistakes"};
-        lv_table_set_row_count(x_table, PUZZLE_COLLECTION_COUNT + 1);
+        lv_table_set_row_count(x_table, PUZZLE_COLLECTION_COUNT + KIND_COUNT + 1);
         table_columns(5, w, h);
-        for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-            const level_stat_t *st = &v->levels[c];
+        for (int c = 0; c < PUZZLE_COLLECTION_COUNT + KIND_COUNT; c++) {   /* collections, then kinds */
+            bool coll = c < PUZZLE_COLLECTION_COUNT;
+            const level_stat_t *st = coll ? &v->levels[c] : &kt[c - PUZZLE_COLLECTION_COUNT];
             fmt_stat_times(f, a, sizeof(f), st);
             fmt_avg_mistakes(m, sizeof(m), st);
-            lv_table_set_cell_value(x_table, c + 1, 0, puzzle_collections[c].name);
+            lv_table_set_cell_value(x_table, c + 1, 0, coll ? puzzle_collections[c].name
+                                                            : STATS_KIND_NAMES[c - PUZZLE_COLLECTION_COUNT]);
             lv_table_set_cell_value_fmt(x_table, c + 1, 1, "%u", (unsigned)st->solved);
             lv_table_set_cell_value(x_table, c + 1, 2, f);
             lv_table_set_cell_value(x_table, c + 1, 3, a);
@@ -2992,7 +3110,39 @@ static void render_stats(const stats_view_t *v, bool from_db)
         return;
     }
 
+    if (v->level >= PUZZLE_COLLECTION_COUNT) {     /* a kind made on the board: one row per level */
+        int k = v->level - PUZZLE_COLLECTION_COUNT;
+        lv_label_set_text(x_title, STATS_KIND_NAMES[k]);
+        const level_stat_t *t = &kt[k];
+        fmt_stat_times(f, a, sizeof(f), t);
+        fmt_avg_mistakes(m, sizeof(m), t);
+        lv_label_set_text_fmt(x_sum1, "Solved %u puzzle%s   -   %u without mistakes   -   %lu solves",
+                              (unsigned)t->solved, t->solved == 1 ? "" : "s", (unsigned)t->perfect,
+                              (unsigned long)t->solves);
+        lv_label_set_text_fmt(x_sum2, "Fastest %s   -   average %s   -   mistakes %s per puzzle", f, a, m);
+        static const int32_t w[] = {140, 66, 72, 72, 82};
+        static const char *const h[] = {"Level", "Solved", "Fastest", "Average", "Mistakes"};
+        lv_table_set_row_count(x_table, GEN_LEVELS + 1);
+        table_columns(5, w, h);
+        for (int l = 0; l < GEN_LEVELS; l++) {
+            const level_stat_t *st = &v->kinds[k][l];
+            fmt_stat_times(f, a, sizeof(f), st);
+            fmt_avg_mistakes(m, sizeof(m), st);
+            lv_table_set_cell_value(x_table, l + 1, 0, GEN_LEVEL_NAMES[l]);
+            lv_table_set_cell_value_fmt(x_table, l + 1, 1, "%u", (unsigned)st->solved);
+            lv_table_set_cell_value(x_table, l + 1, 2, f);
+            lv_table_set_cell_value(x_table, l + 1, 3, a);
+            lv_table_set_cell_value(x_table, l + 1, 4, m);
+        }
+        lv_label_set_text_fmt(x_empty, from_db ? "No %s solved yet." : "%s needs sudoku.db on a microSD card.",
+                              STATS_KIND_NAMES[k]);
+        lv_obj_set_hidden(x_table, x_chart_mode || t->solves == 0);
+        lv_obj_set_hidden(x_empty, x_chart_mode || t->solves != 0);
+        return;
+    }
+
     /* one row per solved puzzle of the level */
+    lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
     const puzzle_collection_t *pc = &puzzle_collections[v->level];
     lv_label_set_text(x_title, pc->name);
     stats_summary(&v->levels[v->level], pc->count);
@@ -3450,9 +3600,10 @@ static void sd_format_cb(lv_event_t *e)
 static void sd_poll_cb(lv_timer_t *t)
 {
     /* sudoku.db results */
-    static stats_view_t view;
-    if (stats_db_take_view(&view) && view.level == x_sel - 1) {
-        x_view = view;
+    static stats_view_t *view;                             /* PSRAM */
+    if (!view) view = heap_caps_malloc(sizeof(*view), MALLOC_CAP_SPIRAM);
+    if (view && stats_db_take_view(view) && view->level == x_sel - 1) {
+        x_view = *view;
         render_stats(&x_view, true);
     }
     static uint16_t c_best[PUZZLE_COUNT];
@@ -5152,6 +5303,10 @@ static void build_stats(void)
         x_btn[c + 1] = make_coll_btn(list, puzzle_collections[c].name, &x_name_lbl[c + 1], &x_cnt_lbl[c + 1],
                                      stats_row_cb, c + 1);
     }
+    for (int k = 0; k < KIND_COUNT; k++) {          /* made on the board (the list scrolls) */
+        int r = 1 + PUZZLE_COLLECTION_COUNT + k;
+        x_btn[r] = make_coll_btn(list, STATS_KIND_NAMES[k], &x_name_lbl[r], &x_cnt_lbl[r], stats_row_cb, r);
+    }
 
     int px = PANE_X, pw = PANE_W;
     /* top bar, right: whose statistics, as a dropdown */
@@ -5464,6 +5619,10 @@ esp_err_t sudoku_ui_start(void)
     if (!g_undo || !g_redo) return ESP_ERR_NO_MEM;
     sudoku_geom_init();                             /* before the generator task can use the tables */
     g_geo = sudoku_geom(VAR_CLASSIC);
+    g_geo_buf = heap_caps_malloc(sizeof(*g_geo_buf), MALLOC_CAP_SPIRAM);
+    s_gen_cache = heap_caps_calloc(GEN_CACHE, sizeof(gen_cache_t), MALLOC_CAP_SPIRAM);
+    x_view_p = heap_caps_calloc(1, sizeof(stats_view_t), MALLOC_CAP_SPIRAM);
+    if (!g_geo_buf || !s_gen_cache || !x_view_p) return ESP_ERR_NO_MEM;
 #if LV_USE_PERF_MONITOR
     lv_sysmon_hide_performance(NULL);
 #endif

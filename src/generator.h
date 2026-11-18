@@ -1,19 +1,27 @@
 #pragma once
 /*
- * Puzzle generator, solver and hints for three variants:
+ * Puzzle generator, solver and hints for five variants:
  *
  *   VAR_CLASSIC  9x9, rows, columns and 3x3 boxes hold 1-9 once each
  *   VAR_X        X-Sudoku: also both main diagonals hold 1-9 once each
  *   VAR_MINI     6x6 with 2x3 boxes (2 rows, 3 columns), digits 1-6
+ *   VAR_HYPER    Hyper (Windoku): also four 3x3 windows, at rows and
+ *                columns 2-4 and 6-8, hold 1-9 once each
+ *   VAR_JIGSAW   9x9 with nine irregular regions of 9 connected cells in
+ *                place of the boxes; every puzzle has its own regions
+ *
+ * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
+ * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map.
  *
  * Every board is kept in 81 cells, row by row (cell = row * 9 + column); a
  * 6x6 board uses the top-left 6x6 of them and leaves the rest 0. Saved games,
  * move logs and the database then work the same for every variant.
  *
  * Units have fixed numbers whatever the variant: 0..8 rows, 9..17 columns,
- * 18..26 boxes (left to right, top to bottom), 27 the main diagonal (top
- * left to bottom right), 28 the other diagonal. A 6x6 board has rows 0..5,
- * columns 9..14 and boxes 18..23; each unit has n cells.
+ * 18..26 boxes (left to right, top to bottom; on Jigsaw the regions), 27 the
+ * main diagonal (top left to bottom right), 28 the other diagonal, 29..32
+ * the Hyper windows (top left, top right, bottom left, bottom right). A 6x6
+ * board has rows 0..5, columns 9..14 and boxes 18..23; each unit has n cells.
  *
  * Generating: a random complete grid, then clues taken away in symmetric
  * pairs (180-degree rotation) as long as exactly one solution remains.
@@ -39,19 +47,24 @@ typedef enum { GEN_EASY = 0, GEN_MEDIUM, GEN_HARD, GEN_EXPERT, GEN_LEVELS } gen_
 
 extern const char *const GEN_LEVEL_NAMES[GEN_LEVELS];   /* "Easy", "Medium", "Hard", "Expert" */
 
-typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_COUNT } sudoku_variant_t;
+/* the numbers are stored in sudoku.db (generated.variant): don't reorder */
+typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_COUNT } sudoku_variant_t;
 
-extern const char *const VARIANT_NAMES[VAR_COUNT];      /* "Classic", "X-Sudoku", "Mini 6x6" */
+extern const char *const VARIANT_NAMES[VAR_COUNT];      /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw" */
 
 /* ---------------------------------------------------------------- geometry */
 #define UNIT_DIAG_MAIN 27
 #define UNIT_DIAG_ANTI 28
-#define UNITS_MAX      29
+#define UNIT_WINDOW    29               /* 29..32 */
+#define UNITS_MAX      33
 
 typedef struct {
+    uint8_t variant;                    /* sudoku_variant_t */
     uint8_t n;                          /* digits and side: 9 or 6 */
     uint8_t box_h, box_w;               /* box size: 3x3, or 2 rows x 3 columns */
     bool diag;                          /* the two diagonals are units too */
+    bool windows;                       /* the four Hyper windows are units too */
+    uint8_t region[81];                 /* box (Jigsaw: region) of each cell, 0..n-1 */
     uint16_t all;                       /* candidate bits 1..n */
     uint8_t ncells;
     uint8_t cells[81];                  /* the cells in use */
@@ -69,7 +82,11 @@ typedef struct {
 
 /* Builds the tables (once); call early, before tasks use them. */
 void sudoku_geom_init(void);
-const sudoku_geom_t *sudoku_geom(int variant);     /* unknown variants: classic */
+/* The fixed variants; unknown ones, and VAR_JIGSAW (which needs its regions), give classic. */
+const sudoku_geom_t *sudoku_geom(int variant);
+/* A Jigsaw board from its region map (81 cells, region 0..8 each, 9 cells
+ * per region) into out; false if the map isn't one. */
+bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
 
 static inline bool sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 {
@@ -82,27 +99,44 @@ static inline bool sudoku_geom_on_diag(const sudoku_geom_t *g, int cell)
     return g->diag && (r == c || r + c == g->n - 1);
 }
 
+/* in a Hyper window: -1, or the window 0..3 */
+static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
+{
+    int r = cell / 9, c = cell % 9;
+    if (!g->windows || r % 4 == 0 || c % 4 == 0) return -1;
+    return (r > 4) * 2 + (c > 4);
+}
+
+/* the cells drawn tinted: X diagonals, Hyper windows */
+static inline bool sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
+{
+    return sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0;
+}
+
 /* ---------------------------------------------------------------- generating */
 
 /* Fills givens (81, 0 = empty) with a new puzzle of that variant and level.
- * seed: any random number. Gives up after a number of tries and returns the
- * closest one found (*got_level says what it is). False only if out of tries
- * for anything at all (shouldn't happen). */
-bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], gen_level_t *got_level);
+ * seed: any random number. Jigsaw: its region map goes into regions (81;
+ * may be NULL for the other variants, which leave it untouched). Gives up
+ * after a number of tries and returns the closest one found (*got_level
+ * says what it is). False only if out of tries for anything at all
+ * (shouldn't happen). Not reentrant: one generator at a time. */
+bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], uint8_t regions[81],
+                     gen_level_t *got_level);
 
 /* Level of a puzzle by the techniques it needs; -1 if it doesn't have
- * exactly one solution. */
-int sudoku_grade(int variant, const uint8_t givens[81]);
+ * exactly one solution. (Generator task.) */
+int sudoku_grade(const sudoku_geom_t *g, const uint8_t givens[81]);
 
-/* Number of solutions, counting up to limit. */
-int sudoku_count_solutions(int variant, const uint8_t cells[81], int limit);
+/* Number of solutions, counting up to limit. (Generator task.) */
+int sudoku_count_solutions(const sudoku_geom_t *g, const uint8_t cells[81], int limit);
 
 /* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
- * break a rule or there is no solution. Milliseconds on the ESP32-P4. */
-bool sudoku_solve(int variant, const uint8_t cells[81], uint8_t out[81]);
+ * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.) */
+bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[81]);
 
 /* ---------------------------------------------------------------- hints */
-int sudoku_unit_cell(int variant, int unit, int k);      /* the k-th cell (0..n-1) of a unit */
+int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cell (0..n-1) of a unit, or -1 */
 
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR } tech_kind_t;
 typedef struct {
@@ -127,7 +161,7 @@ typedef struct {
 
 /* The next step a person would take on the board vals (81, 0 = empty;
  * givens included), knowing the solution. False if the board is full. */
-bool sudoku_next_step(int variant, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out);
+bool sudoku_next_step(const sudoku_geom_t *g, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out);
 
 #ifdef __cplusplus
 }
