@@ -2645,7 +2645,7 @@ static void rp_btn_cb(lv_event_t *e)
     case 4: rp_seek(rp_n, false); break;                      /* end */
     case 5:                                                   /* speed */
         rp_speed = (rp_speed + 1) % (int)sizeof(RP_SPEEDS);
-        lv_label_set_text_fmt(rp_speed_lbl, "%ux", RP_SPEEDS[rp_speed]);
+        lv_label_set_text_fmt(rp_speed_lbl, LV_SYMBOL_PLAY "  Speed %ux", RP_SPEEDS[rp_speed]);
         break;
     }
 }
@@ -2736,11 +2736,22 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
     }
     board_layout(rp_geo, grid, boxes, rp_cells, clues);
 
-    /* controls down the right: start, back, play, forward, end, speed */
+    /* second row (as the game's): where the replay is on the left, the speed on the right */
+    rp_pos = make_label(scr, &lv_font_montserrat_20, C_TEXT);
+    lv_obj_set_width(rp_pos, SCR_W - 8 - 200 - 8 - 16);
+    lv_label_set_long_mode(rp_pos, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_pos(rp_pos, 16, TOOL_Y + (48 - 24) / 2);
+    lv_obj_t *sp = make_btn(scr, SCR_W - 8 - 200, TOOL_Y, 200, 48, NULL, &lv_font_montserrat_20, rp_btn_cb,
+                            (void *)(intptr_t)5);
+    rp_speed_lbl = make_label(sp, &lv_font_montserrat_20, C_ACCENT);
+    lv_obj_center(rp_speed_lbl);
+    lv_label_set_text_fmt(rp_speed_lbl, LV_SYMBOL_PLAY "  Speed %ux", RP_SPEEDS[rp_speed]);
+
+    /* controls down the right, as tall as the board: start, back, play, forward, end */
     static const char *const SYM[] = {LV_SYMBOL_PREV, LV_SYMBOL_LEFT, LV_SYMBOL_PLAY, LV_SYMBOL_RIGHT,
-                                      LV_SYMBOL_NEXT, "1x"};
-    const int gap = 8, bh = (GRID_SIZE - 5 * gap) / 6;   /* six buttons as tall as the board */
-    for (int i = 0; i < 6; i++) {
+                                      LV_SYMBOL_NEXT};
+    const int gap = 8, bh = (GRID_SIZE - 4 * gap) / 5;
+    for (int i = 0; i < 5; i++) {
         lv_obj_t *b = make_btn(scr, PAD_X, GRID_Y + i * (bh + gap), PAD_W, bh, SYM[i],
                                &lv_font_montserrat_28, rp_btn_cb, (void *)(intptr_t)i);
         if (i == 2) {
@@ -2748,27 +2759,18 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
             rp_play_lbl = lv_obj_get_child(b, 0);
             lv_obj_set_style_text_color(rp_play_lbl, lv_color_white(), 0);
         }
-        if (i == 5) {
-            rp_speed_lbl = lv_obj_get_child(b, 0);
-            lv_obj_set_style_text_font(rp_speed_lbl, &lv_font_montserrat_22, 0);
-            lv_label_set_text_fmt(rp_speed_lbl, "%ux", RP_SPEEDS[rp_speed]);
-        }
     }
 
-    /* bottom: slider + position */
+    /* bottom: the slider, the full width */
     rp_slider = lv_slider_create(scr);
-    lv_obj_set_size(rp_slider, 340, 12);
-    lv_obj_set_pos(rp_slider, 24, BOT_Y + (BOT_H - 12) / 2);
+    lv_obj_set_size(rp_slider, SCR_W - 64, 14);
+    lv_obj_set_pos(rp_slider, 32, BOT_Y + (BOT_H - 14) / 2);
     lv_slider_set_range(rp_slider, 0, rp_n > 0 ? rp_n : 1);
     lv_obj_set_style_bg_color(rp_slider, C_CARD2, LV_PART_MAIN);
     lv_obj_set_style_bg_color(rp_slider, C_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(rp_slider, C_ACCENT, LV_PART_KNOB);
     lv_obj_set_ext_click_area(rp_slider, 16);
     lv_obj_add_event_cb(rp_slider, rp_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    rp_pos = make_label(scr, &lv_font_montserrat_16, C_MUTED);
-    lv_obj_set_width(rp_pos, SCR_W - 8 - 390);
-    lv_obj_set_style_text_align(rp_pos, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(rp_pos, 390, BOT_Y + (BOT_H - 20) / 2);
 
     return scr;
 }
