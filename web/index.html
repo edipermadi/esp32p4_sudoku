@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sudoku Web Flasher</title>
+<meta name="description" content="Install the Sudoku firmware on a Waveshare ESP32-P4-WIFI6-Touch-LCD-4B from the browser.">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #f6f3f7; --card: #ffffff; --text: #1d1f24; --muted: #646b78; --line: #e4e1e8;
+    --accent: #2563eb; --accent-text: #ffffff; --warn-bg: #fff4e5; --warn-line: #f0b25a;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15161a; --card: #1f2127; --text: #eceef2; --muted: #9aa1ad; --line: #30333b;
+      --accent: #4f8cff; --accent-text: #0b1020; --warn-bg: #2e2416; --warn-line: #8a6326;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: grid; grid-template-columns: 1fr 260px; gap: 28px; align-items: center; }
+  @media (max-width: 680px) { header { grid-template-columns: 1fr; } header img { max-width: 260px; } }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.15rem; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  header img {
+    width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: contain;   /* the screen is square */
+    border-radius: 14px; border: 1px solid var(--line); display: block;
+  }
+  .version { font: 600 0.85rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+  esp-web-install-button { display: inline-block; margin: 6px 0 10px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--accent-text); font: 600 1.05rem/1 inherit;
+    padding: 14px 22px; border-radius: 10px;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-top: 20px; }
+  .warn { background: var(--warn-bg); border-color: var(--warn-line); }
+  ol, ul { margin: 0; padding-left: 1.3em; }
+  li + li { margin-top: 6px; }
+  code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); padding: 1px 5px; border-radius: 5px; }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: 0.9rem; margin-top: 28px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Sudoku web flasher</h1>
+      <p class="sub">Installs the Sudoku firmware on a Waveshare ESP32-P4-WIFI6-Touch-LCD-4B straight from the browser: no Arduino IDE, no esptool. <span class="version" id="version"></span></p>
+
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate" class="btn">Connect and install</button>
+        <span slot="unsupported">
+          <strong>This browser can't flash a board.</strong> Use Chrome or Edge on a desktop computer (Web Serial isn't in Firefox, Safari or mobile browsers).
+        </span>
+        <span slot="not-allowed">
+          <strong>The page needs HTTPS.</strong> Open it from its GitHub Pages address, or from <code>http://localhost</code>.
+        </span>
+      </esp-web-install-button>
+    </div>
+    <img src="home.png" alt="The Sudoku home screen on the board" width="720" height="720">
+  </header>
+
+  <section class="card">
+    <h2>How to install</h2>
+    <ol>
+      <li>Plug the board's <strong>UART</strong> USB-C port into the computer (not the USB OTG port).</li>
+      <li>Click <strong>Connect and install</strong> and pick the port: <code>USB Single Serial</code> (the CH343 chip). On Windows, if nothing shows up, install the CH343 driver from WCH first.</li>
+      <li>Choose <strong>Install</strong>. Leave <em>Erase device</em> unticked to keep the board's Wi-Fi setting. Tick it only for a fresh start.</li>
+      <li>Wait for the flash (about a minute). The board restarts into Sudoku by itself.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>What's kept</h2>
+    <ul>
+      <li><strong>Games, statistics, players and settings</strong> are on the microSD card (<code>sudoku.db</code>). Flashing never touches the card.</li>
+      <li><strong>The Wi-Fi network</strong> is kept in the board's flash, unless <em>Erase device</em> is ticked.</li>
+      <li>A board that already runs Sudoku can also update itself without a computer link: put the release's <code>update.bin</code> on the card and use <strong>Settings → Data → Firmware update</strong>.</li>
+    </ul>
+  </section>
+
+  <section class="card warn">
+    <h2>Which boards</h2>
+    <p style="margin:0">These builds are for <strong>pre-v3.00 ESP32-P4 chips</strong>, which most 4B boards have, with 32 MB flash and PSRAM. If the board doesn't start after flashing, its chip may be v3 or newer: build from source with the matching <em>Chip Variant</em> instead.</p>
+  </section>
+
+  <footer>
+    <a href="https://github.com/edipermadi/esp32p4_sudoku">Source code</a> ·
+    <a href="https://github.com/edipermadi/esp32p4_sudoku/releases">Releases</a> ·
+    Flashing by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>.
+  </footer>
+</main>
+<script>
+  fetch("manifest.json").then(r => r.json()).then(m => {
+    document.getElementById("version").textContent = m.version;
+  }).catch(() => {});
+</script>
+</body>
+</html>

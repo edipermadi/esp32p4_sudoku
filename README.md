@@ -171,6 +171,21 @@ git push origin v1.0.0
 
 The release builds are for pre-v3.00 chips (`ChipVariant=prev3`, most 4B boards). `tools/package_release.sh BUILD_DIR OUT_DIR VERSION` makes the same files from a local build.
 
+### Web flasher
+
+A release tag without a `-` also publishes a web flasher on GitHub Pages: **https://edipermadi.github.io/esp32p4_sudoku/**. It installs that release from Chrome or Edge on a desktop computer over Web Serial, with no Arduino IDE or esptool needed. It uses [ESP Web Tools](https://esphome.github.io/esp-web-tools/) 10.4.0, which picks the flasher stub for pre-v3 chips by itself.
+
+- **What it flashes:** the separate parts at their `flash_args` offsets. This keeps the Wi-Fi setting unless *Erase device* is ticked in the installer. Data on the card is never touched.
+- **The page:** `web/index.html`. `tools/make_flasher_site.sh BUILD_DIR OUT_DIR VERSION` adds the firmware and `manifest.json`.
+- **Trying it locally:** `python3 -m http.server -d OUT_DIR 8000`, then open `http://localhost:8000`. Web Serial needs HTTPS or localhost.
+
+One-time setup on GitHub:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. **Settings → Environments → github-pages → Deployment branches and tags:** add a tag rule `v*`. The environment only allows `main` by default, and the flasher deploys from tags.
+
+To publish the flasher for a tag that already exists, use **Actions → Firmware → Run workflow** and pick the tag. Running it this way doesn't touch the release.
+
 ## How to play
 
 | Action                          | How                                              |
