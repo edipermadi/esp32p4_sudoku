@@ -12,7 +12,9 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     swipe X1 Y1 X2 Y2 [MS]  a drag (default 300 ms)
     press X Y | move X Y | release [X Y]
     wait MS                 let the UI run
-    shot FILE.png           save the screen as a PNG
+    shot FILE.png [--blur X1,Y1,X2,Y2 ...]
+                            save the screen as a PNG; --blur pixelates those
+                            rectangles first (e.g. a network name)
     ping
 
 Opening the port resets the board (its auto-reset circuit), so a run starts
@@ -93,7 +95,7 @@ class Board:
         word = cmd.split()[0]
         return self.wait_for(expect or ("OK " + word), timeout)
 
-    def shot(self, path, tries=3):
+    def shot(self, path, blur=(), tries=3):
         for attempt in range(tries):
             self.ser.write(b"shot\n")
             self.wait_for("SHOT BEGIN", 10)
@@ -121,7 +123,10 @@ class Board:
                 _, _, size, crc = end_line.split()
                 data = b"".join(chunks[i] for i in sorted(chunks))
                 if len(data) == int(size) and zlib.crc32(data) == int(crc, 16):
-                    write_png(path, decode_rle(data, 720, 720), 720, 720)
+                    rgb = decode_rle(data, 720, 720)
+                    for box in blur:
+                        rgb = pixelate(rgb, 720, 720, box)
+                    write_png(path, rgb, 720, 720)
                     print("saved", path)
                     return
             print("screenshot garbled, retrying (%d)" % (attempt + 1))
@@ -146,6 +151,26 @@ def decode_rle(data, w, h):
     return bytes(out)
 
 
+def pixelate(rgb, w, h, box, block=14):
+    """the rectangle (x1, y1, x2, y2) as coarse blocks of their average colour: unreadable"""
+    x1, y1, x2, y2 = (max(0, min(v, lim)) for v, lim in zip(box, (w, h, w, h)))
+    out = bytearray(rgb)
+    for by in range(y1, y2, block):
+        for bx in range(x1, x2, block):
+            ys, xs = range(by, min(by + block, y2)), range(bx, min(bx + block, x2))
+            n = len(ys) * len(xs)
+            acc = [0, 0, 0]
+            for y in ys:
+                for x in xs:
+                    o = (y * w + x) * 3
+                    acc[0] += rgb[o]; acc[1] += rgb[o + 1]; acc[2] += rgb[o + 2]
+            px = bytes(v // n for v in acc)
+            for y in ys:
+                o = (y * w + xs.start) * 3
+                out[o:o + 3 * len(xs)] = px * len(xs)
+    return bytes(out)
+
+
 def write_png(path, rgb, w, h):
     def chunk(kind, body):
         return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
@@ -164,7 +189,18 @@ def run(board, words):
     if cmd == "shot":
         if len(words) < 2:
             sys.exit("shot needs a file name")
-        board.shot(words[1])
+        blur = []
+        rest = words[2:]
+        if rest and rest[0] == "--blur":
+            for spec in rest[1:]:
+                try:
+                    x1, y1, x2, y2 = (int(v) for v in spec.split(","))
+                except ValueError:
+                    sys.exit("--blur takes X1,Y1,X2,Y2 rectangles: %s" % spec)
+                blur.append((x1, y1, x2, y2))
+        elif rest:
+            sys.exit("unknown shot option: %s" % " ".join(rest))
+        board.shot(words[1], blur)
     elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "ping"):
         timeout = 20 + (int(words[1]) / 1000 if cmd == "wait" and len(words) > 1 else 0)
         board.command(" ".join(words), timeout=timeout)

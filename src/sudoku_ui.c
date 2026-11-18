@@ -267,6 +267,8 @@ static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, th
 
 /* settings screen */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
+static lv_obj_t *st_wifi_eye;               /* shows the network's name (hidden until tapped) */
+static bool      st_wifi_reveal;            /* name shown; hidden again each time Settings opens */
 static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
 static lv_obj_t *st_sd_btn, *st_sd_hint;
@@ -3912,9 +3914,30 @@ static void puzzles_cb(lv_event_t *e)
 
 static void st_select_tab(int tab);
 
+/* The Wi-Fi row's text: the state, or once connected the network's name,
+ * which stays hidden ("Connected  ******") until the eye button shows it, so
+ * a photo or screenshot of Settings doesn't give it away. */
+static void st_wifi_update(void)
+{
+    wifi_status_t ws;
+    wifi_mgr_get_status(&ws);
+    bool connected = ws.state == WIFI_ST_CONNECTED;
+    const char *w = connected && !st_wifi_reveal ? "Connected  ******" : wifi_ui_summary();
+    if (strcmp(lv_label_get_text(st_wifi_lbl), w) != 0) lv_label_set_text(st_wifi_lbl, w);
+    lv_obj_set_hidden(st_wifi_eye, !connected);
+    lv_label_set_text(lv_obj_get_child(st_wifi_eye, 0), st_wifi_reveal ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
+}
+
+static void st_wifi_eye_cb(lv_event_t *e)
+{
+    st_wifi_reveal = !st_wifi_reveal;
+    st_wifi_update();
+}
+
 static void settings_cb(lv_event_t *e)
 {
-    lv_label_set_text(st_wifi_lbl, wifi_ui_summary());
+    st_wifi_reveal = false;                         /* the network's name hidden again */
+    st_wifi_update();
     st_select_tab(0);                               /* Network */
     lv_screen_load(scr_settings);
 }
@@ -3973,8 +3996,7 @@ static void clock_cb(lv_timer_t *t)
     static char last_clock[8], last_date[64];
     lv_obj_t *act = lv_screen_active();
     if (act == scr_settings) {
-        const char *w = wifi_ui_summary();
-        if (strcmp(lv_label_get_text(st_wifi_lbl), w) != 0) lv_label_set_text(st_wifi_lbl, w);
+        st_wifi_update();
         char sd[64];
         stats_db_status(sd, sizeof(sd));
         if (strcmp(lv_label_get_text(st_sd_hint), sd) != 0) lv_label_set_text(st_sd_hint, sd);
@@ -7010,12 +7032,18 @@ static void build_settings(void)
     lv_obj_t *chev = make_label(r, &lv_font_montserrat_20, C_MUTED);
     lv_label_set_text(chev, LV_SYMBOL_RIGHT);
     lv_obj_align(chev, LV_ALIGN_RIGHT_MID, 0, 0);
+    /* the eye: show or hide the network's name (its own tap, not the row's) */
+    st_wifi_eye = make_btn(r, 0, 0, 48, 44, LV_SYMBOL_EYE_OPEN, &lv_font_montserrat_20, st_wifi_eye_cb, NULL);
+    lv_obj_set_style_bg_color(st_wifi_eye, C_CARD2, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(st_wifi_eye, 0), C_ACCENT, 0);
+    lv_obj_align(st_wifi_eye, LV_ALIGN_RIGHT_MID, -30, 0);
     st_wifi_lbl = make_label(r, &lv_font_montserrat_18, C_MUTED);
-    lv_obj_set_width(st_wifi_lbl, 220);
+    lv_obj_set_width(st_wifi_lbl, 200);
     lv_obj_set_style_text_align(st_wifi_lbl, LV_TEXT_ALIGN_RIGHT, 0);
     lv_label_set_long_mode(st_wifi_lbl, LV_LABEL_LONG_MODE_DOTS);
-    lv_label_set_text(st_wifi_lbl, wifi_ui_summary());
-    lv_obj_align(st_wifi_lbl, LV_ALIGN_RIGHT_MID, -32, 0);
+    lv_label_set_text(st_wifi_lbl, "");
+    lv_obj_align(st_wifi_lbl, LV_ALIGN_RIGHT_MID, -86, 0);
+    st_wifi_update();
 
     /* time zone: IANA names; the list opens downwards */
     r = settings_row(col, "Time zone", "For the clock on the home screen");

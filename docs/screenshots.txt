@@ -3,6 +3,7 @@
 # Coordinates are screen pixels (720 x 720). Nothing here changes the game data
 # (no puzzle is played, no setting is changed).
 
+wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
 shot docs/screenshots/home.png
 
 tap 513 308                 # Puzzles
@@ -30,9 +31,10 @@ shot docs/screenshots/trophies.png
 tap 72 36                   # Home
 wait 400
 
-tap 513 590                 # Settings (opens on Network)
-wait 500
-shot docs/screenshots/settings.png
+tap 513 590                 # Settings (opens on Network; the network's name is hidden there)
+wait 800
+# the time zone is blurred: it says where the board is
+shot docs/screenshots/settings.png --blur 330,236,616,286
 tap 186 98                  # the Display tab
 wait 300
 shot docs/screenshots/settings-display.png

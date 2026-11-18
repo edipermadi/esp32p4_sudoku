@@ -430,6 +430,7 @@ static void post_message(const char *msg);
  * keeps STATS_MAX_GAMES, dropping the one played longest ago */
 static void save_game(const saved_game_t *g, const game_move_t *moves, int nmoves)
 {
+    if (!g) return;                                 /* no game: nothing to save (clear_game removes one) */
     sqlite3_stmt *st;
     char cells[82];
     uint8_t notes[162];
@@ -720,7 +721,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("time_zone", true, 0, p->timezone);
     set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
                                                           ? p->last_collection : 0].name);
-    save_game(puzzle_id_valid(p->game.id) ? &p->game : NULL, NULL, 0);
+    if (puzzle_id_valid(p->game.id)) save_game(&p->game, NULL, 0);   /* (none after a factory reset) */
     set_setting("migrated_from_nvs", false, 1, NULL);
     exec("COMMIT");
 }
