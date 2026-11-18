@@ -1,7 +1,8 @@
 /*
  * microSD (TF) slot: SDMMC slot 0, 4-bit, IO_MUX pins CLK43 CMD44 D0..D3 39..42.
- * Based on the esp32p4_86box project's driver. Only what Settings -> Format
- * needs: detect the card and lay down a fresh FAT32 volume. Nothing mounts it.
+ * Based on the esp32p4_86box project's driver: detect the card, mount its
+ * FAT volume at /sdcard (stats_db.c keeps sudoku.db there), and lay down a
+ * fresh FAT32 volume for Settings -> Format.
  *
  * Not using the Arduino SD_MMC library: its generic P4 variant toggles GPIO45
  * as a card power switch, which this board does not have.
@@ -16,6 +17,7 @@
 #include "sdmmc_cmd.h"
 #include "ff.h"
 #include "diskio_impl.h"
+#include "esp_vfs_fat.h"
 
 static const char *TAG = "bsp_sdcard";
 
@@ -23,6 +25,8 @@ static esp_ldo_channel_handle_t s_ldo;
 static bool s_host_ok, s_slot_ok, s_ready;
 static sdmmc_card_t s_card;
 static BYTE s_pdrv = 0xFF;
+static FATFS *s_fs;
+static char s_drv[3];
 
 esp_err_t bsp_sdcard_host_init(void)
 {
@@ -119,14 +123,54 @@ static const ff_diskio_impl_t s_diskio = {
     .ioctl = dio_ioctl,
 };
 
-esp_err_t bsp_sdcard_format_fat32(void)
+static esp_err_t register_drive(void)
 {
-    ESP_RETURN_ON_FALSE(s_ready, ESP_ERR_INVALID_STATE, TAG, "probe the card first");
     if (s_pdrv == 0xFF) {
         ESP_RETURN_ON_ERROR(ff_diskio_get_drive(&s_pdrv), TAG, "no free FatFs drive");
         ff_diskio_register(s_pdrv, &s_diskio);
+        s_drv[0] = (char)('0' + s_pdrv);
+        s_drv[1] = ':';
+        s_drv[2] = 0;
     }
-    char drv[3] = {(char)('0' + s_pdrv), ':', 0};
+    return ESP_OK;
+}
+
+esp_err_t bsp_sdcard_mount(void)
+{
+    ESP_RETURN_ON_FALSE(s_ready, ESP_ERR_INVALID_STATE, TAG, "no card");
+    if (s_fs) return ESP_OK;
+    ESP_RETURN_ON_ERROR(register_drive(), TAG, "drive");
+    esp_vfs_fat_conf_t conf = {
+        .base_path = BSP_SD_MOUNT_POINT,
+        .fat_drive = s_drv,
+        .max_files = 4,
+    };
+    FATFS *fs = NULL;
+    ESP_RETURN_ON_ERROR(esp_vfs_fat_register_cfg(&conf, &fs), TAG, "VFS register failed");
+    FRESULT fr = f_mount(fs, s_drv, 1);
+    if (fr != FR_OK) {
+        esp_vfs_fat_unregister_path(BSP_SD_MOUNT_POINT);
+        ESP_LOGW(TAG, "f_mount failed (%d)", fr);
+        return fr == FR_NO_FILESYSTEM ? ESP_ERR_NOT_SUPPORTED : ESP_FAIL;
+    }
+    s_fs = fs;
+    return ESP_OK;
+}
+
+void bsp_sdcard_unmount(void)
+{
+    if (!s_fs) return;
+    f_mount(NULL, s_drv, 0);
+    esp_vfs_fat_unregister_path(BSP_SD_MOUNT_POINT);
+    s_fs = NULL;
+}
+
+esp_err_t bsp_sdcard_format_fat32(void)
+{
+    ESP_RETURN_ON_FALSE(s_ready, ESP_ERR_INVALID_STATE, TAG, "probe the card first");
+    ESP_RETURN_ON_FALSE(!s_fs, ESP_ERR_INVALID_STATE, TAG, "unmount first");
+    ESP_RETURN_ON_ERROR(register_drive(), TAG, "drive");
+    const char *drv = s_drv;
 
     /* Logical drive N maps to physical drive N, partition 0 (ESP-IDF's VolToPart),
      * so without FM_SFD f_mkfs writes an MBR holding a single primary partition

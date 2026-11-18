@@ -78,8 +78,15 @@ esp_err_t bsp_sdcard_probe(uint64_t *bytes, char *name);
 /* Is the card found by bsp_sdcard_probe() still answering? (CMD13, no clock change) */
 esp_err_t bsp_sdcard_check(void);
 /* Erases the card's layout: MBR with one primary FAT32 partition over the
- * whole card (FatFs f_mkfs). Takes seconds; call from a worker task. */
+ * whole card (FatFs f_mkfs). Takes seconds; call from a worker task.
+ * Unmount first. */
 esp_err_t bsp_sdcard_format_fat32(void);
+
+#define BSP_SD_MOUNT_POINT "/sdcard"
+/* Mounts the card's FAT volume at BSP_SD_MOUNT_POINT (POSIX file API).
+ * ESP_ERR_NOT_SUPPORTED: the card has no FAT filesystem. */
+esp_err_t bsp_sdcard_mount(void);
+void bsp_sdcard_unmount(void);
 
 /* GT911 touch, polled (INT is not routed to the SoC). */
 esp_err_t bsp_touch_init(void);

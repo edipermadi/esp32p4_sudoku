@@ -6,7 +6,8 @@
  *   - list: a scrolling row of collections at the top, a 10x10 grid of
  *     puzzles below it.
  *     Solved puzzles are green, the game in progress is orange.
- *   - statistics: per level and per puzzle best times, mistakes, solves.
+ *   - statistics: per level and per puzzle best times, mistakes, solves,
+ *     read from sudoku.db on the microSD card (stats_db.c).
  *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone,
  *     and formatting the microSD card (FAT32, one partition).
  *   - wifi: on/off, nearby networks, password keyboard (wifi_ui.c).
@@ -40,6 +41,7 @@
 #include "wifi_mgr.h"
 #include "wifi_ui.h"
 #include "timezones.h"
+#include "stats_db.h"
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
@@ -128,13 +130,13 @@ static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date;
 /* statistics screen: row 0 of the left column is "All levels" */
 #define X_ROWS (PUZZLE_COLLECTION_COUNT + 1)
 static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
-static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty;
+static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_note;
 static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 
 /* settings screen */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
-static lv_obj_t *st_sd_btn;
+static lv_obj_t *st_sd_btn, *st_sd_hint;
 
 /* list screen */
 static lv_obj_t *l_total, *l_strip, *l_arrow_l, *l_arrow_r;
@@ -256,10 +258,10 @@ static bool has_progress(void)
 /* ============================================================= persistence */
 
 /*
- * The game in progress is saved only when leaving the game screen, when
- * pausing, and (as a best time) when solved. Writing flash stalls PSRAM
- * access long enough to blink the MIPI-DSI panel, so the write happens a
- * moment after the screen has already changed, where a blink is not seen.
+ * The game in progress is saved (to sudoku.db, via store.h) when leaving the
+ * game screen and when pausing; statistics when solved. The delay dates from
+ * when this went to flash, whose writes blink the panel; it does no harm with
+ * the card, whose writes run in the database task anyway.
  */
 static void commit_cb(lv_timer_t *t)
 {
@@ -369,6 +371,7 @@ static uint32_t s_solve_secs, s_solve_mistakes;
 static void solve_commit_cb(lv_timer_t *t)
 {
     store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
+    stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);   /* card copy, if any */
     if (store_saved_game()->id == s_solve_id) store_clear_game();
 }
 
@@ -409,6 +412,10 @@ static void on_solved(void)
     } else {
         lv_label_set_text_fmt(g_win_miss, "%u mistake%s", (unsigned)g_mistakes, g_mistakes == 1 ? "" : "s");
         lv_obj_set_style_text_color(g_win_miss, C_MUTED, 0);
+    }
+    if (!stats_db_ready()) {
+        sudoku_ui_notice("No sudoku.db on a microSD card: this result is kept only until the board is "
+                         "switched off.", 6000);
     }
     lv_obj_set_hidden(g_pause_ovl, true);
     lv_obj_set_hidden(g_win_ovl, false);
@@ -1037,6 +1044,9 @@ static void clock_cb(lv_timer_t *t)
     if (act == scr_settings) {
         const char *w = wifi_ui_summary();
         if (strcmp(lv_label_get_text(st_wifi_lbl), w) != 0) lv_label_set_text(st_wifi_lbl, w);
+        char sd[64];
+        stats_db_status(sd, sizeof(sd));
+        if (strcmp(lv_label_get_text(st_sd_hint), sd) != 0) lv_label_set_text(st_sd_hint, sd);
         return;
     }
     if (act != scr_home) return;
@@ -1069,10 +1079,9 @@ static void clock_cb(lv_timer_t *t)
 
 /* ------------------------------------------------------------- statistics */
 
-typedef struct {
-    uint16_t solved, perfect, known;     /* known: solves with a mistake count */
-    uint32_t solves, time_sum, fastest, miss_sum;
-} level_stat_t;
+/* The screen draws a stats_view_t (stats_db.h): normally the answer to a
+ * query on sudoku.db; without the database, the same built from RAM. */
+typedef stats_level_t level_stat_t;
 
 static void add_puzzle_stat(level_stat_t *st, uint16_t id)
 {
@@ -1090,11 +1099,24 @@ static void add_puzzle_stat(level_stat_t *st, uint16_t id)
     }
 }
 
-static void level_stat(int c, level_stat_t *st)
+/* fallback when there is no sudoku.db: this session's RAM statistics */
+static void view_from_ram(int level, stats_view_t *v)
 {
-    memset(st, 0, sizeof(*st));
-    const puzzle_collection_t *pc = &puzzle_collections[c];
-    for (uint16_t i = 0; i < pc->count; i++) add_puzzle_stat(st, pc->first + i);
+    memset(v, 0, sizeof(*v));
+    v->level = level;
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+        const puzzle_collection_t *pc = &puzzle_collections[c];
+        for (uint16_t i = 0; i < pc->count; i++) {
+            add_puzzle_stat(&v->levels[c], pc->first + i);
+            add_puzzle_stat(&v->total, pc->first + i);
+            if (c != level || !store_best_time(pc->first + i) || v->n_puzzles >= STATS_MAX_PUZZLES) continue;
+            stats_puzzle_t *p = &v->puzzles[v->n_puzzles++];
+            p->number = i + 1;
+            p->best = (uint16_t)store_best_time(pc->first + i);
+            p->fewest = store_fewest_mistakes(pc->first + i);
+            p->solves = store_solve_count(pc->first + i);
+        }
+    }
 }
 
 /* "1.4", or "-" when nothing is known */
@@ -1139,39 +1161,48 @@ static void table_columns(int n, const int32_t *w, const char *const *head)
     }
 }
 
-static void refresh_stats(void)
+static stats_view_t x_view;
+
+static void stats_select_rows(void)
 {
-    level_stat_t all, st;
-    memset(&all, 0, sizeof(all));
-    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        level_stat(c, &st);
-        lv_label_set_text_fmt(x_cnt_lbl[c + 1], "%u/%u", (unsigned)st.solved, (unsigned)puzzle_collections[c].count);
-    }
-    for (uint16_t i = 0; i < PUZZLE_COUNT; i++) add_puzzle_stat(&all, i);
-    lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)all.solved, (unsigned)PUZZLE_COUNT);
     for (int r = 0; r < X_ROWS; r++) {
         bool sel = r == x_sel;
         lv_obj_set_state(x_btn[r], LV_STATE_CHECKED, sel);
         lv_obj_set_style_text_color(x_name_lbl[r], sel ? lv_color_white() : C_TEXT, 0);
         lv_obj_set_style_text_color(x_cnt_lbl[r], sel ? lv_color_white() : C_MUTED, 0);
     }
+}
+
+static void render_stats(const stats_view_t *v, bool from_db)
+{
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
+        lv_label_set_text_fmt(x_cnt_lbl[c + 1], "%u/%u", (unsigned)v->levels[c].solved,
+                              (unsigned)puzzle_collections[c].count);
+    }
+    lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)v->total.solved, (unsigned)PUZZLE_COUNT);
+    stats_select_rows();
+    lv_label_set_text(x_note, from_db
+        ? "From sudoku.db on the microSD card. Mistake: a placed digit that broke a rule; "
+          "per puzzle, the fewest in any solve (\"-\": not counted then)."
+        : "No sudoku.db: insert a FAT32 microSD card before switching on to keep statistics. "
+          "Showing what the board has in memory.");
 
     char f[16], a[16], m[16];
     lv_obj_scroll_to_y(x_table, 0, LV_ANIM_OFF);
-    if (x_sel == 0) {
+    if (v->level < 0) {
         /* one row per level */
         lv_label_set_text(x_title, "All levels");
-        stats_summary(&all, PUZZLE_COUNT);
+        stats_summary(&v->total, PUZZLE_COUNT);
         static const int32_t w[] = {140, 66, 72, 72, 82};   /* sums to PANE_W */
         static const char *const h[] = {"Level", "Solved", "Fastest", "Average", "Mistakes"};
         lv_table_set_row_count(x_table, PUZZLE_COLLECTION_COUNT + 1);
         table_columns(5, w, h);
         for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-            level_stat(c, &st);
-            fmt_stat_times(f, a, sizeof(f), &st);
-            fmt_avg_mistakes(m, sizeof(m), &st);
+            const level_stat_t *st = &v->levels[c];
+            fmt_stat_times(f, a, sizeof(f), st);
+            fmt_avg_mistakes(m, sizeof(m), st);
             lv_table_set_cell_value(x_table, c + 1, 0, puzzle_collections[c].name);
-            lv_table_set_cell_value_fmt(x_table, c + 1, 1, "%u", (unsigned)st.solved);
+            lv_table_set_cell_value_fmt(x_table, c + 1, 1, "%u", (unsigned)st->solved);
             lv_table_set_cell_value(x_table, c + 1, 2, f);
             lv_table_set_cell_value(x_table, c + 1, 3, a);
             lv_table_set_cell_value(x_table, c + 1, 4, m);
@@ -1182,31 +1213,37 @@ static void refresh_stats(void)
     }
 
     /* one row per solved puzzle of the level */
-    int c = x_sel - 1;
-    const puzzle_collection_t *pc = &puzzle_collections[c];
-    level_stat(c, &st);
+    const puzzle_collection_t *pc = &puzzle_collections[v->level];
     lv_label_set_text(x_title, pc->name);
-    stats_summary(&st, pc->count);
+    stats_summary(&v->levels[v->level], pc->count);
     static const int32_t w[] = {90, 130, 110, 102};     /* sums to PANE_W */
     static const char *const h[] = {"Puzzle", "Best time", "Mistakes", "Solved"};
-    lv_table_set_row_count(x_table, st.solved + 1);
+    lv_table_set_row_count(x_table, v->n_puzzles + 1);
     table_columns(4, w, h);
-    uint32_t row = 1;
-    for (uint16_t i = 0; i < pc->count; i++) {
-        uint16_t id = pc->first + i;
-        uint32_t t = store_best_time(id);
-        if (!t) continue;
-        uint8_t mk = store_fewest_mistakes(id);
-        fmt_time(f, sizeof(f), t);
-        lv_table_set_cell_value_fmt(x_table, row, 0, "#%u", (unsigned)(i + 1));
-        lv_table_set_cell_value(x_table, row, 1, f);
-        if (mk == STORE_MISTAKES_UNKNOWN) lv_table_set_cell_value(x_table, row, 2, "-");
-        else lv_table_set_cell_value_fmt(x_table, row, 2, "%u", (unsigned)mk);
-        lv_table_set_cell_value_fmt(x_table, row, 3, "%u", (unsigned)store_solve_count(id));
-        row++;
+    for (int r = 0; r < v->n_puzzles; r++) {
+        const stats_puzzle_t *p = &v->puzzles[r];
+        fmt_time(f, sizeof(f), p->best);
+        lv_table_set_cell_value_fmt(x_table, r + 1, 0, "#%u", (unsigned)p->number);
+        lv_table_set_cell_value(x_table, r + 1, 1, f);
+        if (p->fewest == STORE_MISTAKES_UNKNOWN) lv_table_set_cell_value(x_table, r + 1, 2, "-");
+        else lv_table_set_cell_value_fmt(x_table, r + 1, 2, "%u", (unsigned)p->fewest);
+        lv_table_set_cell_value_fmt(x_table, r + 1, 3, "%u", (unsigned)p->solves);
     }
-    lv_obj_set_hidden(x_table, st.solved == 0);
-    lv_obj_set_hidden(x_empty, st.solved != 0);
+    lv_obj_set_hidden(x_table, v->n_puzzles == 0);
+    lv_obj_set_hidden(x_empty, v->n_puzzles != 0);
+}
+
+/* Asks sudoku.db for the selected view (drawn when the answer arrives, see
+ * sd_poll_cb); without the database, draws from RAM at once. */
+static void refresh_stats(void)
+{
+    stats_select_rows();
+    if (stats_db_ready()) {
+        stats_db_query(x_sel - 1);
+    } else {
+        view_from_ram(x_sel - 1, &x_view);
+        render_stats(&x_view, false);
+    }
 }
 
 static void stats_cb(lv_event_t *e)
@@ -1260,13 +1297,12 @@ static void sleep_dd_cb(lv_event_t *e)
  *
  * The card shares the SDMMC host with the Wi-Fi link, and initialising a card
  * (400 kHz) disturbs that link badly enough that ESP-Hosted restarts the
- * board. So the card is detected at boot, before Wi-Fi starts (sd_poll_cb
- * starts Wi-Fi when that is done), and formatting then only transfers data at
- * the link's own 40 MHz. A card inserted later can only be detected while
+ * board. So the card is detected at boot, before Wi-Fi starts (see
+ * sudoku_ui_start()), and formatting then only transfers data at the link's
+ * own 40 MHz. A card inserted later can only be detected while
  * Wi-Fi has not been started since boot. */
-typedef enum { SD_IDLE, SD_BOOT_PROBING, SD_BOOT_DONE, SD_PROBING, SD_FOUND, SD_NO_CARD,
-               SD_FORMATTING, SD_DONE, SD_FAILED } sd_state_t;
-typedef enum { SD_JOB_BOOT, SD_JOB_PROBE, SD_JOB_FORMAT } sd_job_t;
+typedef enum { SD_IDLE, SD_PROBING, SD_FOUND, SD_NO_CARD, SD_FORMATTING, SD_DONE, SD_FAILED } sd_state_t;
+typedef enum { SD_JOB_PROBE, SD_JOB_FORMAT } sd_job_t;
 static volatile sd_state_t s_sd_state = SD_IDLE;
 static volatile bool s_sd_present;
 static sd_state_t s_sd_seen = SD_IDLE;
@@ -1280,16 +1316,17 @@ static void sd_task(void *arg)
     sd_job_t job = (sd_job_t)(intptr_t)arg;
     esp_err_t err;
     switch (job) {
-    case SD_JOB_BOOT:
     case SD_JOB_PROBE:
         err = bsp_sdcard_probe(&s_sd_bytes, s_sd_name);
         s_sd_present = err == ESP_OK;
-        s_sd_state = job == SD_JOB_BOOT ? SD_BOOT_DONE : (s_sd_present ? SD_FOUND : SD_NO_CARD);
+        s_sd_state = s_sd_present ? SD_FOUND : SD_NO_CARD;
         break;
     case SD_JOB_FORMAT:
+        stats_db_suspend();                        /* close sudoku.db, unmount */
         err = bsp_sdcard_check();                  /* still the card found earlier? */
         if (err == ESP_OK) err = bsp_sdcard_format_fat32();
         s_sd_err = err;
+        if (err == ESP_OK) stats_db_resume();      /* fresh sudoku.db, filled from NVS */
         s_sd_state = err == ESP_OK ? SD_DONE : SD_FAILED;
         break;
     }
@@ -1298,7 +1335,7 @@ static void sd_task(void *arg)
 
 static bool sd_run(sd_job_t job)
 {
-    s_sd_state = job == SD_JOB_BOOT ? SD_BOOT_PROBING : job == SD_JOB_PROBE ? SD_PROBING : SD_FORMATTING;
+    s_sd_state = job == SD_JOB_PROBE ? SD_PROBING : SD_FORMATTING;
     if (xTaskCreate(sd_task, "sd_card", 8192, (void *)(intptr_t)job, 4, NULL) != pdPASS) {
         s_sd_state = SD_IDLE;
         return false;
@@ -1337,10 +1374,6 @@ static void sd_format_cancel_cb(lv_event_t *e)
 
 static void sd_format_cb(lv_event_t *e)
 {
-    if (s_sd_state == SD_BOOT_PROBING) {
-        sudoku_ui_notice("Still looking for a microSD card. Try again in a moment.", 3000);
-        return;
-    }
     if (s_sd_state != SD_IDLE) return;
     if (s_sd_present) {
         s_sd_state = SD_FOUND;                     /* found at boot: straight to the question */
@@ -1354,23 +1387,30 @@ static void sd_format_cb(lv_event_t *e)
 
 static void sd_poll_cb(lv_timer_t *t)
 {
+    /* sudoku.db results */
+    static stats_view_t view;
+    if (stats_db_take_view(&view) && view.level == x_sel - 1) {
+        x_view = view;
+        render_stats(&x_view, true);
+    }
+    static uint16_t c_best[PUZZLE_COUNT];
+    static uint8_t c_fewest[PUZZLE_COUNT], c_solves[PUZZLE_COUNT];
+    if (stats_db_take_cache(c_best, c_fewest, c_solves)) {
+        store_merge_stats(c_best, c_fewest, c_solves);     /* sudoku.db -> RAM copy */
+        lv_obj_t *act = lv_screen_active();
+        if (act == scr_home) refresh_home();
+        else if (act == scr_list) refresh_list();
+        else if (act == scr_stats) refresh_stats();
+    }
+
     sd_state_t st = s_sd_state;
     if (st == s_sd_seen) return;
     s_sd_seen = st;
     char sz[24], text[200];
     switch (st) {
-    case SD_BOOT_DONE:
-        if (s_sd_present) {
-            fmt_gb(sz, sizeof(sz), s_sd_bytes);
-            printf("microSD: \"%s\", %s\n", s_sd_name, sz);
-        } else {
-            printf("microSD: no card\n");
-        }
-        wifi_mgr_start();                          /* now the card is done with the 400 kHz clock */
-        s_sd_state = s_sd_seen = SD_IDLE;
-        break;
     case SD_FOUND: {
         sd_btn_text("Format", true);
+        stats_db_start();                          /* card found after boot: use it for stats too */
         fmt_gb(sz, sizeof(sz), s_sd_bytes);
         snprintf(text, sizeof(text),
                  "Card \"%s\", %s.\nEverything on it will be erased. It gets one FAT32 "
@@ -1749,12 +1789,10 @@ static void build_stats(void)
     lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
     lv_obj_set_pos(x_empty, px + 4, 180);
 
-    lv_obj_t *note = make_label(scr_stats, &lv_font_montserrat_12, C_MUTED);
-    lv_label_set_text(note, "Mistake: a placed digit that broke a rule. Per puzzle: the fewest in any solve.\n"
-                            "\"-\": solved before mistakes were counted.");
-    lv_obj_set_width(note, pw - 4);
-    lv_label_set_long_mode(note, LV_LABEL_LONG_MODE_WRAP);
-    lv_obj_set_pos(note, px + 4, SCR_W - 40);
+    x_note = make_label(scr_stats, &lv_font_montserrat_12, C_MUTED);   /* text: render_stats() */
+    lv_obj_set_width(x_note, pw - 4);
+    lv_label_set_long_mode(x_note, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_pos(x_note, px + 4, SCR_W - 40);
 }
 
 /* one settings row: a card with a title + hint on the left; returns the card
@@ -1884,7 +1922,11 @@ static void build_settings(void)
     tz_show_selected();
     lv_obj_add_event_cb(st_tz_dd, tz_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    r = settings_row(col, "microSD card", "Erase it: FAT32, one partition, whole card");
+    r = settings_row(col, "microSD card", "");
+    st_sd_hint = lv_obj_get_child(r, 1);           /* status of sudoku.db, see clock_cb */
+    char sd[64];
+    stats_db_status(sd, sizeof(sd));
+    lv_label_set_text(st_sd_hint, sd);
     st_sd_btn = make_btn(r, 0, 0, 160, 52, "Format", &lv_font_montserrat_18, sd_format_cb, NULL);
     lv_obj_set_style_bg_color(st_sd_btn, C_CARD2, 0);
     lv_obj_set_style_bg_opa(st_sd_btn, LV_OPA_50, LV_STATE_DISABLED);
@@ -1978,25 +2020,54 @@ esp_err_t sudoku_ui_start(void)
     lv_sysmon_hide_performance(NULL);
 #endif
 
+    /* splash while the card and sudoku.db are read (a second or two) */
+    lv_obj_t *boot = lv_screen_active();
+    lv_obj_set_style_bg_color(boot, lv_color_hex(PAL_DARK.bg), 0);
+    lv_obj_set_style_bg_opa(boot, LV_OPA_COVER, 0);
+    lv_obj_t *splash = lv_label_create(boot);
+    lv_label_set_text(splash, "Sudoku\n\nStarting...");
+    lv_obj_set_style_text_align(splash, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(splash, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(splash, lv_color_hex(PAL_DARK.text), 0);
+    lv_obj_center(splash);
+    lv_refr_now(NULL);
+
+    /* The settings and the game in progress live in sudoku.db, so the card
+     * comes first. Card setup also has to happen before Wi-Fi starts (they
+     * share the SDMMC host, see the microSD section). */
+    s_sd_present = bsp_sdcard_probe(&s_sd_bytes, s_sd_name) == ESP_OK;
+    if (s_sd_present) {
+        char sz[24];
+        fmt_gb(sz, sizeof(sz), s_sd_bytes);
+        printf("microSD: \"%s\", %s\n", s_sd_name, sz);
+        stats_db_start();
+        if (stats_db_wait_open(4000)) {
+            store_prefs_t prefs;
+            if (stats_db_take_prefs(&prefs)) store_apply_prefs(&prefs);
+            static uint16_t c_best[PUZZLE_COUNT];
+            static uint8_t c_fewest[PUZZLE_COUNT], c_solves[PUZZLE_COUNT];
+            if (stats_db_take_cache(c_best, c_fewest, c_solves)) store_merge_stats(c_best, c_fewest, c_solves);
+        }
+    } else {
+        printf("microSD: no card\n");
+    }
+    wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
+
     sfx_set_enabled(store_sound_enabled());
     for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in)) {
         lv_indev_add_event_cb(in, touch_sound_cb, LV_EVENT_PRESSED, NULL);
     }
-
     tz_apply(store_timezone());
-    /* microSD detection first, then Wi-Fi (sd_poll_cb starts it; see the
-     * microSD section). Wi-Fi reconnects to the saved network if left on. */
-    if (!sd_run(SD_JOB_BOOT)) wifi_mgr_start();
-
     l_coll = store_last_collection();
     s_sleep_min = store_screen_timeout_min();
     apply_theme(store_dark_mode());
+    lv_obj_delete(splash);
 
     g_last_tick = lv_tick_get();
     lv_timer_create(tick_cb, 200, NULL);
     lv_timer_create(saver_cb, 1000, NULL);
     lv_timer_create(clock_cb, 1000, NULL);
-    lv_timer_create(sd_poll_cb, 200, NULL);
+    lv_timer_create(sd_poll_cb, 100, NULL);
     clock_cb(NULL);
     return ESP_OK;
 }

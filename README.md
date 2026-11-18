@@ -37,10 +37,23 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 - **Light and dark mode**: switch between colour schemes under **Settings → Dark mode**.
 - **Wi-Fi and clock**: **Settings → Wi-Fi** opens a screen with an on/off switch, nearby networks (tap one; secured networks ask for the password on an on-screen keyboard) and **Forget**. Once connected, the time comes from NTP (pool.ntp.org) and the home screen shows it. The board remembers the network and reconnects at start-up. Wi-Fi goes through the board's ESP32-C6 co-processor (ESP-Hosted over SDIO); the Wi-Fi code is shared with the `esp32p4_86box` project.
 - **Time zone**: **Settings → Time zone** lists IANA names such as `Asia/Dubai`, with daylight saving where the zone has it.
+- **Game data on the microSD card**: statistics, the game in progress and the settings are kept in `sudoku.db`, a SQLite 3 database in the root of a FAT32 microSD card that is inserted at start-up. Nothing is written to the board's flash for them; only the Wi-Fi network and on/off switch stay on the board (NVS). At start-up the board shows "Starting..." while it opens the database (about a second), then builds the screens with its settings. The **Statistics** screen reads the database with SQL queries; the puzzle list, the home screen and "New best!" use a copy in RAM loaded at start-up. Without a card, the game runs on defaults and keeps changes, the game in progress and solves only until power-off; the "Solved!" dialog warns about this and Settings shows it under **microSD card**. Data that earlier versions kept on the board (NVS) is copied in the first time a database is used (statistics are also merged at every start; merging again changes nothing). Open it on a computer with `sqlite3 sudoku.db`:
+  - `solves`: every solve, with `puzzle` (0–1599), `level`, `number` (1–100), `seconds`, `mistakes` and `solved_at` (Unix time UTC; NULL until Wi-Fi has set the clock).
+  - `puzzle_stats`: per puzzle `best_seconds`, `fewest_mistakes` (NULL if solved before mistakes were counted) and `solves`.
+  - `level_stats` (view): per level solved, solves, fastest, average, average mistakes and solves without mistakes.
+  - `saved_game`: the unfinished game (one row): `cells` holds 81 digits row by row (0 = empty, givens included), `notes` 81 little-endian 16-bit masks (bit d = pencil mark d), plus `elapsed_ms`, `mistakes` and `saved_at`.
+  - `settings`: `dark_mode`, `sound`, `screen_off_minutes`, `time_zone`, `last_level`, and `migrated_from_nvs`.
+
+  ```
+  sqlite3 sudoku.db "SELECT level, number, seconds, mistakes, datetime(solved_at, 'unixepoch') FROM solves ORDER BY id DESC LIMIT 10"
+  sqlite3 -box sudoku.db "SELECT * FROM level_stats"
+  ```
+
+  SQLite 3.54.1 is built in from the official amalgamation (`src/sqlite/`), with a small file layer for ESP-IDF's FAT filesystem. The board doesn't lock the file, so take the card out (or switch off) before opening the database elsewhere.
 - **Format microSD card**: **Settings → microSD card → Format** erases the card and gives it a fresh MBR with one primary FAT32 partition spanning the whole card (FatFs `f_mkfs`, cluster size chosen automatically, data area aligned to 4 MiB). It shows the card's name and size in a confirmation dialog first. The game itself doesn't use the card.
   - Insert the card before switching the board on. The card shares its SD controller with the Wi-Fi chip, and setting up a card while Wi-Fi runs breaks the Wi-Fi link and restarts the board. So the card is detected at start-up, before Wi-Fi starts, and a card inserted later is only picked up if Wi-Fi hasn't been switched on since start-up.
-- **Settings** (dark mode, sound effects, screen timeout, Wi-Fi network and time zone) are saved and kept across restarts. The Wi-Fi password is stored unencrypted in NVS.
-- **Saved state**: best times, mistakes and solve counts, and the game in progress (entries, notes, elapsed time and mistakes) are kept in NVS. The game is saved when you leave it or pause, and the statistics when you solve. Nothing is written to flash during play: a flash write briefly stalls the display's frame buffer in PSRAM and makes the panel blink. If power is cut mid-game, the moves since the last leave or pause are lost.
+- **Settings** (dark mode, sound effects, screen timeout and time zone) are kept in `sudoku.db`; the Wi-Fi network is kept on the board, with the password stored unencrypted in NVS.
+- **Saved state**: the game in progress (entries, notes, elapsed time and mistakes) is saved to `sudoku.db` when you leave it or pause. If power is cut mid-game, the moves since the last leave or pause are lost.
 
 ## Building
 
@@ -66,7 +79,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
    arduino-cli upload -b esp32:esp32:esp32p4:PSRAM=enabled,FlashSize=32M,PartitionScheme=app13M_data7M_32MB,ChipVariant=prev3 -p /dev/ttyACM0 .
    ```
 
-   Best times and the saved game live in NVS, so they survive a normal upload. Enable "Erase All Flash Before Sketch Upload" to reset them.
+   Game data is on the microSD card, so uploads don't touch it; the Wi-Fi network survives a normal upload too. "Erase All Flash Before Sketch Upload" forgets the Wi-Fi network (and the old pre-database data).
 
 ## How to play
 
@@ -127,7 +140,9 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 ```
 esp32p4_sudoku.ino      setup/loop
 src/sudoku_ui.c         home, list, statistics, settings and game screens
-src/store.cpp           NVS: best times, mistakes and solve counts, saved game, last collection, sound on/off, colour scheme, screen timeout
+src/store.cpp           RAM copy of statistics, saved game and settings; reads the old NVS keys once
+src/stats_db.c          sudoku.db on the microSD card: statistics, saved game, settings, queries
+src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
 src/wifi_ui.c           Wi-Fi screen: networks, password keyboard
 src/timezones.c         IANA time zone names -> POSIX TZ rules
