@@ -1,0 +1,34 @@
+#pragma once
+/*
+ * Minimal MP4 (ISO BMFF) writer for one H.264 video track at a constant frame
+ * rate. Frames go in as Annex-B access units (start codes, as the ESP32-P4
+ * H.264 encoder produces them); SPS and PPS are taken from the stream for the
+ * avcC box and the rest is stored length-prefixed. Layout: ftyp, mdat (one
+ * chunk, all frames), moov at the end. Uses stdio, so it works on the FAT
+ * volume and on a PC (for testing).
+ */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct mp4w mp4w_t;
+
+/* max_frames bounds the sample table (frames past it are refused). */
+mp4w_t *mp4w_open(const char *path, int width, int height, int fps, int max_frames);
+/* One encoded frame (Annex-B). key: an IDR frame. */
+bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key);
+/* Writes the index (moov) and closes the file; false if anything failed.
+ * The writer is freed either way. */
+bool mp4w_close(mp4w_t *w);
+/* Closes without finishing and deletes the file. */
+void mp4w_abort(mp4w_t *w);
+/* Bytes written so far. */
+uint32_t mp4w_size(const mp4w_t *w);
+
+#ifdef __cplusplus
+}
+#endif

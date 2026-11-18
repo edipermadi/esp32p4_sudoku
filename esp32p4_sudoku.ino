@@ -26,6 +26,7 @@
 #include "src/sudoku_ui.h"
 #include "src/sfx.h"
 #include "esp_system.h"
+#include "esp_heap_caps.h"
 
 /* Why the chip last restarted, if it was not a normal power-on/reset. */
 static const char *abnormal_reset_text(esp_reset_reason_t r)
@@ -42,6 +43,12 @@ static const char *abnormal_reset_text(esp_reset_reason_t r)
 
 void setup()
 {
+  /* malloc() of 64 bytes or more goes to PSRAM (the core default is 4096):
+   * LVGL's widgets and SQLite then stay out of the 768 KB internal RAM, which
+   * the Wi-Fi link (ESP-Hosted DMA buffers) and the H.264 encoder (one ~52 KB
+   * block for MP4 export) need. Wi-Fi, lwIP, USB and FreeRTOS ask for internal
+   * RAM explicitly and are not affected. */
+  heap_caps_malloc_extmem_enable(64);
   Serial.begin(115200);
   delay(500);
   Serial.println("ESP32-P4 Sudoku");

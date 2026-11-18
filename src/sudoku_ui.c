@@ -58,6 +58,8 @@
 #include "stats_db.h"
 #include "usb_msc.h"
 #include "solver.h"
+#include "video_enc.h"
+#include <sys/stat.h>
 #include "moves.h"
 #include "esp_heap_caps.h"
 
@@ -149,7 +151,7 @@ static uint32_t g_started_tick;  /* lv_tick_get() then, to work it out once NTP 
                                     0 = not this session (resumed with no known start) */
 static uint32_t g_last_tick;
 
-static board_t  g_undo[UNDO_MAX];
+static board_t *g_undo;          /* UNDO_MAX boards, PSRAM (31 KB) */
 static int      g_undo_head, g_undo_len;
 
 /* ------------------------------------------------------------- widgets */
@@ -1158,12 +1160,12 @@ static void rp_back_cb(lv_event_t *e)
     rp_close();
 }
 
-/* Opens the Replay screen for a log of puzzle `id`; sub = the line under the title. */
-static void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub)
+/* Loads a log for puzzle `id`: the givens, the moves and their play times. */
+static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
 {
     if (!rp_moves) rp_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
     if (!rp_vt) rp_vt = heap_caps_malloc(sizeof(uint32_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
-    if (!rp_moves || !rp_vt) return;
+    if (!rp_moves || !rp_vt) return false;
     if (n > GAME_MOVES_MAX) n = GAME_MOVES_MAX;
     if (n > 0 && moves != rp_moves) memcpy(rp_moves, moves, sizeof(game_move_t) * n);
     rp_n = n;
@@ -1175,21 +1177,24 @@ static void open_replay(uint16_t id, const game_move_t *moves, int n, const char
         prev_t = rp_moves[i].t_ms;
     }
     puzzle_load(id, rp_given);
-    if (scr_replay) rp_close();
-    rp_return = lv_screen_active();
+    return true;
+}
 
-    scr_replay = make_screen();
-    make_btn(scr_replay, 8, 6, 104, 48, LV_SYMBOL_LEFT "  Back", &lv_font_montserrat_18, rp_back_cb, NULL);
+/* Builds the Replay screen (on the default display) for the prepared log. */
+static lv_obj_t *rp_build(uint16_t id, const char *sub)
+{
+    lv_obj_t *scr = make_screen();
+    make_btn(scr, 8, 6, 104, 48, LV_SYMBOL_LEFT "  Back", &lv_font_montserrat_18, rp_back_cb, NULL);
     char name[40];
     puzzle_name(id, name, sizeof(name));
-    rp_title = make_label(scr_replay, &lv_font_montserrat_22, C_TEXT);
+    rp_title = make_label(scr, &lv_font_montserrat_22, C_TEXT);
     lv_label_set_text_fmt(rp_title, "Replay  -  %s", name);
     lv_obj_set_pos(rp_title, 126, 6);
-    rp_sub = make_label(scr_replay, &lv_font_montserrat_14, C_MUTED);
+    rp_sub = make_label(scr, &lv_font_montserrat_14, C_MUTED);
     lv_label_set_text(rp_sub, sub);
     lv_obj_set_pos(rp_sub, 126, 36);
 
-    lv_obj_t *grid = lv_obj_create(scr_replay);
+    lv_obj_t *grid = lv_obj_create(scr);
     lv_obj_remove_style_all(grid);
     lv_obj_set_pos(grid, GRID_X, GRID_Y);
     lv_obj_set_size(grid, GRID_SIZE, GRID_SIZE);
@@ -1224,7 +1229,7 @@ static void open_replay(uint16_t id, const game_move_t *moves, int n, const char
                                       LV_SYMBOL_NEXT, "1x"};
     const int bh = 92, gap = (GRID_SIZE - 6 * bh) / 5;
     for (int i = 0; i < 6; i++) {
-        lv_obj_t *b = make_btn(scr_replay, PAD_X, GRID_Y + i * (bh + gap), PAD_W, bh, SYM[i],
+        lv_obj_t *b = make_btn(scr, PAD_X, GRID_Y + i * (bh + gap), PAD_W, bh, SYM[i],
                                &lv_font_montserrat_28, rp_btn_cb, (void *)(intptr_t)i);
         if (i == 2) {
             lv_obj_set_style_bg_color(b, C_ACCENT, 0);
@@ -1239,20 +1244,30 @@ static void open_replay(uint16_t id, const game_move_t *moves, int n, const char
     }
 
     /* bottom: slider + position */
-    rp_slider = lv_slider_create(scr_replay);
+    rp_slider = lv_slider_create(scr);
     lv_obj_set_size(rp_slider, 340, 12);
     lv_obj_set_pos(rp_slider, 24, BOT_Y + (BOT_H - 12) / 2);
-    lv_slider_set_range(rp_slider, 0, n > 0 ? n : 1);
+    lv_slider_set_range(rp_slider, 0, rp_n > 0 ? rp_n : 1);
     lv_obj_set_style_bg_color(rp_slider, C_CARD2, LV_PART_MAIN);
     lv_obj_set_style_bg_color(rp_slider, C_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(rp_slider, C_ACCENT, LV_PART_KNOB);
     lv_obj_set_ext_click_area(rp_slider, 16);
     lv_obj_add_event_cb(rp_slider, rp_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    rp_pos = make_label(scr_replay, &lv_font_montserrat_16, C_MUTED);
+    rp_pos = make_label(scr, &lv_font_montserrat_16, C_MUTED);
     lv_obj_set_width(rp_pos, SCR_W - 8 - 390);
     lv_obj_set_style_text_align(rp_pos, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(rp_pos, 390, BOT_Y + (BOT_H - 20) / 2);
 
+    return scr;
+}
+
+/* Opens the Replay screen for a log of puzzle `id`; sub = the line under the title. */
+static void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub)
+{
+    if (!rp_prepare(id, moves, n)) return;
+    if (scr_replay) rp_close();
+    rp_return = lv_screen_active();
+    scr_replay = rp_build(id, sub);
     rp_playing = false;
     rp_seek(0, false);
     rp_last_tick = lv_tick_get();
@@ -1274,10 +1289,15 @@ static void win_replay_cb(lv_event_t *e)
 /* a solve from History: ask sudoku.db, history_poll() opens it */
 static int64_t hz_row_solve[STATS_MAX_DAY_ROWS];
 
+static bool rp_want_export;                 /* the replay asked for is to be exported, not shown */
+static bool rx_busy;                        /* an export is running */
+static void export_start(const stats_replay_t *r);
+
 static void history_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) return;
+    rp_want_export = false;
     stats_db_query_replay(hz_row_solve[i]);
 }
 
@@ -1287,8 +1307,14 @@ static void history_replay_poll(void)
     if (!rp_loaded || !stats_db_take_replay(rp_loaded)) return;
     lv_obj_t *act = lv_screen_active();
     if (act != scr_history && act != scr_plays) return;      /* left meanwhile */
+    if (rx_busy) return;
     if (!rp_loaded->found) {
         sudoku_ui_notice("This solve has no recorded moves.", 3000);
+        return;
+    }
+    if (rp_want_export) {
+        rp_want_export = false;
+        export_start(rp_loaded);
         return;
     }
     char t[16], sub[96];
@@ -1296,6 +1322,227 @@ static void history_replay_poll(void)
     snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
              rp_loaded->player, t, (unsigned)rp_loaded->hints, rp_loaded->hints == 1 ? "" : "s");
     open_replay(rp_loaded->puzzle, rp_loaded->moves, rp_loaded->n, sub);
+}
+
+/* ------------------------------------------------------------- export as MP4 */
+/*
+ * The Replay screen played into a video: it is built on a second, invisible
+ * LVGL display (rendered into rx_fb in memory, never shown), stepped through
+ * the game frame by frame, and every frame goes through the hardware H.264
+ * encoder into an MP4 on the card (video_enc.c, mp4_writer.c). The video
+ * holds the start for RX_INTRO_MS, plays the moves at RX_SPEED x the replay
+ * timeline (pauses already shortened to RP_MAX_GAP_MS), then holds the solved
+ * board for RX_OUTRO_MS. A dialog on the real screen shows the progress.
+ */
+#define RX_FPS        15
+#define RX_SPEED      2
+#define RX_INTRO_MS   1000
+#define RX_OUTRO_MS   3000
+#define RX_DIR        BSP_SD_MOUNT_POINT "/replays"
+
+static lv_display_t *rx_disp;
+static uint16_t *rx_fb;
+static video_enc_t *rx_enc;
+static lv_timer_t *rx_timer;
+static int rx_frame, rx_frames, rx_last_k;
+static bool rx_last_playing, rx_cancel;
+static lv_obj_t *rx_ovl, *rx_bar, *rx_lbl;
+static char rx_path[128];
+
+static void rx_flush_cb(lv_display_t *d, const lv_area_t *area, uint8_t *px)
+{
+    lv_display_flush_ready(d);                      /* the picture stays in rx_fb */
+}
+
+static void rx_cancel_cb(lv_event_t *e)
+{
+    rx_cancel = true;
+}
+
+static void rx_finish(bool ok)
+{
+    if (rx_timer) lv_timer_delete(rx_timer);
+    rx_timer = NULL;
+    uint32_t bytes = video_enc_bytes(rx_enc);
+    if (ok) ok = video_enc_close(rx_enc);
+    else video_enc_abort(rx_enc);
+    rx_enc = NULL;
+    if (rx_disp) lv_display_delete(rx_disp);       /* and the replay screen built on it */
+    rx_disp = NULL;
+    heap_caps_free(rx_fb);
+    rx_fb = NULL;
+    if (rx_ovl) lv_obj_delete(rx_ovl);
+    rx_ovl = NULL;
+    rx_busy = false;
+    char msg[200];
+    if (ok) {
+        const char *name = strrchr(rx_path, '/');
+        snprintf(msg, sizeof(msg), "Saved replays%s (%.1f MB). Copy it to a computer with Settings > USB drive.",
+                 name ? name : "", bytes / 1048576.0);
+        printf("export: %s, %u bytes, %d frames\n", rx_path, (unsigned)bytes, rx_frames);
+    } else {
+        snprintf(msg, sizeof(msg), rx_cancel ? "Export cancelled." : "Export failed: couldn't write the video.");
+    }
+    sudoku_ui_notice(msg, ok ? 6000 : 4000);
+}
+
+/* replay position at video frame f: moves shown, and whether it "plays" */
+static int rx_k_at(int f, bool *playing)
+{
+    int64_t t = (int64_t)f * 1000 / RX_FPS - RX_INTRO_MS;
+    *playing = false;
+    if (t < 0 || rp_n == 0) return 0;
+    uint32_t clock = (uint32_t)(t * RX_SPEED);
+    int k = 0;
+    while (k < rp_n && rp_vt[k] <= clock) k++;
+    *playing = k < rp_n;
+    return k;
+}
+
+static void rx_timer_cb(lv_timer_t *t)
+{
+    if (rx_cancel || !stats_db_ready()) {          /* cancelled, or the card went away */
+        rx_finish(false);
+        return;
+    }
+    uint32_t t0 = lv_tick_get();
+    do {
+        bool playing;
+        int k = rx_k_at(rx_frame, &playing);
+        bool changed = rx_frame == 0 || k != rx_last_k || playing != rx_last_playing;
+        if (changed) {
+            rp_k = k;
+            rp_playing = playing;
+            rp_render();
+            lv_refr_now(rx_disp);                  /* into rx_fb */
+            rx_last_k = k;
+            rx_last_playing = playing;
+        }
+        if (!video_enc_frame(rx_enc, rx_fb, changed)) {
+            rx_finish(false);
+            return;
+        }
+        rx_frame++;
+    } while (rx_frame < rx_frames && lv_tick_elaps(t0) < 30);   /* keep the progress dialog alive */
+
+    if (rx_frame >= rx_frames) {
+        rx_finish(true);
+        return;
+    }
+    int pct = rx_frame * 100 / rx_frames;
+    lv_bar_set_value(rx_bar, pct, LV_ANIM_OFF);
+    lv_label_set_text_fmt(rx_lbl, "Frame %d of %d   -   %.1f MB", rx_frame, rx_frames,
+                          video_enc_bytes(rx_enc) / 1048576.0);
+}
+
+/* file name from the player, puzzle and when it was solved */
+static void rx_name(const stats_replay_t *r, char *out, size_t n)
+{
+    char raw[96], name[40], when[20] = "";
+    puzzle_name(r->puzzle, name, sizeof(name));
+    if (r->finished_at) {
+        time_t tt = (time_t)r->finished_at;
+        struct tm tm;
+        localtime_r(&tt, &tm);
+        strftime(when, sizeof(when), "%Y%m%d-%H%M", &tm);
+    } else {
+        snprintf(when, sizeof(when), "solve%lld", (long long)r->solve_id);
+    }
+    snprintf(raw, sizeof(raw), "%s_%s_%s", r->player, name, when);
+    size_t j = 0;
+    for (size_t i = 0; raw[i] && j + 1 < n; i++) {   /* letters, digits, - and _ only */
+        char c = raw[i];
+        bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+        if (!ok) c = (c == ' ' || c == '#') ? '-' : 0;
+        if (!c || (c == '-' && j && out[j - 1] == '-')) continue;
+        out[j++] = c;
+    }
+    out[j] = 0;
+}
+
+static void export_start(const stats_replay_t *r)
+{
+    if (rx_busy || !stats_db_ready()) return;
+    if (!rp_prepare(r->puzzle, r->moves, r->n)) return;
+    uint32_t play_ms = rp_n ? rp_vt[rp_n - 1] / RX_SPEED : 0;
+    rx_frames = (int)((RX_INTRO_MS + play_ms + RX_OUTRO_MS) * RX_FPS / 1000) + 1;
+
+    char file[80];
+    rx_name(r, file, sizeof(file));
+    mkdir(RX_DIR, 0775);                            /* fine if it exists */
+    snprintf(rx_path, sizeof(rx_path), RX_DIR "/%s.mp4", file);
+
+    rx_fb = heap_caps_aligned_alloc(64, SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
+    rx_enc = rx_fb ? video_enc_open(rx_path, SCR_W, SCR_W, RX_FPS, rx_frames + 8) : NULL;
+    if (!rx_enc) {
+        heap_caps_free(rx_fb);
+        rx_fb = NULL;
+        sudoku_ui_notice("Can't export: the video encoder or the file on the card couldn't be opened.", 4000);
+        return;
+    }
+
+    /* the Replay screen on an invisible display that renders into rx_fb */
+    lv_display_t *main_disp = lv_display_get_default();
+    rx_disp = lv_display_create(SCR_W, SCR_W);
+    lv_display_set_color_format(rx_disp, LV_COLOR_FORMAT_RGB565);
+    lv_display_set_buffers(rx_disp, rx_fb, NULL, SCR_W * SCR_W * 2, LV_DISPLAY_RENDER_MODE_FULL);
+    lv_display_set_flush_cb(rx_disp, rx_flush_cb);
+    lv_display_set_theme(rx_disp, lv_display_get_theme(main_disp));
+#if LV_USE_PERF_MONITOR
+    lv_sysmon_hide_performance(rx_disp);           /* no FPS/CPU box in the video */
+#endif
+    lv_display_set_default(rx_disp);
+    char t[16], sub[96];
+    fmt_time(t, sizeof(t), r->seconds);
+    snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
+             r->player, t, (unsigned)r->hints, r->hints == 1 ? "" : "s");
+    lv_obj_t *scr = rp_build(r->puzzle, sub);
+    lv_screen_load(scr);
+    lv_display_set_default(main_disp);
+
+    /* progress dialog on the real screen */
+    rx_ovl = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(rx_ovl);
+    lv_obj_set_size(rx_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(rx_ovl, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(rx_ovl, (lv_opa_t)P->scrim_opa, 0);
+    lv_obj_set_clickable(rx_ovl, true);                   /* nothing else while it runs */
+    lv_obj_t *card = lv_obj_create(rx_ovl);
+    lv_obj_set_size(card, 520, 250);
+    lv_obj_center(card);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_width(card, 0, 0);
+    lv_obj_set_style_radius(card, 16, 0);
+    lv_obj_set_scrollable(card, false);
+    lv_obj_t *tl = make_label(card, &lv_font_montserrat_22, C_TEXT);
+    lv_label_set_text(tl, LV_SYMBOL_VIDEO "  Exporting video");
+    lv_obj_align(tl, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_t *fl = make_label(card, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_width(fl, 470);
+    lv_label_set_long_mode(fl, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_style_text_align(fl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text_fmt(fl, "replays/%s.mp4", file);
+    lv_obj_align(fl, LV_ALIGN_TOP_MID, 0, 42);
+    rx_bar = lv_bar_create(card);
+    lv_obj_set_size(rx_bar, 460, 16);
+    lv_bar_set_range(rx_bar, 0, 100);
+    lv_obj_set_style_bg_color(rx_bar, C_CARD2, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(rx_bar, C_ACCENT, LV_PART_INDICATOR);
+    lv_obj_align(rx_bar, LV_ALIGN_TOP_MID, 0, 80);
+    rx_lbl = make_label(card, &lv_font_montserrat_16, C_MUTED);
+    lv_label_set_text(rx_lbl, "Starting...");
+    lv_obj_align(rx_lbl, LV_ALIGN_TOP_MID, 0, 108);
+    lv_obj_t *cb = make_btn(card, 0, 0, 200, 52, "Cancel", &lv_font_montserrat_18, rx_cancel_cb, NULL);
+    lv_obj_set_style_bg_color(cb, C_CARD2, 0);
+    lv_obj_align(cb, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    rx_busy = true;
+    rx_cancel = false;
+    rx_frame = 0;
+    rx_last_k = -1;
+    rx_last_playing = false;
+    rx_timer = lv_timer_create(rx_timer_cb, 1, NULL);
+    printf("export: %s, %d frames\n", rx_path, rx_frames);
 }
 
 /* ============================================================= list screen */
@@ -2488,7 +2735,17 @@ static void plays_hint(const char *text)
 static void plays_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i >= 0 && i < STATS_MAX_DAY_ROWS && pl_row_solve[i]) stats_db_query_replay(pl_row_solve[i]);
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || rx_busy) return;
+    rp_want_export = false;
+    stats_db_query_replay(pl_row_solve[i]);
+}
+
+static void plays_export_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || rx_busy) return;
+    rp_want_export = true;
+    stats_db_query_replay(pl_row_solve[i]);
 }
 
 static void plays_pager_update(void)
@@ -2550,6 +2807,10 @@ static void render_plays(const stats_plays_t *p)
         lv_obj_t *play = make_label(card, &lv_font_montserrat_24, C_ACCENT);
         lv_label_set_text(play, LV_SYMBOL_PLAY);
         lv_obj_align(play, LV_ALIGN_RIGHT_MID, 0, 0);
+        lv_obj_t *mp4 = make_btn(card, 0, 0, 96, 52, LV_SYMBOL_DOWNLOAD "  MP4", &lv_font_montserrat_16,
+                                 plays_export_cb, (void *)(intptr_t)i);   /* save as a video */
+        lv_obj_set_style_bg_color(mp4, C_CARD2, 0);
+        lv_obj_align(mp4, LV_ALIGN_RIGHT_MID, -44, 0);
     }
     lv_obj_scroll_to_y(pl_list, 0, LV_ANIM_OFF);
     plays_pager_update();
@@ -3496,6 +3757,8 @@ static void touch_sound_cb(lv_event_t *e)
 
 esp_err_t sudoku_ui_start(void)
 {
+    g_undo = heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM);
+    if (!g_undo) return ESP_ERR_NO_MEM;
 #if LV_USE_PERF_MONITOR
     lv_sysmon_hide_performance(NULL);
 #endif
