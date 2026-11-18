@@ -1,5 +1,6 @@
 /*
- * Wi-Fi station manager (see wifi_mgr.h).
+ * Wi-Fi station manager (see wifi_mgr.h). From the esp32p4_86box project;
+ * here "forget" also clears the C6's own stored config (radio_forget()).
  */
 #include "wifi_mgr.h"
 #include <Arduino.h>
@@ -141,6 +142,16 @@ static bool radio_up(void)
     return true;
 }
 
+/* The ESP32-C6 runs its own Wi-Fi stack and keeps the last station config in
+ * its own flash (the P4 side stores nothing: ESP-Hosted sets nvs_enable =
+ * false). Erasing only our NVS keys left it there, and it reconnected to the
+ * old network when Wi-Fi was switched on. Needs the radio up. */
+static void radio_forget(void)
+{
+    WiFi.disconnect(false, true);            /* disconnect + empty station config */
+    WiFi.eraseAP();                          /* esp_wifi_restore: stored config back to defaults */
+}
+
 static void begin_connect(const char *ssid, const char *pass)
 {
     strlcpy(s_try_ssid, ssid, sizeof(s_try_ssid));
@@ -219,6 +230,8 @@ static void handle(const cmd_t &c)
         if (radio_up()) {
             if (s_st.saved_ssid[0]) {
                 begin_connect(s_st.saved_ssid, s_saved_pass);
+            } else {
+                radio_forget();              /* nothing saved: nor may the C6 have anything */
             }
             WiFi.scanNetworks(true);
             xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -265,13 +278,21 @@ static void handle(const cmd_t &c)
             begin_connect(c.ssid, saved ? s_saved_pass : c.pass);
         }
         break;
-    case CMD_FORGET:
+    case CMD_FORGET: {
         nvs_store(nullptr, "", "");
         s_saved_pass[0] = 0;
         s_trying = false;
-        if (s_radio_up) {
-            WiFi.disconnect(false, true);
+        /* the C6's copy too, bringing the radio up just for that if it's off */
+        bool was_up = s_radio_up;
+        if (s_radio_up || radio_up()) {
+            radio_forget();
+            if (!was_up && !s_st.enabled) {
+                WiFi.mode(WIFI_OFF);
+                s_radio_up = false;
+                set_state(WIFI_ST_OFF);
+            }
         }
+        printf("wifi_mgr: network forgotten (board and Wi-Fi chip)\n");
         xSemaphoreTake(s_lock, portMAX_DELAY);
         s_st.saved_ssid[0] = 0;
         s_st.ssid[0] = 0;
@@ -281,6 +302,7 @@ static void handle(const cmd_t &c)
         }
         xSemaphoreGive(s_lock);
         break;
+    }
     }
 }
 
@@ -345,8 +367,9 @@ static void poll(void)
 
 static void worker(void *arg)
 {
-    if (s_st.enabled && radio_up() && s_st.saved_ssid[0]) {
-        begin_connect(s_st.saved_ssid, s_saved_pass);
+    if (s_st.enabled && radio_up()) {
+        if (s_st.saved_ssid[0]) begin_connect(s_st.saved_ssid, s_saved_pass);
+        else radio_forget();                 /* nothing saved: clear the C6's old network */
     }
     cmd_t c;
     for (;;) {
