@@ -167,6 +167,9 @@ static uint32_t g_last_tick;
 
 static board_t *g_undo;          /* UNDO_MAX boards, PSRAM (31 KB) */
 static int      g_undo_head, g_undo_len;
+static board_t *g_redo;          /* undone boards, newest last, PSRAM; any new edit empties it */
+static int      g_redo_len;
+static int      g_lock;          /* digit-first: the digit locked on the pad (long press), 0 = none */
 
 /* ------------------------------------------------------------- widgets */
 static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_history, *scr_game;
@@ -208,7 +211,7 @@ static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 
 /* settings screen */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
-static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl;
+static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
 static lv_obj_t *st_sd_btn, *st_sd_hint;
 static lv_obj_t *u_ovl;                   /* "USB drive" panel while the computer has the card */
@@ -233,6 +236,7 @@ static int       g_layout_var = -1;     /* variant the board and pad are laid ou
 static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
 static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
 static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
+static lv_obj_t *g_undo_btn, *g_redo_btn;
 
 static void show_list(void);
 static void open_puzzle(uint16_t id);
@@ -601,6 +605,22 @@ static int compute_conflicts(void)
     return n;
 }
 
+/* Is cell i's digit wrong by the Mistake check setting (Settings)? Off:
+ * nothing; Rules: it breaks a rule (g_conflict); Solution: also a digit
+ * that isn't the solution's. Shown red; placing one buzzes. */
+static bool digit_wrong(int i)
+{
+    if (!g_b.val[i]) return false;
+    switch (store_assist()) {
+    case ASSIST_OFF:
+        return false;
+    case ASSIST_SOLUTION:
+        return g_conflict[i] || (!g_given[i] && g_sol_ok && g_b.val[i] != g_sol[i]);
+    default:
+        return g_conflict[i];
+    }
+}
+
 /* Does the unit hold 1-n, each once? */
 static bool unit_complete(int u)
 {
@@ -707,7 +727,7 @@ static void update_header(void)
     uint32_t b = store_best_time(g_id);
     if (b) {
         fmt_time(best, sizeof(best), b);
-        snprintf(buf, sizeof(buf), LV_SYMBOL_OK "  Solved  -  best %s", best);
+        snprintf(buf, sizeof(buf), LV_SYMBOL_OK "  Best %s", best);
         lv_obj_set_style_text_color(g_best, C_GREEN, 0);
     } else {
         snprintf(buf, sizeof(buf), "Not solved yet");
@@ -721,7 +741,7 @@ static void update_header(void)
 
 static void refresh_board(void)
 {
-    int sv = g_sel >= 0 ? g_b.val[g_sel] : 0;
+    int sv = g_lock ? g_lock : (g_sel >= 0 ? g_b.val[g_sel] : 0);   /* same-digit highlight */
     for (int i = 0; i < 81; i++) {
         if (!g_geo->used[i]) continue;
         lv_color_t bg = cell_base_bg(g_geo, i, g_given[i]);
@@ -735,12 +755,13 @@ static void refresh_board(void)
         if (h_step && !g_solved && h_mark[i]) {
             bg = h_mark[i] == 2 ? (h_info.kind == STEP_WRONG ? C_CELL_BAD : C_CELL_SEL) : C_CELL_SAME;
         }
-        if (!g_solved && g_conflict[i] && !g_given[i] && i != g_sel) bg = C_CELL_BAD;
+        bool wrong = !g_solved && digit_wrong(i);
+        if (wrong && !g_given[i] && i != g_sel) bg = C_CELL_BAD;
         lv_obj_set_style_bg_color(g_cells[i], bg, 0);
 
         lv_color_t fg = g_given[i] ? C_TEXT : C_DIGIT_USER;
         if (g_solved) fg = g_given[i] ? C_TEXT : C_GREEN;
-        else if (g_conflict[i]) fg = C_RED;
+        else if (wrong) fg = C_RED;
         lv_obj_set_style_text_color(g_cell_lbl[i], fg, 0);
 
         const char *t = DIGITS[g_b.val[i]];
@@ -754,23 +775,37 @@ static void refresh_board(void)
     for (int d = 1; d <= g_geo->n; d++) {
         int left = g_geo->n - count[d];
         lv_label_set_text_fmt(g_pad_cnt[d - 1], "%d", left > 0 ? left : 0);
-        lv_obj_set_style_opa(g_pad[d - 1], left <= 0 ? LV_OPA_40 : LV_OPA_COVER, 0);
+        lv_obj_set_style_opa(g_pad[d - 1], left <= 0 && d != g_lock ? LV_OPA_40 : LV_OPA_COVER, 0);
+        bool locked = d == g_lock;                  /* digit-first: the locked digit is accent blue */
+        lv_obj_set_state(g_pad[d - 1], LV_STATE_CHECKED, locked);
+        lv_obj_set_style_text_color(lv_obj_get_child(g_pad[d - 1], 0), locked ? lv_color_white() : C_TEXT, 0);
+        lv_obj_set_style_text_color(g_pad_cnt[d - 1], locked ? lv_color_white() : C_MUTED, 0);
     }
+    lv_obj_set_style_opa(g_undo_btn, g_undo_len ? LV_OPA_COVER : LV_OPA_40, 0);
+    lv_obj_set_style_opa(g_redo_btn, g_redo_len ? LV_OPA_COVER : LV_OPA_40, 0);
 
     if (g_hints) lv_label_set_text_fmt(g_hint_cnt, "%u", (unsigned)g_hints);
     lv_obj_set_hidden(g_hint_cnt, g_hints == 0);
 
     /* status line */
     int bad = 0;
-    for (int i = 0; i < 81; i++) bad += g_conflict[i];
+    for (int i = 0; i < 81; i++) bad += digit_wrong(i);
+    bool full = filled_count() == g_geo->ncells;
     if (g_solved) {
         char t[16];
         fmt_time(t, sizeof(t), g_elapsed_ms / 1000);
         lv_label_set_text_fmt(g_status, LV_SYMBOL_OK "  Solved in %s", t);
         lv_obj_set_style_text_color(g_status, C_GREEN, 0);
     } else if (bad) {
-        lv_label_set_text_fmt(g_status, LV_SYMBOL_WARNING "  %d conflicting", bad);
+        lv_label_set_text_fmt(g_status, LV_SYMBOL_WARNING "  %d %s", bad,
+                              store_assist() == ASSIST_SOLUTION ? "wrong" : "conflicting");
         lv_obj_set_style_text_color(g_status, C_RED, 0);
+    } else if (full) {                              /* Mistake check off: something is wrong somewhere */
+        lv_label_set_text(g_status, "All filled, not solved yet");
+        lv_obj_set_style_text_color(g_status, C_ORANGE, 0);
+    } else if (g_lock) {
+        lv_label_set_text_fmt(g_status, "Placing %d: tap cells", g_lock);
+        lv_obj_set_style_text_color(g_status, C_ACCENT, 0);
     } else {
         lv_label_set_text_fmt(g_status, "Filled %d / %d", filled_count(), g_geo->ncells);
         lv_obj_set_style_text_color(g_status, C_MUTED, 0);
@@ -808,6 +843,7 @@ static void solve_commit_cb(lv_timer_t *t)
 static void on_solved(void)
 {
     g_solved = true;
+    g_lock = 0;
     g_paused = false;
     sfx_play(SFX_SOLVED);
     g_sel = -1;
@@ -873,11 +909,18 @@ static void after_move(void)
     save_current();                                 /* every move (not once solved) */
 }
 
-static void push_undo(void)
+static void push_undo_keep_redo(void)
 {
     g_undo[g_undo_head] = g_b;
     g_undo_head = (g_undo_head + 1) % UNDO_MAX;
     if (g_undo_len < UNDO_MAX) g_undo_len++;
+}
+
+/* before every edit: the board goes on the undo ring, and redo is gone */
+static void push_undo(void)
+{
+    push_undo_keep_redo();
+    g_redo_len = 0;
 }
 
 static bool can_edit(void)
@@ -920,9 +963,12 @@ static void enter_digit(int d)
     after_move();
     if (!placed || g_solved) return;          /* on_solved() plays its own sound */
 
-    if (g_conflict[i]) {
+    /* a mistake: breaks a rule (with Mistake check on Solution: or isn't the
+     * solution's digit). Counted even with the check off, just not shown. */
+    bool wrong = g_conflict[i] || (store_assist() == ASSIST_SOLUTION && g_sol_ok && d != g_sol[i]);
+    if (wrong) {
         if (g_mistakes < 0xFFFF) g_mistakes++;
-        sfx_play(SFX_ERROR);
+        if (store_assist() != ASSIST_OFF) sfx_play(SFX_ERROR);
         return;
     }
     placed_sounds(i, d);
@@ -987,6 +1033,10 @@ static void cell_click_cb(lv_event_t *e)
     if (g_solved || g_paused) return;
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     g_sel = i;
+    if (g_lock && !g_given[i]) {                    /* digit-first: the locked digit goes in (or its note) */
+        enter_digit(g_lock);
+        return;
+    }
     refresh_board();
 }
 
@@ -998,7 +1048,7 @@ static void cell_draw_cb(lv_event_t *e)
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t co;
     lv_obj_get_coords(cell, &co);
-    int sv = g_sel >= 0 ? g_b.val[g_sel] : 0;
+    int sv = g_lock ? g_lock : (g_sel >= 0 ? g_b.val[g_sel] : 0);
 
     /* three marks per row: 3 rows on a 9x9 board, 2 (centred) on a 6x6 one */
     int size = lv_area_get_width(&co), pitch = size / 3, rows = (g_geo->n + 2) / 3;
@@ -1020,9 +1070,51 @@ static void cell_draw_cb(lv_event_t *e)
     }
 }
 
+/* A short tap enters the digit in the selected cell; while a digit is
+ * locked (digit-first) it moves the lock to that digit, or unlocks it. */
 static void pad_click_cb(lv_event_t *e)
 {
-    enter_digit((int)(intptr_t)lv_event_get_user_data(e));
+    int d = (int)(intptr_t)lv_event_get_user_data(e);
+    if (g_lock) {
+        g_lock = g_lock == d ? 0 : d;
+        refresh_board();
+        return;
+    }
+    enter_digit(d);
+}
+
+/* A long press locks the digit: then each tap on a cell places it there. */
+static void pad_long_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused) return;
+    int d = (int)(intptr_t)lv_event_get_user_data(e);
+    g_lock = g_lock == d ? 0 : d;
+    refresh_board();
+}
+
+/* Auto notes: every empty cell gets all the digits that still fit there as
+ * pencil marks (replacing its notes). Undo takes it back. */
+static void auto_notes_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused) return;
+    uint16_t notes[81];
+    int changed = 0;
+    for (int k = 0; k < g_geo->ncells; k++) {
+        int c = g_geo->cells[k];
+        notes[c] = g_b.notes[c];
+        if (g_b.val[c]) continue;
+        uint16_t m = g_geo->all;
+        for (int p = 0; p < g_geo->npeers[c]; p++) m &= (uint16_t)~(1u << g_b.val[g_geo->peers[c][p]]);
+        notes[c] = m;
+        changed += m != g_b.notes[c];
+    }
+    if (!changed) {
+        sudoku_ui_notice("The notes already show every digit that fits.", 2500);
+        return;
+    }
+    push_undo();
+    for (int k = 0; k < g_geo->ncells; k++) g_b.notes[g_geo->cells[k]] = notes[g_geo->cells[k]];
+    after_move();
 }
 
 static void erase_cb(lv_event_t *e)
@@ -1039,6 +1131,11 @@ static void erase_cb(lv_event_t *e)
 static void undo_cb(lv_event_t *e)
 {
     if (g_solved || g_paused || g_undo_len == 0) return;
+    if (g_redo_len == UNDO_MAX) {                   /* full: the oldest undone board goes */
+        memmove(g_redo, g_redo + 1, sizeof(board_t) * (UNDO_MAX - 1));
+        g_redo_len--;
+    }
+    g_redo[g_redo_len++] = g_b;                     /* for Redo */
     g_undo_head = (g_undo_head + UNDO_MAX - 1) % UNDO_MAX;
     g_undo_len--;
     uint8_t before[81];
@@ -1046,6 +1143,20 @@ static void undo_cb(lv_event_t *e)
     g_b = g_undo[g_undo_head];
     for (int i = 0; i < 81; i++) {
         if (g_b.val[i] != before[i]) record_move(i, g_b.val[i], MOVE_UNDO);
+    }
+    after_move();
+}
+
+/* puts back what the last Undo took away (until the next edit) */
+static void redo_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused || g_redo_len == 0) return;
+    push_undo_keep_redo();
+    uint8_t before[81];
+    memcpy(before, g_b.val, sizeof(before));
+    g_b = g_redo[--g_redo_len];
+    for (int i = 0; i < 81; i++) {
+        if (g_b.val[i] != before[i]) record_move(i, g_b.val[i], MOVE_REDO);
     }
     after_move();
 }
@@ -1256,6 +1367,8 @@ static void reset_game(void)
     hint_drop();
     mark_started();                                 /* opened or restarted: a new attempt */
     g_undo_len = g_undo_head = 0;
+    g_redo_len = 0;
+    g_lock = 0;
     g_sel = -1;
     g_solved = false;
     lv_obj_set_hidden(g_win_ovl, true);
@@ -1539,34 +1652,43 @@ static void build_game(void)
     /* number pad */
     for (int d = 1; d <= 9; d++) {
         lv_obj_t *b = make_btn(scr_game, PAD_X, GRID_Y + 1 + (d - 1) * (PAD_H + PAD_GAP), PAD_W, PAD_H,
-                               DIGITS[d], &lv_font_montserrat_28, pad_click_cb, (void *)(intptr_t)d);
+                               DIGITS[d], &lv_font_montserrat_28, NULL, NULL);
+        lv_obj_add_event_cb(b, pad_click_cb, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)d);
+        lv_obj_add_event_cb(b, pad_long_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)d);   /* lock it */
         g_pad[d - 1] = b;
         g_pad_cnt[d - 1] = make_label(b, &lv_font_montserrat_12, C_MUTED);
         lv_obj_align(g_pad_cnt[d - 1], LV_ALIGN_TOP_RIGHT, -6, 4);
     }
 
-    /* bottom bar */
-    int bx = 8, bw = 100;
-    make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LEFT "  Undo", &lv_font_montserrat_16, undo_cb, NULL);
-    bx += bw + 8;
+    /* bottom bar: seven buttons across (the status line is in the top bar) */
+    const int gap = 6, bw = (SCR_W - 16 - 6 * gap) / 7;
+    int bx = 8;
+    g_undo_btn = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LEFT "  Undo", &lv_font_montserrat_16, undo_cb,
+                          NULL);
+    bx += bw + gap;
+    g_redo_btn = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, "Redo  " LV_SYMBOL_RIGHT, &lv_font_montserrat_16, redo_cb,
+                          NULL);
+    bx += bw + gap;
     make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_BACKSPACE "  Erase", &lv_font_montserrat_16, erase_cb, NULL);
-    bx += bw + 8;
+    bx += bw + gap;
     g_notes_btn = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_EDIT "  Notes", &lv_font_montserrat_16, NULL, NULL);
     lv_obj_set_checkable(g_notes_btn, true);
     lv_obj_add_event_cb(g_notes_btn, notes_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bx += bw + 8;
+    bx += bw + gap;
+    make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LIST "  Auto", &lv_font_montserrat_16, auto_notes_cb, NULL);
+    bx += bw + gap;
     make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_REFRESH "  Restart", &lv_font_montserrat_16, restart_cb, NULL);
-    bx += bw + 8;
+    bx += bw + gap;
     lv_obj_t *fb = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_EYE_OPEN "  Fill", &lv_font_montserrat_16,
                             fill_cb, NULL);
     g_hint_cnt = make_label(fb, &lv_font_montserrat_12, C_ORANGE);     /* hints used */
     lv_obj_align(g_hint_cnt, LV_ALIGN_TOP_RIGHT, -5, 2);
     lv_obj_set_hidden(g_hint_cnt, true);
-    bx += bw + 8;
-    g_status = make_label(scr_game, &lv_font_montserrat_16, C_MUTED);
-    lv_obj_set_width(g_status, SCR_W - 8 - bx);
+    /* status: top bar, right-aligned on the line under the title, up to the Hint button */
+    g_status = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_width(g_status, SCR_W - 8 - 200 - 8 - 92 - 8 - 126);
     lv_obj_set_style_text_align(g_status, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(g_status, bx, BOT_Y + (BOT_H - 20) / 2);
+    lv_obj_set_pos(g_status, 126, 36);
 
     /* hint card: text, then More / Place it, and close (moved to the top by hint_render if needed) */
     h_card = lv_obj_create(scr_game);
@@ -3079,7 +3201,8 @@ static void stats_info_cb(lv_event_t *e)
 {
     static char text[640];
     snprintf(text, sizeof(text), "%s\n\n"
-             "Mistake: a placed digit that broke a row, column or box rule. Undo doesn't take it back.\n\n"
+             "Mistake: a placed digit that broke a row, column or box rule (with Mistake check on Solution, "
+             "also one that wasn't the solution's). Undo doesn't take it back.\n\n"
              "Per puzzle: the best time, the fewest mistakes in any solve, and how many times it was "
              "solved. \"-\" means mistakes weren't counted yet when it was solved.\n\n"
              "Per level: puzzles solved, the fastest and the average of the best times, and the "
@@ -3185,6 +3308,41 @@ static lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_
     lv_label_set_text_fmt(*lbl, "%d%%", value);
     lv_obj_align(*lbl, LV_ALIGN_RIGHT_MID, -250, 0);
     return sl;
+}
+
+static void assist_dd_cb(lv_event_t *e)
+{
+    store_set_assist((uint8_t)lv_dropdown_get_selected(st_assist_dd));   /* the game redraws when shown */
+}
+
+/* a dropdown on the right of a settings row, styled like the others */
+static lv_obj_t *settings_dropdown(lv_obj_t *row, const char *options, uint32_t sel, int width, lv_event_cb_t cb)
+{
+    lv_obj_t *dd = lv_dropdown_create(row);
+    lv_obj_set_size(dd, width, 52);
+    lv_obj_align(dd, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_dropdown_set_options_static(dd, options);
+    lv_obj_set_style_text_font(dd, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(dd, C_TEXT, 0);
+    lv_obj_set_style_bg_color(dd, C_CARD2, 0);
+    lv_obj_set_style_border_width(dd, 0, 0);
+    lv_obj_set_style_shadow_width(dd, 0, 0);
+    lv_obj_set_style_radius(dd, 8, 0);
+    lv_obj_set_style_pad_hor(dd, 16, 0);
+    lv_obj_set_style_pad_ver(dd, 15, 0);
+    lv_obj_t *dl = lv_dropdown_get_list(dd);
+    lv_obj_set_style_text_font(dl, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(dl, C_TEXT, 0);
+    lv_obj_set_style_text_line_space(dl, 22, 0);   /* finger-sized rows */
+    lv_obj_set_style_bg_color(dl, C_CARD2, 0);
+    lv_obj_set_style_border_width(dl, 0, 0);
+    lv_obj_set_style_radius(dl, 8, 0);
+    lv_obj_set_style_max_height(dl, 480, 0);
+    lv_obj_set_style_bg_color(dl, C_ACCENT, LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(dl, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_dropdown_set_selected(dd, sel);
+    lv_obj_add_event_cb(dd, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    return dd;
 }
 
 static void sleep_dd_cb(lv_event_t *e)
@@ -5138,33 +5296,13 @@ static void build_settings(void)
     r = settings_row(col, "Volume", "Speaker loudness");
     st_vol_sl = settings_slider(r, 0, 100, store_volume(), vol_sl_cb, &st_vol_lbl);
 
+    r = settings_row(col, "Mistake check", "Red digits: none, rule breakers, or any wrong digit");
+    st_assist_dd = settings_dropdown(r, "Off\nRules\nSolution", store_assist(), 150, assist_dd_cb);
+
     r = settings_row(col, "Screen off after", "Without a touch. The game pauses; tap to wake.");
-    st_sleep_dd = lv_dropdown_create(r);
-    lv_obj_set_size(st_sleep_dd, 150, 52);
-    lv_obj_align(st_sleep_dd, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_dropdown_set_options_static(st_sleep_dd, SLEEP_OPTIONS);
-    lv_obj_set_style_text_font(st_sleep_dd, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(st_sleep_dd, C_TEXT, 0);
-    lv_obj_set_style_bg_color(st_sleep_dd, C_CARD2, 0);
-    lv_obj_set_style_border_width(st_sleep_dd, 0, 0);
-    lv_obj_set_style_shadow_width(st_sleep_dd, 0, 0);
-    lv_obj_set_style_radius(st_sleep_dd, 8, 0);
-    lv_obj_set_style_pad_hor(st_sleep_dd, 16, 0);
-    lv_obj_set_style_pad_ver(st_sleep_dd, 15, 0);
-    lv_obj_t *dl = lv_dropdown_get_list(st_sleep_dd);
-    lv_obj_set_style_text_font(dl, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(dl, C_TEXT, 0);
-    lv_obj_set_style_text_line_space(dl, 22, 0);   /* finger-sized rows */
-    lv_obj_set_style_bg_color(dl, C_CARD2, 0);
-    lv_obj_set_style_border_width(dl, 0, 0);
-    lv_obj_set_style_radius(dl, 8, 0);
-    lv_obj_set_style_max_height(dl, 480, 0);
-    lv_obj_set_style_bg_color(dl, C_ACCENT, LV_PART_SELECTED | LV_STATE_CHECKED);
-    lv_obj_set_style_text_color(dl, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
     uint32_t sel = 0;
     while (sel < SLEEP_COUNT - 1 && SLEEP_MIN[sel] != s_sleep_min) sel++;
-    lv_dropdown_set_selected(st_sleep_dd, sel);
-    lv_obj_add_event_cb(st_sleep_dd, sleep_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    st_sleep_dd = settings_dropdown(r, SLEEP_OPTIONS, sel, 150, sleep_dd_cb);
 
     /* Wi-Fi: the whole card opens the Wi-Fi screen */
     r = settings_row(col, "Wi-Fi", "For the clock (time from the internet)");
@@ -5197,7 +5335,7 @@ static void build_settings(void)
     lv_obj_set_style_radius(st_tz_dd, 8, 0);
     lv_obj_set_style_pad_hor(st_tz_dd, 14, 0);
     lv_obj_set_style_pad_ver(st_tz_dd, 16, 0);
-    dl = lv_dropdown_get_list(st_tz_dd);
+    lv_obj_t *dl = lv_dropdown_get_list(st_tz_dd);
     lv_obj_set_style_text_font(dl, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(dl, C_TEXT, 0);
     lv_obj_set_style_text_line_space(dl, 22, 0);
@@ -5322,7 +5460,8 @@ static void touch_sound_cb(lv_event_t *e)
 esp_err_t sudoku_ui_start(void)
 {
     g_undo = heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM);
-    if (!g_undo) return ESP_ERR_NO_MEM;
+    g_redo = heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM);
+    if (!g_undo || !g_redo) return ESP_ERR_NO_MEM;
     sudoku_geom_init();                             /* before the generator task can use the tables */
     g_geo = sudoku_geom(VAR_CLASSIC);
 #if LV_USE_PERF_MONITOR

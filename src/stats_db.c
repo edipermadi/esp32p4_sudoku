@@ -405,6 +405,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "screen_off_minutes")) p->screen_timeout_min = v < 0 ? 0 : (v > 255 ? 255 : v);
             else if (!strcmp(k, "brightness")) p->brightness = v < 10 ? 10 : (v > 100 ? 100 : v);
             else if (!strcmp(k, "volume")) p->volume = v < 0 ? 0 : (v > 100 ? 100 : v);
+            else if (!strcmp(k, "assist")) p->assist = v >= ASSIST_OFF && v <= ASSIST_SOLUTION ? v : ASSIST_RULES;
             else if (!strcmp(k, "time_zone") && t) snprintf(p->timezone, sizeof(p->timezone), "%s", t);
             else if (!strcmp(k, "last_level") && t) {
                 for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
@@ -539,6 +540,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("screen_off_minutes", false, p->screen_timeout_min, NULL);
     set_setting("brightness", false, p->brightness, NULL);
     set_setting("volume", false, p->volume, NULL);
+    set_setting("assist", false, p->assist, NULL);
     set_setting("time_zone", true, 0, p->timezone);
     set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
                                                           ? p->last_collection : 0].name);

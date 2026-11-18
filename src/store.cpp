@@ -32,6 +32,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .screen_timeout_min = 5,
     .brightness = 100,
     .volume = 70,
+    .assist = ASSIST_RULES,
     .timezone = "UTC",
     .player_id = 0,
     .player_name = "Player 1",
@@ -296,6 +297,17 @@ void store_set_volume(uint8_t percent)
 {
     s_p.volume = percent;
     stats_db_set_int("volume", percent);
+}
+
+uint8_t store_assist(void)
+{
+    return s_p.assist <= ASSIST_SOLUTION ? s_p.assist : ASSIST_RULES;
+}
+
+void store_set_assist(uint8_t assist)
+{
+    s_p.assist = assist;
+    stats_db_set_int("assist", assist);
 }
 
 uint8_t store_screen_timeout_min(void)

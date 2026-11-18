@@ -7,6 +7,7 @@
  *
  * Stored in sudoku.db as a BLOB (saved_game.moves, solves.moves): 6 bytes per
  * move, little-endian: uint32 t_ms, uint8 cell (0..80), uint8 digit | kind << 4.
+ * (Kind 4, Redo, is newer: a build from before it stops reading a log there.)
  */
 #include <stdint.h>
 #include <stddef.h>
@@ -23,6 +24,7 @@ typedef enum {
     MOVE_FILL = 1,                       /* Fill: the solution's digit (a hint) */
     MOVE_ERASE = 2,                      /* Erase button */
     MOVE_UNDO = 3,                       /* Undo put this cell back */
+    MOVE_REDO = 4,                       /* Redo put an undone change back */
 } move_kind_t;
 
 typedef struct {
@@ -55,7 +57,7 @@ static inline int moves_unpack(const uint8_t *in, int bytes, game_move_t *out, i
         m->cell = in[4];
         m->digit = in[5] & 0x0F;
         m->kind = in[5] >> 4;
-        if (m->cell > 80 || m->digit > 9 || m->kind > MOVE_UNDO) break;
+        if (m->cell > 80 || m->digit > 9 || m->kind > MOVE_REDO) break;
     }
     return n;
 }

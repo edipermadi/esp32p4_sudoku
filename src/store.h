@@ -76,6 +76,7 @@ typedef struct {
     uint8_t screen_timeout_min;
     uint8_t brightness;                       /* backlight, 10..100 % */
     uint8_t volume;                           /* speaker, 0..100 % */
+    uint8_t assist;                           /* store_assist_t: what turns red */
     char timezone[STORE_TZ_LEN];
     int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
     char player_name[STORE_NAME_LEN];
@@ -115,6 +116,15 @@ uint8_t store_brightness(void);
 void store_set_brightness(uint8_t percent);
 uint8_t store_volume(void);
 void store_set_volume(uint8_t percent);
+
+/* Mistake check: which digits turn red (and buzz) in the game. */
+typedef enum {
+    ASSIST_OFF = 0,                           /* none: no red, no buzz (mistakes still counted) */
+    ASSIST_RULES = 1,                         /* digits that break a row/column/box rule (default) */
+    ASSIST_SOLUTION = 2,                      /* also digits that aren't the solution's */
+} store_assist_t;
+uint8_t store_assist(void);
+void store_set_assist(uint8_t assist);
 
 #ifdef __cplusplus
 }
