@@ -80,6 +80,10 @@ LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
 #define SYMBOL_USER     "\xEF\x80\x87"   /* FontAwesome U+F007 */
 #define SYMBOL_CALENDAR "\xEF\x81\xB3"   /* FontAwesome U+F073 */
 #define SYMBOL_INFO     "\xEF\x81\x9A"   /* FontAwesome U+F05A */
+#define SYMBOL_TROPHY   "\xEF\x82\x91"   /* FontAwesome U+F091 */
+#define SYMBOL_LOCK     "\xEF\x80\xA3"   /* FontAwesome U+F023 */
+#define SYMBOL_STAR     "\xEF\x80\x85"   /* FontAwesome U+F005 */
+#define SYMBOL_CHART    "\xEF\x88\x81"   /* FontAwesome U+F201 (chart-line) */
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
@@ -167,6 +171,7 @@ static int      g_undo_head, g_undo_len;
 /* ------------------------------------------------------------- widgets */
 static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_history, *scr_game;
 static lv_obj_t *scr_plays;               /* Gameplays: recorded solves to replay */
+static lv_obj_t *scr_trophy;              /* Trophies: achievements, daily leaderboard */
 
 /* home screen */
 #define HOME_COL_W      440      /* menu button, one column */
@@ -195,6 +200,8 @@ static int p_count = -1;                 /* last list from sudoku.db, -1 = none 
 #define X_ROWS (PUZZLE_COLLECTION_COUNT + 1)
 static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
 static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_player_dd;
+static lv_obj_t *x_chart, *x_plot, *x_trend, *x_chart_btn;   /* progress chart (instead of the table) */
+static bool      x_chart_mode;            /* chart shown (kept until power-off) */
 static bool      x_from_db;               /* what the info popup says the numbers come from */
 static char      x_player_txt[STORE_NAME_LEN + 8];    /* closed dropdown: icon + name */
 static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
@@ -237,6 +244,10 @@ static void history_cb(lv_event_t *e);
 static void apply_loaded_prefs(void);
 static void win_replay_cb(lv_event_t *e);
 static void plays_poll(void);
+static void trophy_poll(void);
+static void trophy_toast_poll(void);
+static void tr_ask(void);
+static void build_trophies(void);
 static void apply_theme(bool dark);
 
 /* ============================================================= helpers */
@@ -248,6 +259,14 @@ static void fmt_time(char *buf, size_t n, uint32_t s)
     } else {
         snprintf(buf, n, "%02u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
     }
+}
+
+/* "st", "nd", "rd" or "th" after n */
+static const char *ordinal(int n)
+{
+    int t = n % 100;
+    if (t >= 11 && t <= 13) return "th";
+    return n % 10 == 1 ? "st" : n % 10 == 2 ? "nd" : n % 10 == 3 ? "rd" : "th";
 }
 
 /* ------------------------------------------------------------- generated puzzles */
@@ -773,9 +792,15 @@ static void solve_commit_cb(lv_timer_t *t)
         int id, streak;
         bool solved;
         if (stats_db_daily_status(day, &id, &solved, &streak) && solved) {   /* after the solve above (queued first) */
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Daily puzzle solved! Streak: %d day%s", streak, streak == 1 ? "" : "s");
-            sudoku_ui_notice(msg, 4000);
+            char msg[128];
+            int len = snprintf(msg, sizeof(msg), "Daily puzzle solved! Streak: %d day%s.", streak,
+                               streak == 1 ? "" : "s");
+            int rank = 0, of = 0;
+            if (stats_db_daily_rank(day, &rank, &of) && rank && of > 1) {
+                snprintf(msg + len, sizeof(msg) - len, " You're %d%s of %d today (Trophies > Daily).", rank,
+                         ordinal(rank), of);
+            }
+            sudoku_ui_notice(msg, 5000);
         }
     }
 }
@@ -2546,6 +2571,7 @@ static void refresh_home(void)
         lv_label_set_text_fmt(h_continue_sub, "%s  -  %s", name, t);
     }
     daily_btn_update();
+    if (stats_db_ready()) stats_db_query_achievements();   /* the Trophies line (trophy_poll) */
     home_layout();
 }
 
@@ -2805,8 +2831,11 @@ static void stats_select_rows(void)
     }
 }
 
+static void chart_render(const stats_view_t *v, bool from_db);
+
 static void render_stats(const stats_view_t *v, bool from_db)
 {
+    chart_render(v, from_db);
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
         lv_label_set_text_fmt(x_cnt_lbl[c + 1], "%u/%u", (unsigned)v->levels[c].solved,
                               (unsigned)puzzle_collections[c].count);
@@ -2836,7 +2865,7 @@ static void render_stats(const stats_view_t *v, bool from_db)
             lv_table_set_cell_value(x_table, c + 1, 3, a);
             lv_table_set_cell_value(x_table, c + 1, 4, m);
         }
-        lv_obj_set_hidden(x_table, false);
+        lv_obj_set_hidden(x_table, x_chart_mode);
         lv_obj_set_hidden(x_empty, true);
         return;
     }
@@ -2858,8 +2887,191 @@ static void render_stats(const stats_view_t *v, bool from_db)
         else lv_table_set_cell_value_fmt(x_table, r + 1, 2, "%u", (unsigned)p->fewest);
         lv_table_set_cell_value_fmt(x_table, r + 1, 3, "%u", (unsigned)p->solves);
     }
-    lv_obj_set_hidden(x_table, v->n_puzzles == 0);
-    lv_obj_set_hidden(x_empty, v->n_puzzles != 0);
+    lv_obj_set_hidden(x_table, x_chart_mode || v->n_puzzles == 0);
+    lv_obj_set_hidden(x_empty, x_chart_mode || v->n_puzzles != 0);
+}
+
+/* ------------------------------------------------------------- progress chart */
+/*
+ * The Chart button on Statistics swaps the table for a chart of the player's
+ * newest solves at the selected level (STATS_RECENT, oldest on the left):
+ * a dot per solve and an orange line for the average of the last 5, with
+ * minutes up the side. Below it, how the newest 5 compare with the first 5.
+ */
+#define AVG_WIN 5
+#define PLOT_L  58                      /* room for the time labels */
+#define PLOT_R  14
+#define PLOT_T  14
+#define PLOT_B  44                      /* room for the legend */
+
+/* a scale step that gives at most 5 lines up to max seconds */
+static uint32_t chart_step(uint32_t max)
+{
+    static const uint32_t STEPS[] = {30, 60, 120, 300, 600, 900, 1200, 1800, 3600, 7200};
+    for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); i++) {
+        if (max <= STEPS[i] * 5) return STEPS[i];
+    }
+    return (max / 5 / 3600 + 1) * 3600;
+}
+
+/* trailing average of up to AVG_WIN solves ending at i */
+static uint32_t chart_avg(const stats_view_t *v, int i)
+{
+    int from = i - AVG_WIN + 1 < 0 ? 0 : i - AVG_WIN + 1;
+    uint32_t sum = 0;
+    for (int k = from; k <= i; k++) sum += v->recent[k];
+    return sum / (uint32_t)(i - from + 1);
+}
+
+static void plot_text(lv_layer_t *layer, const char *text, lv_color_t color, int x1, int y1, int x2,
+                      lv_text_align_t align)
+{
+    lv_draw_label_dsc_t d;
+    lv_draw_label_dsc_init(&d);
+    d.font = &lv_font_montserrat_14;
+    d.color = color;
+    d.align = align;
+    d.text = text;
+    d.text_local = 1;                               /* copied: text is on the stack */
+    lv_area_t a = {.x1 = x1, .y1 = y1, .x2 = x2, .y2 = y1 + 18};
+    lv_draw_label(layer, &d, &a);
+}
+
+static void plot_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, lv_color_t color, int width, lv_opa_t opa)
+{
+    lv_draw_line_dsc_t d;
+    lv_draw_line_dsc_init(&d);
+    d.p1.x = x1;
+    d.p1.y = y1;
+    d.p2.x = x2;
+    d.p2.y = y2;
+    d.color = color;
+    d.width = width;
+    d.opa = opa;
+    d.round_start = d.round_end = 1;
+    lv_draw_line(layer, &d);
+}
+
+static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color)
+{
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_color = color;
+    d.bg_opa = LV_OPA_COVER;
+    d.radius = LV_RADIUS_CIRCLE;
+    lv_area_t a = {.x1 = x - r, .y1 = y - r, .x2 = x + r, .y2 = y + r};
+    lv_draw_rect(layer, &d, &a);
+}
+
+static void plot_draw_cb(lv_event_t *e)
+{
+    const stats_view_t *v = &x_view;
+    if (v->n_recent < 2) return;
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_area_t co;
+    lv_obj_get_coords(x_plot, &co);
+    int left = co.x1 + PLOT_L, right = co.x2 - PLOT_R, top = co.y1 + PLOT_T, bottom = co.y2 - PLOT_B;
+    uint32_t max = 0;
+    for (int i = 0; i < v->n_recent; i++) {
+        if (v->recent[i] > max) max = v->recent[i];
+    }
+    uint32_t step = chart_step(max), lines = (max + step - 1) / step, top_s = lines * step;
+    if (!top_s) top_s = step;
+
+    /* scale: a line per step, labelled in minutes */
+    char buf[16];
+    for (uint32_t k = 0; k <= lines; k++) {
+        int y = bottom - (int)((int64_t)(bottom - top) * k * step / top_s);
+        plot_line(layer, left, y, right, y, C_CARD2, 1, LV_OPA_COVER);
+        fmt_time(buf, sizeof(buf), k * step);
+        plot_text(layer, buf, C_MUTED, co.x1, y - 9, left - 8, LV_TEXT_ALIGN_RIGHT);
+    }
+
+    /* the solves: dots joined by a faint line, then the average on top */
+    const int n = v->n_recent;
+    int px = 0, py = 0, ax = 0, ay = 0;
+    for (int i = 0; i < n; i++) {
+        int x = left + (right - left) * i / (n - 1);
+        int y = bottom - (int)((int64_t)(bottom - top) * v->recent[i] / top_s);
+        if (i) plot_line(layer, px, py, x, y, C_ACCENT, 2, LV_OPA_40);
+        px = x;
+        py = y;
+    }
+    for (int i = 0; i < n; i++) {
+        int x = left + (right - left) * i / (n - 1);
+        int y = bottom - (int)((int64_t)(bottom - top) * v->recent[i] / top_s);
+        plot_dot(layer, x, y, 4, C_ACCENT);
+    }
+    for (int i = 0; i < n; i++) {
+        int x = left + (right - left) * i / (n - 1);
+        int y = bottom - (int)((int64_t)(bottom - top) * chart_avg(v, i) / top_s);
+        if (i) plot_line(layer, ax, ay, x, y, C_ORANGE, 4, LV_OPA_COVER);
+        ax = x;
+        ay = y;
+    }
+
+    /* legend under the plot */
+    int ly = co.y2 - 26;
+    plot_dot(layer, left + 6, ly + 9, 5, C_ACCENT);
+    plot_text(layer, "Each solve", C_MUTED, left + 18, ly, left + 140, LV_TEXT_ALIGN_LEFT);
+    plot_line(layer, left + 150, ly + 9, left + 176, ly + 9, C_ORANGE, 4, LV_OPA_COVER);
+    plot_text(layer, "Average of the last 5", C_MUTED, left + 186, ly, right, LV_TEXT_ALIGN_LEFT);
+}
+
+static void chart_render(const stats_view_t *v, bool from_db)
+{
+    lv_obj_set_hidden(x_chart, !x_chart_mode);
+    lv_label_set_text(lv_obj_get_child(x_chart_btn, 0), x_chart_mode ? LV_SYMBOL_LIST "  Table"
+                                                                     : SYMBOL_CHART "  Chart");
+    if (!x_chart_mode) return;
+    char text[200];
+    const int n = v->n_recent;
+    if (!from_db) {
+        snprintf(text, sizeof(text), "The chart needs sudoku.db on a microSD card: it is drawn from the "
+                                     "solves logged there.");
+    } else if (n < 2) {
+        snprintf(text, sizeof(text), "Solve at least two puzzles%s to see a chart.",
+                 v->level < 0 ? "" : " at this level");
+    } else {
+        uint32_t fastest = 0xFFFFFFFF;
+        for (int i = 0; i < n; i++) {
+            if (v->recent[i] < fastest) fastest = v->recent[i];
+        }
+        char f[16], a1[16], a2[16];
+        fmt_time(f, sizeof(f), fastest);
+        int len = snprintf(text, sizeof(text), "Your last %d solve%s%s, oldest on the left. Fastest %s.", n,
+                           n == 1 ? "" : "s", v->level < 0 ? "" : " at this level", f);
+        if (n >= 2 * AVG_WIN) {                         /* newest 5 against the first 5 shown */
+            uint32_t first = 0, last = 0;
+            for (int i = 0; i < AVG_WIN; i++) {
+                first += v->recent[i];
+                last += v->recent[n - AVG_WIN + i];
+            }
+            first /= AVG_WIN;
+            last /= AVG_WIN;
+            fmt_time(a1, sizeof(a1), first);
+            fmt_time(a2, sizeof(a2), last);
+            int pct = first ? (int)(((int64_t)first - (int64_t)last) * 100 / (int64_t)first) : 0;
+            if (pct > 0) {
+                snprintf(text + len, sizeof(text) - len, "\nThe newest 5 average %s, the first 5 %s: "
+                         "%d%% faster.", a2, a1, pct);
+            } else if (pct < 0) {
+                snprintf(text + len, sizeof(text) - len, "\nThe newest 5 average %s, the first 5 %s: "
+                         "%d%% slower.", a2, a1, -pct);
+            } else {
+                snprintf(text + len, sizeof(text) - len, "\nThe newest 5 average %s, the same as the first 5.", a2);
+            }
+        }
+    }
+    lv_label_set_text(x_trend, text);
+    lv_obj_set_hidden(x_plot, !from_db || n < 2);
+    lv_obj_invalidate(x_plot);
+}
+
+static void chart_btn_cb(lv_event_t *e)
+{
+    x_chart_mode = !x_chart_mode;
+    render_stats(&x_view, x_from_db);
 }
 
 /* the (i) button next to the title: what the numbers mean */
@@ -3106,6 +3318,8 @@ static void sd_poll_cb(lv_timer_t *t)
     }
     if (scr_history) history_poll();
     if (scr_plays) plays_poll();
+    trophy_poll();
+    trophy_toast_poll();
     history_replay_poll();                                 /* a solve tapped in History or Gameplays */
     static stats_player_change_t ch;
     if (stats_db_take_player_change(&ch)) {
@@ -3120,6 +3334,7 @@ static void sd_poll_cb(lv_timer_t *t)
         }
         refresh_home();
         render_players();
+        if (lv_screen_active() == scr_trophy) tr_ask();          /* now this player's */
         if (lv_screen_active() == scr_stats) refresh_stats();   /* now this player's */
         else stats_player_dd_update();
     }
@@ -3781,6 +3996,408 @@ static void build_plays(void)
     plays_hint("Loading...");
 }
 
+/* ============================================================= trophies */
+/*
+ * Trophies (home screen), two tabs:
+ *   Achievements: the current player's list (stats_db.c): unlocked ones with
+ *     a trophy and the date, the others with a lock and their progress.
+ *   Daily: the leaderboard of one day's daily puzzle, today first (< > for
+ *     other days): everyone's best time, fastest first, then who hasn't
+ *     solved it.
+ * Achievements a solve unlocks pop up at the top of the screen (trophy_toast).
+ */
+static lv_obj_t *tr_tab[2], *tr_view[2];
+static lv_obj_t *tr_ach_count, *tr_ach_list;
+static lv_obj_t *tr_day_lbl, *tr_day_prev, *tr_day_next, *tr_board_list, *tr_play_btn;
+static int tr_tab_sel;
+static char tr_day[12];                   /* day on the leaderboard, "" = today */
+static lv_obj_t *h_trophy_sub;            /* home button line: "7 of 22 achievements" */
+static void notice_del_cb(lv_timer_t *t);
+
+static void tr_hint(lv_obj_t *list, const char *text)
+{
+    lv_obj_clean(list);
+    lv_obj_t *l = make_label(list, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_style_pad_top(l, 20, 0);
+    lv_label_set_text(l, text);
+}
+
+static lv_obj_t *tr_card(lv_obj_t *list, int h)
+{
+    lv_obj_t *card = lv_obj_create(list);
+    lv_obj_set_size(card, LV_PCT(100), h);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_width(card, 0, 0);
+    lv_obj_set_style_radius(card, 10, 0);
+    lv_obj_set_style_pad_hor(card, 16, 0);
+    lv_obj_set_style_pad_ver(card, 0, 0);
+    lv_obj_set_scrollable(card, false);
+    lv_obj_set_clickable(card, false);
+    return card;
+}
+
+/* "3 / 10", "2 h 5 min / 10 h", "4 / 7 days" */
+static void ach_progress_text(const stats_ach_t *a, char *buf, size_t n)
+{
+    switch (a->unit) {
+    case ACH_UNIT_MINUTES:
+        if (a->value >= 60) snprintf(buf, n, "%ld h %ld min / %ld h", (long)(a->value / 60), (long)(a->value % 60),
+                                     (long)(a->goal / 60));
+        else snprintf(buf, n, "%ld min / %ld h", (long)a->value, (long)(a->goal / 60));
+        break;
+    case ACH_UNIT_DAYS:
+        snprintf(buf, n, "%ld / %ld days", (long)a->value, (long)a->goal);
+        break;
+    default:
+        snprintf(buf, n, "%ld / %ld", (long)a->value, (long)a->goal);
+        break;
+    }
+}
+
+static void ach_card(const stats_ach_t *a)
+{
+    lv_obj_t *card = tr_card(tr_ach_list, 80);
+    lv_obj_t *icon = make_label(card, &font_icons_24, a->unlocked ? C_ORANGE : C_MUTED);
+    lv_label_set_text(icon, a->unlocked ? SYMBOL_TROPHY : SYMBOL_LOCK);
+    lv_obj_align(icon, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *t = make_label(card, &lv_font_montserrat_20, a->unlocked ? C_TEXT : C_MUTED);
+    lv_label_set_text(t, a->title);
+    lv_obj_align(t, LV_ALIGN_LEFT_MID, 44, -13);
+    lv_obj_t *d = make_label(card, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_width(d, SCR_W - 24 - 32 - 44 - 190);
+    lv_label_set_long_mode(d, LV_LABEL_LONG_MODE_DOTS);
+    lv_label_set_text(d, a->desc);
+    lv_obj_align(d, LV_ALIGN_LEFT_MID, 44, 14);
+
+    lv_obj_t *r = make_label(card, &lv_font_montserrat_16, a->unlocked ? C_GREEN : C_MUTED);
+    lv_obj_set_width(r, 176);
+    lv_obj_set_style_text_align(r, LV_TEXT_ALIGN_RIGHT, 0);
+    if (a->unlocked) {
+        char when[24] = "Unlocked";
+        if (a->unlocked_at) {
+            time_t tt = (time_t)a->unlocked_at;
+            struct tm tm;
+            localtime_r(&tt, &tm);
+            strftime(when, sizeof(when), "%d %b %Y", &tm);
+        }
+        lv_label_set_text(r, when);
+        lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, 0);
+    } else if (a->goal > 1) {
+        char prog[32];
+        ach_progress_text(a, prog, sizeof(prog));
+        lv_label_set_text(r, prog);
+        lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, -12);
+        lv_obj_t *bar = lv_bar_create(card);
+        lv_obj_set_size(bar, 150, 10);
+        lv_bar_set_range(bar, 0, a->goal);
+        lv_bar_set_value(bar, a->value, LV_ANIM_OFF);
+        lv_obj_set_style_bg_color(bar, C_CARD2, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(bar, C_ACCENT, LV_PART_INDICATOR);
+        lv_obj_align(bar, LV_ALIGN_RIGHT_MID, 0, 14);
+    } else {
+        lv_label_set_text(r, "Not yet");
+        lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+}
+
+static void render_achievements(const stats_achievements_t *a)
+{
+    lv_label_set_text_fmt(tr_ach_count, "%d of %d unlocked", a->unlocked, a->n);
+    lv_obj_clean(tr_ach_list);
+    for (int pass = 0; pass < 2; pass++) {             /* unlocked first, then the rest */
+        for (int i = 0; i < a->n; i++) {
+            if (a->a[i].unlocked == (pass == 0)) ach_card(&a->a[i]);
+        }
+    }
+    lv_obj_scroll_to_y(tr_ach_list, 0, LV_ANIM_OFF);
+}
+
+/* day moved by delta days ('YYYY-MM-DD', in place) */
+static void day_shift(char *day, int delta)
+{
+    struct tm tm = {0};
+    if (sscanf(day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) != 3) return;
+    tm.tm_year -= 1900;
+    tm.tm_mon -= 1;
+    tm.tm_mday += delta;
+    tm.tm_hour = 12;                                    /* clear of DST changes */
+    mktime(&tm);
+    strftime(day, 12, "%Y-%m-%d", &tm);
+}
+
+static bool tr_today(char day[12])
+{
+    int level;
+    return daily_today(day, &level, NULL);
+}
+
+static void render_board(const stats_board_t *b)
+{
+    char today[12] = "";
+    bool clock = tr_today(today);
+    bool is_today = clock && !strcmp(b->day, today);
+    struct tm tm = {0};
+    char date[32] = "";
+    if (sscanf(b->day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
+        tm.tm_year -= 1900;
+        tm.tm_mon -= 1;
+        tm.tm_hour = 12;
+        mktime(&tm);                                     /* fills in the weekday */
+        strftime(date, sizeof(date), "%a %d %b %Y", &tm);
+    }
+    if (b->exists && b->level >= 0 && b->level < GEN_LEVELS) {
+        lv_label_set_text_fmt(tr_day_lbl, "%s%s  -  %s", is_today ? "Today, " : "", date, GEN_LEVEL_NAMES[b->level]);
+    } else {
+        lv_label_set_text_fmt(tr_day_lbl, "%s%s", is_today ? "Today, " : "", date);
+    }
+    lv_obj_set_state(tr_day_next, LV_STATE_DISABLED, is_today);
+    bool me_solved = false;
+    for (int i = 0; i < b->n; i++) me_solved |= b->rows[i].player_id == store_player_id() && b->rows[i].solved;
+    lv_obj_set_hidden(tr_play_btn, !is_today || me_solved);
+
+    if (!b->exists || b->solved == 0) {
+        tr_hint(tr_board_list, !b->exists ? (is_today ? "Nobody has played today's puzzle yet. Be the first!"
+                                                      : "Nobody played the daily puzzle on this day.")
+                                          : (is_today ? "Nobody has solved today's puzzle yet. Be the first!"
+                                                      : "Nobody solved this day's puzzle."));
+        return;
+    }
+    lv_obj_clean(tr_board_list);
+    int rank = 0;
+    for (int i = 0; i < b->n; i++) {
+        const stats_board_row_t *r = &b->rows[i];
+        bool me = r->player_id == store_player_id();
+        lv_obj_t *card = tr_card(tr_board_list, r->solved ? 76 : 56);
+        if (me) {
+            lv_obj_set_style_border_color(card, C_ACCENT, 0);
+            lv_obj_set_style_border_width(card, 2, 0);
+        }
+        if (!r->solved) {
+            lv_obj_t *n = make_label(card, &lv_font_montserrat_18, C_MUTED);
+            lv_label_set_text_fmt(n, "%s   -   not solved yet", r->player);
+            lv_obj_align(n, LV_ALIGN_LEFT_MID, 56, 0);
+            continue;
+        }
+        rank++;
+        lv_obj_t *pos = make_label(card, rank == 1 ? &font_icons_24 : &lv_font_montserrat_24,
+                                   rank == 1 ? C_ORANGE : C_MUTED);
+        if (rank == 1) lv_label_set_text(pos, SYMBOL_STAR);
+        else lv_label_set_text_fmt(pos, "%d", rank);
+        lv_obj_set_width(pos, 40);
+        lv_obj_set_style_text_align(pos, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(pos, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_t *n = make_label(card, &lv_font_montserrat_20, C_TEXT);
+        lv_label_set_text_fmt(n, "%s%s", r->player, me ? "  (you)" : "");
+        lv_obj_align(n, LV_ALIGN_LEFT_MID, 56, -13);
+        char line[96];
+        snprintf(line, sizeof(line), "%d%s   -   %u mistake%s   -   %u hint%s", rank, ordinal(rank),
+                 (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s", (unsigned)r->hints, r->hints == 1 ? "" : "s");
+        if (r->solves > 1) {
+            size_t len = strlen(line);
+            snprintf(line + len, sizeof(line) - len, "   -   solved %u times", (unsigned)r->solves);
+        }
+        lv_obj_t *sub = make_label(card, &lv_font_montserrat_14, C_MUTED);
+        lv_label_set_text(sub, line);
+        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 56, 14);
+        char t[16];
+        fmt_time(t, sizeof(t), r->seconds);
+        lv_obj_t *tl = make_label(card, &font_timer_36, rank == 1 ? C_ORANGE : C_TEXT);
+        lv_label_set_text(tl, t);
+        lv_obj_align(tl, LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+    lv_obj_scroll_to_y(tr_board_list, 0, LV_ANIM_OFF);
+}
+
+/* asks sudoku.db for what the open tab shows */
+static void tr_ask(void)
+{
+    if (!stats_db_ready()) {
+        lv_label_set_text(tr_ach_count, "");
+        tr_hint(tr_ach_list, "Achievements are worked out from the solves in sudoku.db: insert a FAT32 microSD "
+                             "card before switching on.");
+        tr_hint(tr_board_list, "The leaderboard needs sudoku.db on a microSD card.");
+        lv_label_set_text(tr_day_lbl, "");
+        lv_obj_set_hidden(tr_play_btn, true);
+        return;
+    }
+    if (tr_tab_sel == 0) {
+        stats_db_query_achievements();
+        return;
+    }
+    char today[12];
+    if (!tr_today(today)) {
+        lv_label_set_text(tr_day_lbl, "");
+        lv_obj_set_state(tr_day_next, LV_STATE_DISABLED, true);
+        lv_obj_set_state(tr_day_prev, LV_STATE_DISABLED, true);
+        lv_obj_set_hidden(tr_play_btn, true);
+        tr_hint(tr_board_list, "The daily leaderboard needs today's date: connect Wi-Fi (Settings) so the "
+                               "clock is set.");
+        return;
+    }
+    lv_obj_set_state(tr_day_prev, LV_STATE_DISABLED, false);
+    if (!tr_day[0] || strcmp(tr_day, today) > 0) snprintf(tr_day, sizeof(tr_day), "%s", today);
+    stats_db_query_board(tr_day);
+}
+
+static void tr_select_tab(int tab)
+{
+    tr_tab_sel = tab;
+    for (int i = 0; i < 2; i++) {
+        lv_obj_set_state(tr_tab[i], LV_STATE_CHECKED, i == tab);
+        lv_obj_set_style_text_color(lv_obj_get_child(tr_tab[i], 0), i == tab ? lv_color_white() : C_TEXT, 0);
+        lv_obj_set_hidden(tr_view[i], i != tab);
+    }
+    tr_ask();
+}
+
+static void tr_tab_cb(lv_event_t *e)
+{
+    tr_select_tab((int)(intptr_t)lv_event_get_user_data(e));
+}
+
+static void tr_day_cb(lv_event_t *e)
+{
+    char today[12];
+    if (!tr_today(today)) return;
+    if (!tr_day[0]) snprintf(tr_day, sizeof(tr_day), "%s", today);
+    day_shift(tr_day, (int)(intptr_t)lv_event_get_user_data(e));
+    if (strcmp(tr_day, today) > 0) snprintf(tr_day, sizeof(tr_day), "%s", today);
+    stats_db_query_board(tr_day);
+}
+
+static void trophy_cb(lv_event_t *e)
+{
+    tr_day[0] = 0;                                       /* the leaderboard opens on today */
+    tr_select_tab(tr_tab_sel);
+    lv_screen_load(scr_trophy);
+}
+
+/* sudoku.db answers for the Trophies screen and the home button line */
+static void trophy_poll(void)
+{
+    static stats_achievements_t *a;                      /* PSRAM: internal RAM is tight */
+    static stats_board_t *b;
+    if (!a) a = heap_caps_malloc(sizeof(*a), MALLOC_CAP_SPIRAM);
+    if (!b) b = heap_caps_malloc(sizeof(*b), MALLOC_CAP_SPIRAM);
+    if (!a || !b) return;
+    if (stats_db_take_achievements(a)) {
+        if (h_trophy_sub) lv_label_set_text_fmt(h_trophy_sub, "%d of %d achievements", a->unlocked, a->n);
+        if (scr_trophy && a->player_id == store_player_id()) render_achievements(a);
+    }
+    if (stats_db_take_board(b) && scr_trophy && !strcmp(b->day, tr_day)) render_board(b);
+}
+
+static void build_trophies(void)
+{
+    scr_trophy = make_screen();
+    make_btn(scr_trophy, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
+    lv_obj_t *t = make_label(scr_trophy, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Trophies");
+    lv_obj_set_pos(t, 150, 20);
+    static const char *const TABS[2] = {SYMBOL_TROPHY "  Achievements", SYMBOL_STAR "  Daily"};
+    for (int i = 0; i < 2; i++) {
+        tr_tab[i] = make_btn(scr_trophy, SCR_W - 12 - (2 - i) * 186 - (1 - i) * 8, 10, 186, 52, TABS[i],
+                             &font_icons_20, tr_tab_cb, (void *)(intptr_t)i);
+    }
+
+    /* achievements */
+    lv_obj_t *av = lv_obj_create(scr_trophy);
+    lv_obj_remove_style_all(av);
+    lv_obj_set_pos(av, 12, 74);
+    lv_obj_set_size(av, SCR_W - 24, SCR_W - 74 - 12);
+    tr_view[0] = av;
+    tr_ach_count = make_label(av, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_set_pos(tr_ach_count, 4, 4);
+    tr_ach_list = lv_obj_create(av);
+    lv_obj_remove_style_all(tr_ach_list);
+    lv_obj_set_pos(tr_ach_list, 0, 36);
+    lv_obj_set_size(tr_ach_list, SCR_W - 24, SCR_W - 74 - 12 - 36);
+    lv_obj_set_flex_flow(tr_ach_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(tr_ach_list, 8, 0);
+    lv_obj_set_scroll_dir(tr_ach_list, LV_DIR_VER);
+
+    /* daily leaderboard: < day > and the list */
+    lv_obj_t *bv = lv_obj_create(scr_trophy);
+    lv_obj_remove_style_all(bv);
+    lv_obj_set_pos(bv, 12, 74);
+    lv_obj_set_size(bv, SCR_W - 24, SCR_W - 74 - 12);
+    tr_view[1] = bv;
+    tr_day_prev = make_btn(bv, 0, 0, 64, 52, LV_SYMBOL_LEFT, &lv_font_montserrat_22, tr_day_cb, (void *)(intptr_t)-1);
+    tr_day_next = make_btn(bv, SCR_W - 24 - 64, 0, 64, 52, LV_SYMBOL_RIGHT, &lv_font_montserrat_22, tr_day_cb,
+                           (void *)(intptr_t)1);
+    lv_obj_set_style_text_opa(lv_obj_get_child(tr_day_next, 0), LV_OPA_30, LV_STATE_DISABLED);
+    lv_obj_set_style_text_opa(lv_obj_get_child(tr_day_prev, 0), LV_OPA_30, LV_STATE_DISABLED);
+    tr_day_lbl = make_label(bv, &lv_font_montserrat_20, C_TEXT);
+    lv_obj_set_width(tr_day_lbl, SCR_W - 24 - 2 * 72);
+    lv_obj_set_style_text_align(tr_day_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(tr_day_lbl, LV_ALIGN_TOP_MID, 0, 14);
+    tr_board_list = lv_obj_create(bv);
+    lv_obj_remove_style_all(tr_board_list);
+    lv_obj_set_pos(tr_board_list, 0, 64);
+    lv_obj_set_size(tr_board_list, SCR_W - 24, SCR_W - 74 - 12 - 64 - 64);
+    lv_obj_set_flex_flow(tr_board_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(tr_board_list, 8, 0);
+    lv_obj_set_scroll_dir(tr_board_list, LV_DIR_VER);
+    tr_play_btn = make_btn(bv, 0, 0, 300, 52, LV_SYMBOL_BELL "  Play today's puzzle", &lv_font_montserrat_18,
+                           daily_cb, NULL);
+    lv_obj_set_style_bg_color(tr_play_btn, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(tr_play_btn, 0), lv_color_white(), 0);
+    lv_obj_align(tr_play_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_hidden(tr_play_btn, true);
+
+    for (int i = 0; i < 2; i++) {
+        lv_obj_set_state(tr_tab[i], LV_STATE_CHECKED, i == tr_tab_sel);
+        lv_obj_set_style_text_color(lv_obj_get_child(tr_tab[i], 0), i == tr_tab_sel ? lv_color_white() : C_TEXT, 0);
+        lv_obj_set_hidden(tr_view[i], i != tr_tab_sel);
+    }
+    lv_label_set_text(tr_ach_count, "");
+    tr_hint(tr_ach_list, "Loading...");
+    tr_hint(tr_board_list, "Loading...");
+}
+
+/* "Achievement unlocked" at the top of the screen, a moment after the Solved dialog */
+static char s_toast_text[200];
+
+static void trophy_toast_cb(lv_timer_t *t)
+{
+    lv_obj_t *n = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(n, SCR_W - 80, LV_SIZE_CONTENT);
+    lv_obj_align(n, LV_ALIGN_TOP_MID, 0, 16);
+    lv_obj_set_style_bg_color(n, C_CARD, 0);
+    lv_obj_set_style_border_color(n, C_ORANGE, 0);
+    lv_obj_set_style_border_width(n, 2, 0);
+    lv_obj_set_style_radius(n, 14, 0);
+    lv_obj_set_style_pad_all(n, 14, 0);
+    lv_obj_set_style_shadow_width(n, 24, 0);
+    lv_obj_set_style_shadow_opa(n, LV_OPA_40, 0);
+    lv_obj_set_scrollable(n, false);
+    lv_obj_set_clickable(n, false);
+    lv_obj_t *icon = make_label(n, &font_icons_24, C_ORANGE);
+    lv_label_set_text(icon, SYMBOL_TROPHY);
+    lv_obj_align(icon, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_t *l = make_label(n, &lv_font_montserrat_18, C_TEXT);
+    lv_obj_set_width(l, SCR_W - 80 - 28 - 52);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
+    lv_label_set_text(l, s_toast_text);
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 48, 0);
+    sfx_play(SFX_DIGIT_DONE);
+    lv_timer_t *del = lv_timer_create(notice_del_cb, 5000, n);
+    lv_timer_set_repeat_count(del, 1);
+}
+
+static void trophy_toast_poll(void)
+{
+    char titles[160];
+    int n = 0;
+    if (!stats_db_take_unlocked(titles, sizeof(titles), &n)) return;
+    snprintf(s_toast_text, sizeof(s_toast_text), "%s unlocked:\n%s", n == 1 ? "Achievement" : "Achievements", titles);
+    lv_timer_t *t = lv_timer_create(trophy_toast_cb, 1200, NULL);   /* after the fanfare starts */
+    lv_timer_set_repeat_count(t, 1);
+    if (h_trophy_sub && stats_db_ready()) stats_db_query_achievements();   /* the home line */
+}
+
 /* ------------------------------------------------------------- players */
 
 /* name dialog (add or rename), on the top layer with an on-screen keyboard */
@@ -4046,7 +4663,7 @@ static void apply_theme(bool dark)
 
     lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
     lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi, *old_profile = scr_profile, *old_history = scr_history;
-    lv_obj_t *old_plays = scr_plays;
+    lv_obj_t *old_plays = scr_plays, *old_trophy = scr_trophy;
     lv_obj_t *act = lv_screen_active();
 
     build_game();
@@ -4058,6 +4675,7 @@ static void apply_theme(bool dark)
     build_profile();
     build_history();
     build_plays();
+    build_trophies();
     if (g_id != STORE_NO_GAME) {
         lv_obj_set_state(g_notes_btn, LV_STATE_CHECKED, g_notes_mode);
         lv_obj_set_hidden(g_pause_ovl, !g_paused);
@@ -4074,11 +4692,13 @@ static void apply_theme(bool dark)
                  : act && act == old_profile  ? scr_profile
                  : act && act == old_history  ? scr_history
                  : act && act == old_plays    ? scr_plays
+                 : act && act == old_trophy   ? scr_trophy
                  : act && act == old_list     ? scr_list
                  : act && act == old_settings ? scr_settings
                  : scr_home;
     lv_screen_load(to);
     if (to == scr_plays) plays_ask(pl_offset);         /* fill the rebuilt list */
+    if (to == scr_trophy) tr_ask();
 
     /* the old screens may be running this very event: delete them later */
     if (old_home) lv_obj_delete_async(old_home);
@@ -4089,6 +4709,7 @@ static void apply_theme(bool dark)
     if (old_profile) lv_obj_delete_async(old_profile);
     if (old_history) lv_obj_delete_async(old_history);
     if (old_plays) lv_obj_delete_async(old_plays);
+    if (old_trophy) lv_obj_delete_async(old_trophy);
     if (old_game) lv_obj_delete_async(old_game);
 }
 
@@ -4344,6 +4965,9 @@ static void build_home(void)
     lv_obj_t *hb = home_btn(h_menu, SYMBOL_CALENDAR "  History", history_cb, NULL);   /* the calendar of games */
     lv_obj_set_style_text_font(lv_obj_get_child(hb, 0), &font_icons_24, 0);
     home_btn(h_menu, LV_SYMBOL_VIDEO "  Gameplays", plays_cb, NULL);
+    lv_obj_t *tb = home_btn(h_menu, SYMBOL_TROPHY "  Trophies", trophy_cb, &h_trophy_sub);   /* achievements, leaderboard */
+    lv_obj_set_style_text_font(lv_obj_get_child(tb, 0), &font_icons_24, 0);
+    lv_label_set_text(h_trophy_sub, stats_db_ready() ? "Achievements and daily leaderboard" : "Needs a microSD card");
     home_btn(h_menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);
 
     lv_obj_t *src = make_label(scr_home, &lv_font_montserrat_12, C_MUTED);
@@ -4426,6 +5050,29 @@ static void build_stats(void)
     x_empty = make_label(scr_stats, &lv_font_montserrat_18, C_MUTED);
     lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
     lv_obj_set_pos(x_empty, px + 4, 180);
+
+    /* Chart / Table switch (top right of the pane) and the chart card in the table's place */
+    x_chart_btn = make_btn(scr_stats, SCR_W - 12 - 130, 68, 130, 40, SYMBOL_CHART "  Chart", &font_icons_20,
+                           chart_btn_cb, NULL);
+    lv_obj_set_style_text_color(lv_obj_get_child(x_chart_btn, 0), C_ACCENT, 0);
+    x_chart = lv_obj_create(scr_stats);
+    lv_obj_set_pos(x_chart, px, 158);
+    lv_obj_set_size(x_chart, pw, SCR_W - 158 - 12);
+    lv_obj_set_style_bg_color(x_chart, C_CARD, 0);
+    lv_obj_set_style_border_width(x_chart, 0, 0);
+    lv_obj_set_style_radius(x_chart, 12, 0);
+    lv_obj_set_style_pad_all(x_chart, 12, 0);
+    lv_obj_set_scrollable(x_chart, false);
+    lv_obj_set_flex_flow(x_chart, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(x_chart, 10, 0);
+    x_plot = lv_obj_create(x_chart);
+    lv_obj_remove_style_all(x_plot);
+    lv_obj_set_size(x_plot, LV_PCT(100), 380);
+    lv_obj_add_event_cb(x_plot, plot_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    x_trend = make_label(x_chart, &lv_font_montserrat_16, C_TEXT);
+    lv_obj_set_width(x_trend, LV_PCT(100));
+    lv_label_set_long_mode(x_trend, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_hidden(x_chart, true);
 
 }
 

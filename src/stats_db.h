@@ -25,6 +25,9 @@
  *       Easy", "X-Sudoku Easy" or "Mini Easy" etc. by variant (generator.h:
  *       0 classic, 1 X-Sudoku, 2 mini 6x6). day = the date of a daily puzzle
  *       (level "Daily Easy" etc.)
+ *   achievements(player_id, key, unlocked_at): achievements each player has
+ *       unlocked (see stats_db_query_achievements()); unlocked_at NULL =
+ *       found already done when the table was first filled, or clock not set
  *   settings(key, value): dark_mode, sound, screen_off_minutes, brightness, volume, time_zone,
  *       last_level, current_player, and migrated_from_nvs (set when the database is first
  *       filled: from what the board has, or, after a format, with just the
@@ -47,6 +50,7 @@ extern "C" {
 #endif
 
 #define STATS_MAX_PUZZLES 100            /* rows per level in a query result */
+#define STATS_RECENT      40             /* newest solves for the progress chart */
 
 typedef struct {
     uint16_t solved, perfect, known;     /* known: puzzles with a mistake count */
@@ -67,6 +71,10 @@ typedef struct {
     stats_level_t total;
     int n_puzzles;                       /* rows in puzzles (level >= 0 only) */
     stats_puzzle_t puzzles[STATS_MAX_PUZZLES];
+    /* progress chart: seconds of this player's newest solves at the level
+     * (all levels: any puzzle, generated ones included), oldest first */
+    int n_recent;
+    uint16_t recent[STATS_RECENT];
 } stats_view_t;
 
 /* Mounts the card and opens (or creates) the database. A new database (no
@@ -210,6 +218,61 @@ bool stats_db_gen_get(int id, uint8_t givens[81], int *variant, int *level, char
  * days in a row with the daily solved (ending today, or yesterday if not
  * yet today). False without a database. Waits for the database. */
 bool stats_db_daily_status(const char *day, int *id, bool *solved_today, int *streak);
+/* The current player's place on that day's leaderboard (best time; ties:
+ * fewer mistakes, then fewer hints): rank 1.., of = players who solved it;
+ * rank 0 = not solved. False without a database. Waits for the database. */
+bool stats_db_daily_rank(const char *day, int *rank, int *of);
+
+/* ---------------------------------------------------------------- daily leaderboard */
+/* Everyone's best solve of one day's daily puzzle (whenever it was solved),
+ * fastest first; players who haven't solved it come last. */
+typedef struct {
+    char player[STORE_NAME_LEN];
+    int32_t player_id;
+    bool solved;
+    uint32_t seconds;                    /* best time */
+    uint16_t mistakes, hints;            /* of that solve */
+    uint16_t solves;                     /* times solved */
+} stats_board_row_t;
+
+typedef struct {
+    char day[12];                        /* 'YYYY-MM-DD' */
+    bool exists;                         /* that day's puzzle has been made (opened by someone) */
+    int level;                           /* gen_level_t of the puzzle */
+    int n, solved;                       /* rows, and how many of them solved it */
+    stats_board_row_t rows[STATS_MAX_PLAYERS];
+} stats_board_t;
+void stats_db_query_board(const char *day);
+bool stats_db_take_board(stats_board_t *out);
+
+/* ---------------------------------------------------------------- achievements */
+/* A fixed list (stats_db.c), each with the player's progress toward it.
+ * They are checked after every solve; newly unlocked ones come back through
+ * stats_db_take_unlocked(). Achievements already earned when this firmware
+ * first opens a database are recorded quietly. */
+#define STATS_ACH_MAX 24
+
+typedef enum { ACH_UNIT_COUNT = 0, ACH_UNIT_MINUTES, ACH_UNIT_DAYS } ach_unit_t;
+
+typedef struct {
+    const char *title, *desc;            /* static strings */
+    int32_t value, goal;                 /* progress (value capped at goal) */
+    uint8_t unit;                        /* ach_unit_t: how to show value / goal */
+    bool unlocked;
+    int64_t unlocked_at;                 /* Unix time, 0 = unknown */
+} stats_ach_t;
+
+typedef struct {
+    int32_t player_id;
+    int n, unlocked;
+    stats_ach_t a[STATS_ACH_MAX];
+} stats_achievements_t;
+
+/* the current player's achievements */
+void stats_db_query_achievements(void);
+bool stats_db_take_achievements(stats_achievements_t *out);
+/* Titles of achievements the last solve unlocked, comma-separated; false if none. */
+bool stats_db_take_unlocked(char *buf, int len, int *count);
 
 void stats_db_query_plays(int offset);
 bool stats_db_take_plays(stats_plays_t *out);

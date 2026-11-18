@@ -40,6 +40,7 @@ typedef enum {
     CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
+    CMD_RANK, CMD_BOARD, CMD_ACH,
 } cmd_type_t;
 typedef struct {
     cmd_type_t type;
@@ -105,9 +106,16 @@ static struct {
     bool ok;
     bool solved_today;           /* CMD_DAILY results */
     int streak;
+    int rank, of;                /* CMD_RANK results */
 } s_gen;
 static SemaphoreHandle_t s_gen_done;
 static bool s_plays_new;
+static stats_board_t *s_board;       /* CMD_BOARD result (PSRAM, like the ones below) */
+static bool s_board_new;
+static stats_achievements_t *s_ach;  /* CMD_ACH result */
+static bool s_ach_new;
+static char s_unlocked[160];         /* titles unlocked by the last solve */
+static int s_unlocked_n;
 
 static bool moves_bufs(void)
 {
@@ -182,6 +190,11 @@ static const char SCHEMA[] =
     "CREATE TABLE IF NOT EXISTS " T_PUZZLE_STATS ";"
     "CREATE TABLE IF NOT EXISTS " T_SAVED_GAME ";"
     "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value);"
+    "CREATE TABLE IF NOT EXISTS achievements("           /* unlocked achievements (ACH below) */
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"
+    "  key TEXT NOT NULL,"
+    "  unlocked_at INTEGER,"                             /* Unix time; NULL = found done at first fill / no clock */
+    "  PRIMARY KEY (player_id, key));"
     "CREATE TABLE IF NOT EXISTS generated("              /* puzzles made on the board */
     "  id INTEGER PRIMARY KEY,"                          /* puzzle id = 2000 + id */
     "  level INTEGER NOT NULL,"                          /* 0 Easy, 1 Medium, 2 Hard, 3 Expert */
@@ -228,6 +241,8 @@ static const char SQL_SOLVE_INSERT[] =
 
 static int query_int(const char *sql);
 static int gen_level_of(int gid, bool *daily, int *variant);
+static void ach_sync(int32_t player, bool announce);
+static void ach_backfill(void);
 
 static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
 {
@@ -701,6 +716,7 @@ static void do_open_inner(open_seed_t *seed)
         xSemaphoreGive(s_lock);
     }
     load_cache();
+    ach_backfill();                                 /* earned before this firmware: recorded quietly */
     s_solves = query_int("SELECT COUNT(*) FROM solves");
     int players = query_int("SELECT COUNT(*) FROM players");
     s_state = ST_READY;
@@ -731,6 +747,7 @@ static void do_solve(const cmd_t *c)
     ok = step_done(s_solve_upsert, "update puzzle_stats") && ok;
     if (ok && exec("COMMIT")) {
         if (s_solves >= 0) s_solves++;
+        ach_sync(s_player, true);                  /* new achievements: stats_db_take_unlocked() */
     } else {
         exec("ROLLBACK");
     }
@@ -799,6 +816,27 @@ static void do_query(int level)
             p->solves = n > 0xFFFF ? 0xFFFF : n;
         }
         sqlite3_finalize(st);
+    }
+
+    /* progress chart: the newest solves at this level (all levels: any), oldest first */
+    if (s_db && sqlite3_prepare_v2(s_db, level >= 0 && level < PUZZLE_COLLECTION_COUNT
+                ? "SELECT seconds FROM solves WHERE player_id = ?1 AND level = ?3 ORDER BY id DESC LIMIT ?2"
+                : "SELECT seconds FROM solves WHERE player_id = ?1 ORDER BY id DESC LIMIT ?2",
+                -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_int(st, 2, STATS_RECENT);
+        if (level >= 0 && level < PUZZLE_COLLECTION_COUNT) {
+            sqlite3_bind_text(st, 3, puzzle_collections[level].name, -1, SQLITE_STATIC);
+        }
+        uint16_t newest_first[STATS_RECENT];
+        int n = 0;
+        while (n < STATS_RECENT && sqlite3_step(st) == SQLITE_ROW) {
+            int64_t sec = sqlite3_column_int64(st, 0);
+            newest_first[n++] = (uint16_t)(sec > 0xFFFF ? 0xFFFF : (sec < 1 ? 1 : sec));
+        }
+        sqlite3_finalize(st);
+        for (int i = 0; i < n; i++) v.recent[i] = newest_first[n - 1 - i];
+        v.n_recent = n;
     }
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -917,6 +955,7 @@ static void do_delete(int32_t id)
         "DELETE FROM solves WHERE player_id = ?1",
         "DELETE FROM puzzle_stats WHERE player_id = ?1",
         "DELETE FROM saved_game WHERE player_id = ?1",
+        "DELETE FROM achievements WHERE player_id = ?1",
         "DELETE FROM players WHERE id = ?1",
     };
     bool ok = exec("BEGIN");
@@ -1119,6 +1158,320 @@ static void do_daily(void)
     xSemaphoreGive(s_gen_done);
 }
 
+/* ------------------------------------------------------------- daily rank and leaderboard */
+
+/* everyone's best solve of the daily puzzle of s_gen.day (or *board's day), fastest first */
+#define BOARD_SQL \
+    "SELECT p.id, p.name, b.best, b.mistakes, b.hints, b.n FROM players p LEFT JOIN (" \
+    "  SELECT player_id, MIN(seconds) AS best, mistakes, hints, COUNT(*) AS n FROM solves" \
+    "   WHERE puzzle = ?1 GROUP BY player_id) b ON b.player_id = p.id" \
+    " ORDER BY b.best IS NULL, b.best, b.mistakes, b.hints, p.id"
+
+/* the daily puzzle of a day: its generated.id (0 = not made) and level */
+static int daily_id_of(const char *day, int *level)
+{
+    int id = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT id, level FROM generated WHERE day = ?1 ORDER BY id LIMIT 1",
+                                   -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(st, 1, day, -1, SQLITE_STATIC);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            id = sqlite3_column_int(st, 0);
+            if (level) *level = sqlite3_column_int(st, 1);
+        }
+        sqlite3_finalize(st);
+    }
+    return id;
+}
+
+static void board_fill(stats_board_t *b, const char *day)
+{
+    memset(b, 0, sizeof(*b));
+    snprintf(b->day, sizeof(b->day), "%s", day);
+    int gid = daily_id_of(day, &b->level);
+    b->exists = gid > 0;
+    sqlite3_stmt *st;
+    if (!s_db || sqlite3_prepare_v2(s_db, BOARD_SQL, -1, &st, NULL) != SQLITE_OK) return;
+    sqlite3_bind_int(st, 1, gid > 0 ? PUZZLE_GEN_BASE + gid : -1);
+    while (b->n < STATS_MAX_PLAYERS && sqlite3_step(st) == SQLITE_ROW) {
+        stats_board_row_t *r = &b->rows[b->n++];
+        r->player_id = sqlite3_column_int(st, 0);
+        const char *name = (const char *)sqlite3_column_text(st, 1);
+        snprintf(r->player, sizeof(r->player), "%s", name ? name : "");
+        r->solved = sqlite3_column_type(st, 2) != SQLITE_NULL;
+        if (!r->solved) continue;
+        b->solved++;
+        r->seconds = (uint32_t)sqlite3_column_int64(st, 2);
+        r->mistakes = (uint16_t)sqlite3_column_int(st, 3);
+        r->hints = (uint16_t)sqlite3_column_int(st, 4);
+        r->solves = (uint16_t)sqlite3_column_int(st, 5);
+    }
+    sqlite3_finalize(st);
+}
+
+/* a result buffer in PSRAM (internal RAM is kept for Wi-Fi and the video encoder) */
+static void *psram_buf(void **p, size_t size)
+{
+    if (!*p) *p = heap_caps_calloc(1, size, MALLOC_CAP_SPIRAM);
+    return *p;
+}
+
+static void do_board(const char *day)
+{
+    static stats_board_t *b;
+    if (!psram_buf((void **)&b, sizeof(*b)) || !psram_buf((void **)&s_board, sizeof(*s_board))) return;
+    board_fill(b, day);
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    *s_board = *b;
+    s_board_new = true;
+    xSemaphoreGive(s_lock);
+}
+
+/* the current player's place on s_gen.day's leaderboard */
+static void do_rank(void)
+{
+    static stats_board_t *b;
+    s_gen.rank = s_gen.of = 0;
+    s_gen.ok = s_db != NULL && psram_buf((void **)&b, sizeof(*b));
+    if (s_gen.ok) {
+        board_fill(b, s_gen.day);
+        s_gen.of = b->solved;
+        for (int i = 0; i < b->n; i++) {
+            if (b->rows[i].player_id == s_player && b->rows[i].solved) s_gen.rank = i + 1;
+        }
+    }
+    xSemaphoreGive(s_gen_done);
+}
+
+/* ------------------------------------------------------------- achievements */
+/*
+ * Each one is a number worked out from the player's solves (?1 = player id)
+ * and a goal; it is unlocked once the number reaches the goal. The streak
+ * ones are worked out in C (longest run of days with the daily solved).
+ * The keys are stored in the achievements table: don't rename them.
+ */
+#define HARD_OR_MORE "(level LIKE '%Hard' OR level LIKE '%Expert')"
+#define CLASSIC_9X9  "(level NOT LIKE 'Mini %' AND level NOT LIKE 'X-Sudoku %')"
+#define DAILY_DAYS \
+    "SELECT DISTINCT g.day FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id" \
+    " WHERE s.player_id = ?1 AND g.day IS NOT NULL ORDER BY g.day"
+
+typedef struct {
+    const char *key, *title, *desc;
+    int32_t goal;
+    uint8_t unit;                       /* ach_unit_t */
+    const char *sql;                    /* one number; NULL = longest daily streak */
+} ach_def_t;
+
+static const ach_def_t ACH[] = {
+    {"solve_1", "First steps", "Solve a puzzle.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1"},
+    {"solve_10", "Getting the hang of it", "Solve 10 puzzles.", 10, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1"},
+    {"solve_50", "Regular", "Solve 50 puzzles.", 50, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1"},
+    {"solve_100", "Centurion", "Solve 100 puzzles.", 100, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1"},
+    {"clean_1", "Clean sheet", "Solve a puzzle without a mistake or a hint.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND mistakes = 0 AND hints = 0"},
+    {"clean_25", "Steady hand", "Solve 25 puzzles without a mistake or a hint.", 25, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND mistakes = 0 AND hints = 0"},
+    {"hard_clean", "Hard and clean", "Solve a Hard, Very Hard or Expert puzzle without a mistake or a hint.", 1,
+     ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND mistakes = 0 AND hints = 0 AND " HARD_OR_MORE},
+    {"expert", "Expert", "Solve an Expert puzzle (New puzzle or the Sunday daily).", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE '%Expert'"},
+    {"quick", "Quick thinker", "Solve a 9x9 puzzle in under 5 minutes.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND seconds < 300 AND level NOT LIKE 'Mini %'"},
+    {"fast_hard", "Speed demon", "Solve a Hard or harder puzzle in under 10 minutes, without hints.", 1,
+     ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND seconds < 600 AND hints = 0 AND " HARD_OR_MORE},
+    {"x_sudoku", "Crossed lines", "Solve an X-Sudoku.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'X-Sudoku %'"},
+    {"mini", "Small wonder", "Solve a Mini 6x6.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND level LIKE 'Mini %'"},
+    {"variety", "Variety", "Solve a Classic, an X-Sudoku and a Mini 6x6.", 3, ACH_UNIT_COUNT,
+     "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'X-Sudoku %')"
+     " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND level LIKE 'Mini %')"},
+    {"fresh_10", "Fresh off the press", "Solve 10 puzzles made with New puzzle.", 10, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id"
+     " WHERE s.player_id = ?1 AND g.day IS NULL"},
+    {"daily_10", "Daily regular", "Solve the daily puzzle on 10 different days.", 10, ACH_UNIT_DAYS,
+     "SELECT COUNT(*) FROM (" DAILY_DAYS ")"},
+    {"streak_3", "On a roll", "Solve the daily puzzle 3 days in a row.", 3, ACH_UNIT_DAYS, NULL},
+    {"streak_7", "Week streak", "Solve the daily puzzle 7 days in a row.", 7, ACH_UNIT_DAYS, NULL},
+    {"streak_30", "Monthly habit", "Solve the daily puzzle 30 days in a row.", 30, ACH_UNIT_DAYS, NULL},
+    {"explorer", "Explorer", "Solve a puzzle in each of the 16 built-in collections.", PUZZLE_COLLECTION_COUNT,
+     ACH_UNIT_COUNT,
+     "SELECT COUNT(DISTINCT level) FROM puzzle_stats WHERE player_id = ?1 AND puzzle < 2000"},
+    {"collection", "Completionist", "Solve all 100 puzzles of one built-in collection.", 100, ACH_UNIT_COUNT,
+     "SELECT COALESCE(MAX(n), 0) FROM (SELECT COUNT(*) AS n FROM puzzle_stats"
+     " WHERE player_id = ?1 AND puzzle < 2000 GROUP BY level)"},
+    {"marathon", "Marathon", "Spend 10 hours solving puzzles (solve times added up).", 600, ACH_UNIT_MINUTES,
+     "SELECT CAST(TOTAL(seconds) / 60 AS INTEGER) FROM solves WHERE player_id = ?1"},
+    {"night_owl", "Night owl", "Finish a puzzle between midnight and 5 am.", 1, ACH_UNIT_COUNT,
+     "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND finished_at IS NOT NULL"
+     " AND CAST(strftime('%H', finished_at, 'unixepoch', 'localtime') AS INTEGER) < 5"},
+};
+#define ACH_COUNT ((int)(sizeof(ACH) / sizeof(ACH[0])))
+_Static_assert(sizeof(ACH) / sizeof(ACH[0]) <= STATS_ACH_MAX, "raise STATS_ACH_MAX");
+
+/* days since 1970-01-01 of 'YYYY-MM-DD' (proleptic Gregorian), or INT32_MIN */
+static int32_t day_number(const char *d)
+{
+    int y, m, dd;
+    if (!d || sscanf(d, "%d-%d-%d", &y, &m, &dd) != 3) return INT32_MIN;
+    y -= m <= 2;
+    int32_t era = (y >= 0 ? y : y - 399) / 400;
+    int32_t yoe = y - era * 400;
+    int32_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + dd - 1;
+    int32_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+/* the longest run of days in a row with the daily puzzle solved */
+static int longest_daily_streak(int32_t player)
+{
+    sqlite3_stmt *st;
+    int best = 0, run = 0;
+    int32_t prev = INT32_MIN;
+    if (!s_db || sqlite3_prepare_v2(s_db, DAILY_DAYS, -1, &st, NULL) != SQLITE_OK) return 0;
+    sqlite3_bind_int(st, 1, player);
+    while (sqlite3_step(st) == SQLITE_ROW) {
+        int32_t d = day_number((const char *)sqlite3_column_text(st, 0));
+        if (d == INT32_MIN) continue;
+        run = prev != INT32_MIN && d == prev + 1 ? run + 1 : 1;
+        if (run > best) best = run;
+        prev = d;
+    }
+    sqlite3_finalize(st);
+    return best;
+}
+
+/* progress of every achievement for a player */
+static void ach_values(int32_t player, int32_t *val)
+{
+    int streak = -1;
+    for (int i = 0; i < ACH_COUNT; i++) {
+        val[i] = 0;
+        if (!ACH[i].sql) {
+            if (streak < 0) streak = longest_daily_streak(player);
+            val[i] = streak;
+            continue;
+        }
+        sqlite3_stmt *st;
+        if (sqlite3_prepare_v2(s_db, ACH[i].sql, -1, &st, NULL) != SQLITE_OK) {
+            printf("stats_db: achievement %s: %s\n", ACH[i].key, sqlite3_errmsg(s_db));
+            continue;
+        }
+        sqlite3_bind_int(st, 1, player);
+        if (sqlite3_step(st) == SQLITE_ROW) val[i] = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+    }
+}
+
+/* when each achievement was unlocked: 1 = unlocked (time unknown), 0 = not yet */
+static void ach_unlocked(int32_t player, int64_t *when)
+{
+    for (int i = 0; i < ACH_COUNT; i++) when[i] = 0;
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "SELECT key, unlocked_at FROM achievements WHERE player_id = ?1", -1, &st,
+                           NULL) != SQLITE_OK) return;
+    sqlite3_bind_int(st, 1, player);
+    while (sqlite3_step(st) == SQLITE_ROW) {
+        const char *key = (const char *)sqlite3_column_text(st, 0);
+        for (int i = 0; key && i < ACH_COUNT; i++) {
+            if (strcmp(ACH[i].key, key) != 0) continue;
+            int64_t t = sqlite3_column_type(st, 1) == SQLITE_NULL ? 0 : sqlite3_column_int64(st, 1);
+            when[i] = t > 1 ? t : 1;
+        }
+    }
+    sqlite3_finalize(st);
+}
+
+/* Records the achievements a player has reached and not recorded yet. With
+ * announce, they go to stats_db_take_unlocked() and get the time now; without
+ * (first fill), they are recorded quietly with no time. */
+static void ach_sync(int32_t player, bool announce)
+{
+    if (!s_db) return;
+    int32_t val[ACH_COUNT];
+    int64_t when[ACH_COUNT];
+    ach_values(player, val);
+    ach_unlocked(player, when);
+    time_t now = time(NULL);
+    char titles[sizeof(s_unlocked)] = "";
+    int n = 0;
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "INSERT OR IGNORE INTO achievements(player_id, key, unlocked_at) VALUES(?1, ?2, ?3)",
+                           -1, &st, NULL) != SQLITE_OK) return;
+    for (int i = 0; i < ACH_COUNT; i++) {
+        if (when[i] || val[i] < ACH[i].goal) continue;
+        sqlite3_reset(st);
+        sqlite3_bind_int(st, 1, player);
+        sqlite3_bind_text(st, 2, ACH[i].key, -1, SQLITE_STATIC);
+        if (announce && now > 1700000000) sqlite3_bind_int64(st, 3, now);
+        else sqlite3_bind_null(st, 3);
+        if (!step_done(st, "achievement")) continue;
+        if (!announce) continue;
+        size_t len = strlen(titles);
+        snprintf(titles + len, sizeof(titles) - len, "%s%s", n ? ", " : "", ACH[i].title);
+        n++;
+    }
+    sqlite3_finalize(st);
+    if (n) {
+        printf("stats_db: unlocked %s\n", titles);
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+        snprintf(s_unlocked, sizeof(s_unlocked), "%s", titles);
+        s_unlocked_n = n;
+        xSemaphoreGive(s_lock);
+    }
+}
+
+/* the achievements already earned by every player, recorded quietly (at open) */
+static void ach_backfill(void)
+{
+    int32_t ids[STATS_MAX_PLAYERS];
+    int n = 0;
+    sqlite3_stmt *st;
+    if (!s_db || sqlite3_prepare_v2(s_db, "SELECT id FROM players", -1, &st, NULL) != SQLITE_OK) return;
+    while (n < STATS_MAX_PLAYERS && sqlite3_step(st) == SQLITE_ROW) ids[n++] = sqlite3_column_int(st, 0);
+    sqlite3_finalize(st);
+    for (int i = 0; i < n; i++) ach_sync(ids[i], false);
+}
+
+static void do_achievements(void)
+{
+    static stats_achievements_t *ap;
+    if (!psram_buf((void **)&ap, sizeof(*ap)) || !psram_buf((void **)&s_ach, sizeof(*s_ach))) return;
+    stats_achievements_t *const a = ap;
+    memset(a, 0, sizeof(*a));
+    a->player_id = s_player;
+    if (s_db) {
+        ach_sync(s_player, false);                 /* nothing missed (e.g. a restored sudoku.db) */
+        int32_t val[ACH_COUNT];
+        int64_t when[ACH_COUNT];
+        ach_values(s_player, val);
+        ach_unlocked(s_player, when);
+        for (int i = 0; i < ACH_COUNT; i++) {
+            stats_ach_t *x = &a->a[a->n++];
+            x->title = ACH[i].title;
+            x->desc = ACH[i].desc;
+            x->goal = ACH[i].goal;
+            x->unit = ACH[i].unit;
+            x->unlocked = when[i] != 0;
+            x->unlocked_at = when[i] > 1 ? when[i] : 0;
+            x->value = x->unlocked || val[i] > ACH[i].goal ? ACH[i].goal : val[i];
+            a->unlocked += x->unlocked;
+        }
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    *s_ach = *a;
+    s_ach_new = true;
+    xSemaphoreGive(s_lock);
+}
+
 /* a page of recorded solves (newest first), for the Gameplays screen */
 static void do_plays(int offset)
 {
@@ -1314,6 +1667,15 @@ static void worker(void *arg)
             break;
         case CMD_DAILY:
             do_daily();
+            break;
+        case CMD_RANK:
+            do_rank();
+            break;
+        case CMD_BOARD:
+            do_board(c.text);
+            break;
+        case CMD_ACH:
+            do_achievements();
             break;
         case CMD_SUSPEND:
             flush_game();
@@ -1522,6 +1884,64 @@ bool stats_db_daily_status(const char *day, int *id, bool *solved_today, int *st
     *solved_today = s_gen.solved_today;
     *streak = s_gen.streak;
     return true;
+}
+
+bool stats_db_daily_rank(const char *day, int *rank, int *of)
+{
+    snprintf(s_gen.day, sizeof(s_gen.day), "%s", day);
+    if (!gen_call(CMD_RANK)) return false;
+    *rank = s_gen.rank;
+    *of = s_gen.of;
+    return true;
+}
+
+void stats_db_query_board(const char *day)
+{
+    cmd_t c = {.type = CMD_BOARD};
+    snprintf(c.text, sizeof(c.text), "%s", day ? day : "");
+    send(&c);
+}
+
+bool stats_db_take_board(stats_board_t *out)
+{
+    if (!s_lock || !s_board) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_board_new;
+    if (fresh) *out = *s_board;
+    s_board_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
+}
+
+void stats_db_query_achievements(void)
+{
+    cmd_t c = {.type = CMD_ACH};
+    send(&c);
+}
+
+bool stats_db_take_achievements(stats_achievements_t *out)
+{
+    if (!s_lock || !s_ach) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_ach_new;
+    if (fresh) *out = *s_ach;
+    s_ach_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
+}
+
+bool stats_db_take_unlocked(char *buf, int len, int *count)
+{
+    if (!s_lock) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool any = s_unlocked_n > 0;
+    if (any) {
+        snprintf(buf, len, "%s", s_unlocked);
+        if (count) *count = s_unlocked_n;
+    }
+    s_unlocked_n = 0;
+    xSemaphoreGive(s_lock);
+    return any;
 }
 
 void stats_db_query_plays(int offset)
