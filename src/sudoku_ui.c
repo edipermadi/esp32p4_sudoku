@@ -84,6 +84,7 @@ LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
 #define SYMBOL_LOCK     "\xEF\x80\xA3"   /* FontAwesome U+F023 */
 #define SYMBOL_STAR     "\xEF\x80\x85"   /* FontAwesome U+F005 */
 #define SYMBOL_CHART    "\xEF\x88\x81"   /* FontAwesome U+F201 (chart-line) */
+#define SYMBOL_BULB     "\xEF\x83\xAB"   /* FontAwesome U+F0EB (lightbulb) */
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
@@ -170,8 +171,9 @@ static uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
 #define PANE_W      (SCR_W - PANE_X - 12)   /* 432 */
 #define TOP_H       60
 #define GRID_X      8
-#define GRID_Y      64
-#define GRID_SIZE   604     /* 9x9: 4 + 3 * (3*64 + 2*2) + 2*4 + 4 (board_layout) */
+#define TOOL_Y      62      /* the game's second row: ?, Hint, pause and timer */
+#define GRID_Y      116     /* the board, under that row */
+#define GRID_SIZE   552     /* 9x9: 57 px cells (board_layout) */
 #define PAD_X       (GRID_X + GRID_SIZE + 8)
 #define PAD_W       (SCR_W - PAD_X - 8)
 #define PAD_H       62
@@ -2352,18 +2354,21 @@ static void build_game(void)
     make_btn(scr_game, 8, 6, 104, 48, LV_SYMBOL_LEFT "  List", &lv_font_montserrat_18, back_cb, NULL);
     g_title = make_label(scr_game, &lv_font_montserrat_22, C_TEXT);
     lv_obj_set_pos(g_title, 126, 6);
-    lv_obj_set_width(g_title, SCR_W - 8 - 200 - 8 - 92 - 8 - 48 - 8 - 126);   /* up to the ? button */
+    /* the whole line to the right edge, one line ("Daily X-Sudoku Medium, 18 Nov" fits; longer ends in ...) */
+    lv_obj_set_size(g_title, SCR_W - 8 - 126, lv_font_get_line_height(&lv_font_montserrat_22));
     lv_label_set_long_mode(g_title, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_t *qb = make_btn(scr_game, SCR_W - 8 - 200 - 8 - 92 - 8 - 48, 6, 48, 48, "?", &lv_font_montserrat_22, rules_cb,
+    /* second row: ? and Hint on the left, the pause button and timer on the right */
+    lv_obj_t *qb = make_btn(scr_game, 8, TOOL_Y, 52, 48, SYMBOL_BULB, &font_icons_24, rules_cb,
                             NULL);                   /* the variant's rules */
     lv_obj_set_style_text_color(lv_obj_get_child(qb, 0), C_ACCENT, 0);
     g_best = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(g_best, 126, 36);
 
-    lv_obj_t *hb = make_btn(scr_game, SCR_W - 8 - 200 - 8 - 92, 6, 92, 48, "Hint", &lv_font_montserrat_18, hint_cb, NULL);
+    lv_obj_t *hb = make_btn(scr_game, 8 + 52 + 8, TOOL_Y, 120, 48, LV_SYMBOL_EYE_OPEN "  Hint", &lv_font_montserrat_18,
+                            hint_cb, NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(hb, 0), C_ACCENT, 0);
 
-    lv_obj_t *tb = make_btn(scr_game, SCR_W - 8 - 200, 6, 200, 48, NULL, NULL, pause_cb, NULL);
+    lv_obj_t *tb = make_btn(scr_game, SCR_W - 8 - 200, TOOL_Y, 200, 48, NULL, NULL, pause_cb, NULL);
     lv_obj_set_style_bg_opa(tb, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(tb, LV_OPA_COVER, LV_STATE_PRESSED);
     g_timer_icon = make_label(tb, &lv_font_montserrat_20, C_MUTED);
@@ -2456,14 +2461,14 @@ static void build_game(void)
     bx += bw + gap;
     make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_REFRESH "  Restart", &lv_font_montserrat_16, restart_cb, NULL);
     bx += bw + gap;
-    lv_obj_t *fb = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_EYE_OPEN "  Fill", &lv_font_montserrat_16,
+    lv_obj_t *fb = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_OK "  Fill", &lv_font_montserrat_16,
                             fill_cb, NULL);
     g_hint_cnt = make_label(fb, &lv_font_montserrat_12, C_ORANGE);     /* hints used */
     lv_obj_align(g_hint_cnt, LV_ALIGN_TOP_RIGHT, -5, 2);
     lv_obj_set_hidden(g_hint_cnt, true);
     /* status: top bar, right-aligned on the line under the title, up to the Hint button */
     g_status = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
-    lv_obj_set_width(g_status, SCR_W - 8 - 200 - 8 - 92 - 8 - 48 - 8 - 126);
+    lv_obj_set_width(g_status, SCR_W - 8 - 126);
     lv_obj_set_style_text_align(g_status, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(g_status, 126, 36);
 
@@ -2734,7 +2739,7 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
     /* controls down the right: start, back, play, forward, end, speed */
     static const char *const SYM[] = {LV_SYMBOL_PREV, LV_SYMBOL_LEFT, LV_SYMBOL_PLAY, LV_SYMBOL_RIGHT,
                                       LV_SYMBOL_NEXT, "1x"};
-    const int bh = 92, gap = (GRID_SIZE - 6 * bh) / 5;
+    const int gap = 8, bh = (GRID_SIZE - 5 * gap) / 6;   /* six buttons as tall as the board */
     for (int i = 0; i < 6; i++) {
         lv_obj_t *b = make_btn(scr, PAD_X, GRID_Y + i * (bh + gap), PAD_W, bh, SYM[i],
                                &lv_font_montserrat_28, rp_btn_cb, (void *)(intptr_t)i);
