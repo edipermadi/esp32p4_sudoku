@@ -26,6 +26,7 @@ typedef struct {
     uint32_t elapsed_ms;
     uint16_t mistakes;         /* rule-breaking digits placed so far */
     int64_t  started_at;       /* Unix time the puzzle was opened (or restarted), 0 = unknown */
+    uint16_t hints;            /* cells filled with Fill (the solution) so far */
 } saved_game_t;                /* (older NVS saves end before mistakes or started_at) */
 
 void store_init(void);

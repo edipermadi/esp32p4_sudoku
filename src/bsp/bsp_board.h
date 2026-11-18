@@ -43,6 +43,9 @@ extern "C" {
 #define BSP_I2S_DIN_GPIO         11      /* ES7210 mic ADC -> SoC (unused here) */
 #define BSP_AUDIO_PA_GPIO        53      /* NS4150 amp enable, active high */
 
+/* ------------------------------------------------------------- Wi-Fi (C6) */
+#define BSP_HOSTED_RESET_GPIO    54      /* ESP32-C6 EN: low = held in reset */
+
 typedef enum {
     BSP_PANEL_UNKNOWN = 0,
     BSP_PANEL_ST7703,
@@ -117,6 +120,12 @@ void bsp_audio_release(void);
 esp_err_t bsp_audio_write(const int16_t *stereo_frames, size_t frames, uint32_t timeout_ms);
 /* 0..100 % (0 = mute, 100 = 0 dB codec gain). */
 void bsp_audio_set_volume(int percent);
+
+/* ---------------------------------------------------------------- power */
+/* Backlight, speaker amp, panel and Wi-Fi chip off (held through sleep), then
+ * deep sleep with no wake-up source: only the RESET button (or a power cycle)
+ * starts the board again. Close files / unmount the card first. Never returns. */
+void bsp_power_off(void) __attribute__((noreturn));
 
 #ifdef __cplusplus
 }

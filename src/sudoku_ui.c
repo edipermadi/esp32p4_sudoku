@@ -2,7 +2,8 @@
  * Sudoku UI for a 720x720 touch screen (LVGL 9).
  *
  * Screens:
- *   - home: Continue (the game in progress), Puzzles and Settings.
+ *   - home: Continue (the game in progress), Puzzles and Settings; a power
+ *     button (top right) turns the board off (deep sleep until RESET).
  *   - list: a scrolling row of collections at the top, a 10x10 grid of
  *     puzzles below it.
  *     Solved puzzles are green, the game in progress is orange.
@@ -20,7 +21,8 @@
  * Clock: with Wi-Fi connected the time comes from NTP (wifi_mgr.cpp starts
  * SNTP) and the home screen shows it in the chosen time zone.
  *   - game: the 9x9 board, a 1..9 number pad on the right, a timer at the
- *     top, and Undo / Erase / Notes / Restart at the bottom. Conflicting
+ *     top, and Undo / Erase / Notes / Restart / Fill at the bottom. Fill puts
+ *     the solution's digit in the selected cell and counts as a hint. Conflicting
  *     digits turn red; a complete board without conflicts is solved (every
  *     embedded puzzle has exactly one solution).
  *
@@ -48,6 +50,7 @@
 #include "timezones.h"
 #include "stats_db.h"
 #include "usb_msc.h"
+#include "solver.h"
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
@@ -127,6 +130,9 @@ static bool     g_solved;
 static bool     g_paused;
 static uint32_t g_elapsed_ms;
 static uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
+static uint16_t g_hints;         /* cells filled with Fill (undo doesn't remove them either) */
+static uint8_t  g_sol[81];       /* the solution, for Fill */
+static bool     g_sol_ok;
 static int64_t  g_started_at;    /* Unix time the puzzle was opened/restarted, 0 = not known yet */
 static uint32_t g_started_tick;  /* lv_tick_get() then, to work it out once NTP sets the clock;
                                     0 = not this session (resumed with no known start) */
@@ -183,7 +189,8 @@ static uint16_t  l_pending_id;
 static lv_obj_t *g_cells[81], *g_cell_lbl[81];
 static lv_obj_t *g_pad[9], *g_pad_cnt[9];
 static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
-static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss;
+static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
+static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
 
 static void show_list(void);
 static void open_puzzle(uint16_t id);
@@ -357,6 +364,7 @@ static void save_current(void)
     memcpy(sg.notes, g_b.notes, sizeof(sg.notes));
     sg.elapsed_ms = g_elapsed_ms;
     sg.mistakes = g_mistakes;
+    sg.hints = g_hints;
     sg.started_at = game_started_at();
     store_set_game(&sg);
     store_commit_game();
@@ -426,6 +434,9 @@ static void refresh_board(void)
         lv_obj_set_style_opa(g_pad[d - 1], left <= 0 ? LV_OPA_40 : LV_OPA_COVER, 0);
     }
 
+    if (g_hints) lv_label_set_text_fmt(g_hint_cnt, "%u", (unsigned)g_hints);
+    lv_obj_set_hidden(g_hint_cnt, g_hints == 0);
+
     /* status line */
     int bad = 0;
     for (int i = 0; i < 81; i++) bad += g_conflict[i];
@@ -444,13 +455,14 @@ static void refresh_board(void)
 }
 
 static uint16_t s_solve_id;
-static uint32_t s_solve_secs, s_solve_mistakes;
+static uint32_t s_solve_secs, s_solve_mistakes, s_solve_hints;
 static int64_t  s_solve_started;
 
 static void solve_commit_cb(lv_timer_t *t)
 {
     store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
-    stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_started);   /* finished: now */
+    stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_hints,
+                          s_solve_started);                                  /* finished: now */
     if (store_saved_game()->id == s_solve_id) store_clear_game();
 }
 
@@ -467,6 +479,7 @@ static void on_solved(void)
     s_solve_id = g_id;
     s_solve_secs = secs;
     s_solve_mistakes = g_mistakes;
+    s_solve_hints = g_hints;
     s_solve_started = game_started_at();
     lv_timer_t *ct = lv_timer_create(solve_commit_cb, SAVE_DELAY_MS, NULL);   /* after the dialog is up */
     lv_timer_set_repeat_count(ct, 1);
@@ -492,6 +505,13 @@ static void on_solved(void)
     } else {
         lv_label_set_text_fmt(g_win_miss, "%u mistake%s", (unsigned)g_mistakes, g_mistakes == 1 ? "" : "s");
         lv_obj_set_style_text_color(g_win_miss, C_MUTED, 0);
+    }
+    if (g_hints == 0) {
+        lv_label_set_text(g_win_hint, "No hints");
+        lv_obj_set_style_text_color(g_win_hint, C_GREEN, 0);
+    } else {
+        lv_label_set_text_fmt(g_win_hint, "%u hint%s used", (unsigned)g_hints, g_hints == 1 ? "" : "s");
+        lv_obj_set_style_text_color(g_win_hint, C_ORANGE, 0);
     }
     if (!stats_db_ready()) {
         sudoku_ui_notice("No sudoku.db on a microSD card: this result is kept only until the board is "
@@ -525,6 +545,9 @@ static bool can_edit(void)
     return g_sel >= 0 && !g_given[g_sel] && !g_solved && !g_paused;
 }
 
+static void place_digit(int i, int d);
+static void placed_sounds(int i, int d);
+
 static void enter_digit(int d)
 {
     if (!can_edit()) return;
@@ -539,12 +562,8 @@ static void enter_digit(int d)
         if (g_b.val[i] == d) {
             g_b.val[i] = 0;
         } else {
-            g_b.val[i] = (uint8_t)d;
-            g_b.notes[i] = 0;
+            place_digit(i, d);
             placed = true;
-            for (int j = 0; j < 81; j++) {           /* digit placed: drop it from peers' notes */
-                if (j != i && is_peer(i, j)) g_b.notes[j] &= (uint16_t)~(1u << d);
-            }
         }
     }
     after_move();
@@ -555,6 +574,47 @@ static void enter_digit(int d)
         sfx_play(SFX_ERROR);
         return;
     }
+    placed_sounds(i, d);
+}
+
+/* Fill: the selected cell gets its digit from the solution; counts as a hint */
+static void fill_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused) return;
+    if (!g_sol_ok) {
+        sudoku_ui_notice("Fill isn't available: this puzzle has no solution.", 3000);
+        return;
+    }
+    if (g_sel < 0 || g_given[g_sel]) {
+        sudoku_ui_notice("Tap an empty cell first, then Fill.", 2500);
+        return;
+    }
+    int i = g_sel, d = g_sol[i];
+    if (g_b.val[i] == d) {
+        sudoku_ui_notice("That cell is already right.", 2000);
+        return;
+    }
+    push_undo();
+    place_digit(i, d);
+    if (g_hints < 0xFFFF) g_hints++;
+    after_move();
+    if (!g_solved) placed_sounds(i, d);
+}
+
+/* a digit placed in cell i: its notes go, and peers lose that note */
+static void place_digit(int i, int d)
+{
+    g_b.val[i] = (uint8_t)d;
+    g_b.notes[i] = 0;
+    for (int j = 0; j < 81; j++) {
+        if (j != i && is_peer(i, j)) g_b.notes[j] &= (uint16_t)~(1u << d);
+    }
+}
+
+/* chimes for a digit d placed in cell i without a conflict */
+static void placed_sounds(int i, int d)
+{
+    if (g_conflict[i]) return;
     int n = 0;
     bool clean = true;
     for (int j = 0; j < 81; j++) {
@@ -654,6 +714,7 @@ static void reset_game(void)
     memset(g_b.notes, 0, sizeof(g_b.notes));
     g_elapsed_ms = 0;
     g_mistakes = 0;
+    g_hints = 0;
     mark_started();                                 /* opened or restarted: a new attempt */
     g_undo_len = g_undo_head = 0;
     g_sel = -1;
@@ -754,6 +815,7 @@ static void start_game(uint16_t id, bool resume)
 {
     g_id = id;
     puzzle_load(id, g_given);
+    g_sol_ok = sudoku_solve(g_given, g_sol);
     reset_game();
     const saved_game_t *s = store_saved_game();
     if (resume && s->id == id) {
@@ -765,6 +827,7 @@ static void start_game(uint16_t id, bool resume)
         }
         g_elapsed_ms = s->elapsed_ms;
         g_mistakes = s->mistakes;
+        g_hints = s->hints;
         g_started_at = s->started_at;               /* from when it was first opened */
         if (!g_started_at) g_started_tick = 0;      /* unknown, and not worked out from this session */
     }
@@ -861,7 +924,7 @@ static void build_game(void)
     }
 
     /* bottom bar */
-    int bx = 8, bw = 118;
+    int bx = 8, bw = 100;
     make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LEFT "  Undo", &lv_font_montserrat_16, undo_cb, NULL);
     bx += bw + 8;
     make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_BACKSPACE "  Erase", &lv_font_montserrat_16, erase_cb, NULL);
@@ -872,10 +935,16 @@ static void build_game(void)
     bx += bw + 8;
     make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_REFRESH "  Restart", &lv_font_montserrat_16, restart_cb, NULL);
     bx += bw + 8;
-    g_status = make_label(scr_game, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_t *fb = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_EYE_OPEN "  Fill", &lv_font_montserrat_16,
+                            fill_cb, NULL);
+    g_hint_cnt = make_label(fb, &lv_font_montserrat_12, C_ORANGE);     /* hints used */
+    lv_obj_align(g_hint_cnt, LV_ALIGN_TOP_RIGHT, -5, 2);
+    lv_obj_set_hidden(g_hint_cnt, true);
+    bx += bw + 8;
+    g_status = make_label(scr_game, &lv_font_montserrat_16, C_MUTED);
     lv_obj_set_width(g_status, SCR_W - 8 - bx);
     lv_obj_set_style_text_align(g_status, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(g_status, bx, BOT_Y + (BOT_H - 22) / 2);
+    lv_obj_set_pos(g_status, bx, BOT_Y + (BOT_H - 20) / 2);
 
     /* solved dialog */
     g_win_ovl = lv_obj_create(scr_game);
@@ -908,6 +977,8 @@ static void build_game(void)
     lv_obj_align(g_win_best, LV_ALIGN_TOP_MID, 0, 136);
     g_win_miss = make_label(card, &lv_font_montserrat_18, C_MUTED);
     lv_obj_align(g_win_miss, LV_ALIGN_TOP_MID, 0, 164);
+    g_win_hint = make_label(card, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_align(g_win_hint, LV_ALIGN_TOP_MID, 0, 190);
 
     lv_obj_t *b1 = make_btn(card, 0, 0, 196, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_18, win_list_cb, NULL);
     lv_obj_align(b1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -1694,6 +1765,35 @@ static void factory_reset_cb(lv_event_t *e)
     lv_obj_set_style_bg_color(lv_obj_get_child(lv_msgbox_get_footer(m), -1), C_RED, 0);
 }
 
+/* ------------------------------------------------------------- power off */
+
+static void power_off_confirm_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    printf("power off\n");
+    /* black first, so nothing half-drawn shows while the light goes out */
+    lv_obj_t *black = lv_obj_create(lv_layer_sys());
+    lv_obj_remove_style_all(black);
+    lv_obj_set_size(black, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(black, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(black, LV_OPA_COVER, 0);
+    lv_refr_now(NULL);
+    bsp_display_brightness_set(0);
+    vTaskDelay(pdMS_TO_TICKS(150));                /* the confirm tap's tick finishes */
+    stats_db_suspend();                            /* queued writes done, sudoku.db closed, card unmounted */
+    bsp_power_off();                               /* deep sleep until RESET */
+}
+
+static void power_off_cb(lv_event_t *e)
+{
+    lv_obj_t *m = make_msgbox("Turn off?",
+        "The screen, sound and Wi-Fi turn off and the board goes into deep sleep. "
+        "Your game in progress is kept. Press the RESET button on the board to turn it back on.");
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, LV_SYMBOL_POWER "  Turn off", power_off_confirm_cb, true);
+    lv_obj_set_style_bg_color(lv_obj_get_child(lv_msgbox_get_footer(m), -1), C_RED, 0);
+}
+
 /* ------------------------------------------------------------- USB drive */
 
 static void usb_finish(void)
@@ -1832,6 +1932,11 @@ static void render_day(const stats_day_t *d)
         } else {
             snprintf(line, sizeof(line), "Solved %s in %s   -   %u mistake%s   -   started %s",
                      end, took, (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s", start);
+        }
+        if (r->hints) {
+            size_t len = strlen(line);
+            snprintf(line + len, sizeof(line) - len, "   -   %u hint%s",
+                     (unsigned)r->hints, r->hints == 1 ? "" : "s");
         }
         lv_label_set_text(what, line);
     }
@@ -2463,6 +2568,10 @@ static void build_home(void)
     lv_obj_set_hidden(h_clock, true);
     h_date = make_label(scr_home, &lv_font_montserrat_16, C_MUTED);
     lv_obj_align(h_date, LV_ALIGN_TOP_MID, 0, 80);
+
+    lv_obj_t *pw = make_btn(scr_home, 0, 0, 64, 52, LV_SYMBOL_POWER, &lv_font_montserrat_24,
+                            power_off_cb, NULL);
+    lv_obj_align(pw, LV_ALIGN_TOP_RIGHT, -12, 10);
 
     lv_obj_t *col = lv_obj_create(scr_home);
     lv_obj_remove_style_all(col);

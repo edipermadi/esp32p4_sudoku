@@ -8,7 +8,7 @@
  *       who plays; settings.current_player is the one playing now. Each
  *       player has their own statistics and game in progress.
  *   solves(id, player_id, puzzle, level, number, seconds, mistakes,
- *          finished_at, started_at)
+ *          finished_at, started_at, hints)
  *       one row per solve; started_at = when the puzzle was opened (or
  *       restarted), finished_at = when it was solved; Unix time (UTC), NULL
  *       when the clock wasn't set (no Wi-Fi/NTP yet)
@@ -17,7 +17,7 @@
  *       before mistakes were counted
  *   level_stats (view): per player and level: solved / fastest / average / mistakes
  *   saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms,
- *              mistakes, saved_at, started_at)    saved after every move
+ *              mistakes, saved_at, started_at, hints)    saved after every move
  *       the one unfinished game; cells = 81 digits row by row (0 = empty,
  *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
  *   settings(key, value): dark_mode, sound, screen_off_minutes, time_zone,
@@ -89,7 +89,8 @@ void stats_db_save_game(const saved_game_t *g);   /* NULL: no game in progress *
 
 /* Logs a finished puzzle (finished now) and updates its puzzle_stats row.
  * started_at: Unix time it was opened, 0 = unknown. */
-void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, int64_t started_at);
+void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,
+                           int64_t started_at);
 
 /* Asks for the Statistics screen's data (level -1 = all levels). */
 void stats_db_query(int level);
@@ -150,6 +151,7 @@ typedef struct {
     int64_t started_at, finished_at;     /* Unix time, 0 = unknown */
     uint32_t seconds;                    /* time taken (in progress: so far) */
     uint16_t mistakes;
+    uint16_t hints;                      /* cells filled with Fill */
 } stats_day_row_t;
 
 typedef struct {

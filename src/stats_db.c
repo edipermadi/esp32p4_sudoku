@@ -42,7 +42,7 @@ typedef enum {
 typedef struct {
     cmd_type_t type;
     uint16_t puzzle;
-    uint32_t seconds, mistakes;
+    uint32_t seconds, mistakes, hints;
     int64_t when;               /* CMD_SOLVE: finished, Unix time, 0 = unknown */
     int64_t started;            /* CMD_SOLVE: started, Unix time, 0 = unknown */
     int level;                  /* CMD_QUERY */
@@ -99,7 +99,7 @@ static bool exec(const char *sql)
     return true;
 }
 
-/* table layouts (user_version 4), shared by SCHEMA and the upgrade below */
+/* table layouts (user_version 5), shared by SCHEMA and the upgrade below */
 #define T_PLAYERS \
     "players("                                                                  \
     "  id INTEGER PRIMARY KEY,"                                                 \
@@ -115,7 +115,8 @@ static bool exec(const char *sql)
     "  seconds INTEGER NOT NULL,"                                               \
     "  mistakes INTEGER NOT NULL,"                                              \
     "  finished_at INTEGER,"                /* Unix time UTC; NULL = clock not set */ \
-    "  started_at INTEGER)"                 /* when it was opened (or restarted) */
+    "  started_at INTEGER,"                 /* when it was opened (or restarted) */ \
+    "  hints INTEGER NOT NULL DEFAULT 0)"   /* cells filled with Fill (the solution) */
 #define T_PUZZLE_STATS \
     "puzzle_stats("                                                             \
     "  player_id INTEGER NOT NULL REFERENCES players(id),"                      \
@@ -137,7 +138,8 @@ static bool exec(const char *sql)
     "  elapsed_ms INTEGER NOT NULL,"                                            \
     "  mistakes INTEGER NOT NULL,"                                              \
     "  saved_at INTEGER,"                   /* Unix time UTC; NULL = clock not set */ \
-    "  started_at INTEGER)"
+    "  started_at INTEGER,"                                                     \
+    "  hints INTEGER NOT NULL DEFAULT 0)"
 
 static const char SCHEMA[] =
     "CREATE TABLE IF NOT EXISTS " T_PLAYERS ";"
@@ -161,7 +163,7 @@ static const char SCHEMA_POST[] =
     "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
     "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
     "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
-    "PRAGMA user_version = 4;";
+    "PRAGMA user_version = 5;";
 
 /* MIN() of SQL is NULL if either side is: keep the known value then */
 #define FEWEST_MERGED "COALESCE(MIN(fewest_mistakes, excluded.fewest_mistakes), fewest_mistakes, excluded.fewest_mistakes)"
@@ -179,8 +181,8 @@ static const char SQL_SOLVE_UPSERT[] =
     "   fewest_mistakes = " FEWEST_MERGED ", solves = solves + 1";
 
 static const char SQL_SOLVE_INSERT[] =
-    "INSERT INTO solves(player_id, puzzle, level, number, seconds, mistakes, finished_at, started_at)"
-    " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+    "INSERT INTO solves(player_id, puzzle, level, number, seconds, mistakes, finished_at, started_at, hints)"
+    " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9)";
 
 static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
 {
@@ -250,7 +252,7 @@ static void save_game(const saved_game_t *g)
     time_t now = time(NULL);
     if (sqlite3_prepare_v2(s_db,
             "INSERT OR REPLACE INTO saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms,"
-            " mistakes, saved_at, started_at) VALUES(?10, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            " mistakes, saved_at, started_at, hints) VALUES(?10, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?11)",
             -1, &st, NULL) != SQLITE_OK) {
         return;
     }
@@ -264,6 +266,7 @@ static void save_game(const saved_game_t *g)
     if (g->started_at) sqlite3_bind_int64(st, 9, g->started_at);
     else sqlite3_bind_null(st, 9);
     sqlite3_bind_int(st, 10, s_player);
+    sqlite3_bind_int(st, 11, g->hints);
     step_done(st, "save game");
     sqlite3_finalize(st);
 }
@@ -274,7 +277,7 @@ static void load_game(saved_game_t *g)
     memset(g, 0, sizeof(*g));
     g->id = STORE_NO_GAME;
     sqlite3_stmt *st;
-    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, cells, notes, elapsed_ms, mistakes, started_at FROM saved_game"
+    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, cells, notes, elapsed_ms, mistakes, started_at, hints FROM saved_game"
                                  " WHERE player_id = ?1", -1, &st, NULL) != SQLITE_OK) {
         return;
     }
@@ -293,6 +296,7 @@ static void load_game(saved_game_t *g)
             g->elapsed_ms = (uint32_t)sqlite3_column_int64(st, 3);
             g->mistakes = (uint16_t)sqlite3_column_int(st, 4);
             g->started_at = sqlite3_column_int64(st, 5);      /* NULL reads as 0 = unknown */
+            g->hints = (uint16_t)sqlite3_column_int(st, 6);
         }
     }
     sqlite3_finalize(st);
@@ -339,7 +343,7 @@ static bool has_column(const char *table, const char *col)
 }
 
 /* Databases made by earlier builds: CREATE ... IF NOT EXISTS keeps their old
- * tables, so bring them up to date (user_version 1-3 -> 4). Their data
+ * tables, so bring them up to date (user_version 1-4 -> 5). Their data
  * becomes player 1's. */
 static bool upgrade_schema(void)
 {
@@ -350,6 +354,8 @@ static bool upgrade_schema(void)
     }
     if (!has_column("solves", "started_at")) ok &= exec("ALTER TABLE solves ADD COLUMN started_at INTEGER");
     if (!has_column("saved_game", "started_at")) ok &= exec("ALTER TABLE saved_game ADD COLUMN started_at INTEGER");
+    if (!has_column("solves", "hints")) ok &= exec("ALTER TABLE solves ADD COLUMN hints INTEGER NOT NULL DEFAULT 0");
+    if (!has_column("saved_game", "hints")) ok &= exec("ALTER TABLE saved_game ADD COLUMN hints INTEGER NOT NULL DEFAULT 0");
 
     bool old_solves = !has_column("solves", "player_id");
     bool old_stats = !has_column("puzzle_stats", "player_id");
@@ -369,8 +375,8 @@ static bool upgrade_schema(void)
         ok &= exec("ALTER TABLE saved_game RENAME TO saved_game_v3");
         ok &= exec("CREATE TABLE " T_SAVED_GAME);
         ok &= exec("INSERT INTO saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms, mistakes,"
-                   " saved_at, started_at) SELECT 1, puzzle, level, number, cells, notes, elapsed_ms, mistakes,"
-                   " saved_at, started_at FROM saved_game_v3");
+                   " saved_at, started_at, hints) SELECT 1, puzzle, level, number, cells, notes, elapsed_ms,"
+                   " mistakes, saved_at, started_at, hints FROM saved_game_v3");
         ok &= exec("DROP TABLE saved_game_v3");
     }
     if (ok) {
@@ -633,6 +639,7 @@ static void do_solve(const cmd_t *c)
     if (c->started) sqlite3_bind_int64(s_solve_insert, 7, c->started);
     else sqlite3_bind_null(s_solve_insert, 7);
     sqlite3_bind_int(s_solve_insert, 8, s_player);
+    sqlite3_bind_int64(s_solve_insert, 9, c->hints);
     bool ok = step_done(s_solve_insert, "insert solve");
     bind_puzzle(s_solve_upsert, c->puzzle);
     sqlite3_bind_int64(s_solve_upsert, 4, c->seconds ? c->seconds : 1);
@@ -854,10 +861,10 @@ static void do_delete(int32_t id)
  * they started. t = Unix time, local day as 'YYYY-MM-DD'. */
 #define HISTORY_EVENTS \
     "SELECT s.finished_at AS t, s.started_at AS started, s.finished_at AS finished, p.name AS player," \
-    "       s.puzzle, s.seconds, s.mistakes, 0 AS in_progress" \
+    "       s.puzzle, s.seconds, s.mistakes, 0 AS in_progress, s.hints" \
     "  FROM solves s JOIN players p ON p.id = s.player_id WHERE s.finished_at IS NOT NULL" \
     " UNION ALL " \
-    "SELECT g.started_at, g.started_at, NULL, p.name, g.puzzle, g.elapsed_ms / 1000, g.mistakes, 1" \
+    "SELECT g.started_at, g.started_at, NULL, p.name, g.puzzle, g.elapsed_ms / 1000, g.mistakes, 1, g.hints" \
     "  FROM saved_game g JOIN players p ON p.id = g.player_id WHERE g.started_at IS NOT NULL"
 
 static void do_month(int year, int month)
@@ -908,7 +915,7 @@ static void do_day(int year, int month, int day)
     snprintf(ymd, sizeof(ymd), "%04d-%02d-%02d", year, month, day);
     sqlite3_stmt *st;
     if (s_db && sqlite3_prepare_v2(s_db,
-            "SELECT started, finished, player, puzzle, seconds, mistakes, in_progress FROM ("
+            "SELECT started, finished, player, puzzle, seconds, mistakes, in_progress, hints FROM ("
             HISTORY_EVENTS ") WHERE date(t, 'unixepoch', 'localtime') = ?1 ORDER BY t",
             -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_text(st, 1, ymd, -1, SQLITE_STATIC);
@@ -923,6 +930,7 @@ static void do_day(int year, int month, int day)
             r->seconds = (uint32_t)sqlite3_column_int64(st, 4);
             r->mistakes = sqlite3_column_int(st, 5);
             r->in_progress = sqlite3_column_int(st, 6) != 0;
+            r->hints = sqlite3_column_int(st, 7);
         }
         sqlite3_finalize(st);
     }
@@ -1116,7 +1124,8 @@ bool stats_db_ready(void)
     return s_state == ST_READY;
 }
 
-void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, int64_t started_at)
+void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,
+                           int64_t started_at)
 {
     time_t now = time(NULL);
     cmd_t c = {
@@ -1124,6 +1133,7 @@ void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes,
         .puzzle = puzzle,
         .seconds = seconds,
         .mistakes = mistakes,
+        .hints = hints,
         .when = now > 1700000000 ? (int64_t)now : 0,      /* only once NTP has set the clock */
         .started = started_at,
     };
