@@ -37,6 +37,7 @@ typedef struct {                /* CMD_OPEN: what the board has (freed by the wo
 typedef enum {
     CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
+    CMD_MONTH, CMD_DAY,
 } cmd_type_t;
 typedef struct {
     cmd_type_t type;
@@ -45,6 +46,7 @@ typedef struct {
     int64_t when;               /* CMD_SOLVE: finished, Unix time, 0 = unknown */
     int64_t started;            /* CMD_SOLVE: started, Unix time, 0 = unknown */
     int level;                  /* CMD_QUERY */
+    int year, month, day;       /* CMD_MONTH, CMD_DAY */
     open_seed_t *seed;          /* CMD_OPEN */
     char key[24];               /* CMD_SET */
     bool is_text;
@@ -75,6 +77,10 @@ static bool s_players_new;
 static stats_player_change_t s_change;
 static bool s_change_new;
 static char s_message[96];
+static stats_month_t s_month;
+static bool s_month_new;
+static stats_day_t s_day;
+static bool s_day_new;
 /* the newest game to save (CMD_GAME just says "there is one") */
 static saved_game_t s_game_next;
 static bool s_game_next_has, s_game_dirty;
@@ -844,6 +850,88 @@ static void do_delete(int32_t id)
     }
 }
 
+/* Every dated event: solves by when they finished, unfinished games by when
+ * they started. t = Unix time, local day as 'YYYY-MM-DD'. */
+#define HISTORY_EVENTS \
+    "SELECT s.finished_at AS t, s.started_at AS started, s.finished_at AS finished, p.name AS player," \
+    "       s.puzzle, s.seconds, s.mistakes, 0 AS in_progress" \
+    "  FROM solves s JOIN players p ON p.id = s.player_id WHERE s.finished_at IS NOT NULL" \
+    " UNION ALL " \
+    "SELECT g.started_at, g.started_at, NULL, p.name, g.puzzle, g.elapsed_ms / 1000, g.mistakes, 1" \
+    "  FROM saved_game g JOIN players p ON p.id = g.player_id WHERE g.started_at IS NOT NULL"
+
+static void do_month(int year, int month)
+{
+    static stats_month_t m;
+    memset(&m, 0, sizeof(m));
+    sqlite3_stmt *st;
+    char ym[8] = "";
+    if (s_db && year == 0) {                  /* the latest month with anything in it */
+        if (sqlite3_prepare_v2(s_db, "SELECT strftime('%Y-%m', MAX(t), 'unixepoch', 'localtime') FROM ("
+                                     HISTORY_EVENTS ")", -1, &st, NULL) == SQLITE_OK) {
+            if (sqlite3_step(st) == SQLITE_ROW && sqlite3_column_type(st, 0) != SQLITE_NULL) {
+                sscanf((const char *)sqlite3_column_text(st, 0), "%d-%d", &year, &month);
+            }
+            sqlite3_finalize(st);
+        }
+    }
+    if (s_db && year > 0) {
+        m.year = year;
+        m.month = month;
+        snprintf(ym, sizeof(ym), "%04d-%02d", year, month);
+        if (sqlite3_prepare_v2(s_db,
+                "SELECT CAST(strftime('%d', t, 'unixepoch', 'localtime') AS INTEGER), COUNT(*) FROM ("
+                HISTORY_EVENTS ") WHERE strftime('%Y-%m', t, 'unixepoch', 'localtime') = ?1 GROUP BY 1",
+                -1, &st, NULL) == SQLITE_OK) {
+            sqlite3_bind_text(st, 1, ym, -1, SQLITE_STATIC);
+            while (sqlite3_step(st) == SQLITE_ROW) {
+                int d = sqlite3_column_int(st, 0), n = sqlite3_column_int(st, 1);
+                if (d >= 1 && d <= 31) m.count[d - 1] = n > 255 ? 255 : n;
+            }
+            sqlite3_finalize(st);
+        }
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_month = m;
+    s_month_new = true;
+    xSemaphoreGive(s_lock);
+}
+
+static void do_day(int year, int month, int day)
+{
+    static stats_day_t d;
+    memset(&d, 0, sizeof(d));
+    d.year = year;
+    d.month = month;
+    d.day = day;
+    char ymd[12];
+    snprintf(ymd, sizeof(ymd), "%04d-%02d-%02d", year, month, day);
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db,
+            "SELECT started, finished, player, puzzle, seconds, mistakes, in_progress FROM ("
+            HISTORY_EVENTS ") WHERE date(t, 'unixepoch', 'localtime') = ?1 ORDER BY t",
+            -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(st, 1, ymd, -1, SQLITE_STATIC);
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            d.total++;
+            if (d.n >= STATS_MAX_DAY_ROWS) continue;
+            stats_day_row_t *r = &d.rows[d.n++];
+            r->started_at = sqlite3_column_int64(st, 0);
+            r->finished_at = sqlite3_column_int64(st, 1);
+            snprintf(r->player, sizeof(r->player), "%s", (const char *)sqlite3_column_text(st, 2));
+            r->puzzle = sqlite3_column_int(st, 3);
+            r->seconds = (uint32_t)sqlite3_column_int64(st, 4);
+            r->mistakes = sqlite3_column_int(st, 5);
+            r->in_progress = sqlite3_column_int(st, 6) != 0;
+        }
+        sqlite3_finalize(st);
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_day = d;
+    s_day_new = true;
+    xSemaphoreGive(s_lock);
+}
+
 static void worker(void *arg)
 {
     sqlite3_initialize();
@@ -880,6 +968,12 @@ static void worker(void *arg)
             break;
         case CMD_DELETE_PLAYER:
             do_delete(c.ival);
+            break;
+        case CMD_MONTH:
+            do_month(c.year, c.month);
+            break;
+        case CMD_DAY:
+            do_day(c.year, c.month, c.day);
             break;
         case CMD_SUSPEND:
             flush_game();
@@ -1110,6 +1204,40 @@ bool stats_db_take_message(char *buf, int len)
     s_message[0] = 0;
     xSemaphoreGive(s_lock);
     return any;
+}
+
+void stats_db_query_month(int year, int month)
+{
+    cmd_t c = {.type = CMD_MONTH, .year = year, .month = month};
+    send(&c);
+}
+
+bool stats_db_take_month(stats_month_t *out)
+{
+    if (!s_lock) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_month_new;
+    if (fresh) *out = s_month;
+    s_month_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
+}
+
+void stats_db_query_day(int year, int month, int day)
+{
+    cmd_t c = {.type = CMD_DAY, .year = year, .month = month, .day = day};
+    send(&c);
+}
+
+bool stats_db_take_day(stats_day_t *out)
+{
+    if (!s_lock) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_day_new;
+    if (fresh) *out = s_day;
+    s_day_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
 }
 
 void stats_db_suspend(void)

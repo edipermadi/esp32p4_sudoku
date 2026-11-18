@@ -134,6 +134,38 @@ bool stats_db_take_player_change(stats_player_change_t *out);
 /* A message for the user (e.g. "name taken"); false if none. */
 bool stats_db_take_message(char *buf, int len);
 
+/* ---------------------------------------------------------------- history */
+/* Days are local dates (the time zone in settings); solves finished before
+ * the clock was set have no date and don't appear. */
+typedef struct {
+    int year, month;                     /* 0 = nothing dated yet */
+    uint8_t count[31];                   /* solves + games started, per day (index day-1) */
+} stats_month_t;
+
+#define STATS_MAX_DAY_ROWS 40
+typedef struct {
+    char player[STORE_NAME_LEN];
+    uint16_t puzzle;
+    bool in_progress;                    /* a saved game started that day, not solved yet */
+    int64_t started_at, finished_at;     /* Unix time, 0 = unknown */
+    uint32_t seconds;                    /* time taken (in progress: so far) */
+    uint16_t mistakes;
+} stats_day_row_t;
+
+typedef struct {
+    int year, month, day;
+    int n, total;                        /* rows here / rows that day (n <= STATS_MAX_DAY_ROWS) */
+    stats_day_row_t rows[STATS_MAX_DAY_ROWS];   /* oldest first */
+} stats_day_t;
+
+/* Which days of a month had games (all players). year 0: the most recent
+ * month that has any. */
+void stats_db_query_month(int year, int month);
+bool stats_db_take_month(stats_month_t *out);
+/* Who played what on a day. */
+void stats_db_query_day(int year, int month, int day);
+bool stats_db_take_day(stats_day_t *out);
+
 /* Closes the database and unmounts the card (before formatting); waits up
  * to a few seconds. stats_db_start_fresh() mounts and starts a new one. */
 void stats_db_suspend(void);

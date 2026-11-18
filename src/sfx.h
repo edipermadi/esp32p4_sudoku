@@ -16,6 +16,8 @@ typedef enum {
     SFX_DIGIT_DONE,     /* all nine of a digit placed */
     SFX_ERROR,          /* placed digit breaks a rule */
     SFX_SOLVED,         /* puzzle complete */
+    SFX_UNIT_DONE,      /* a row, column or 3x3 box holds 1-9 */
+    SFX_UNITS_DONE,     /* two or three of them at once */
     SFX_COUNT
 } sfx_id_t;
 

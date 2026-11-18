@@ -6,7 +6,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 
 - **1600 puzzles in flash**: the 16 OpenSudoku collections from <https://opensudoku.gitlab.io/>. These are Easy, Medium, Hard and Very Hard, plus Gnome Sudoku sets 1–3 at each of those levels. Each puzzle is packed into 41 bytes, about 64 KB in total. Every puzzle was checked to have exactly one solution.
 - **Home screen**: the time and date at the top (once Wi-Fi has fetched it), the solved count and big buttons. **Continue** resumes the game in progress and only appears when there is one. **Players** (at the top, showing who is playing), **Puzzles**, **Statistics** and **Settings** open those screens.
-- **Players**: the **Players** screen lists everyone who plays on the board, with their solved puzzles and solves. Tap a player to play as them; **Add player** and **Rename** ask for a name on an on-screen keyboard (names are unique, ignoring case). The red trash button deletes a player with their statistics, solve history and game in progress, after a confirmation; the last player can't be deleted, and deleting the one playing hands over to the first player left. Each player has their own statistics and their own game in progress, and every solve records who solved it. The Statistics screen shows whose statistics it is. Players are kept in `sudoku.db`; without a card there is just one player.
+- **Players**: the **Players** screen lists everyone who plays on the board, with their solved puzzles and solves. Tap a player to play as them; **Add player** and **Rename** ask for a name on an on-screen keyboard (names are unique, ignoring case). The red trash button deletes a player with their statistics, solve history and game in progress, after a confirmation; the last player can't be deleted, and deleting the one playing hands over to the first player left. Each player has their own statistics and their own game in progress, and every solve records who solved it. The Statistics screen has a player dropdown at the top right (person icon and name): it shows whose statistics these are, and picking another player switches to them. Players are kept in `sudoku.db`; without a card there is just one player.
+- **History**: the calendar button at the top of the Statistics screen shows a calendar (‹ › change the month). Days on which anyone finished a puzzle or started one that is still in progress are highlighted. Tap a day for who played what: player, level and puzzle number, time taken, mistakes, and when it was started and solved (or "in progress"). Dates are local, in the time zone from Settings, and come from `sudoku.db`; solves from before the clock was set (Wi-Fi/NTP) have no date and don't appear.
 - **Puzzle list**
   - Collections are in a row along the top, each with its solved count. Swipe the row sideways, or tap the ‹ › arrows at its ends, to see them all. An arrow only shows while there are more collections that way.
   - Puzzles 1–100 fill the screen below it. Solved ones are green and the game in progress is orange.
@@ -28,11 +29,13 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
   - Each level lists its solved puzzles with the best time, the fewest mistakes in any solve, and how many times it was solved.
   - Above the table: solved count, puzzles solved without a mistake, total solves, fastest and average time.
   - Puzzles solved before this version show "-" for mistakes and count as solved once.
+  - The info button next to the "Statistics" title explains what the numbers mean and where they come from.
 - **Screen timeout**: after a while without a touch the game pauses, the screen goes black and the backlight turns off, so a still image can't burn in. Tap anywhere to wake it. The waking tap doesn't press anything. Set the timeout under **Settings → Screen off after**: 1, 2, 5 (default), 10, 15 or 30 minutes, or Never.
 - **Sound effects**: synthesised on the device, with no audio files. A background task mixes up to four at once.
   - A short tick on every touch.
   - A low buzz when a digit you place breaks a row, column or box rule.
   - A rising chime when all nine of a digit are placed without conflicts.
+  - A quick bright sparkle when a placed digit completes a row, column or 3×3 box (1–9, each once), and a longer one when it completes two or three of them at once.
   - A fanfare when the puzzle is solved.
   - Turn them on or off under **Settings → Sound effects**.
 - **Light and dark mode**: switch between colour schemes under **Settings → Dark mode**.
@@ -102,6 +105,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 | Back to the list                | **List** (top left); the game is saved           |
 | Back to the home screen         | **Home** (top left of the list, statistics, players or settings) |
 | Switch or add players          | **Players** on the home screen                   |
+| See who played on a day        | Calendar button on Statistics, tap the day       |
 | See solve times and mistakes    | **Statistics** on the home screen; pick a level on the left |
 | Sound on/off                    | **Settings → Sound effects**                     |
 | Light / dark mode               | **Settings → Dark mode**                         |
@@ -156,7 +160,7 @@ src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
-src/fonts/              Montserrat 44 px digits / 36 px timer, FontAwesome person icon (lv_font_conv)
+src/fonts/              Montserrat 44 px digits / 36 px timer, FontAwesome person, calendar and info icons at 24/20 px (lv_font_conv)
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/opensudoku/       the downloaded .opensudoku collections

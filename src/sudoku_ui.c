@@ -8,6 +8,8 @@
  *     Solved puzzles are green, the game in progress is orange.
  *   - statistics: per level and per puzzle best times, mistakes, solves,
  *     read from sudoku.db on the microSD card (stats_db.c).
+ *   - history: a calendar of the days anyone played; tap a day for who
+ *     played what (from sudoku.db, opened from Statistics).
  *   - players: who is playing; switch, add or rename (statistics and the
  *     game in progress are per player, in sudoku.db).
  *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone,
@@ -54,8 +56,11 @@ static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
 
 LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
 LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
-LV_FONT_DECLARE(font_user_24)     /* person icon, falls back to Montserrat 24 */
-#define SYMBOL_USER "\xEF\x80\x87"  /* FontAwesome U+F007, in font_user_24 */
+LV_FONT_DECLARE(font_icons_24)    /* the two icons below + Montserrat 24 as fallback */
+LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
+#define SYMBOL_USER     "\xEF\x80\x87"   /* FontAwesome U+F007 */
+#define SYMBOL_CALENDAR "\xEF\x81\xB3"   /* FontAwesome U+F073 */
+#define SYMBOL_INFO     "\xEF\x81\x9A"   /* FontAwesome U+F05A */
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
@@ -131,10 +136,16 @@ static board_t  g_undo[UNDO_MAX];
 static int      g_undo_head, g_undo_len;
 
 /* ------------------------------------------------------------- widgets */
-static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_game;
+static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_history, *scr_game;
 
 /* home screen */
 static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player;
+
+/* history screen */
+static lv_obj_t *hz_cal, *hz_title, *hz_list;
+static lv_calendar_date_t hz_marked[31];  /* highlighted days (the calendar keeps the pointer) */
+static int hz_year, hz_month;             /* month asked for / shown, 0 = not yet */
+static bool hz_latest_pending;            /* asked for "the latest month"; show what comes back */
 
 /* players screen */
 static lv_obj_t *p_list, *p_add, *p_note;
@@ -144,7 +155,9 @@ static int p_count = -1;                 /* last list from sudoku.db, -1 = none 
 /* statistics screen: row 0 of the left column is "All levels" */
 #define X_ROWS (PUZZLE_COLLECTION_COUNT + 1)
 static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
-static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_note, *x_player;
+static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_player_dd;
+static bool      x_from_db;               /* what the info popup says the numbers come from */
+static char      x_player_txt[STORE_NAME_LEN + 8];    /* closed dropdown: icon + name */
 static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 
 /* settings screen */
@@ -176,6 +189,8 @@ static void open_puzzle(uint16_t id);
 static void render_players(void);
 static void usb_finish(void);
 static void usb_btn_update(void);
+static void history_poll(void);
+static void history_cb(lv_event_t *e);
 static void apply_theme(bool dark);
 
 /* ============================================================= helpers */
@@ -259,6 +274,31 @@ static int compute_conflicts(void)
     }
     for (int i = 0; i < 81; i++) n += g_conflict[i];
     return n;
+}
+
+/* Does the unit (9 cell indices) hold 1-9, each once? */
+static bool unit_complete(const int *cells)
+{
+    uint16_t seen = 0;
+    for (int k = 0; k < 9; k++) {
+        uint8_t v = g_b.val[cells[k]];
+        if (!v || (seen & (1u << v))) return false;
+        seen |= (uint16_t)(1u << v);
+    }
+    return true;
+}
+
+/* How many of cell i's row, column and box were just completed (0..3). */
+static int units_completed_by(int i)
+{
+    int r = i / 9, c = i % 9, br = r / 3 * 3, bc = c / 3 * 3;
+    int row[9], col[9], box[9];
+    for (int k = 0; k < 9; k++) {
+        row[k] = r * 9 + k;
+        col[k] = k * 9 + c;
+        box[k] = (br + k / 3) * 9 + bc + k % 3;
+    }
+    return unit_complete(row) + unit_complete(col) + unit_complete(box);
 }
 
 static int filled_count(void)
@@ -522,6 +562,8 @@ static void enter_digit(int d)
         }
     }
     if (n == 9 && clean) sfx_play(SFX_DIGIT_DONE);
+    int units = units_completed_by(i);              /* row / column / box now 1-9 */
+    if (units) sfx_play(units > 1 ? SFX_UNITS_DONE : SFX_UNIT_DONE);
 }
 
 /* ------------------------------------------------------------- events */
@@ -650,6 +692,12 @@ static void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool 
     lv_obj_set_height(b, 52);
     if (!primary) lv_obj_set_style_bg_color(b, C_CARD, 0);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, m);
+    /* LVGL makes the footer LV_DPI_DEF / 3 (~43 px) tall, less than these
+     * 52 px buttons, which then spill over the text and past the box edge */
+    lv_obj_t *foot = lv_msgbox_get_footer(m);
+    lv_obj_set_height(foot, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_top(foot, 10, 0);
+    lv_obj_set_style_pad_bottom(foot, 18, 0);                  /* room under the buttons */
 }
 
 static void restart_cb(lv_event_t *e)
@@ -1205,6 +1253,39 @@ static void table_columns(int n, const int32_t *w, const char *const *head)
     }
 }
 
+/* the player dropdown on Statistics: everyone from sudoku.db (the Players
+ * screen's list), the closed box shows an icon and who is playing */
+static void stats_player_dd_update(void)
+{
+    if (!x_player_dd) return;
+    static char opts[STATS_MAX_PLAYERS * STORE_NAME_LEN];
+    bool db = stats_db_ready() && p_count > 0;
+    int sel = 0;
+    opts[0] = 0;
+    if (db) {
+        size_t len = 0;
+        for (int i = 0; i < p_count; i++) {
+            len += snprintf(opts + len, sizeof(opts) - len, "%s%s", i ? "\n" : "", p_players[i].name);
+            if (p_players[i].id == store_player_id()) sel = i;
+        }
+    } else {
+        snprintf(opts, sizeof(opts), "%s", store_player_name());
+    }
+    lv_dropdown_set_options(x_player_dd, opts);
+    lv_dropdown_set_selected(x_player_dd, sel);
+    snprintf(x_player_txt, sizeof(x_player_txt), SYMBOL_USER "  %s", store_player_name());
+    lv_dropdown_set_text(x_player_dd, x_player_txt);
+    lv_obj_set_state(x_player_dd, LV_STATE_DISABLED, !db || p_count < 2);
+}
+
+static void stats_player_dd_cb(lv_event_t *e)
+{
+    uint32_t i = lv_dropdown_get_selected(x_player_dd);
+    if ((int)i < p_count && p_players[i].id != store_player_id()) {
+        stats_db_switch_player(p_players[i].id);   /* statistics reload when the switch is done */
+    }
+}
+
 static stats_view_t x_view;
 
 static void stats_select_rows(void)
@@ -1224,13 +1305,9 @@ static void render_stats(const stats_view_t *v, bool from_db)
                               (unsigned)puzzle_collections[c].count);
     }
     lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)v->total.solved, (unsigned)PUZZLE_COUNT);
-    lv_label_set_text_fmt(x_player, "Player: %s", store_player_name());
+    stats_player_dd_update();
     stats_select_rows();
-    lv_label_set_text(x_note, from_db
-        ? "From sudoku.db on the microSD card. Mistake: a placed digit that broke a rule; "
-          "per puzzle, the fewest in any solve (\"-\": not counted then)."
-        : "No sudoku.db: insert a FAT32 microSD card before switching on to keep statistics. "
-          "Showing what the board has in memory.");
+    x_from_db = from_db;
 
     char f[16], a[16], m[16];
     lv_obj_scroll_to_y(x_table, 0, LV_ANIM_OFF);
@@ -1278,6 +1355,25 @@ static void render_stats(const stats_view_t *v, bool from_db)
     lv_obj_set_hidden(x_empty, v->n_puzzles != 0);
 }
 
+/* the (i) button next to the title: what the numbers mean */
+static void stats_info_cb(lv_event_t *e)
+{
+    static char text[640];
+    snprintf(text, sizeof(text), "%s\n\n"
+             "Mistake: a placed digit that broke a row, column or box rule. Undo doesn't take it back.\n\n"
+             "Per puzzle: the best time, the fewest mistakes in any solve, and how many times it was "
+             "solved. \"-\" means mistakes weren't counted yet when it was solved.\n\n"
+             "Per level: puzzles solved, the fastest and the average of the best times, and the "
+             "average of the fewest mistakes.",
+             x_from_db ? "These are the statistics of the player chosen at the top right, from sudoku.db "
+                         "on the microSD card."
+                       : "No sudoku.db: insert a FAT32 microSD card before switching on to keep statistics. "
+                         "This shows what the board has in memory.");
+    lv_obj_t *m = make_msgbox("About these statistics", text);
+    lv_obj_set_width(m, 600);
+    msgbox_button(m, "OK", mbox_close_cb, true);
+}
+
 /* Asks sudoku.db for the selected view (drawn when the answer arrives, see
  * sd_poll_cb); without the database, draws from RAM at once. */
 static void refresh_stats(void)
@@ -1293,6 +1389,7 @@ static void refresh_stats(void)
 
 static void stats_cb(lv_event_t *e)
 {
+    if (stats_db_ready()) stats_db_list_players();   /* fresh list for the player dropdown */
     refresh_stats();
     lv_screen_load(scr_stats);
 }
@@ -1462,6 +1559,7 @@ static void sd_poll_cb(lv_timer_t *t)
         l_coll = store_last_collection();
         apply_theme(store_dark_mode());                    /* redraws every screen with it */
     }
+    if (scr_history) history_poll();
     static stats_player_change_t ch;
     if (stats_db_take_player_change(&ch)) {
         store_set_player(ch.id, ch.name);
@@ -1474,6 +1572,8 @@ static void sd_poll_cb(lv_timer_t *t)
         }
         refresh_home();
         render_players();
+        if (lv_screen_active() == scr_stats) refresh_stats();   /* now this player's */
+        else stats_player_dd_update();
     }
     static stats_player_t list[STATS_MAX_PLAYERS];
     int n = stats_db_take_players(list);
@@ -1481,6 +1581,7 @@ static void sd_poll_cb(lv_timer_t *t)
         memcpy(p_players, list, sizeof(stats_player_t) * n);
         p_count = n;
         render_players();
+        stats_player_dd_update();
     }
     char msg[96];
     if (stats_db_take_message(msg, sizeof(msg))) sudoku_ui_notice(msg, 4000);
@@ -1620,6 +1721,193 @@ static void usb_connect_cb(lv_event_t *e)
     lv_obj_t *d = make_btn(u_ovl, 0, 0, 220, 60, "Done", &lv_font_montserrat_20, usb_done_cb, NULL);
     lv_obj_set_style_bg_color(d, C_ACCENT, 0);
     lv_obj_set_style_text_color(lv_obj_get_child(d, 0), lv_color_white(), 0);
+}
+
+/* ------------------------------------------------------------- history */
+
+static void fmt_clock(char *buf, size_t n, int64_t t)
+{
+    if (!t) {
+        snprintf(buf, n, "?");
+        return;
+    }
+    time_t tt = (time_t)t;
+    struct tm tm;
+    localtime_r(&tt, &tm);
+    strftime(buf, n, "%H:%M", &tm);
+}
+
+static void history_hint(const char *text)
+{
+    lv_obj_clean(hz_list);
+    lv_obj_t *l = make_label(hz_list, &lv_font_montserrat_16, C_MUTED);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
+    lv_label_set_text(l, text);
+}
+
+static void render_day(const stats_day_t *d)
+{
+    struct tm tm = {.tm_year = d->year - 1900, .tm_mon = d->month - 1, .tm_mday = d->day, .tm_hour = 12};
+    mktime(&tm);                                   /* fills in the weekday */
+    char date[48];
+    strftime(date, sizeof(date), "%A, %d %B %Y", &tm);
+    lv_label_set_text(hz_title, date);
+    if (!d->n) {
+        history_hint("Nobody played that day.");
+        return;
+    }
+    lv_obj_clean(hz_list);
+    for (int i = 0; i < d->n; i++) {
+        const stats_day_row_t *r = &d->rows[i];
+        lv_obj_t *card = lv_obj_create(hz_list);
+        lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_set_style_bg_color(card, C_CARD, 0);
+        lv_obj_set_style_border_width(card, 0, 0);
+        lv_obj_set_style_radius(card, 10, 0);
+        lv_obj_set_style_pad_hor(card, 16, 0);
+        lv_obj_set_style_pad_ver(card, 10, 0);
+        lv_obj_set_style_pad_row(card, 4, 0);
+        lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_scrollable(card, false);
+
+        char name[40], took[16], start[8], end[8], line[128];
+        puzzle_name(r->puzzle, name, sizeof(name));
+        fmt_time(took, sizeof(took), r->seconds);
+        fmt_clock(start, sizeof(start), r->started_at);
+        fmt_clock(end, sizeof(end), r->finished_at);
+        lv_obj_t *who = make_label(card, &lv_font_montserrat_18, C_TEXT);
+        lv_label_set_text_fmt(who, "%s   -   %s", r->player, name);
+        lv_obj_t *what = make_label(card, &lv_font_montserrat_14, r->in_progress ? C_ORANGE : C_MUTED);
+        if (r->in_progress) {
+            snprintf(line, sizeof(line), "Started %s   -   in progress, %s so far   -   %u mistake%s",
+                     start, took, (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s");
+        } else {
+            snprintf(line, sizeof(line), "Solved %s in %s   -   %u mistake%s   -   started %s",
+                     end, took, (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s", start);
+        }
+        lv_label_set_text(what, line);
+    }
+    if (d->total > d->n) {
+        char more[48];
+        snprintf(more, sizeof(more), "... and %d more", d->total - d->n);
+        lv_obj_t *l = make_label(hz_list, &lv_font_montserrat_14, C_MUTED);
+        lv_label_set_text(l, more);
+    }
+}
+
+static void render_month(const stats_month_t *m)
+{
+    int n = 0;
+    for (int d = 1; d <= 31; d++) {
+        if (!m->count[d - 1]) continue;
+        hz_marked[n].year = m->year;
+        hz_marked[n].month = m->month;
+        hz_marked[n].day = d;
+        n++;
+    }
+    lv_calendar_set_highlighted_dates(hz_cal, hz_marked, n);
+}
+
+static void history_ask_month(int year, int month)
+{
+    hz_year = year;
+    hz_month = month;
+    stats_db_query_month(year, month);
+}
+
+static void history_day_cb(lv_event_t *e)
+{
+    lv_calendar_date_t d;
+    if (lv_calendar_get_pressed_date(hz_cal, &d) != LV_RESULT_OK || !d.year) return;
+    if (!stats_db_ready()) return;
+    stats_db_query_day(d.year, d.month, d.day);
+}
+
+static void history_cb(lv_event_t *e)
+{
+    lv_label_set_text(hz_title, "Tap a day to see who played what");
+    if (!stats_db_ready()) {
+        history_hint("No sudoku.db: insert a FAT32 microSD card before switching on to keep a history.");
+    } else {
+        history_hint("Highlighted days had games. Solves from before the clock was set (Wi-Fi) "
+                     "have no date and don't appear.");
+        time_t now = time(NULL);
+        if (CLOCK_VALID(now)) {
+            struct tm tm;
+            localtime_r(&now, &tm);
+            lv_calendar_set_today_date(hz_cal, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+            lv_calendar_set_month_shown(hz_cal, tm.tm_year + 1900, tm.tm_mon + 1);
+            hz_latest_pending = false;
+            history_ask_month(tm.tm_year + 1900, tm.tm_mon + 1);
+        } else {
+            hz_latest_pending = true;                  /* no clock: open on the latest month played */
+            history_ask_month(0, 0);
+        }
+    }
+    lv_screen_load(scr_history);
+}
+
+static void history_back_cb(lv_event_t *e)
+{
+    refresh_stats();
+    lv_screen_load(scr_stats);
+}
+
+/* results from sudoku.db, and the month arrows (called from sd_poll_cb) */
+static void history_poll(void)
+{
+    static stats_month_t m;
+    if (stats_db_take_month(&m)) {
+        if (hz_latest_pending && m.year) {
+            lv_calendar_set_month_shown(hz_cal, m.year, m.month);
+            hz_year = m.year;
+            hz_month = m.month;
+        }
+        hz_latest_pending = false;
+        if (m.year == hz_year && m.month == hz_month) render_month(&m);
+    }
+    static stats_day_t d;
+    if (stats_db_take_day(&d)) render_day(&d);
+    if (lv_screen_active() == scr_history && stats_db_ready() && !hz_latest_pending) {
+        const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
+        if (sh->year != hz_year || sh->month != hz_month) history_ask_month(sh->year, sh->month);
+    }
+}
+
+static void build_history(void)
+{
+    scr_history = make_screen();
+    make_btn(scr_history, 12, 10, 170, 52, LV_SYMBOL_LEFT "  Statistics", &lv_font_montserrat_18,
+             history_back_cb, NULL);
+    lv_obj_t *t = make_label(scr_history, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "History");
+    lv_obj_set_pos(t, 200, 20);
+
+    hz_cal = lv_calendar_create(scr_history);
+    lv_obj_set_pos(hz_cal, 12, 72);
+    lv_obj_set_size(hz_cal, SCR_W - 24, 380);
+    lv_calendar_add_header_arrow(hz_cal);
+    lv_obj_set_style_text_font(hz_cal, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_bg_color(hz_cal, C_CARD, 0);
+    lv_obj_set_style_border_width(hz_cal, 0, 0);
+    lv_obj_set_style_radius(hz_cal, 12, 0);
+    lv_obj_t *bm = lv_calendar_get_btnmatrix(hz_cal);
+    lv_obj_set_style_text_color(bm, C_TEXT, LV_PART_ITEMS);
+    lv_obj_add_event_cb(hz_cal, history_day_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    if (hz_year) lv_calendar_set_month_shown(hz_cal, hz_year, hz_month);   /* theme rebuild */
+
+    hz_title = make_label(scr_history, &lv_font_montserrat_20, C_TEXT);
+    lv_obj_set_pos(hz_title, 16, 462);
+    lv_label_set_text(hz_title, "Tap a day to see who played what");
+
+    hz_list = lv_obj_create(scr_history);
+    lv_obj_remove_style_all(hz_list);
+    lv_obj_set_pos(hz_list, 12, 494);
+    lv_obj_set_size(hz_list, SCR_W - 24, SCR_W - 494 - 10);
+    lv_obj_set_flex_flow(hz_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(hz_list, 8, 0);
+    lv_obj_set_scroll_dir(hz_list, LV_DIR_VER);
 }
 
 /* ------------------------------------------------------------- players */
@@ -1886,7 +2174,7 @@ static void apply_theme(bool dark)
     lv_display_set_theme(disp, lv_theme_default_init(disp, C_ACCENT, C_ORANGE, dark, &lv_font_montserrat_16));
 
     lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
-    lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi, *old_profile = scr_profile;
+    lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi, *old_profile = scr_profile, *old_history = scr_history;
     lv_obj_t *act = lv_screen_active();
 
     build_game();
@@ -1896,6 +2184,7 @@ static void apply_theme(bool dark)
     build_settings();
     build_wifi();
     build_profile();
+    build_history();
     if (g_id != STORE_NO_GAME) {
         lv_obj_set_state(g_notes_btn, LV_STATE_CHECKED, g_notes_mode);
         lv_obj_set_hidden(g_pause_ovl, !g_paused);
@@ -1910,6 +2199,7 @@ static void apply_theme(bool dark)
                  : act && act == old_stats    ? scr_stats
                  : act && act == old_wifi     ? scr_wifi
                  : act && act == old_profile  ? scr_profile
+                 : act && act == old_history  ? scr_history
                  : act && act == old_list     ? scr_list
                  : act && act == old_settings ? scr_settings
                  : scr_home;
@@ -1922,6 +2212,7 @@ static void apply_theme(bool dark)
     if (old_stats) lv_obj_delete_async(old_stats);
     if (old_wifi) lv_obj_delete_async(old_wifi);
     if (old_profile) lv_obj_delete_async(old_profile);
+    if (old_history) lv_obj_delete_async(old_history);
     if (old_game) lv_obj_delete_async(old_game);
 }
 
@@ -2141,7 +2432,7 @@ static void build_home(void)
 
     /* who is playing, first */
     lv_obj_t *pb = home_btn(col, SYMBOL_USER "  Players", profile_cb, &h_player);   /* sub: "Playing as ..." */
-    lv_obj_set_style_text_font(lv_obj_get_child(pb, 0), &font_user_24, 0);
+    lv_obj_set_style_text_font(lv_obj_get_child(pb, 0), &font_icons_24, 0);
 
     /* hidden when there is no game in progress; the flex column closes up */
     h_continue = home_btn(col, LV_SYMBOL_PLAY "  Continue", continue_cb, &h_continue_sub);
@@ -2167,6 +2458,10 @@ static void build_stats(void)
     lv_obj_t *t = make_label(scr_stats, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Statistics");
     lv_obj_set_pos(t, 150, 20);
+    lv_obj_t *info = make_btn(scr_stats, 300, 10, 52, 52, SYMBOL_INFO, &font_icons_24, stats_info_cb, NULL);
+    lv_obj_set_style_bg_opa(info, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(info, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(lv_obj_get_child(info, 0), C_ACCENT, 0);
 
     lv_obj_t *list = make_coll_column(scr_stats);
     x_btn[0] = make_coll_btn(list, "All levels", &x_name_lbl[0], &x_cnt_lbl[0], stats_row_cb, 0);
@@ -2176,8 +2471,31 @@ static void build_stats(void)
     }
 
     int px = PANE_X, pw = PANE_W;
-    x_player = make_label(scr_stats, &lv_font_montserrat_18, C_MUTED);
-    lv_obj_align(x_player, LV_ALIGN_TOP_RIGHT, -16, 26);
+    /* top bar, right: calendar (History) and whose statistics, as a dropdown */
+    make_btn(scr_stats, SCR_W - 12 - 250 - 10 - 64, 10, 64, 52, SYMBOL_CALENDAR, &font_icons_20, history_cb, NULL);
+    x_player_dd = lv_dropdown_create(scr_stats);
+    lv_obj_set_pos(x_player_dd, SCR_W - 12 - 250, 10);
+    lv_obj_set_size(x_player_dd, 250, 52);
+    lv_obj_set_style_text_font(x_player_dd, &font_icons_20, 0);
+    lv_obj_set_style_text_color(x_player_dd, C_TEXT, 0);
+    lv_obj_set_style_bg_color(x_player_dd, C_CARD, 0);
+    lv_obj_set_style_border_width(x_player_dd, 0, 0);
+    lv_obj_set_style_shadow_width(x_player_dd, 0, 0);
+    lv_obj_set_style_radius(x_player_dd, 8, 0);
+    lv_obj_set_style_pad_hor(x_player_dd, 14, 0);
+    lv_obj_set_style_pad_ver(x_player_dd, 15, 0);
+    lv_obj_t *pdl = lv_dropdown_get_list(x_player_dd);
+    lv_obj_set_style_text_font(pdl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(pdl, C_TEXT, 0);
+    lv_obj_set_style_text_line_space(pdl, 22, 0);
+    lv_obj_set_style_bg_color(pdl, C_CARD2, 0);
+    lv_obj_set_style_border_width(pdl, 0, 0);
+    lv_obj_set_style_radius(pdl, 8, 0);
+    lv_obj_set_style_max_height(pdl, 480, 0);
+    lv_obj_set_style_bg_color(pdl, C_ACCENT, LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(pdl, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(x_player_dd, stats_player_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    stats_player_dd_update();
     x_title = make_label(scr_stats, &lv_font_montserrat_22, C_TEXT);
     lv_obj_set_pos(x_title, px + 4, 80);
     x_sum1 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
@@ -2187,7 +2505,7 @@ static void build_stats(void)
 
     x_table = lv_table_create(scr_stats);
     lv_obj_set_pos(x_table, px, 158);
-    lv_obj_set_size(x_table, pw, SCR_W - 158 - 48);
+    lv_obj_set_size(x_table, pw, SCR_W - 158 - 12);
     lv_obj_set_style_bg_color(x_table, C_CARD, 0);
     lv_obj_set_style_border_width(x_table, 0, 0);
     lv_obj_set_style_radius(x_table, 12, 0);
@@ -2209,10 +2527,6 @@ static void build_stats(void)
     lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
     lv_obj_set_pos(x_empty, px + 4, 180);
 
-    x_note = make_label(scr_stats, &lv_font_montserrat_12, C_MUTED);   /* text: render_stats() */
-    lv_obj_set_width(x_note, pw - 4);
-    lv_label_set_long_mode(x_note, LV_LABEL_LONG_MODE_WRAP);
-    lv_obj_set_pos(x_note, px + 4, SCR_W - 40);
 }
 
 /* one settings row: a card with a title + hint on the left; returns the card

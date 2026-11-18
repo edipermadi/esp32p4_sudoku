@@ -32,6 +32,14 @@ static const note_t s_touch[] = {
 static const note_t s_digit_done[] = {
     {784, 90, W_TRI, 55}, {1047, 170, W_TRI, 55}, END,
 };
+/* Quick bright sparkle, same key: E6 G6 C7. */
+static const note_t s_unit_done[] = {
+    {1319, 60, W_SINE, 40}, {1568, 60, W_SINE, 40}, {2093, 150, W_SINE, 38}, END,
+};
+/* Longer for a cross of units: C6 E6 G6 C7, held. */
+static const note_t s_units_done[] = {
+    {1047, 55, W_SINE, 40}, {1319, 55, W_SINE, 40}, {1568, 55, W_SINE, 40}, {2093, 240, W_SINE, 40}, END,
+};
 /* Low two-step buzz. */
 static const note_t s_error[] = {
     {196, 90, W_SQUARE, 22}, {0, 35, 0, 0}, {147, 160, W_SQUARE, 22}, END,
@@ -47,6 +55,8 @@ static const note_t *const s_sounds[SFX_COUNT] = {
     [SFX_DIGIT_DONE] = s_digit_done,
     [SFX_ERROR] = s_error,
     [SFX_SOLVED] = s_solved,
+    [SFX_UNIT_DONE] = s_unit_done,
+    [SFX_UNITS_DONE] = s_units_done,
 };
 
 typedef struct {
