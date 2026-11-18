@@ -151,6 +151,8 @@ static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_pl
 static lv_obj_t *hz_cal, *hz_title, *hz_list;
 static lv_calendar_date_t hz_marked[31];  /* highlighted days (the calendar keeps the pointer) */
 static int hz_year, hz_month;             /* month asked for / shown, 0 = not yet */
+static uint8_t hz_count[31];              /* games per day of the highlighted month (badges) */
+static lv_calendar_date_t hz_sel;         /* the day tapped (its list is shown), year 0 = none */
 static bool hz_latest_pending;            /* asked for "the latest month"; show what comes back */
 
 /* players screen */
@@ -1950,6 +1952,7 @@ static void render_day(const stats_day_t *d)
 
 static void render_month(const stats_month_t *m)
 {
+    memcpy(hz_count, m->count, sizeof(hz_count));
     int n = 0;
     for (int d = 1; d <= 31; d++) {
         if (!m->count[d - 1]) continue;
@@ -1959,6 +1962,63 @@ static void render_month(const stats_month_t *m)
         n++;
     }
     lv_calendar_set_highlighted_dates(hz_cal, hz_marked, n);
+}
+
+/* The tapped day: solid accent fill, white number (the calendar itself only
+ * marks it faintly, and only on highlighted days). Plus a badge with the
+ * number of games at the top right of each highlighted day. */
+static void history_cal_draw_cb(lv_event_t *e)
+{
+    lv_draw_task_t *t = lv_event_get_draw_task(e);
+    lv_draw_task_type_t type = lv_draw_task_get_type(t);
+    if (type != LV_DRAW_TASK_TYPE_LABEL && type != LV_DRAW_TASK_TYPE_FILL) return;
+    lv_draw_dsc_base_t *base = (lv_draw_dsc_base_t *)lv_draw_task_get_draw_dsc(t);
+    if (base->part != LV_PART_ITEMS) return;
+    lv_obj_t *bm = lv_event_get_current_target_obj(e);
+    uint32_t id = base->id1;
+    if (id < 7 || lv_buttonmatrix_has_button_ctrl(bm, id, LV_BUTTONMATRIX_CTRL_DISABLED)) return;  /* names, other months */
+    int day = atoi(lv_buttonmatrix_get_button_text(bm, id));
+    if (day < 1 || day > 31) return;
+
+    const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
+    bool selected = hz_sel.year == sh->year && hz_sel.month == sh->month && hz_sel.day == day;
+    if (type == LV_DRAW_TASK_TYPE_FILL) {
+        if (selected) {
+            lv_draw_fill_dsc_t *f = lv_draw_task_get_fill_dsc(t);
+            f->color = C_ACCENT;
+            f->opa = LV_OPA_COVER;
+        }
+        return;
+    }
+    if (selected) lv_draw_task_get_label_dsc(t)->color = lv_color_white();
+
+    if (!lv_buttonmatrix_has_button_ctrl(bm, id, LV_BUTTONMATRIX_CTRL_CUSTOM_2)) return;  /* highlighted */
+    if (!hz_count[day - 1]) return;
+
+    char txt[4];
+    if (hz_count[day - 1] > 99) snprintf(txt, sizeof(txt), "99");
+    else snprintf(txt, sizeof(txt), "%u", (unsigned)hz_count[day - 1]);
+    lv_area_t a;                                    /* the day number's text area */
+    lv_draw_task_get_area(t, &a);
+    int w = txt[1] ? 24 : 18, h = 18;
+    lv_area_t pill = {.x1 = a.x2 + 3, .y1 = a.y1 - 10, .x2 = a.x2 + 3 + w - 1, .y2 = a.y1 - 10 + h - 1};
+
+    lv_draw_rect_dsc_t rd;
+    lv_draw_rect_dsc_init(&rd);
+    rd.bg_color = C_ORANGE;
+    rd.bg_opa = LV_OPA_COVER;
+    rd.radius = LV_RADIUS_CIRCLE;
+    lv_draw_rect(base->layer, &rd, &pill);
+    lv_draw_label_dsc_t ld;
+    lv_draw_label_dsc_init(&ld);
+    ld.font = &lv_font_montserrat_12;
+    ld.color = lv_color_white();
+    ld.align = LV_TEXT_ALIGN_CENTER;
+    ld.text = txt;
+    ld.text_local = 1;                              /* copied: txt is on the stack */
+    lv_area_t ta = pill;
+    ta.y1 += (h - lv_font_get_line_height(ld.font)) / 2;
+    lv_draw_label(base->layer, &ld, &ta);
 }
 
 static void history_ask_month(int year, int month)
@@ -1972,6 +2032,8 @@ static void history_day_cb(lv_event_t *e)
 {
     lv_calendar_date_t d;
     if (lv_calendar_get_pressed_date(hz_cal, &d) != LV_RESULT_OK || !d.year) return;
+    hz_sel = d;
+    lv_obj_invalidate(lv_calendar_get_btnmatrix(hz_cal));
     if (!stats_db_ready()) return;
     stats_db_query_day(d.year, d.month, d.day);
 }
@@ -1979,10 +2041,12 @@ static void history_day_cb(lv_event_t *e)
 static void history_cb(lv_event_t *e)
 {
     lv_label_set_text(hz_title, "Tap a day to see who played what");
+    hz_sel.year = 0;                                /* nothing picked yet */
     if (!stats_db_ready()) {
         history_hint("No sudoku.db: insert a FAT32 microSD card before switching on to keep a history.");
     } else {
-        history_hint("Highlighted days had games. Solves from before the clock was set (Wi-Fi) "
+        history_hint("Highlighted days had games; the badge says how many. Solves from before the "
+                     "clock was set (Wi-Fi) "
                      "have no date and don't appear.");
         time_t now = time(NULL);
         if (CLOCK_VALID(now)) {
@@ -2046,6 +2110,8 @@ static void build_history(void)
     lv_obj_set_style_radius(hz_cal, 12, 0);
     lv_obj_t *bm = lv_calendar_get_btnmatrix(hz_cal);
     lv_obj_set_style_text_color(bm, C_TEXT, LV_PART_ITEMS);
+    lv_obj_set_send_draw_task_events(bm, true);
+    lv_obj_add_event_cb(bm, history_cal_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
     lv_obj_add_event_cb(hz_cal, history_day_cb, LV_EVENT_VALUE_CHANGED, NULL);
     if (hz_year) lv_calendar_set_month_shown(hz_cal, hz_year, hz_month);   /* theme rebuild */
 
