@@ -594,166 +594,18 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t 
     return l;
 }
 
-/* ------------------------------------------------------------- justified text */
-/*
- * LVGL labels can't justify text, so this widget lays the words out itself:
- * every line of a paragraph but the last is spread to the full width (left
- * and right edges flush); the last line, and a line of one word, stay left.
- * '\n' ends a paragraph. Font, colour and line spacing come from the styles
- * (inherited, like a label). Words are measured glyph by glyph (UTF-8).
- * Height follows the text (LV_SIZE_CONTENT). Every dialog (make_msgbox) uses it.
- */
-typedef struct {
-    char *text;
-    int32_t width;                      /* content width the height was worked out for */
-} just_t;
-
-#define JUST_MAX_WORDS 64               /* per line */
-
-/* the UTF-8 character at s[*i] (moves *i past it); 0 at n */
-static uint32_t just_utf8_next(const char *s, int n, int *i)
+/* ------------------------------------------------------------- dialog text */
+/* Text that wraps to its parent's width, left-aligned (dialogs). Font: NULL
+ * = the parent's (inherited, like a label's). */
+static lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, const char *text)
 {
-    if (*i >= n) return 0;
-    uint8_t c = (uint8_t)s[(*i)++];
-    int more = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
-    uint32_t cp = more == 3 ? (c & 0x07u) : more == 2 ? (c & 0x0Fu) : more == 1 ? (c & 0x1Fu) : c;
-    while (more-- > 0 && *i < n) cp = (cp << 6) | ((uint8_t)s[(*i)++] & 0x3Fu);
-    return cp;
-}
-
-static int32_t just_word_w(const lv_font_t *f, const char *s, int n, int32_t letter_space)
-{
-    int32_t w = 0;
-    int i = 0;
-    uint32_t cp = just_utf8_next(s, n, &i);
-    while (cp) {
-        uint32_t next = just_utf8_next(s, n, &i);
-        w += lv_font_get_glyph_width(f, cp, next) + letter_space;
-        cp = next;
-    }
-    return w;
-}
-
-/* lays the text out in width w; with layer, draws it from co's top left. Returns the line count. */
-static int just_run(lv_obj_t *obj, int32_t w, lv_layer_t *layer, const lv_area_t *co)
-{
-    const just_t *j = lv_obj_get_user_data(obj);
-    if (!j || !j->text) return 0;
-    const lv_font_t *f = lv_obj_get_style_text_font(obj, 0);
-    int32_t ls = lv_obj_get_style_text_letter_space(obj, 0);
-    int32_t line_h = lv_font_get_line_height(f) + lv_obj_get_style_text_line_space(obj, 0);
-    int32_t space_w = lv_font_get_glyph_width(f, ' ', 0) + ls;
-    lv_draw_label_dsc_t d;
-    if (layer) {
-        lv_draw_label_dsc_init(&d);
-        d.font = f;
-        d.color = lv_obj_get_style_text_color(obj, 0);
-        d.opa = lv_obj_get_style_text_opa(obj, 0);
-        d.letter_space = ls;
-    }
-    const char *p = j->text;
-    int lines = 0;
-    while (*p) {
-        const char *ws[JUST_MAX_WORDS];
-        int32_t ww[JUST_MAX_WORDS], sum = 0;
-        int wl[JUST_MAX_WORDS], nw = 0;
-        while (*p == ' ') p++;
-        while (*p && *p != '\n') {                  /* words while they fit */
-            const char *e = p;
-            while (*e && *e != ' ' && *e != '\n') e++;
-            int32_t wd = just_word_w(f, p, (int)(e - p), ls);
-            if (nw && (sum + nw * space_w + wd > w || nw == JUST_MAX_WORDS)) break;
-            ws[nw] = p;
-            wl[nw] = (int)(e - p);
-            ww[nw] = wd;
-            sum += wd;
-            nw++;
-            p = e;
-            while (*p == ' ') p++;
-        }
-        bool last = !*p || *p == '\n';
-        if (layer) {
-            int32_t x = 0, spare = w - sum;
-            for (int k = 0; k < nw; k++) {
-                int32_t gap = last || nw < 2 ? k * space_w : spare * k / (nw - 1);
-                lv_area_t a = {.x1 = co->x1 + x + gap, .y1 = co->y1 + lines * line_h};
-                a.x2 = a.x1 + ww[k] + 8;            /* slack: the word never wraps */
-                a.y2 = a.y1 + line_h - 1;
-                d.text = ws[k];
-                d.text_length = (uint32_t)wl[k];
-                lv_draw_label(layer, &d, &a);
-                x += ww[k];
-            }
-        }
-        lines++;
-        if (*p == '\n') p++;
-    }
-    return lines;
-}
-
-static void just_event_cb(lv_event_t *e)
-{
-    lv_obj_t *obj = lv_event_get_current_target_obj(e);
-    just_t *j = lv_obj_get_user_data(obj);
-    switch (lv_event_get_code(e)) {
-    case LV_EVENT_GET_SELF_SIZE: {
-        lv_point_t *pt = lv_event_get_param(e);
-        const lv_font_t *f = lv_obj_get_style_text_font(obj, 0);
-        int32_t lsp = lv_obj_get_style_text_line_space(obj, 0);
-        int n = just_run(obj, lv_obj_get_content_width(obj), NULL, NULL);
-        int32_t h = n ? n * (lv_font_get_line_height(f) + lsp) - lsp : 0;
-        if (pt->y < h) pt->y = h;
-        break;
-    }
-    case LV_EVENT_SIZE_CHANGED:                     /* a new width: new line breaks, new height */
-        if (j && j->width != lv_obj_get_content_width(obj)) {
-            j->width = lv_obj_get_content_width(obj);
-            lv_obj_refresh_self_size(obj);
-        }
-        break;
-    case LV_EVENT_DRAW_MAIN_END: {
-        lv_area_t co;
-        lv_obj_get_content_coords(obj, &co);
-        just_run(obj, lv_area_get_width(&co), lv_event_get_layer(e), &co);
-        break;
-    }
-    case LV_EVENT_DELETE:
-        if (j) {
-            lv_free(j->text);
-            lv_free(j);
-        }
-        lv_obj_set_user_data(obj, NULL);
-        break;
-    default:
-        break;
-    }
-}
-
-static void just_set_text(lv_obj_t *obj, const char *text)
-{
-    just_t *j = lv_obj_get_user_data(obj);
-    if (!j) return;
-    lv_free(j->text);
-    j->text = lv_strdup(text ? text : "");
-    lv_obj_refresh_self_size(obj);
-    lv_obj_invalidate(obj);
-}
-
-/* justified text, full width of its parent (font and colour as for make_label) */
-static lv_obj_t *make_just_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, const char *text)
-{
-    lv_obj_t *obj = lv_obj_create(parent);
-    lv_obj_remove_style_all(obj);
-    lv_obj_set_size(obj, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_scrollable(obj, false);
-    lv_obj_set_clickable(obj, false);
-    if (font) lv_obj_set_style_text_font(obj, font, 0);
-    lv_obj_set_style_text_color(obj, color, 0);
-    just_t *j = lv_malloc_zeroed(sizeof(just_t));
-    lv_obj_set_user_data(obj, j);
-    lv_obj_add_event_cb(obj, just_event_cb, LV_EVENT_ALL, NULL);
-    just_set_text(obj, text);
-    return obj;
+    lv_obj_t *l = lv_label_create(parent);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
+    if (font) lv_obj_set_style_text_font(l, font, 0);
+    lv_obj_set_style_text_color(l, color, 0);
+    lv_label_set_text(l, text ? text : "");
+    return l;
 }
 
 /* ============================================================= sudoku rules */
@@ -1830,8 +1682,8 @@ static lv_obj_t *make_msgbox(const char *title, const char *text)
 {
     lv_obj_t *m = lv_msgbox_create(NULL);
     lv_msgbox_add_title(m, title);
-    /* justified (left and right edges flush); NULL: the caller fills the content */
-    if (text) make_just_text(lv_msgbox_get_content(m), NULL, C_TEXT, text);
+    /* left-aligned, wrapped; NULL: the caller fills the content */
+    if (text) make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT, text);
     lv_obj_set_width(m, 520);
     lv_obj_set_style_text_font(m, &lv_font_montserrat_20, 0);
     return m;
@@ -1842,7 +1694,10 @@ static void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool 
     lv_obj_t *b = lv_msgbox_add_footer_button(m, text);
     lv_obj_set_flex_grow(b, 1);
     lv_obj_set_height(b, 52);
-    if (!primary) lv_obj_set_style_bg_color(b, C_CARD, 0);
+    if (!primary) {                                 /* Cancel, Close ...: grey, not the dialog's own white */
+        lv_obj_set_style_bg_color(b, C_CARD2, 0);
+        lv_obj_set_style_text_color(b, C_TEXT, 0);
+    }
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, m);
     /* LVGL makes the footer LV_DPI_DEF / 3 (~43 px) tall, less than these
      * 52 px buttons, which then spill over the text and past the box edge */
@@ -2468,7 +2323,7 @@ static void rules_show(int variant)
     lv_obj_set_size(pic, LV_PCT(100), p->h * 40 + 16);
     lv_obj_set_user_data(pic, (void *)p);
     lv_obj_add_event_cb(pic, rules_pic_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
-    lv_obj_t *t = make_just_text(lv_msgbox_get_content(m), NULL, C_TEXT, RULES_TEXT[variant]);
+    lv_obj_t *t = make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT, RULES_TEXT[variant]);
     lv_obj_set_style_margin_top(t, 10, 0);
     msgbox_button(m, "OK", mbox_close_cb, true);
 }
@@ -3460,7 +3315,7 @@ static void gen_var_cb(lv_event_t *e)
     uint32_t sel = lv_buttonmatrix_get_selected_button(bm);
     if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= VAR_COUNT) return;
     gen_pick_var = GEN_VAR_ORDER[sel];
-    just_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
+    lv_label_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
 }
 
 static void gen_cancel_cb(lv_event_t *e)
@@ -3479,7 +3334,7 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_t *m = make_msgbox("New puzzle", NULL);
     gen_pick = m;
     lv_obj_set_width(m, 600);
-    make_just_text(lv_msgbox_get_content(m), NULL, C_TEXT,
+    make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT,
                    "A new puzzle made on the board, with exactly one solution. Easy and Medium need only "
                    "singles; Hard needs pairs or locked candidates; Expert needs more than that.");
 
@@ -3506,7 +3361,7 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_set_style_bg_color(vm, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_text_color(vm, lv_color_white(), LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_add_event_cb(vm, gen_var_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    gen_pick_desc = make_just_text(lv_msgbox_get_content(m), &lv_font_montserrat_16, C_MUTED,
+    gen_pick_desc = make_wrap_text(lv_msgbox_get_content(m), &lv_font_montserrat_16, C_MUTED,
                                    GEN_VAR_DESC[gen_pick_var]);
     lv_obj_set_style_margin_top(gen_pick_desc, 8, 0);
 
@@ -3519,8 +3374,12 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_set_style_pad_row(grid, 12, 0);
     lv_obj_set_style_pad_top(grid, 16, 0);
     for (int lv = 0; lv < GEN_LEVELS; lv++) {
-        lv_obj_t *b = make_btn(grid, 0, 0, 0, 60, GEN_LEVEL_NAMES[lv], &lv_font_montserrat_22, gen_level_cb,
-                               (void *)(intptr_t)lv);
+        /* a star per step: Easy one, Expert four */
+        char label[48] = "";
+        for (int k = 0; k <= lv; k++) strcat(label, SYMBOL_STAR);
+        strcat(label, "  ");
+        strcat(label, GEN_LEVEL_NAMES[lv]);
+        lv_obj_t *b = make_btn(grid, 0, 0, 0, 60, label, &font_icons_24, gen_level_cb, (void *)(intptr_t)lv);
         lv_obj_set_width(b, LV_PCT(48));
         lv_obj_set_style_bg_color(b, C_ACCENT, 0);
         lv_obj_set_style_text_color(lv_obj_get_child(b, 0), lv_color_white(), 0);
@@ -3682,7 +3541,7 @@ static void learn_cb(lv_event_t *e)
     learn_box = m;
     lv_obj_set_width(m, 640);
     lv_obj_t *c = lv_msgbox_get_content(m);
-    make_just_text(c, &lv_font_montserrat_16, C_MUTED,
+    make_wrap_text(c, &lv_font_montserrat_16, C_MUTED,
                    "Pick one: a puzzle opens where it's the next step, with the hint showing where to look. "
                    "Practice games aren't saved or counted.");
     for (int i = 0; i < LEARN_COUNT; i++) {
@@ -5940,13 +5799,15 @@ static void build_trophies(void)
     lv_obj_t *t = make_label(scr_trophy, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Trophies");
     lv_obj_set_pos(t, 150, 20);
-    static const char *const TABS[TR_TABS] = {SYMBOL_TROPHY " Achievements", SYMBOL_STAR "  Daily",
+    static const char *const TABS[TR_TABS] = {SYMBOL_TROPHY "  Achievements", SYMBOL_STAR "  Daily",
                                               SYMBOL_CALENDAR "  Weekly", SYMBOL_CHART "  Records"};
-    /* the tabs: a row of equal buttons across the page, under the title */
-    const int tab_gap = 8, tab_w = (SCR_W - 24 - (TR_TABS - 1) * tab_gap) / TR_TABS;
-    for (int i = 0; i < TR_TABS; i++) {
-        tr_tab[i] = make_btn(scr_trophy, 12 + i * (tab_w + tab_gap), TR_TAB_Y, tab_w, TR_TAB_H, TABS[i], &font_icons_20,
-                             tr_tab_cb, (void *)(intptr_t)i);
+    /* the tabs: a row across the page under the title, each as wide as its label needs
+     * with room either side (Achievements is the long one); 232 + 136 + 154 + 150 + 3 x 8 = 696 */
+    static const int TAB_W[TR_TABS] = {232, 136, 154, 150};
+    const int tab_gap = 8;
+    for (int i = 0, x = 12; i < TR_TABS; x += TAB_W[i++] + tab_gap) {
+        tr_tab[i] = make_btn(scr_trophy, x, TR_TAB_Y, TAB_W[i], TR_TAB_H, TABS[i], &font_icons_20, tr_tab_cb,
+                             (void *)(intptr_t)i);
     }
 
     /* achievements */
