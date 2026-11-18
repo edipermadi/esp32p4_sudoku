@@ -81,6 +81,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
   - Above the table: solved count, puzzles solved without a mistake, total solves, fastest and average time.
   - Puzzles solved before this version show "-" for mistakes and count as solved once.
   - The info button next to the "Statistics" title explains what the numbers mean and where they come from.
+- **Lock screen**: **Settings → Display → Lock screen** (Off, Swipe or PIN). The lock button on the home screen (left of the power button) locks at once: the screen goes dark and comes back locked at the next tap (with the setting Off, it locks with a swipe). When the setting is on, the screen also comes back from its timeout locked: a lock icon, the time, the date and who is playing, and either "Swipe up to unlock" (the time follows the finger; swipe far enough) or a 4-digit PIN on a keypad. Choosing PIN asks for the PIN twice; **Lock PIN → Change** sets a new one. After 5 wrong PINs the keypad waits 30 seconds. It is meant to keep little fingers out of a game, not to secure anything: the PIN is kept as plain text in `sudoku.db` (`settings.lock_pin`, with `lock_mode` 0 Off, 1 Swipe, 2 PIN), and pressing **RESET** starts the board unlocked (the lock only comes with a timeout), which is also the way back in with a forgotten PIN.
 - **Screen timeout**: after a while without a touch the game pauses, the screen goes black and the backlight turns off, so a still image can't burn in. Tap anywhere to wake it. The waking tap doesn't press anything. Set the timeout under **Settings → Screen off after**: 1, 2, 5 (default), 10, 15 or 30 minutes, or Never.
 - **Sound effects**: synthesised on the device, with no audio files. A background task mixes up to four at once.
   - A short tick on every touch.
@@ -170,6 +171,8 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 | Make a new puzzle               | **Puzzles → New puzzle**, pick a variant, then a level |
 | Paint a cell / Killer cage sums | Press and hold the cell                          |
 | Hide the clock                  | **Settings → Show timer**                        |
+| Lock the screen on its timeout  | **Settings → Display → Lock screen** (Swipe or PIN) |
+| Lock the screen now             | The lock button on the home screen (top right)   |
 | A variant's rules               | The light bulb button in the game (next to Hint) |
 | Accent colour                   | **Settings → Accent colour**                     |
 | A player's colour               | Tap the dot by their name on **Players**         |
@@ -222,7 +225,7 @@ python3 tools/devctl.py --port /dev/ttyACM0 "tap 513 308; wait 400; shot puzzles
 python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
 ```
 
-- Commands: `tap X Y`, `long X Y [MS]`, `swipe X1 Y1 X2 Y2 [MS]`, `press X Y` / `move X Y` / `release`, `wait MS`, `shot FILE.png`, `ping`. Coordinates are screen pixels (0–719) from the top left. Several commands on the command line are separated by `;`; a script has one per line (`#` starts a comment).
+- Commands: `tap X Y`, `long X Y [MS]`, `swipe X1 Y1 X2 Y2 [MS]`, `press X Y` / `move X Y` / `release`, `wait MS`, `screenoff` (as the screen timeout: black, with the lock screen under it if that's on; the next tap wakes it), `shot FILE.png [--blur X1,Y1,X2,Y2 ...]`, `ping`. Coordinates are screen pixels (0–719) from the top left. Several commands on the command line are separated by `;`; a script has one per line (`#` starts a comment).
 - Opening the port restarts the board (its auto-reset circuit), so the tool waits for the `DEVCTL ready` line it prints at start-up and every run starts on a fresh Home screen, which keeps screenshot scripts repeatable. `--no-wait` skips the wait.
 - The tool then switches the port to `--baud` (921600 by default) for the transfer; a screenshot takes about 2 seconds. It is sent run-length coded (720 × 720 RGB565, runs of up to 256 equal pixels) as numbered base64 lines with a CRC, so log lines from the firmware can't spoil it; a garbled one is asked for again.
 - `docs/screenshots.txt` makes the pictures above: it only looks at screens (opens Easy #1 without playing it, changes nothing) and writes `docs/screenshots/*.png`.

@@ -560,6 +560,8 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "show_timer")) p->show_timer = v != 0;
             else if (!strcmp(k, "accent")) p->accent = v >= 0 && v < ACCENT_COUNT ? v : 0;
             else if (!strcmp(k, "rules_seen")) p->rules_seen = (uint32_t)sqlite3_column_int64(st, 1);
+            else if (!strcmp(k, "lock_mode")) p->lock_mode = v >= LOCK_OFF && v <= LOCK_PIN ? v : LOCK_OFF;
+            else if (!strcmp(k, "lock_pin") && t) snprintf(p->lock_pin, sizeof(p->lock_pin), "%s", t);
             else if (!strcmp(k, "time_zone") && t) snprintf(p->timezone, sizeof(p->timezone), "%s", t);
             else if (!strcmp(k, "last_level") && t) {
                 for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
@@ -718,6 +720,8 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("show_timer", false, p->show_timer, NULL);
     set_setting("accent", false, p->accent, NULL);
     set_setting("rules_seen", false, (int)p->rules_seen, NULL);
+    set_setting("lock_mode", false, p->lock_mode, NULL);
+    set_setting("lock_pin", true, 0, p->lock_pin);
     set_setting("time_zone", true, 0, p->timezone);
     set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
                                                           ? p->last_collection : 0].name);

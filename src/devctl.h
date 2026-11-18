@@ -11,6 +11,7 @@
  *   swipe <x1> <y1> <x2> <y2> [ms]   a drag (default 300 ms)
  *   press <x> <y> / move <x> <y> / release    by hand
  *   wait <ms>                 let the UI run (animations, the database)
+ *   screenoff                 turn the screen off as its timeout does (the next tap wakes it)
  *   shot                      the screen, as lines (below)
  *
  * Every command answers "OK <command>" (or "ERR <why>") once done.

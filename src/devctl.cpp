@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <lvgl.h>
 #include "bsp/bsp_board.h"
+#include "sudoku_ui.h"
 
 #define LINE_MAX     96                 /* command line */
 #define CHUNK        96                 /* coded bytes per S line (128 base64 characters) */
@@ -164,6 +165,9 @@ static void run(char *line)
         pump(a[0] > 0 ? (uint32_t)a[0] : 0);
     } else if (!strcmp(cmd, "shot")) {
         shot();
+    } else if (!strcmp(cmd, "screenoff")) {
+        sudoku_ui_screen_off();                     /* as the timeout: black, then the lock screen if on */
+        pump(200);
     } else {
         Serial.printf("ERR unknown: %s\n", line);
         return;

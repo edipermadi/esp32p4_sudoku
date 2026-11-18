@@ -12,6 +12,7 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     swipe X1 Y1 X2 Y2 [MS]  a drag (default 300 ms)
     press X Y | move X Y | release [X Y]
     wait MS                 let the UI run
+    screenoff               turn the screen off as its timeout does (the next tap wakes it)
     shot FILE.png [--blur X1,Y1,X2,Y2 ...]
                             save the screen as a PNG; --blur pixelates those
                             rectangles first (e.g. a network name)
@@ -201,7 +202,7 @@ def run(board, words):
         elif rest:
             sys.exit("unknown shot option: %s" % " ".join(rest))
         board.shot(words[1], blur)
-    elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "ping"):
+    elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "ping", "screenoff"):
         timeout = 20 + (int(words[1]) / 1000 if cmd == "wait" and len(words) > 1 else 0)
         board.command(" ".join(words), timeout=timeout)
     else:

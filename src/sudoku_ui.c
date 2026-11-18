@@ -272,6 +272,9 @@ static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, th
 /* settings screen */
 static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
 static lv_obj_t *st_wifi_eye;               /* shows the network's name (hidden until tapped) */
+static lv_obj_t *st_lock_dd, *st_pin_btn;   /* the lock screen: Off / Swipe / PIN, and Change PIN */
+static void lock_dd_cb(lv_event_t *e);
+static void pin_change_cb(lv_event_t *e);
 static bool      st_wifi_reveal;            /* name shown; hidden again each time Settings opens */
 static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
@@ -328,6 +331,7 @@ static void apply_loaded_prefs(void);
 static void win_replay_cb(lv_event_t *e);
 static void plays_poll(void);
 static void trophy_poll(void);
+static void lock_now_cb(lv_event_t *e);
 static void trophy_toast_poll(void);
 static void tr_ask(void);
 static void build_trophies(void);
@@ -6722,6 +6726,8 @@ static void build_home(void)
     lv_obj_t *pw = make_btn(scr_home, 0, 0, 64, 52, LV_SYMBOL_POWER, &lv_font_montserrat_24,
                             power_off_cb, NULL);
     lv_obj_align(pw, LV_ALIGN_TOP_RIGHT, -12, 10);
+    lv_obj_t *lk = make_btn(scr_home, 0, 0, 64, 52, SYMBOL_LOCK, &font_icons_24, lock_now_cb, NULL);
+    lv_obj_align(lk, LV_ALIGN_TOP_RIGHT, -12 - 64 - 10, 10);   /* left of the power button: lock now */
 
     lv_obj_t *col = lv_obj_create(scr_home);
     lv_obj_remove_style_all(col);
@@ -6994,6 +7000,17 @@ static void build_settings(void)
     while (sel < SLEEP_COUNT - 1 && SLEEP_MIN[sel] != s_sleep_min) sel++;
     st_sleep_dd = settings_dropdown(r, SLEEP_OPTIONS, sel, 150, sleep_dd_cb);
 
+    r = settings_row(col, "Lock screen", "After the screen timeout: swipe up, or a PIN");
+    st_lock_dd = settings_dropdown(r, "Off\nSwipe\nPIN", store_lock_mode(), 150, lock_dd_cb);
+
+    r = settings_row(col, "Lock PIN", "4 digits; RESET starts the board unlocked");
+    st_pin_btn = make_btn(r, 0, 0, 150, 52, LV_SYMBOL_EDIT "  Change", &lv_font_montserrat_18, pin_change_cb, NULL);
+    lv_obj_set_style_bg_color(st_pin_btn, C_CARD2, 0);
+    lv_obj_set_style_bg_opa(st_pin_btn, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_set_style_text_opa(st_pin_btn, LV_OPA_50, LV_STATE_DISABLED);
+    lv_obj_align(st_pin_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
+
     col = st_pane[ST_SOUND];
     r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
     st_sound_sw = settings_switch(r, sfx_enabled(), sound_sw_cb);
@@ -7135,6 +7152,308 @@ void sudoku_ui_notice(const char *text, uint32_t ms)
 
 /* ============================================================= screen saver */
 
+/* ------------------------------------------------------------- lock screen */
+/*
+ * Settings > Display > Lock screen: with Swipe or PIN, the screen comes back
+ * from its timeout locked: the time, the date and who is playing, and a
+ * swipe up (or the 4-digit PIN) to get back. It sits on the system layer,
+ * under the black cover of the screen saver, so the waking tap only shows
+ * it. After 5 wrong PINs the keypad waits 30 s. Not security: RESET starts
+ * the board unlocked (also the way back in with a forgotten PIN).
+ */
+#define LOCK_SWIPE_PX   140                 /* how far up a swipe has to go */
+#define LOCK_TRIES      5
+#define LOCK_WAIT_MS    30000
+
+static lv_obj_t *lk_ovl, *lk_box, *lk_time, *lk_date, *lk_hint, *lk_dots[4], *lk_pad;
+static lv_timer_t *lk_timer;
+static char lk_entry[5];
+static int lk_tries;
+static uint32_t lk_wait_until;
+static int32_t lk_press_y;
+
+/* a 3 x 4 keypad: 1-9, (blank), 0, backspace; cb gets the key in user data ('0'..'9', '<') */
+static lv_obj_t *pin_pad(lv_obj_t *parent, lv_event_cb_t cb)
+{
+    static const char KEYS[12] = {'1', '2', '3', '4', '5', '6', '7', '8', '9', ' ', '0', '<'};
+    lv_obj_t *pad = lv_obj_create(parent);
+    lv_obj_remove_style_all(pad);
+    lv_obj_set_size(pad, 3 * 110 + 2 * 12, 4 * 72 + 3 * 12);
+    for (int i = 0; i < 12; i++) {
+        if (KEYS[i] == ' ') continue;
+        char t[4] = {KEYS[i], 0};
+        lv_obj_t *b = make_btn(pad, (i % 3) * 122, (i / 3) * 84, 110, 72, KEYS[i] == '<' ? LV_SYMBOL_BACKSPACE : t,
+                               &lv_font_montserrat_28, cb, (void *)(intptr_t)KEYS[i]);
+        lv_obj_set_style_bg_color(b, C_CARD2, 0);
+    }
+    return pad;
+}
+
+static void pin_dots(lv_obj_t *const *dots, int n, lv_color_t on)
+{
+    for (int i = 0; i < 4; i++) {
+        lv_obj_set_style_bg_color(dots[i], i < n ? on : C_CARD2, 0);
+    }
+}
+
+static void pin_dots_make(lv_obj_t *parent, lv_obj_t **dots)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, 4 * 22 + 3 * 18, 22);
+    for (int i = 0; i < 4; i++) {
+        dots[i] = lv_obj_create(row);
+        lv_obj_remove_style_all(dots[i]);
+        lv_obj_set_size(dots[i], 22, 22);
+        lv_obj_set_pos(dots[i], i * 40, 0);
+        lv_obj_set_style_radius(dots[i], LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(dots[i], LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(dots[i], C_CARD2, 0);
+    }
+}
+
+static void lock_tick(lv_timer_t *t)
+{
+    if (!lk_ovl) return;
+    time_t now = time(NULL);
+    char hm[8] = "--:--", date[48] = "";
+    if (CLOCK_VALID(now)) {
+        struct tm tm;
+        localtime_r(&now, &tm);
+        strftime(hm, sizeof(hm), "%H:%M", &tm);
+        strftime(date, sizeof(date), "%A, %d %B", &tm);
+    }
+    lv_label_set_text(lk_time, hm);
+    lv_label_set_text(lk_date, date);
+    if (lk_pad) {                                   /* the wait after too many wrong PINs */
+        int32_t left = (int32_t)(lk_wait_until - lv_tick_get());
+        bool waiting = lk_wait_until && left > 0;
+        lv_obj_set_state(lk_pad, LV_STATE_DISABLED, waiting);
+        lv_obj_set_style_opa(lk_pad, waiting ? LV_OPA_40 : LV_OPA_COVER, 0);
+        if (waiting) lv_label_set_text_fmt(lk_hint, "Too many tries: wait %d s", (int)(left / 1000) + 1);
+        else if (lk_wait_until) {
+            lk_wait_until = 0;
+            lv_label_set_text(lk_hint, "Enter the PIN");
+        }
+    }
+}
+
+static void lock_open(void)   /* unlock: remove the lock screen */
+{
+    if (lk_timer) lv_timer_delete(lk_timer);
+    lk_timer = NULL;
+    if (lk_ovl) lv_obj_delete_async(lk_ovl);
+    lk_ovl = lk_box = lk_pad = NULL;
+}
+
+static void lock_key_cb(lv_event_t *e)
+{
+    char k = (char)(intptr_t)lv_event_get_user_data(e);
+    if (lk_wait_until) return;
+    size_t n = strlen(lk_entry);
+    if (k == '<') {
+        if (n) lk_entry[n - 1] = 0;
+    } else if (n < 4) {
+        lk_entry[n] = k;
+        lk_entry[n + 1] = 0;
+    }
+    n = strlen(lk_entry);
+    pin_dots(lk_dots, (int)n, C_ACCENT);
+    if (n < 4) return;
+    if (!strcmp(lk_entry, store_lock_pin())) {      /* right: back to where it was */
+        lk_tries = 0;
+        lock_open();
+        return;
+    }
+    lk_entry[0] = 0;                                /* wrong */
+    pin_dots(lk_dots, 4, C_RED);
+    sfx_play(SFX_ERROR);
+    if (++lk_tries >= LOCK_TRIES) {
+        lk_tries = 0;
+        lk_wait_until = lv_tick_get() + LOCK_WAIT_MS;
+        if (!lk_wait_until) lk_wait_until = 1;
+    } else {
+        lv_label_set_text_fmt(lk_hint, "Wrong PIN, try again (%d left)", LOCK_TRIES - lk_tries);
+    }
+}
+
+/* Swipe: the time follows the finger up; far enough, and it's unlocked */
+static void lock_swipe_cb(lv_event_t *e)
+{
+    lv_point_t p;
+    lv_indev_get_point(lv_indev_active(), &p);
+    switch (lv_event_get_code(e)) {
+    case LV_EVENT_PRESSED:
+        lk_press_y = p.y;
+        break;
+    case LV_EVENT_PRESSING: {
+        int32_t dy = p.y - lk_press_y;
+        lv_obj_set_style_translate_y(lk_box, dy < 0 ? dy : 0, 0);
+        lv_obj_set_style_opa(lk_box, dy < 0 ? (lv_opa_t)LV_MAX(60, 255 + dy) : LV_OPA_COVER, 0);
+        break;
+    }
+    case LV_EVENT_RELEASED:
+    case LV_EVENT_PRESS_LOST:
+        if (lk_press_y - p.y >= LOCK_SWIPE_PX) {
+            lock_open();
+        } else {
+            lv_obj_set_style_translate_y(lk_box, 0, 0);
+            lv_obj_set_style_opa(lk_box, LV_OPA_COVER, 0);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+/* the lock screen, under the screen saver's black cover (lv_layer_sys);
+ * force (the lock button on Home): even with the setting Off, as Swipe */
+static void lock_show(bool force)
+{
+    uint8_t mode = store_lock_mode();
+    if (mode == LOCK_OFF && force) mode = LOCK_SWIPE;
+    if (mode == LOCK_OFF || lk_ovl) return;
+    lk_ovl = lv_obj_create(lv_layer_sys());
+    lv_obj_remove_style_all(lk_ovl);
+    lv_obj_set_size(lk_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(lk_ovl, C_BG, 0);
+    lv_obj_set_style_bg_opa(lk_ovl, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(lk_ovl, true);             /* nothing below gets a touch */
+    lv_obj_set_scrollable(lk_ovl, false);
+
+    lk_box = lv_obj_create(lk_ovl);                 /* the time and who's playing */
+    lv_obj_remove_style_all(lk_box);
+    lv_obj_set_size(lk_box, LV_PCT(100), 220);
+    lv_obj_align(lk_box, LV_ALIGN_TOP_MID, 0, mode == LOCK_PIN ? 30 : 150);
+    lv_obj_set_flex_flow(lk_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(lk_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(lk_box, 8, 0);
+    lv_obj_set_clickable(lk_box, false);
+    lv_obj_t *icon = make_label(lk_box, &font_icons_24, C_MUTED);
+    lv_label_set_text(icon, SYMBOL_LOCK);
+    lk_time = make_label(lk_box, &font_timer_36, C_TEXT);   /* (its own size: scaled, it would blur) */
+    lk_date = make_label(lk_box, &lv_font_montserrat_20, C_MUTED);
+    lv_obj_t *who = make_label(lk_box, &font_icons_20, C_MUTED);
+    lv_label_set_text_fmt(who, SYMBOL_USER "  %s", store_player_name());
+
+    lk_hint = make_label(lk_ovl, &lv_font_montserrat_20, C_TEXT);
+    lk_entry[0] = 0;
+    lk_pad = NULL;
+    if (mode == LOCK_PIN) {
+        lv_label_set_text(lk_hint, "Enter the PIN");
+        lv_obj_align(lk_hint, LV_ALIGN_TOP_MID, 0, 250);
+        lv_obj_t *dots_row;
+        pin_dots_make(lk_ovl, lk_dots);
+        dots_row = lv_obj_get_parent(lk_dots[0]);
+        lv_obj_align(dots_row, LV_ALIGN_TOP_MID, 0, 290);
+        lk_pad = pin_pad(lk_ovl, lock_key_cb);
+        lv_obj_align(lk_pad, LV_ALIGN_TOP_MID, 0, 340);
+    } else {
+        lv_label_set_text(lk_hint, LV_SYMBOL_UP "\nSwipe up to unlock");
+        lv_obj_set_style_text_align(lk_hint, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(lk_hint, LV_ALIGN_BOTTOM_MID, 0, -70);
+        lv_obj_add_event_cb(lk_ovl, lock_swipe_cb, LV_EVENT_PRESSED, NULL);
+        lv_obj_add_event_cb(lk_ovl, lock_swipe_cb, LV_EVENT_PRESSING, NULL);
+        lv_obj_add_event_cb(lk_ovl, lock_swipe_cb, LV_EVENT_RELEASED, NULL);
+        lv_obj_add_event_cb(lk_ovl, lock_swipe_cb, LV_EVENT_PRESS_LOST, NULL);
+    }
+    lock_tick(NULL);
+    lk_timer = lv_timer_create(lock_tick, 1000, NULL);
+}
+
+/* ---- Settings: the lock and its PIN (st_lock_dd, st_pin_btn: with the other settings widgets) */
+static lv_obj_t *ps_ovl, *ps_hint, *ps_dots[4];
+static char ps_first[5], ps_entry[5];
+static bool ps_from_dd;                             /* opened by choosing PIN (cancel: back to the old mode) */
+
+static void pin_setup_close(bool done)
+{
+    if (ps_ovl) lv_obj_delete_async(ps_ovl);
+    ps_ovl = NULL;
+    if (!done && ps_from_dd && st_lock_dd) lv_dropdown_set_selected(st_lock_dd, store_lock_mode());
+    if (st_pin_btn) lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
+}
+
+static void pin_setup_key_cb(lv_event_t *e)
+{
+    char k = (char)(intptr_t)lv_event_get_user_data(e);
+    size_t n = strlen(ps_entry);
+    if (k == '<') {
+        if (n) ps_entry[n - 1] = 0;
+    } else if (n < 4) {
+        ps_entry[n] = k;
+        ps_entry[n + 1] = 0;
+    }
+    n = strlen(ps_entry);
+    pin_dots(ps_dots, (int)n, C_ACCENT);
+    if (n < 4) return;
+    if (!ps_first[0]) {                             /* once more, to be sure */
+        snprintf(ps_first, sizeof(ps_first), "%s", ps_entry);
+        ps_entry[0] = 0;
+        pin_dots(ps_dots, 0, C_ACCENT);
+        lv_label_set_text(ps_hint, "Enter it again");
+        return;
+    }
+    if (strcmp(ps_first, ps_entry) != 0) {
+        ps_first[0] = ps_entry[0] = 0;
+        pin_dots(ps_dots, 4, C_RED);
+        sfx_play(SFX_ERROR);
+        lv_label_set_text(ps_hint, "They didn't match: enter a new PIN");
+        return;
+    }
+    store_set_lock_pin(ps_entry);
+    store_set_lock_mode(LOCK_PIN);
+    pin_setup_close(true);
+    sudoku_ui_notice("PIN set: the screen locks with it after the screen timeout.", 3000);
+}
+
+static void pin_setup_cancel_cb(lv_event_t *e)
+{
+    pin_setup_close(false);
+}
+
+static void pin_setup_open(bool from_dd)
+{
+    if (ps_ovl) return;
+    ps_from_dd = from_dd;
+    ps_first[0] = ps_entry[0] = 0;
+    ps_ovl = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(ps_ovl);
+    lv_obj_set_size(ps_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(ps_ovl, C_BG, 0);
+    lv_obj_set_style_bg_opa(ps_ovl, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(ps_ovl, true);
+    lv_obj_t *t = make_label(ps_ovl, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Lock screen PIN");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 40);
+    ps_hint = make_label(ps_ovl, &lv_font_montserrat_20, C_MUTED);
+    lv_label_set_text(ps_hint, "Enter a new 4-digit PIN");
+    lv_obj_align(ps_hint, LV_ALIGN_TOP_MID, 0, 100);
+    pin_dots_make(ps_ovl, ps_dots);
+    lv_obj_align(lv_obj_get_parent(ps_dots[0]), LV_ALIGN_TOP_MID, 0, 150);
+    lv_obj_t *pad = pin_pad(ps_ovl, pin_setup_key_cb);
+    lv_obj_align(pad, LV_ALIGN_TOP_MID, 0, 200);
+    lv_obj_t *c = make_btn(ps_ovl, 0, 0, 240, 56, "Cancel", &lv_font_montserrat_20, pin_setup_cancel_cb, NULL);
+    lv_obj_set_style_bg_color(c, C_CARD2, 0);
+    lv_obj_align(c, LV_ALIGN_BOTTOM_MID, 0, -30);
+}
+
+static void lock_dd_cb(lv_event_t *e)
+{
+    uint32_t sel = lv_dropdown_get_selected(st_lock_dd);
+    if (sel == LOCK_PIN) {                          /* a PIN first */
+        pin_setup_open(true);
+        return;
+    }
+    store_set_lock_mode((uint8_t)sel);
+    lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, true);
+}
+
+static void pin_change_cb(lv_event_t *e)
+{
+    pin_setup_open(false);
+}
+
 static lv_obj_t *s_saver;   /* black cover on the system layer while the screen is off */
 
 static void saver_wake_cb(lv_event_t *e)
@@ -7149,11 +7468,12 @@ static void saver_wake_cb(lv_event_t *e)
     }
 }
 
-static void saver_sleep(void)
+static void saver_sleep(bool lock_now)
 {
     if (lv_screen_active() == scr_game && g_id != STORE_NO_GAME && !g_solved && !g_paused) {
         set_paused(true);   /* stops the clock, hides the board, saves the game */
     }
+    lock_show(lock_now);                /* (if on) under the black cover: what the waking tap shows */
     s_saver = lv_obj_create(lv_layer_sys());
     lv_obj_remove_style_all(s_saver);
     lv_obj_set_size(s_saver, LV_PCT(100), LV_PCT(100));
@@ -7167,10 +7487,21 @@ static void saver_sleep(void)
     bsp_display_brightness_set(0);
 }
 
+void sudoku_ui_screen_off(void)
+{
+    if (!s_saver) saver_sleep(false);
+}
+
+/* the lock button on Home: the screen off now, and locked when it wakes */
+static void lock_now_cb(lv_event_t *e)
+{
+    if (!s_saver) saver_sleep(true);
+}
+
 static void saver_cb(lv_timer_t *t)
 {
     if (!s_saver && s_sleep_min &&
-        lv_display_get_inactive_time(NULL) >= (uint32_t)s_sleep_min * 60 * 1000) saver_sleep();
+        lv_display_get_inactive_time(NULL) >= (uint32_t)s_sleep_min * 60 * 1000) saver_sleep(false);
 }
 
 static void touch_sound_cb(lv_event_t *e)

@@ -36,6 +36,8 @@ static const store_prefs_t DEFAULT_PREFS = {
     .show_timer = true,
     .accent = 0,
     .rules_seen = 0,
+    .lock_mode = LOCK_OFF,
+    .lock_pin = "",
     .timezone = "UTC",
     .player_id = 0,
     .player_name = "Player 1",
@@ -333,6 +335,29 @@ void store_set_accent(uint8_t accent)
 {
     s_p.accent = accent;
     stats_db_set_int("accent", accent);
+}
+
+uint8_t store_lock_mode(void)
+{
+    if (s_p.lock_mode == LOCK_PIN && strlen(s_p.lock_pin) != 4) return LOCK_SWIPE;   /* (no PIN set: swipe) */
+    return s_p.lock_mode <= LOCK_PIN ? s_p.lock_mode : LOCK_OFF;
+}
+
+void store_set_lock_mode(uint8_t mode)
+{
+    s_p.lock_mode = mode;
+    stats_db_set_int("lock_mode", mode);
+}
+
+const char *store_lock_pin(void)
+{
+    return s_p.lock_pin;
+}
+
+void store_set_lock_pin(const char *pin)
+{
+    snprintf(s_p.lock_pin, sizeof(s_p.lock_pin), "%s", pin ? pin : "");
+    stats_db_set_text("lock_pin", s_p.lock_pin);
 }
 
 uint32_t store_rules_seen(void)

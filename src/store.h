@@ -83,6 +83,8 @@ typedef struct {
     bool show_timer;                          /* the game's clock is shown (it always runs) */
     uint8_t accent;                           /* accent colour, ACCENT_* (0 = blue) */
     uint32_t rules_seen;                      /* bit v: variant v's rules card has been shown */
+    uint8_t lock_mode;                        /* store_lock_t: the lock screen after a screen timeout */
+    char lock_pin[8];                         /* 4 digits (PIN mode), "" = none set */
     char timezone[STORE_TZ_LEN];
     int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
     char player_name[STORE_NAME_LEN];
@@ -144,6 +146,14 @@ void store_set_accent(uint8_t accent);
 /* Which variants' rules cards were shown already (bit = variant). */
 uint32_t store_rules_seen(void);
 void store_set_rules_seen(uint32_t mask);
+
+/* Lock screen (Settings > Display): shown when the screen wakes from its
+ * timeout. Not security: RESET starts the board unlocked. */
+typedef enum { LOCK_OFF = 0, LOCK_SWIPE = 1, LOCK_PIN = 2 } store_lock_t;
+uint8_t store_lock_mode(void);
+void store_set_lock_mode(uint8_t mode);
+const char *store_lock_pin(void);                 /* 4 digits, or "" */
+void store_set_lock_pin(const char *pin);
 
 #ifdef __cplusplus
 }
