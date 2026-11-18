@@ -5,10 +5,10 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 ## Features
 
 - **1600 puzzles in flash**: the 16 OpenSudoku collections from <https://opensudoku.gitlab.io/>. These are Easy, Medium, Hard and Very Hard, plus Gnome Sudoku sets 1–3 at each of those levels. Each puzzle is packed into 41 bytes, about 64 KB in total. Every puzzle was checked to have exactly one solution.
-- **Home screen**: the solved count and three big buttons. **Continue** resumes the game in progress and only appears when there is one. **Puzzles**, **Statistics** and **Settings** open those screens.
+- **Home screen**: the time and date at the top (once Wi-Fi has fetched it), the solved count and big buttons. **Continue** resumes the game in progress and only appears when there is one. **Puzzles**, **Statistics** and **Settings** open those screens.
 - **Puzzle list**
-  - Collections are on the left, each with its solved count.
-  - Puzzles 1–100 are on the right. Solved ones are green and the game in progress is orange.
+  - Collections are in a row along the top, each with its solved count. Swipe the row sideways, or tap the ‹ › arrows at its ends, to see them all. An arrow only shows while there are more collections that way.
+  - Puzzles 1–100 fill the screen below it. Solved ones are green and the game in progress is orange.
   - Each collection shows its fastest and average solve time.
 - **Game**
   - The selected cell's row, column and box are highlighted, and so is every cell with the same digit.
@@ -35,7 +35,9 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
   - A fanfare when the puzzle is solved.
   - Turn them on or off under **Settings → Sound effects**.
 - **Light and dark mode**: switch between colour schemes under **Settings → Dark mode**.
-- **Settings** (dark mode, sound effects and screen timeout) are saved and kept across restarts.
+- **Wi-Fi and clock**: **Settings → Wi-Fi** opens a screen with an on/off switch, nearby networks (tap one; secured networks ask for the password on an on-screen keyboard) and **Forget**. Once connected, the time comes from NTP (pool.ntp.org) and the home screen shows it. The board remembers the network and reconnects at start-up. Wi-Fi goes through the board's ESP32-C6 co-processor (ESP-Hosted over SDIO); the Wi-Fi code is shared with the `esp32p4_86box` project.
+- **Time zone**: **Settings → Time zone** lists IANA names such as `Asia/Dubai`, with daylight saving where the zone has it.
+- **Settings** (dark mode, sound effects, screen timeout, Wi-Fi network and time zone) are saved and kept across restarts. The Wi-Fi password is stored unencrypted in NVS.
 - **Saved state**: best times, mistakes and solve counts, and the game in progress (entries, notes, elapsed time and mistakes) are kept in NVS. The game is saved when you leave it or pause, and the statistics when you solve. Nothing is written to flash during play: a flash write briefly stalls the display's frame buffer in PSRAM and makes the panel blink. If power is cut mid-game, the moves since the last leave or pause are lost.
 
 ## Building
@@ -70,7 +72,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 |---------------------------------|--------------------------------------------------|
 | Open the puzzle list            | **Puzzles** on the home screen                   |
 | Resume the game in progress     | **Continue** on the home screen                  |
-| Pick a collection               | Tap it in the left-hand list                     |
+| Pick a collection               | Tap it in the row at the top (swipe for more)    |
 | Start or resume a puzzle        | Tap its number                                   |
 | Select a cell                   | Tap it                                           |
 | Enter a digit                   | Tap 1–9 on the right. Tap the same digit again to clear it |
@@ -85,6 +87,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 | Sound on/off                    | **Settings → Sound effects**                     |
 | Light / dark mode               | **Settings → Dark mode**                         |
 | Screen timeout                  | **Settings → Screen off after**                  |
+| Connect to Wi-Fi                | **Settings → Wi-Fi**, switch on, tap a network   |
+| Time zone                       | **Settings → Time zone**                         |
 
 The small number on each pad button is how many of that digit are still to place. Red digits break a row, column or box rule. The puzzle is solved when every cell is filled and nothing is red. Each puzzle has exactly one solution, so the solution is always the intended one.
 
@@ -121,6 +125,10 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 esp32p4_sudoku.ino      setup/loop
 src/sudoku_ui.c         home, list, statistics, settings and game screens
 src/store.cpp           NVS: best times, mistakes and solve counts, saved game, last collection, sound on/off, colour scheme, screen timeout
+src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
+src/wifi_ui.c           Wi-Fi screen: networks, password keyboard
+src/timezones.c         IANA time zone names -> POSIX TZ rules
+src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data

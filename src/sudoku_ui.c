@@ -3,10 +3,15 @@
  *
  * Screens:
  *   - home: Continue (the game in progress), Puzzles and Settings.
- *   - list: collections on the left, a 10x10 grid of puzzles on the right.
+ *   - list: a scrolling row of collections at the top, a 10x10 grid of
+ *     puzzles below it.
  *     Solved puzzles are green, the game in progress is orange.
  *   - statistics: per level and per puzzle best times, mistakes, solves.
- *   - settings: dark mode, sound effects, screen timeout.
+ *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone.
+ *   - wifi: on/off, nearby networks, password keyboard (wifi_ui.c).
+ *
+ * Clock: with Wi-Fi connected the time comes from NTP (wifi_mgr.cpp starts
+ * SNTP) and the home screen shows it in the chosen time zone.
  *   - game: the 9x9 board, a 1..9 number pad on the right, a timer at the
  *     top, and Undo / Erase / Notes / Restart at the bottom. Conflicting
  *     digits turn red; a complete board without conflicts is solved (every
@@ -21,11 +26,17 @@
 #include "sudoku_ui.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <time.h>
 #include <lvgl.h>
 #include "puzzles.h"
 #include "store.h"
 #include "sfx.h"
 #include "bsp/bsp_board.h"
+#include "ui_palette.h"
+#include "wifi_mgr.h"
+#include "wifi_ui.h"
+#include "timezones.h"
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
@@ -36,13 +47,7 @@ LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
 LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
 
 /* ------------------------------------------------------------- palette */
-typedef struct {
-    uint32_t bg, card, card2, text, muted, accent, green, orange, red;
-    uint32_t grid_thick, grid_thin;
-    uint32_t cell, cell_given, cell_peer, cell_same, cell_sel, cell_bad, cell_solved, digit_user;
-    uint32_t list_solved, list_active, notice, scrim_opa;
-} palette_t;
-
+/* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
 static const palette_t PAL_DARK = {
     .bg = 0x101218, .card = 0x1B1E27, .card2 = 0x2A2F3D, .text = 0xEDEFF4, .muted = 0x8B92A5,
     .accent = 0x4F8CFF, .green = 0x3DD68C, .orange = 0xFFA94D, .red = 0xFF6B6B,
@@ -61,34 +66,10 @@ static const palette_t PAL_LIGHT = {
     .list_solved = 0x2FA36B, .list_active = 0xD98A2B, .notice = 0xFFE8D6, .scrim_opa = LV_OPA_40,
 };
 
-static const palette_t *P = &PAL_DARK;
+const palette_t *ui_pal = &PAL_DARK;
+#define P ui_pal
 static bool s_dark = true;
 static uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
-
-#define C_BG          lv_color_hex(P->bg)
-#define C_CARD        lv_color_hex(P->card)
-#define C_CARD2       lv_color_hex(P->card2)
-#define C_TEXT        lv_color_hex(P->text)
-#define C_MUTED       lv_color_hex(P->muted)
-#define C_ACCENT      lv_color_hex(P->accent)
-#define C_GREEN       lv_color_hex(P->green)
-#define C_ORANGE      lv_color_hex(P->orange)
-#define C_RED         lv_color_hex(P->red)
-
-#define C_GRID_THICK  lv_color_hex(P->grid_thick)
-#define C_GRID_THIN   lv_color_hex(P->grid_thin)
-#define C_CELL        lv_color_hex(P->cell)
-#define C_CELL_GIVEN  lv_color_hex(P->cell_given)
-#define C_CELL_PEER   lv_color_hex(P->cell_peer)
-#define C_CELL_SAME   lv_color_hex(P->cell_same)
-#define C_CELL_SEL    lv_color_hex(P->cell_sel)
-#define C_CELL_BAD    lv_color_hex(P->cell_bad)
-#define C_CELL_SOLVED lv_color_hex(P->cell_solved)
-#define C_DIGIT_USER  lv_color_hex(P->digit_user)
-
-#define C_LIST_SOLVED lv_color_hex(P->list_solved)
-#define C_LIST_ACTIVE lv_color_hex(P->list_active)
-#define C_NOTICE      lv_color_hex(P->notice)
 
 /* ------------------------------------------------------------- geometry */
 #define SCR_W       720
@@ -136,10 +117,10 @@ static board_t  g_undo[UNDO_MAX];
 static int      g_undo_head, g_undo_len;
 
 /* ------------------------------------------------------------- widgets */
-static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_game;
+static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_game;
 
 /* home screen */
-static lv_obj_t *h_total, *h_continue, *h_continue_sub;
+static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date;
 
 /* statistics screen: row 0 of the left column is "All levels" */
 #define X_ROWS (PUZZLE_COLLECTION_COUNT + 1)
@@ -148,10 +129,11 @@ static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty;
 static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 
 /* settings screen */
-static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd;
+static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
+static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
 
 /* list screen */
-static lv_obj_t *l_total;
+static lv_obj_t *l_total, *l_strip, *l_arrow_l, *l_arrow_r;
 static lv_obj_t *l_coll_btn[PUZZLE_COLLECTION_COUNT], *l_coll_cnt[PUZZLE_COLLECTION_COUNT];
 static lv_obj_t *l_coll_name[PUZZLE_COLLECTION_COUNT];
 static lv_obj_t *l_name, *l_stats, *l_btnm;
@@ -908,6 +890,32 @@ static void refresh_list(void)
     lv_buttonmatrix_set_map(l_btnm, l_map);
 }
 
+/* < and > at the ends of the collection row: shown while more is off screen that way */
+static void list_update_arrows(void)
+{
+    lv_obj_set_hidden(l_arrow_l, lv_obj_get_scroll_left(l_strip) <= 0);
+    lv_obj_set_hidden(l_arrow_r, lv_obj_get_scroll_right(l_strip) <= 0);
+}
+
+static void strip_scroll_cb(lv_event_t *e)
+{
+    list_update_arrows();
+}
+
+static void strip_arrow_cb(lv_event_t *e)
+{
+    int dir = (int)(intptr_t)lv_event_get_user_data(e);   /* -1 left, +1 right */
+    lv_obj_scroll_by_bounded(l_strip, -dir * (SCR_W / 2), 0, LV_ANIM_ON);
+}
+
+/* scrolls the collection row so the selected one is visible */
+static void list_reveal_coll(lv_anim_enable_t anim)
+{
+    lv_obj_update_layout(scr_list);
+    lv_obj_scroll_to_view(l_coll_btn[l_coll], anim);
+    list_update_arrows();
+}
+
 static void show_list(void)
 {
     if (g_id != STORE_NO_GAME) {
@@ -915,6 +923,7 @@ static void show_list(void)
         store_set_last_collection((uint8_t)l_coll);
     }
     refresh_list();
+    list_reveal_coll(LV_ANIM_OFF);
     lv_screen_load(scr_list);
 }
 
@@ -923,6 +932,7 @@ static void coll_click_cb(lv_event_t *e)
     l_coll = (int)(intptr_t)lv_event_get_user_data(e);
     store_set_last_collection((uint8_t)l_coll);
     refresh_list();
+    list_reveal_coll(LV_ANIM_ON);
 }
 
 static void refresh_home(void)
@@ -957,12 +967,100 @@ static void home_cb(lv_event_t *e)
 static void puzzles_cb(lv_event_t *e)
 {
     refresh_list();
+    list_reveal_coll(LV_ANIM_OFF);
     lv_screen_load(scr_list);
 }
 
 static void settings_cb(lv_event_t *e)
 {
+    lv_label_set_text(st_wifi_lbl, wifi_ui_summary());
     lv_screen_load(scr_settings);
+}
+
+static void wifi_open_cb(lv_event_t *e)
+{
+    lv_screen_load(scr_wifi);
+    wifi_ui_set_shown(true);
+}
+
+static void wifi_back_cb(lv_event_t *e)
+{
+    wifi_ui_set_shown(false);
+    settings_cb(e);
+}
+
+/* "Asia/Dubai  UTC+4\n..." for the time zone dropdown (built once) */
+static const char *tz_dropdown_options(void)
+{
+    static char *opts;
+    if (opts) return opts;
+    size_t n = 0;
+    for (int i = 0; i < tz_count(); i++) n += strlen(tz_get(i)->name) + 16;
+    opts = (char *)malloc(n);
+    if (!opts) return "UTC";
+    char *p = opts;
+    for (int i = 0; i < tz_count(); i++) {
+        const tz_entry_t *z = tz_get(i);
+        const char *sp = strstr(z->label, "  ");          /* label: "UTC+4  Dubai" */
+        int off_len = sp ? (int)(sp - z->label) : 0;
+        if (strcmp(z->name, "UTC") == 0) off_len = 0;
+        p += sprintf(p, "%s%s%.*s%s", z->name, off_len ? "  " : "", off_len, z->label,
+                     i < tz_count() - 1 ? "\n" : "");
+    }
+    return opts;
+}
+
+static void tz_show_selected(void)
+{
+    const tz_entry_t *z = tz_get((int)lv_dropdown_get_selected(st_tz_dd));
+    snprintf(st_tz_txt, sizeof(st_tz_txt), "%s", z->name);
+    lv_dropdown_set_text(st_tz_dd, st_tz_txt);
+}
+
+static void tz_dd_cb(lv_event_t *e)
+{
+    const tz_entry_t *z = tz_get((int)lv_dropdown_get_selected(st_tz_dd));
+    store_set_timezone(z->name);
+    tz_apply(z->name);
+    tz_show_selected();
+}
+
+/* home clock and the Settings Wi-Fi line; runs every second */
+static void clock_cb(lv_timer_t *t)
+{
+    static char last_clock[8], last_date[64];
+    lv_obj_t *act = lv_screen_active();
+    if (act == scr_settings) {
+        const char *w = wifi_ui_summary();
+        if (strcmp(lv_label_get_text(st_wifi_lbl), w) != 0) lv_label_set_text(st_wifi_lbl, w);
+        return;
+    }
+    if (act != scr_home) return;
+
+    char c[8], d[64];
+    time_t now = time(NULL);
+    bool valid = now > 1700000000;                         /* set by NTP */
+    if (valid) {
+        struct tm tm;
+        localtime_r(&now, &tm);
+        strftime(c, sizeof(c), "%H:%M", &tm);
+        strftime(d, sizeof(d), "%A, %d %B", &tm);
+    } else {
+        wifi_status_t ws;
+        wifi_mgr_get_status(&ws);
+        c[0] = 0;
+        snprintf(d, sizeof(d), "%s", ws.state == WIFI_ST_CONNECTED ? "Getting the time..."
+                                   : "Connect Wi-Fi in Settings to show the time");
+    }
+    if (strcmp(c, last_clock) != 0 || lv_obj_is_hidden(h_clock) == valid) {
+        strcpy(last_clock, c);
+        lv_label_set_text(h_clock, c);
+        lv_obj_set_hidden(h_clock, !valid);
+    }
+    if (strcmp(d, last_date) != 0) {
+        strcpy(last_date, d);
+        lv_label_set_text(h_date, d);
+    }
 }
 
 /* ------------------------------------------------------------- statistics */
@@ -1157,6 +1255,7 @@ static void build_list(void);
 static void build_home(void);
 static void build_stats(void);
 static void build_settings(void);
+static void build_wifi(void);
 
 /* Switches palette and LVGL theme, then rebuilds every screen around the
  * current state (all of which lives outside the widgets) and shows the
@@ -1169,7 +1268,7 @@ static void apply_theme(bool dark)
     lv_display_set_theme(disp, lv_theme_default_init(disp, C_ACCENT, C_ORANGE, dark, &lv_font_montserrat_16));
 
     lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
-    lv_obj_t *old_stats = scr_stats;
+    lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi;
     lv_obj_t *act = lv_screen_active();
 
     build_game();
@@ -1177,6 +1276,7 @@ static void apply_theme(bool dark)
     build_home();
     build_stats();
     build_settings();
+    build_wifi();
     if (g_id != STORE_NO_GAME) {
         lv_obj_set_state(g_notes_btn, LV_STATE_CHECKED, g_notes_mode);
         lv_obj_set_hidden(g_pause_ovl, !g_paused);
@@ -1189,6 +1289,7 @@ static void apply_theme(bool dark)
     refresh_stats();
     lv_obj_t *to = act && act == old_game     ? scr_game
                  : act && act == old_stats    ? scr_stats
+                 : act && act == old_wifi     ? scr_wifi
                  : act && act == old_list     ? scr_list
                  : act && act == old_settings ? scr_settings
                  : scr_home;
@@ -1199,6 +1300,7 @@ static void apply_theme(bool dark)
     if (old_list) lv_obj_delete_async(old_list);
     if (old_settings) lv_obj_delete_async(old_settings);
     if (old_stats) lv_obj_delete_async(old_stats);
+    if (old_wifi) lv_obj_delete_async(old_wifi);
     if (old_game) lv_obj_delete_async(old_game);
 }
 
@@ -1303,23 +1405,60 @@ static void build_list(void)
     l_total = make_label(scr_list, &lv_font_montserrat_16, C_MUTED);
     lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -16, 28);
 
-    /* collections */
-    lv_obj_t *list = make_coll_column(scr_list);
+    /* collections: one row of chips (name + solved count), scrolls sideways */
+    lv_obj_t *strip = lv_obj_create(scr_list);
+    l_strip = strip;
+    lv_obj_remove_style_all(strip);
+    /* between the < > arrows (8 + 40 + 4 on each side), so chips never pass under them */
+    lv_obj_set_pos(strip, 52, 72);
+    lv_obj_set_size(strip, SCR_W - 2 * 52, 62);
+    lv_obj_set_flex_flow(strip, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_hor(strip, 0, 0);
+    lv_obj_set_style_pad_column(strip, 8, 0);
+    lv_obj_set_scroll_dir(strip, LV_DIR_HOR);
+    lv_obj_set_scrollbar_mode(strip, LV_SCROLLBAR_MODE_OFF);
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        l_coll_btn[c] = make_coll_btn(list, puzzle_collections[c].name, &l_coll_name[c], &l_coll_cnt[c],
-                                      coll_click_cb, c);
+        lv_obj_t *b = lv_button_create(strip);
+        lv_obj_set_size(b, LV_SIZE_CONTENT, 58);
+        lv_obj_set_style_bg_color(b, C_CARD, 0);
+        lv_obj_set_style_bg_color(b, C_CARD2, LV_STATE_PRESSED);
+        lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_CHECKED);
+        lv_obj_set_style_shadow_width(b, 0, 0);
+        lv_obj_set_style_radius(b, 10, 0);
+        lv_obj_set_style_pad_hor(b, 16, 0);
+        lv_obj_set_style_pad_ver(b, 0, 0);
+        lv_obj_set_style_pad_row(b, 1, 0);
+        lv_obj_set_flex_flow(b, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(b, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        l_coll_name[c] = make_label(b, &lv_font_montserrat_16, C_TEXT);
+        lv_label_set_text(l_coll_name[c], puzzle_collections[c].name);
+        l_coll_cnt[c] = make_label(b, &lv_font_montserrat_14, C_MUTED);
+        lv_obj_add_event_cb(b, coll_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)c);
+        l_coll_btn[c] = b;
     }
 
-    /* puzzles of the selected collection */
-    int px = PANE_X, pw = PANE_W;
+    lv_obj_add_event_cb(strip, strip_scroll_cb, LV_EVENT_SCROLL, NULL);
+    lv_obj_add_event_cb(strip, strip_scroll_cb, LV_EVENT_SCROLL_END, NULL);
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *a = make_btn(scr_list, i ? SCR_W - 8 - 40 : 8, 72, 40, 58,
+                               i ? LV_SYMBOL_RIGHT : LV_SYMBOL_LEFT, &lv_font_montserrat_20,
+                               strip_arrow_cb, (void *)(intptr_t)(i ? 1 : -1));
+        lv_obj_set_style_bg_opa(a, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_bg_opa(a, LV_OPA_COVER, LV_STATE_PRESSED);
+        lv_obj_set_style_text_color(lv_obj_get_child(a, 0), C_ACCENT, 0);
+        if (i) l_arrow_r = a;
+        else l_arrow_l = a;
+    }
+
+    /* puzzles of the selected collection: full width */
     l_name = make_label(scr_list, &lv_font_montserrat_22, C_TEXT);
-    lv_obj_set_pos(l_name, px + 4, 80);
+    lv_obj_set_pos(l_name, 16, 144);
     l_stats = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
-    lv_obj_set_pos(l_stats, px + 4, 110);
+    lv_obj_align(l_stats, LV_ALIGN_TOP_RIGHT, -16, 150);
 
     l_btnm = lv_buttonmatrix_create(scr_list);
-    lv_obj_set_pos(l_btnm, px, 136);
-    lv_obj_set_size(l_btnm, pw, SCR_W - 136 - 30);
+    lv_obj_set_pos(l_btnm, 12, 180);
+    lv_obj_set_size(l_btnm, SCR_W - 24, SCR_W - 180 - 24);   /* cells about 65 x 46 */
     lv_obj_set_style_bg_opa(l_btnm, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(l_btnm, 0, 0);
     lv_obj_set_style_pad_all(l_btnm, 0, 0);
@@ -1360,13 +1499,19 @@ static void build_home(void)
 {
     scr_home = make_screen();
 
+    h_clock = make_label(scr_home, &font_timer_36, C_TEXT);
+    lv_obj_align(h_clock, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_set_hidden(h_clock, true);
+    h_date = make_label(scr_home, &lv_font_montserrat_16, C_MUTED);
+    lv_obj_align(h_date, LV_ALIGN_TOP_MID, 0, 80);
+
     lv_obj_t *col = lv_obj_create(scr_home);
     lv_obj_remove_style_all(col);
     lv_obj_set_size(col, 440, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(col, 18, 0);
-    lv_obj_center(col);
+    lv_obj_align(col, LV_ALIGN_CENTER, 0, 40);   /* clear of the clock */
 
     lv_obj_t *t = make_label(col, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Sudoku");
@@ -1488,7 +1633,7 @@ static void build_settings(void)
 
     lv_obj_t *col = lv_obj_create(scr_settings);
     lv_obj_remove_style_all(col);
-    lv_obj_set_pos(col, 40, 100);
+    lv_obj_set_pos(col, 40, 84);
     lv_obj_set_size(col, SCR_W - 80, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(col, 14, 0);
@@ -1526,6 +1671,57 @@ static void build_settings(void)
     while (sel < SLEEP_COUNT - 1 && SLEEP_MIN[sel] != s_sleep_min) sel++;
     lv_dropdown_set_selected(st_sleep_dd, sel);
     lv_obj_add_event_cb(st_sleep_dd, sleep_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    /* Wi-Fi: the whole card opens the Wi-Fi screen */
+    r = settings_row(col, "Wi-Fi", "For the clock (time from the internet)");
+    lv_obj_set_clickable(r, true);
+    lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(r, wifi_open_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *chev = make_label(r, &lv_font_montserrat_20, C_MUTED);
+    lv_label_set_text(chev, LV_SYMBOL_RIGHT);
+    lv_obj_align(chev, LV_ALIGN_RIGHT_MID, 0, 0);
+    st_wifi_lbl = make_label(r, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_set_width(st_wifi_lbl, 220);
+    lv_obj_set_style_text_align(st_wifi_lbl, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_label_set_long_mode(st_wifi_lbl, LV_LABEL_LONG_MODE_DOTS);
+    lv_label_set_text(st_wifi_lbl, wifi_ui_summary());
+    lv_obj_align(st_wifi_lbl, LV_ALIGN_RIGHT_MID, -32, 0);
+
+    /* time zone: IANA names; opens upwards (bottom of the page) */
+    r = settings_row(col, "Time zone", "For the clock on the home screen");
+    st_tz_dd = lv_dropdown_create(r);
+    lv_obj_set_size(st_tz_dd, 330, 52);
+    lv_obj_align(st_tz_dd, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_dropdown_set_options_static(st_tz_dd, tz_dropdown_options());
+    lv_dropdown_set_dir(st_tz_dd, LV_DIR_TOP);
+    lv_dropdown_set_symbol(st_tz_dd, LV_SYMBOL_UP);
+    lv_obj_set_style_text_font(st_tz_dd, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(st_tz_dd, C_TEXT, 0);
+    lv_obj_set_style_bg_color(st_tz_dd, C_CARD2, 0);
+    lv_obj_set_style_border_width(st_tz_dd, 0, 0);
+    lv_obj_set_style_shadow_width(st_tz_dd, 0, 0);
+    lv_obj_set_style_radius(st_tz_dd, 8, 0);
+    lv_obj_set_style_pad_hor(st_tz_dd, 14, 0);
+    lv_obj_set_style_pad_ver(st_tz_dd, 16, 0);
+    dl = lv_dropdown_get_list(st_tz_dd);
+    lv_obj_set_style_text_font(dl, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(dl, C_TEXT, 0);
+    lv_obj_set_style_text_line_space(dl, 22, 0);
+    lv_obj_set_style_bg_color(dl, C_CARD2, 0);
+    lv_obj_set_style_border_width(dl, 0, 0);
+    lv_obj_set_style_radius(dl, 8, 0);
+    lv_obj_set_style_max_height(dl, 520, 0);
+    lv_obj_set_style_bg_color(dl, C_ACCENT, LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(dl, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_dropdown_set_selected(st_tz_dd, (uint32_t)tz_find(store_timezone()));
+    tz_show_selected();
+    lv_obj_add_event_cb(st_tz_dd, tz_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+static void build_wifi(void)
+{
+    scr_wifi = make_screen();
+    wifi_ui_create(scr_wifi, wifi_back_cb);
 }
 
 /* ============================================================= start */
@@ -1613,6 +1809,9 @@ esp_err_t sudoku_ui_start(void)
         lv_indev_add_event_cb(in, touch_sound_cb, LV_EVENT_PRESSED, NULL);
     }
 
+    tz_apply(store_timezone());
+    wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
+
     l_coll = store_last_collection();
     s_sleep_min = store_screen_timeout_min();
     apply_theme(store_dark_mode());
@@ -1620,5 +1819,7 @@ esp_err_t sudoku_ui_start(void)
     g_last_tick = lv_tick_get();
     lv_timer_create(tick_cb, 200, NULL);
     lv_timer_create(saver_cb, 1000, NULL);
+    lv_timer_create(clock_cb, 1000, NULL);
+    clock_cb(NULL);
     return ESP_OK;
 }

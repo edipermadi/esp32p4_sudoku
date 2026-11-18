@@ -11,7 +11,9 @@
  *   "coll" : uint8_t last collection
  *   "snd"  : bool sound effects on
  *   "dark" : bool dark colour scheme
- *   "sleep": uint8_t screen timeout in minutes (0 = never) */
+ *   "sleep": uint8_t screen timeout in minutes (0 = never)
+ *   "tz"   : string, IANA time zone name
+ * (Wi-Fi keeps its network and on/off switch in its own namespace, see wifi_mgr.cpp) */
 static Preferences s_prefs;
 static uint16_t s_best[PUZZLE_COUNT];
 typedef struct {
@@ -139,6 +141,18 @@ bool store_sound_enabled(void)
 void store_set_sound_enabled(bool on)
 {
     s_prefs.putBool("snd", on);
+}
+
+const char *store_timezone(void)
+{
+    static char tz[48];
+    if (!s_prefs.getString("tz", tz, sizeof(tz))) strcpy(tz, "UTC");
+    return tz;
+}
+
+void store_set_timezone(const char *name)
+{
+    s_prefs.putString("tz", name);
 }
 
 uint8_t store_screen_timeout_min(void)

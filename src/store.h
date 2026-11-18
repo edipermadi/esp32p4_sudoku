@@ -53,6 +53,10 @@ void store_set_dark_mode(bool dark);
 bool store_sound_enabled(void);
 void store_set_sound_enabled(bool on);
 
+/* IANA time zone name, e.g. "Asia/Dubai"; "UTC" until one is chosen. */
+const char *store_timezone(void);
+void store_set_timezone(const char *name);
+
 /* Minutes without a touch before the screen turns off; 0 = never. */
 uint8_t store_screen_timeout_min(void);
 void store_set_screen_timeout_min(uint8_t min);
