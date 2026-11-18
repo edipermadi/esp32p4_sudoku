@@ -102,10 +102,17 @@ void bsp_sdcard_unmount(void);
 esp_err_t bsp_touch_init(void);
 /* Returns true while touched; fills the first contact point. */
 bool bsp_touch_read(uint16_t *x, uint16_t *y);
+/* A simulated touch (serial control, devctl.cpp): while on, LVGL reads this
+ * instead of the panel: pressed or not, at x, y. */
+void bsp_touch_sim(bool on, bool pressed, uint16_t x, uint16_t y);
 
 /* All of the above + LVGL display/input-device registration.
  * After this returns, create your UI and call lv_timer_handler() from loop(). */
 esp_err_t bsp_lvgl_start(void);
+/* The panel's frame buffer: what the screen shows, RGB565, BSP_LCD_H_RES x
+ * BSP_LCD_V_RES, read back from PSRAM (cache synced); NULL if not available.
+ * Call from the LVGL task after lv_refr_now(), so no flush is under way. */
+const uint16_t *bsp_display_frame(void);
 
 /* Speaker: I2S0 (TX only, 16-bit stereo) -> ES8311 -> amp. Supported rates:
  * 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000.

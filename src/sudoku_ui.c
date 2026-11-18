@@ -6669,7 +6669,7 @@ static void build_list(void)
 
     l_btnm = lv_buttonmatrix_create(scr_list);
     lv_obj_set_pos(l_btnm, 12, L_GRID_Y);
-    lv_obj_set_size(l_btnm, SCR_W - 24, SCR_W - L_GRID_Y - 12);   /* cells about 65 x 41 */
+    lv_obj_set_size(l_btnm, SCR_W - 24, SCR_W - L_GRID_Y - 24);   /* cells about 65 x 40; the credit below */
     lv_obj_set_style_bg_opa(l_btnm, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(l_btnm, 0, 0);
     lv_obj_set_style_pad_all(l_btnm, 0, 0);
@@ -6699,7 +6699,7 @@ static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, 
     if (sub) {
         lv_obj_align(l, LV_ALIGN_CENTER, 0, -12);
         *sub = make_label(b, &lv_font_montserrat_16, C_MUTED);
-        lv_obj_set_width(*sub, LV_PCT(90));
+        lv_obj_set_size(*sub, LV_PCT(90), lv_font_get_line_height(&lv_font_montserrat_16));   /* one line: "..." */
         lv_obj_set_style_text_align(*sub, LV_TEXT_ALIGN_CENTER, 0);
         lv_label_set_long_mode(*sub, LV_LABEL_LONG_MODE_DOTS);
         lv_obj_align(*sub, LV_ALIGN_CENTER, 0, 17);

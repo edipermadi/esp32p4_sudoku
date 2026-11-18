@@ -25,6 +25,7 @@
 #include "src/store.h"
 #include "src/sudoku_ui.h"
 #include "src/sfx.h"
+#include "src/devctl.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 
@@ -73,6 +74,7 @@ void setup()
   }
   sudoku_ui_start();
 
+  Serial.println("DEVCTL ready");    /* serial control (devctl.h): screenshots, touches */
   const char *why = abnormal_reset_text(reset);
   if (why) {
     Serial.println(why);
@@ -82,6 +84,7 @@ void setup()
 
 void loop()
 {
+  devctl_poll();                     /* commands from tools/devctl.py, if any */
   uint32_t wait_ms = lv_timer_handler();
   delay(wait_ms < 5 ? 1 : (wait_ms > 20 ? 20 : wait_ms));
 }

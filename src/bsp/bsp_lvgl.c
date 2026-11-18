@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_lcd_mipi_dsi.h"
+#include "esp_cache.h"
 
 static const char *TAG = "bsp_lvgl";
 
@@ -52,9 +53,26 @@ static bool color_trans_done_cb(esp_lcd_panel_handle_t panel,
     return false;
 }
 
+static volatile bool s_sim_on, s_sim_pressed;
+static volatile uint16_t s_sim_x, s_sim_y;
+
+void bsp_touch_sim(bool on, bool pressed, uint16_t x, uint16_t y)
+{
+    s_sim_x = x;
+    s_sim_y = y;
+    s_sim_pressed = pressed;
+    s_sim_on = on;
+}
+
 static void lvgl_touch_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
     uint16_t x, y;
+    if (s_sim_on) {                                 /* serial control drives the pointer */
+        data->point.x = s_sim_x;
+        data->point.y = s_sim_y;
+        data->state = s_sim_pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+        return;
+    }
     if (bsp_touch_read(&x, &y)) {
         data->point.x = x;
         data->point.y = y;
@@ -62,6 +80,17 @@ static void lvgl_touch_cb(lv_indev_t *indev, lv_indev_data_t *data)
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
     }
+}
+
+const uint16_t *bsp_display_frame(void)
+{
+    lv_display_t *disp = lv_display_get_default();
+    esp_lcd_panel_handle_t panel = disp ? (esp_lcd_panel_handle_t)lv_display_get_user_data(disp) : NULL;
+    void *fb = NULL;
+    if (!panel || esp_lcd_dpi_panel_get_frame_buffer(panel, 1, &fb) != ESP_OK || !fb) return NULL;
+    /* DMA2D wrote it: drop whatever the CPU cache still holds of it */
+    esp_cache_msync(fb, BSP_LCD_H_RES * BSP_LCD_V_RES * 2, ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_TYPE_DATA);
+    return (const uint16_t *)fb;
 }
 
 esp_err_t bsp_lvgl_start(void)

@@ -1,0 +1,38 @@
+# Screenshots for the README: python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
+# Opening the port restarts the board, so this starts on a fresh Home screen.
+# Coordinates are screen pixels (720 x 720). Nothing here changes the game data
+# (no puzzle is played, no setting is changed).
+
+shot docs/screenshots/home.png
+
+tap 513 308                 # Puzzles
+wait 400
+shot docs/screenshots/puzzles.png
+tap 87 162                  # the Easy collection
+wait 300
+tap 44 262                  # puzzle 1
+wait 600
+shot docs/screenshots/game.png
+tap 60 30                   # List
+wait 400
+tap 72 36                   # Home
+wait 400
+
+tap 513 402                 # Statistics
+wait 800
+shot docs/screenshots/statistics.png
+tap 72 36                   # Home
+wait 400
+
+tap 206 590                 # Trophies
+wait 800
+shot docs/screenshots/trophies.png
+tap 72 36                   # Home
+wait 400
+
+tap 513 590                 # Settings (opens on Network)
+wait 500
+shot docs/screenshots/settings.png
+tap 186 98                  # the Display tab
+wait 300
+shot docs/screenshots/settings-display.png

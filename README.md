@@ -2,6 +2,16 @@
 
 A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720×720 MIPI-DSI, GT911 touch, ES8311 speaker), built with LVGL 9.6 as an Arduino sketch.
 
+## Screenshots
+
+| Home | Puzzles | Game |
+|---|---|---|
+| ![Home](docs/screenshots/home.png) | ![Puzzles](docs/screenshots/puzzles.png) | ![Game](docs/screenshots/game.png) |
+| **Statistics** | **Trophies** | **Settings** |
+| ![Statistics](docs/screenshots/statistics.png) | ![Trophies](docs/screenshots/trophies.png) | ![Settings](docs/screenshots/settings-display.png) |
+
+Captured from the board over its serial port (see [Screenshots and remote control](#screenshots-and-remote-control)).
+
 ## Features
 
 - **1600 puzzles in flash**: the 16 OpenSudoku collections from <https://opensudoku.gitlab.io/>. These are Easy, Medium, Hard and Very Hard, plus Gnome Sudoku sets 1–3 at each of those levels. Each puzzle is packed into 41 bytes, about 64 KB in total. Every puzzle was checked to have exactly one solution.
@@ -199,6 +209,22 @@ npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 36 --font $FONT \
     -r 0x20,0x30-0x3A --format lvgl --lv-include lvgl.h -o src/fonts/font_timer_36.c
 ```
 
+## Screenshots and remote control
+
+The firmware takes commands on the USB-UART port (`src/devctl.cpp`): it can send a screenshot of exactly what the screen shows (the panel's frame buffer, dialogs and notices included) and play touches as if a finger did them (taps, long presses, swipes). `tools/devctl.py` drives it from a computer and saves the screenshots as PNG files (it needs `pip install pyserial`):
+
+```
+python3 tools/devctl.py --port /dev/ttyACM0 shot home.png
+python3 tools/devctl.py --port /dev/ttyACM0 "tap 513 308; wait 400; shot puzzles.png"
+python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
+```
+
+- Commands: `tap X Y`, `long X Y [MS]`, `swipe X1 Y1 X2 Y2 [MS]`, `press X Y` / `move X Y` / `release`, `wait MS`, `shot FILE.png`, `ping`. Coordinates are screen pixels (0–719) from the top left. Several commands on the command line are separated by `;`; a script has one per line (`#` starts a comment).
+- Opening the port restarts the board (its auto-reset circuit), so the tool waits for the `DEVCTL ready` line it prints at start-up and every run starts on a fresh Home screen, which keeps screenshot scripts repeatable. `--no-wait` skips the wait.
+- The tool then switches the port to `--baud` (921600 by default) for the transfer; a screenshot takes about 2 seconds. It is sent run-length coded (720 × 720 RGB565, runs of up to 256 equal pixels) as numbered base64 lines with a CRC, so log lines from the firmware can't spoil it; a garbled one is asked for again.
+- `docs/screenshots.txt` makes the pictures above: it only looks at screens (opens Easy #1 without playing it, changes nothing) and writes `docs/screenshots/*.png`.
+- The protocol, for other tools: send a command line, wait for `OK <command>` (or `ERR ...`). `shot` answers `SHOT BEGIN 720 720`, lines `S <n> <base64>`, `SHOT END <bytes> <crc32 hex>`, then `OK shot`.
+
 ## Changing the colours
 
 Both colour schemes are tables at the top of `src/sudoku_ui.c`: `PAL_DARK` and `PAL_LIGHT`. They set the background, text, grid lines and each cell highlight state.
@@ -212,6 +238,7 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 ```
 esp32p4_sudoku.ino      setup/loop
 src/sudoku_ui.c         home, list, statistics, settings and game screens
+src/devctl.cpp          serial control: screenshots and simulated touches (tools/devctl.py)
 src/store.cpp           RAM copy of statistics, saved game and settings; reads the old NVS keys once
 src/stats_db.c          sudoku.db on the microSD card: statistics, saved game, settings, queries
 src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
@@ -227,6 +254,8 @@ src/puzzles_data.c      generated puzzle data
 src/fonts/              Montserrat 44 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star and chart icons at 24/20 px (lv_font_conv)
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
+tools/devctl.py         screenshots (PNG) and touches over the serial port
+docs/screenshots.txt    the script that makes docs/screenshots/*.png
 tools/opensudoku/       the downloaded .opensudoku collections
 ```
 
