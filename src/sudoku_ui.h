@@ -17,6 +17,11 @@ void sudoku_ui_notice(const char *text, uint32_t ms);
  * under it, if that's on); the next tap wakes it. For serial control. */
 void sudoku_ui_screen_off(void);
 
+/* Call once start-up went well (screens up, sudoku.db open): a firmware just
+ * installed from update.bin is kept; until then, a restart goes back to the
+ * previous one (the bootloader's rollback). */
+void sudoku_ui_mark_ok(void);
+
 #ifdef __cplusplus
 }
 #endif

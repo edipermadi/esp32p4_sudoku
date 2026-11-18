@@ -119,6 +119,7 @@ typedef struct {
     char cages[STATS_CAGES_LEN]; /* a Killer puzzle's cages, "" = none */
     char marks[82];              /* an Even-Odd / Consecutive puzzle's marks, "" = none */
     char thermos[STATS_THERMOS_LEN];   /* a Thermo puzzle's thermometers, "" = none */
+    bool own;                    /* CMD_GEN_ADD: typed in on the board (source STATS_OWN_SOURCE) */
     char day[12];                /* daily: 'YYYY-MM-DD', "" otherwise */
     bool ok;
     bool solved_today;           /* CMD_DAILY results */
@@ -562,6 +563,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "rules_seen")) p->rules_seen = (uint32_t)sqlite3_column_int64(st, 1);
             else if (!strcmp(k, "lock_mode")) p->lock_mode = v >= LOCK_OFF && v <= LOCK_PIN ? v : LOCK_OFF;
             else if (!strcmp(k, "lock_pin") && t) snprintf(p->lock_pin, sizeof(p->lock_pin), "%s", t);
+            else if (!strcmp(k, "saver_clock")) p->saver_clock = v != 0;
             else if (!strcmp(k, "time_zone") && t) snprintf(p->timezone, sizeof(p->timezone), "%s", t);
             else if (!strcmp(k, "last_level") && t) {
                 for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
@@ -722,6 +724,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("rules_seen", false, (int)p->rules_seen, NULL);
     set_setting("lock_mode", false, p->lock_mode, NULL);
     set_setting("lock_pin", true, 0, p->lock_pin);
+    set_setting("saver_clock", false, p->saver_clock, NULL);
     set_setting("time_zone", true, 0, p->timezone);
     set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
                                                           ? p->last_collection : 0].name);
@@ -1277,8 +1280,11 @@ static void do_gen_add(void)
     for (int i = 0; i < 81; i++) reg[i] = (char)('0' + (s_gen.regions[i] <= 8 ? s_gen.regions[i] : 0));
     reg[81] = 0;
     if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant, regions, cages,"
-                                         " marks, thermos) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", -1, &st,
-                                   NULL) == SQLITE_OK) {
+                                         " marks, thermos, source, number) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,"
+                                         " ?10, (SELECT COALESCE(MAX(number), 0) + 1 FROM generated WHERE source = ?10))",
+                                   -1, &st, NULL) == SQLITE_OK) {
+        if (s_gen.own) sqlite3_bind_text(st, 10, STATS_OWN_SOURCE, -1, SQLITE_STATIC);
+        else sqlite3_bind_null(st, 10);               /* (number: NULL as well then) */
         if (s_gen.thermos[0]) sqlite3_bind_text(st, 9, s_gen.thermos, -1, SQLITE_STATIC);
         else sqlite3_bind_null(st, 9);
         if (s_gen.marks[0]) sqlite3_bind_text(st, 8, s_gen.marks, -1, SQLITE_STATIC);
@@ -1297,6 +1303,7 @@ static void do_gen_add(void)
         if (sqlite3_step(st) == SQLITE_DONE) {
             s_gen.id = (int)sqlite3_last_insert_rowid(s_db);
             s_gen.ok = true;
+            if (s_gen.own) gen_source_of(s_gen.id, s_gen.source, &s_gen.number);
         }
         sqlite3_finalize(st);
     }
@@ -2063,7 +2070,7 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest from the collections", "puzzle < 2000"},
     {"Fastest New puzzle (Classic)",
      "puzzle IN (SELECT 2000 + id FROM generated WHERE variant = 0 AND day IS NULL AND source IS NULL)"},
-    {"Fastest imported puzzle", "puzzle IN (SELECT 2000 + id FROM generated WHERE source IS NOT NULL)"},
+    {"Fastest imported or own puzzle", "puzzle IN (SELECT 2000 + id FROM generated WHERE source IS NOT NULL)"},
     {"Fastest daily puzzle", "puzzle IN (SELECT 2000 + id FROM generated WHERE day IS NOT NULL)"},
     {"Fastest X-Sudoku", OF_VARIANT(1)},
     {"Fastest Hyper", OF_VARIANT(3)},
@@ -2954,6 +2961,16 @@ int stats_db_solved_in(uint16_t first, int count, uint8_t *solved)
     if (!gen_call(CMD_SOLVED_IN)) return 0;
     if (solved) memcpy(solved, s_gen.solved_bits, (size_t)(s_gen.count + 7) / 8);
     return s_gen.nsolved;
+}
+
+int stats_db_gen_add_own(const uint8_t givens[81], int level, int *number)
+{
+    if (!s_genp) return -1;
+    s_gen.own = true;
+    int id = stats_db_gen_add(VAR_CLASSIC, level, givens, NULL, NULL, NULL, NULL, NULL);
+    s_gen.own = false;
+    if (id > 0 && number) *number = s_gen.number;
+    return id;
 }
 
 bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number)

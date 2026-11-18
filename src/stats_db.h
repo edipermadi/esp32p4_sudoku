@@ -337,6 +337,10 @@ int stats_db_list_imports(stats_import_t *out);
 /* The current player's solved puzzles among ids first .. first + count - 1:
  * bit i of solved (count bits). How many. Waits for the database. */
 int stats_db_solved_in(uint16_t first, int count, uint8_t *solved);
+/* A puzzle typed in on the board (Classic): stored like an imported one, in
+ * the collection STATS_OWN_SOURCE, numbered from 1. Its generated.id, or -1. */
+#define STATS_OWN_SOURCE "My puzzles"
+int stats_db_gen_add_own(const uint8_t givens[81], int level, int *number);
 /* An imported puzzle's collection and number; false if it isn't one. */
 bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number);
 

@@ -67,6 +67,9 @@
 #include <sys/stat.h>
 #include "moves.h"
 #include "qrcode/qrcodegen.h"
+#include "esp_ota_ops.h"
+#include "esp_app_desc.h"
+#include "esp_image_format.h"
 #include "esp_heap_caps.h"
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
@@ -275,6 +278,10 @@ static lv_obj_t *st_wifi_eye;               /* shows the network's name (hidden 
 static lv_obj_t *st_lock_dd, *st_pin_btn;   /* the lock screen: Off / Swipe / PIN, and Change PIN */
 static void lock_dd_cb(lv_event_t *e);
 static void pin_change_cb(lv_event_t *e);
+static void saver_clock_sw_cb(lv_event_t *e)
+{
+    store_set_saver_clock(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+}
 static bool      st_wifi_reveal;            /* name shown; hidden again each time Settings opens */
 static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
@@ -368,6 +375,8 @@ typedef struct {
     char cages[STATS_CAGES_LEN];        /* Killer: the cages (sudoku_cages_text()), "" = none */
     char marks[82];                     /* Even-Odd / Consecutive: the marks (sudoku_marks_text()), "" = none */
     char thermos[STATS_THERMOS_LEN];    /* Thermo: the thermometers (sudoku_thermos_text()), "" = none */
+    char source[STATS_IMPORT_NAME];     /* a puzzle typed in: its collection ("My puzzles"), "" = none */
+    int number;                         /* and its number there */
     uint8_t givens[81];
     char day[12];                       /* daily puzzle's date, "" otherwise */
 } gen_cache_t;
@@ -387,11 +396,34 @@ static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t giv
     snprintf(s_gen_cache[s_gen_cache_next].cages, STATS_CAGES_LEN, "%s", cages ? cages : "");
     snprintf(s_gen_cache[s_gen_cache_next].marks, 82, "%s", marks ? marks : "");
     snprintf(s_gen_cache[s_gen_cache_next].thermos, STATS_THERMOS_LEN, "%s", thermos ? thermos : "");
+    s_gen_cache[s_gen_cache_next].source[0] = 0;
+    s_gen_cache[s_gen_cache_next].number = 0;
     s_gen_cache[s_gen_cache_next].variant = (uint8_t)variant;
     s_gen_cache[s_gen_cache_next].level = (uint8_t)level;
     memcpy(s_gen_cache[s_gen_cache_next].givens, givens, 81);
     snprintf(s_gen_cache[s_gen_cache_next].day, sizeof(s_gen_cache[0].day), "%s", day ? day : "");
     s_gen_cache_next = (s_gen_cache_next + 1) % GEN_CACHE;
+}
+
+static void gen_cache_source(uint16_t id, const char *source, int number)
+{
+    for (int i = 0; i < GEN_CACHE; i++) {
+        if (s_gen_cache[i].id != id) continue;
+        snprintf(s_gen_cache[i].source, sizeof(s_gen_cache[i].source), "%s", source);
+        s_gen_cache[i].number = number;
+    }
+}
+
+/* a typed-in puzzle's collection and number from the cache (not imported ones: import_of) */
+static bool gen_own_name(uint16_t id, char *buf, size_t n)
+{
+    for (int i = 0; i < GEN_CACHE; i++) {
+        if (s_gen_cache[i].id == id && s_gen_cache[i].source[0]) {
+            snprintf(buf, n, "%s #%d", s_gen_cache[i].source, s_gen_cache[i].number);
+            return true;
+        }
+    }
+    return false;
 }
 
 /* givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown */
@@ -423,6 +455,11 @@ static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char
     if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, reg, cg, mk, th, &var, &lv, d)) return false;
     if (var < 0 || var >= VAR_COUNT) var = VAR_CLASSIC;
     gen_cache_put(id, var, lv, g, reg, cg, mk, th, d);
+    if (var == VAR_CLASSIC && !d[0]) {              /* typed in on the board ("My puzzles #3")? */
+        char src[STATS_IMPORT_NAME];
+        int num;
+        if (stats_db_gen_source(id - PUZZLE_GEN_BASE, src, &num)) gen_cache_source(id, src, num);
+    }
     if (marks) snprintf(marks, 82, "%s", mk);
     if (thermos) snprintf(thermos, STATS_THERMOS_LEN, "%s", th);
     if (givens) memcpy(givens, g, 81);
@@ -533,6 +570,10 @@ static void puzzle_name(uint16_t id, char *buf, size_t n)
     if (k >= 0) {                                   /* imported: "Collection #12" */
         snprintf(buf, n, "%s #%d", s_imports[k].name, num);
         return;
+    }
+    if (puzzle_is_generated(id)) {                  /* (looked up first, so the cache knows its source) */
+        gen_lookup(id, NULL, NULL, NULL);
+        if (gen_own_name(id, buf, n)) return;       /* typed in: "My puzzles #3" */
     }
     if (puzzle_is_generated(id)) {
         int lv = -1, var = VAR_CLASSIC;
@@ -3682,6 +3723,222 @@ static void learn_cb(lv_event_t *e)
     msgbox_button(m, "Close", learn_close_cb, false);
 }
 
+/* ------------------------------------------------------------- enter a puzzle by hand */
+/*
+ * Enter (Puzzles screen): a blank 9x9 board and a 1-9 pad to type in a
+ * Classic puzzle from a book or a newspaper. Check & play: it needs exactly
+ * one solution (the solver counts them); then it's graded, saved as "My
+ * puzzles #n" (sudoku.db, like an imported one; RAM only without a card)
+ * and opened like any other.
+ */
+static lv_obj_t *scr_edit, *ed_cells[81], *ed_lbl[81], *ed_status;
+static uint8_t ed_val[81];
+static int ed_sel = -1;
+static uint16_t s_own_ram_next = 1;                 /* RAM-only numbering without a card */
+
+static void ed_refresh(void)
+{
+    const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
+    int filled = 0, bad = 0;
+    for (int i = 0; i < 81; i++) {
+        bool clash = false;
+        for (int p = 0; ed_val[i] && p < G->npeers[i]; p++) clash |= ed_val[G->peers[i][p]] == ed_val[i];
+        filled += ed_val[i] != 0;
+        bad += clash;
+        lv_color_t bg = i == ed_sel ? C_CELL_SEL : (ed_sel >= 0 && sudoku_geom_peer(G, i, ed_sel) ? C_CELL_PEER : C_CELL);
+        if (clash) bg = C_CELL_BAD;
+        lv_obj_set_style_bg_color(ed_cells[i], bg, 0);
+        lv_obj_set_style_text_color(ed_lbl[i], clash ? C_RED : C_TEXT, 0);
+        lv_label_set_text_static(ed_lbl[i], DIGITS[ed_val[i]]);
+    }
+    if (bad) {
+        lv_label_set_text_fmt(ed_status, LV_SYMBOL_WARNING "  %d digits break a rule", bad);
+        lv_obj_set_style_text_color(ed_status, C_RED, 0);
+    } else {
+        lv_label_set_text_fmt(ed_status, "%d given%s  -  tap a cell, then a digit", filled, filled == 1 ? "" : "s");
+        lv_obj_set_style_text_color(ed_status, C_MUTED, 0);
+    }
+}
+
+static void ed_cell_cb(lv_event_t *e)
+{
+    ed_sel = (int)(intptr_t)lv_event_get_user_data(e);
+    ed_refresh();
+}
+
+static void ed_digit_cb(lv_event_t *e)
+{
+    int d = (int)(intptr_t)lv_event_get_user_data(e);
+    if (ed_sel < 0) return;
+    ed_val[ed_sel] = ed_val[ed_sel] == d ? 0 : (uint8_t)d;   /* the same digit again clears it */
+    if (ed_val[ed_sel] && ed_sel < 80) ed_sel++;     /* on to the next cell, as when typing */
+    ed_refresh();
+}
+
+static void ed_close(void)
+{
+    lv_screen_load(scr_list);
+    if (scr_edit) lv_obj_delete_async(scr_edit);
+    scr_edit = NULL;
+}
+
+static void ed_cancel_cb(lv_event_t *e)
+{
+    ed_close();
+}
+
+static void ed_erase_cb(lv_event_t *e)
+{
+    if (ed_sel >= 0) ed_val[ed_sel] = 0;
+    ed_refresh();
+}
+
+static void ed_clear_cb(lv_event_t *e)
+{
+    memset(ed_val, 0, sizeof(ed_val));
+    ed_sel = 0;
+    ed_refresh();
+}
+
+/* the check runs in its own task: the solver recurses a level per empty cell (the UI task's stack is small) */
+static volatile int ed_check_state;                 /* 0 idle, 1 checking, 2 done */
+static volatile int ed_check_n, ed_check_level;
+static uint8_t ed_check_cells[81];
+static lv_timer_t *ed_check_timer;
+static TaskHandle_t ed_check_handle;                /* its stack in PSRAM (internal RAM is short) */
+
+static void ed_check_task(void *arg)
+{
+    const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
+    int n = sudoku_count_solutions(G, ed_check_cells, 2);
+    ed_check_level = n == 1 ? sudoku_grade(G, ed_check_cells) : -1;
+    ed_check_n = n;
+    ed_check_state = 2;
+    vTaskSuspend(NULL);                             /* deleted by ed_check_done (a PSRAM-stack task can't delete itself) */
+}
+
+static void ed_check_done(lv_timer_t *t)
+{
+    if (ed_check_state != 2 || eTaskGetState(ed_check_handle) != eSuspended) return;
+    vTaskDeleteWithCaps(ed_check_handle);
+    ed_check_handle = NULL;
+    lv_timer_delete(ed_check_timer);
+    ed_check_timer = NULL;
+    ed_check_state = 0;
+    if (!scr_edit) return;                          /* (cancelled meanwhile) */
+    ed_refresh();
+    if (ed_check_n == 0) {
+        sudoku_ui_notice("This puzzle has no solution: check the digits (red ones break a rule).", 4000);
+        return;
+    }
+    if (ed_check_n > 1) {
+        sudoku_ui_notice("This puzzle has more than one solution: some digits are missing.", 4000);
+        return;
+    }
+    int level = ed_check_level;
+    if (level < 0 || level >= GEN_LEVELS) level = GEN_EXPERT;
+    int number = 0;
+    int gid = stats_db_ready() ? stats_db_gen_add_own(ed_check_cells, level, &number) : -1;
+    uint16_t id;
+    if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
+        id = (uint16_t)(PUZZLE_GEN_BASE + gid);
+    } else {
+        id = s_gen_ram_next++;                       /* no card: until power-off */
+        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+        number = s_own_ram_next++;
+    }
+    gen_cache_put(id, VAR_CLASSIC, level, ed_check_cells, NULL, NULL, NULL, NULL, NULL);
+    gen_cache_source(id, STATS_OWN_SOURCE, number);
+    char msg[96];
+    snprintf(msg, sizeof(msg), "Saved as %s #%d: one solution, rated %s.", STATS_OWN_SOURCE, number,
+             GEN_LEVEL_NAMES[level]);
+    sudoku_ui_notice(msg, 3500);
+    if (scr_edit) lv_obj_delete_async(scr_edit);
+    scr_edit = NULL;
+    open_puzzle(id);
+}
+
+static void ed_play_cb(lv_event_t *e)
+{
+    if (ed_check_state) return;
+    int filled = 0;
+    for (int i = 0; i < 81; i++) filled += ed_val[i] != 0;
+    if (filled < 17) {                              /* no Sudoku with fewer has just one solution */
+        sudoku_ui_notice("A puzzle needs at least 17 digits to have just one solution.", 4000);
+        return;
+    }
+    memcpy(ed_check_cells, ed_val, 81);
+    ed_check_state = 1;
+    if (xTaskCreateWithCaps(ed_check_task, "edcheck", 16384, NULL, 2, &ed_check_handle, MALLOC_CAP_SPIRAM) != pdPASS) {
+        ed_check_state = 0;
+        sudoku_ui_notice("Not enough memory to check the puzzle right now.", 3000);
+        return;
+    }
+    lv_label_set_text(ed_status, "Checking...");
+    lv_obj_set_style_text_color(ed_status, C_MUTED, 0);
+    ed_check_timer = lv_timer_create(ed_check_done, 50, NULL);
+}
+
+static void enter_cb(lv_event_t *e)
+{
+    memset(ed_val, 0, sizeof(ed_val));
+    ed_sel = 0;
+    scr_edit = make_screen();
+    make_btn(scr_edit, 8, 6, 120, 48, LV_SYMBOL_CLOSE "  Cancel", &lv_font_montserrat_18, ed_cancel_cb, NULL);
+    lv_obj_t *t = make_label(scr_edit, &lv_font_montserrat_22, C_TEXT);
+    lv_label_set_text(t, "Enter a puzzle");
+    lv_obj_set_pos(t, 142, 6);
+    ed_status = make_label(scr_edit, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_pos(ed_status, 142, 36);
+    lv_obj_t *go = make_btn(scr_edit, SCR_W - 8 - 220, TOOL_Y, 220, 48, LV_SYMBOL_PLAY "  Check & play",
+                            &lv_font_montserrat_18, ed_play_cb, NULL);
+    lv_obj_set_style_bg_color(go, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(go, 0), lv_color_white(), 0);
+    lv_obj_t *er = make_btn(scr_edit, 8, TOOL_Y, 130, 48, LV_SYMBOL_BACKSPACE "  Erase", &lv_font_montserrat_16,
+                            ed_erase_cb, NULL);
+    lv_obj_set_style_bg_color(er, C_CARD2, 0);
+    lv_obj_t *cl = make_btn(scr_edit, 8 + 130 + 8, TOOL_Y, 130, 48, LV_SYMBOL_TRASH "  Clear", &lv_font_montserrat_16,
+                            ed_clear_cb, NULL);
+    lv_obj_set_style_bg_color(cl, C_CARD2, 0);
+
+    lv_obj_t *grid = lv_obj_create(scr_edit);
+    lv_obj_remove_style_all(grid);
+    lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(grid, false);
+    lv_obj_t *boxes[9];
+    for (int b = 0; b < 9; b++) {
+        boxes[b] = lv_obj_create(grid);
+        lv_obj_remove_style_all(boxes[b]);
+        lv_obj_set_style_bg_color(boxes[b], C_GRID_THIN, 0);
+        lv_obj_set_style_bg_opa(boxes[b], LV_OPA_COVER, 0);
+        lv_obj_set_scrollable(boxes[b], false);
+        lv_obj_set_clickable(boxes[b], false);
+    }
+    for (int i = 0; i < 81; i++) {
+        ed_cells[i] = lv_obj_create(grid);
+        lv_obj_remove_style_all(ed_cells[i]);
+        lv_obj_set_style_bg_opa(ed_cells[i], LV_OPA_COVER, 0);
+        lv_obj_set_scrollable(ed_cells[i], false);
+        lv_obj_set_clickable(ed_cells[i], true);
+        lv_obj_add_event_cb(ed_cells[i], ed_cell_cb, LV_EVENT_PRESSED, (void *)(intptr_t)i);
+        ed_lbl[i] = make_label(ed_cells[i], &font_digits_44, C_TEXT);
+        lv_obj_center(ed_lbl[i]);
+    }
+    board_layout(sudoku_geom(VAR_CLASSIC), grid, boxes, ed_cells, NULL);
+    const int span = GRID_SIZE - 6, h = (span - 8 * PAD_GAP) / 9;
+    for (int d = 1; d <= 9; d++) {
+        make_btn(scr_edit, PAD_X, GRID_Y + 1 + (d - 1) * (h + PAD_GAP), PAD_W, h, DIGITS[d], &lv_font_montserrat_28,
+                 ed_digit_cb, (void *)(intptr_t)d);
+    }
+    lv_obj_t *hint = make_label(scr_edit, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_width(hint, SCR_W - 16);
+    lv_label_set_text(hint, "Type in a Classic puzzle's given digits, then Check & play: it needs exactly one solution.");
+    lv_obj_set_pos(hint, 8, BOT_Y + (BOT_H - 18) / 2);
+    ed_refresh();
+    lv_screen_load(scr_edit);
+}
+
 /* ============================================================= list screen */
 
 /* the unfinished games, from sudoku.db (without it: just the one in RAM) */
@@ -4564,6 +4821,205 @@ static lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_
     lv_label_set_text_fmt(*lbl, "%d%%", value);
     lv_obj_align(*lbl, LV_ALIGN_RIGHT_MID, -250, 0);
     return sl;
+}
+
+/* ------------------------------------------------------------- firmware update (from the card) */
+/*
+ * Settings > Data > Firmware update: update.bin in the card's root (the
+ * sketch's .ino.bin from the Arduino IDE's Export Compiled Binary, or the
+ * build folder) goes into the other app slot (two 12.5 MiB slots, ota_0 /
+ * ota_1). esp_ota_end() checks the whole image (format, chip, SHA-256)
+ * before the board is told to start it, so a broken file changes nothing.
+ * The new firmware starts on probation (the bootloader's rollback): it is
+ * kept once the screens are up and sudoku.db has opened (sudoku_ui_mark_ok());
+ * if it crashes before that, the next restart goes back to the old one.
+ * Afterwards update.bin is renamed update.done.
+ */
+#define FW_FILE  BSP_SD_MOUNT_POINT "/update.bin"
+#define FW_DONE  BSP_SD_MOUNT_POINT "/update.done"
+#define FW_CHUNK (16 * 1024)
+
+static lv_obj_t *st_fw_btn, *st_fw_hint;
+static lv_obj_t *fw_ovl, *fw_bar, *fw_lbl;
+static lv_timer_t *fw_timer;
+static volatile int fw_state;                       /* 0 writing, 1 done, 2 failed */
+static volatile uint32_t fw_done_bytes, fw_size;
+static char fw_err[96];
+
+/* update.bin's app description (its build date, version); false if it isn't an ESP app image */
+static bool fw_file_desc(esp_app_desc_t *d, uint32_t *size)
+{
+    struct stat st;
+    if (stat(FW_FILE, &st) != 0 || st.st_size < (off_t)(sizeof(esp_image_header_t) + 256)) return false;
+    FILE *f = fopen(FW_FILE, "rb");
+    if (!f) return false;
+    esp_image_header_t h;
+    bool ok = fread(&h, sizeof(h), 1, f) == 1 && h.magic == ESP_IMAGE_HEADER_MAGIC && h.chip_id == ESP_CHIP_ID_ESP32P4;
+    /* the app description is the start of the first segment */
+    ok = ok && fseek(f, sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t), SEEK_SET) == 0 &&
+         fread(d, sizeof(*d), 1, f) == 1 && d->magic_word == ESP_APP_DESC_MAGIC_WORD;
+    fclose(f);
+    if (ok && size) *size = (uint32_t)st.st_size;
+    return ok;
+}
+
+/* a build's ID: the start of its ELF file's SHA-256 (as a crash log prints it). (The app description's
+ * date is when the Arduino core's libraries were built: the same for every sketch build.) */
+static void fw_build_id(const esp_app_desc_t *d, char out[9])
+{
+    for (int i = 0; i < 4; i++) snprintf(out + 2 * i, 3, "%02x", d->app_elf_sha256[i]);
+}
+
+/* the Firmware update row: what's running, and what update.bin is */
+static void fw_row_update(void)
+{
+    if (!st_fw_hint) return;
+    char run_id[9], new_id[9];
+    fw_build_id(esp_app_get_description(), run_id);
+    esp_app_desc_t d;
+    uint32_t size = 0;
+    bool have = stats_db_ready() && fw_file_desc(&d, &size);   /* (the card is mounted with sudoku.db open) */
+    if (have) {
+        fw_build_id(&d, new_id);
+        lv_label_set_text_fmt(st_fw_hint, "update.bin: build %s, %u KB%s", new_id, (unsigned)(size / 1024),
+                              strcmp(new_id, run_id) ? "" : " (the one running)");
+    } else {
+        lv_label_set_text_fmt(st_fw_hint, "Running build %s; put update.bin on the card", run_id);
+    }
+    lv_obj_set_state(st_fw_btn, LV_STATE_DISABLED, !have);
+}
+
+static void fw_task(void *arg)
+{
+    uint8_t *buf = heap_caps_malloc(FW_CHUNK, MALLOC_CAP_SPIRAM);
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    FILE *f = fopen(FW_FILE, "rb");
+    esp_ota_handle_t h = 0;
+    esp_err_t err = !buf ? ESP_ERR_NO_MEM : !part ? ESP_ERR_NOT_FOUND : !f ? ESP_ERR_INVALID_STATE : ESP_OK;
+    if (err == ESP_OK) err = esp_ota_begin(part, fw_size, &h);   /* erases what the image needs */
+    while (err == ESP_OK) {
+        size_t n = fread(buf, 1, FW_CHUNK, f);
+        if (!n) break;
+        err = esp_ota_write(h, buf, n);
+        fw_done_bytes += (uint32_t)n;
+    }
+    if (f) fclose(f);
+    if (h) {
+        esp_err_t end = esp_ota_end(h);             /* the whole image checked (format, chip, hash) */
+        if (err == ESP_OK) err = end;
+    }
+    if (err == ESP_OK) err = esp_ota_set_boot_partition(part);
+    if (err == ESP_OK) {
+        remove(FW_DONE);
+        rename(FW_FILE, FW_DONE);                   /* not again at the next look */
+        printf("update: %u bytes into %s, starting it\n", (unsigned)fw_done_bytes, part->label);
+    } else {
+        snprintf(fw_err, sizeof(fw_err), "Update failed (%s): the running firmware stays.", esp_err_to_name(err));
+        printf("update: %s\n", fw_err);
+    }
+    heap_caps_free(buf);
+    fw_state = err == ESP_OK ? 1 : 2;
+    vTaskDelete(NULL);
+}
+
+static void fw_poll_cb(lv_timer_t *t)
+{
+    if (fw_size) lv_bar_set_value(fw_bar, (int32_t)((uint64_t)fw_done_bytes * 100 / fw_size), LV_ANIM_OFF);
+    lv_label_set_text_fmt(fw_lbl, "%u of %u KB", (unsigned)(fw_done_bytes / 1024), (unsigned)(fw_size / 1024));
+    if (fw_state == 0) return;
+    lv_timer_delete(fw_timer);
+    fw_timer = NULL;
+    if (fw_state == 2) {
+        lv_obj_delete(fw_ovl);
+        fw_ovl = NULL;
+        sudoku_ui_notice(fw_err, 6000);
+        fw_row_update();
+        return;
+    }
+    lv_label_set_text(fw_lbl, "Done: restarting into the new firmware...");
+    lv_refr_now(NULL);
+    stats_db_suspend();                             /* sudoku.db closed, the card unmounted */
+    vTaskDelay(pdMS_TO_TICKS(800));
+    esp_restart();
+}
+
+static void fw_go_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    esp_app_desc_t d;
+    uint32_t size;
+    if (fw_timer || !fw_file_desc(&d, &size)) return;
+    fw_size = size;
+    fw_done_bytes = 0;
+    fw_state = 0;
+    fw_ovl = lv_obj_create(lv_layer_top());          /* nothing else while it writes */
+    lv_obj_remove_style_all(fw_ovl);
+    lv_obj_set_size(fw_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(fw_ovl, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(fw_ovl, (lv_opa_t)P->scrim_opa, 0);
+    lv_obj_set_clickable(fw_ovl, true);
+    lv_obj_t *card = lv_obj_create(fw_ovl);
+    lv_obj_set_size(card, 520, 200);
+    lv_obj_center(card);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_width(card, 0, 0);
+    lv_obj_set_style_radius(card, 16, 0);
+    lv_obj_set_scrollable(card, false);
+    lv_obj_t *tl = make_label(card, &lv_font_montserrat_22, C_TEXT);
+    lv_label_set_text(tl, LV_SYMBOL_DOWNLOAD "  Updating the firmware");
+    lv_obj_align(tl, LV_ALIGN_TOP_MID, 0, 6);
+    fw_bar = lv_bar_create(card);
+    lv_obj_set_size(fw_bar, 460, 16);
+    lv_bar_set_range(fw_bar, 0, 100);
+    lv_obj_set_style_bg_color(fw_bar, C_CARD2, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(fw_bar, C_ACCENT, LV_PART_INDICATOR);
+    lv_obj_align(fw_bar, LV_ALIGN_TOP_MID, 0, 60);
+    fw_lbl = make_label(card, &lv_font_montserrat_16, C_MUTED);
+    lv_label_set_text(fw_lbl, "Starting...");
+    lv_obj_align(fw_lbl, LV_ALIGN_TOP_MID, 0, 92);
+    lv_obj_t *w = make_label(card, &lv_font_montserrat_14, C_MUTED);
+    lv_label_set_text(w, "Don't switch off or take the card out.");
+    lv_obj_align(w, LV_ALIGN_TOP_MID, 0, 126);
+    if (xTaskCreate(fw_task, "fwupdate", 8192, NULL, 3, NULL) != pdPASS) {
+        lv_obj_delete(fw_ovl);
+        fw_ovl = NULL;
+        return;
+    }
+    fw_timer = lv_timer_create(fw_poll_cb, 200, NULL);
+}
+
+static void fw_update_cb(lv_event_t *e)
+{
+    esp_app_desc_t d;
+    uint32_t size;
+    if (!fw_file_desc(&d, &size)) {
+        sudoku_ui_notice("No usable update.bin on the card.", 3000);
+        fw_row_update();
+        return;
+    }
+    char run_id[9], new_id[9];
+    fw_build_id(esp_app_get_description(), run_id);
+    fw_build_id(&d, new_id);
+    char text[360];
+    snprintf(text, sizeof(text),
+             "Running: build %s.\nupdate.bin: build %s, %u KB%s.\n\nIt is written to the board's other "
+             "firmware slot and checked before the board restarts into it. If the new firmware doesn't start up "
+             "properly, the board goes back to this one by itself.",
+             run_id, new_id, (unsigned)(size / 1024), strcmp(new_id, run_id) ? "" : " (the same build)");
+    lv_obj_t *m = make_msgbox("Update the firmware?", text);
+    lv_obj_set_width(m, 600);
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, LV_SYMBOL_DOWNLOAD "  Update", fw_go_cb, true);
+}
+
+void sudoku_ui_mark_ok(void)
+{
+    const esp_partition_t *run = esp_ota_get_running_partition();
+    esp_ota_img_states_t st;
+    if (esp_ota_get_state_partition(run, &st) == ESP_OK && st == ESP_OTA_IMG_PENDING_VERIFY) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        printf("update: the new firmware started fine: kept\n");
+    }
 }
 
 static void timer_sw_cb(lv_event_t *e)
@@ -6609,11 +7065,14 @@ static void build_list(void)
     lv_obj_set_pos(t, 150, 20);
     l_total = make_label(scr_list, &lv_font_montserrat_16, C_MUTED);
     lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -16, 28);
-    /* under the title: New puzzle and Learn, side by side across the page */
-    const int bw = (SCR_W - 24 - 8) / 2;
+    /* under the title: New puzzle, Enter (type one in) and Learn, across the page */
+    const int bw = (SCR_W - 24 - 2 * 8) / 3;
     lv_obj_t *nb = make_btn(scr_list, 12, L_BTN_Y, bw, 52, LV_SYMBOL_PLUS "  New puzzle", &lv_font_montserrat_18,
                             new_puzzle_cb, NULL);
-    lv_obj_t *lb = make_btn(scr_list, 12 + bw + 8, L_BTN_Y, bw, 52, LV_SYMBOL_EYE_OPEN "  Learn",
+    lv_obj_t *eb = make_btn(scr_list, 12 + bw + 8, L_BTN_Y, bw, 52, LV_SYMBOL_KEYBOARD "  Enter",
+                            &lv_font_montserrat_18, enter_cb, NULL);   /* type one in from a book */
+    lv_obj_set_style_text_color(lv_obj_get_child(eb, 0), C_ACCENT, 0);
+    lv_obj_t *lb = make_btn(scr_list, 12 + 2 * (bw + 8), L_BTN_Y, bw, 52, LV_SYMBOL_EYE_OPEN "  Learn",
                             &lv_font_montserrat_18, learn_cb, NULL);   /* practise a technique */
     lv_obj_set_style_text_color(lv_obj_get_child(lb, 0), C_ACCENT, 0);
     lv_obj_set_style_bg_color(nb, C_ACCENT, 0);
@@ -6901,9 +7360,12 @@ enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
 static lv_obj_t *st_tab_btn[ST_TABS], *st_pane[ST_TABS];
 static int st_tab;                                  /* the open tab; Settings opens on Network */
 
+static void fw_row_update(void);
+
 static void st_select_tab(int tab)
 {
     st_tab = tab;
+    if (tab == ST_DATA) fw_row_update();            /* (a new update.bin since: copied over USB)  */
     for (int i = 0; i < ST_TABS; i++) {
         lv_obj_set_state(st_tab_btn[i], LV_STATE_CHECKED, i == tab);
         lv_obj_set_style_text_color(lv_obj_get_child(st_tab_btn[i], 0), i == tab ? lv_color_white() : C_TEXT, 0);
@@ -7011,6 +7473,9 @@ static void build_settings(void)
     lv_obj_align(st_pin_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
 
+    r = settings_row(col, "Screen-saver clock", "A dim clock for 10 min before the screen goes dark");
+    settings_switch(r, store_saver_clock(), saver_clock_sw_cb);
+
     col = st_pane[ST_SOUND];
     r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
     st_sound_sw = settings_switch(r, sfx_enabled(), sound_sw_cb);
@@ -7095,6 +7560,15 @@ static void build_settings(void)
     lv_obj_set_style_text_opa(st_usb_btn, LV_OPA_50, LV_STATE_DISABLED);
     lv_obj_align(st_usb_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     usb_btn_update();
+
+    r = settings_row(col, "Firmware update", "");
+    st_fw_hint = lv_obj_get_child(r, 1);
+    st_fw_btn = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_DOWNLOAD "  Update", &lv_font_montserrat_18, fw_update_cb, NULL);
+    lv_obj_set_style_bg_color(st_fw_btn, C_CARD2, 0);
+    lv_obj_set_style_bg_opa(st_fw_btn, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_set_style_text_opa(st_fw_btn, LV_OPA_50, LV_STATE_DISABLED);
+    lv_obj_align(st_fw_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+    fw_row_update();
 
     r = settings_row(col, "Import puzzles", "From puzzles/ on the card: .opensudoku, .sdm");
     lv_obj_t *im = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_DOWNLOAD "  Import", &lv_font_montserrat_18, import_cb, NULL);
@@ -7456,10 +7930,61 @@ static void pin_change_cb(lv_event_t *e)
 
 static lv_obj_t *s_saver;   /* black cover on the system layer while the screen is off */
 
+/*
+ * Screen-saver clock (Settings > Display): at the timeout the black cover
+ * shows a dim clock and the date instead, at a new place every minute (no
+ * burn-in), with the backlight low; after SAVER_CLOCK_MIN minutes the light
+ * goes off as without it. A tap wakes it the same way.
+ */
+#define SAVER_CLOCK_MIN     10
+#define SAVER_CLOCK_LIGHT   12              /* % backlight while it shows */
+static lv_obj_t *sv_clock, *sv_time, *sv_date;
+static lv_timer_t *sv_timer;
+static uint32_t sv_since, sv_moved;
+
+static void saver_clock_tick(lv_timer_t *t)
+{
+    if (!s_saver || !sv_clock) return;
+    if (lv_tick_elaps(sv_since) >= SAVER_CLOCK_MIN * 60u * 1000u) {   /* enough: dark */
+        lv_obj_delete(sv_clock);
+        sv_clock = NULL;
+        lv_timer_delete(sv_timer);
+        sv_timer = NULL;
+        lv_refr_now(NULL);
+        bsp_display_brightness_set(0);
+        return;
+    }
+    time_t now = time(NULL);
+    char hm[8] = "--:--", date[48] = "";
+    if (CLOCK_VALID(now)) {
+        struct tm tm;
+        localtime_r(&now, &tm);
+        strftime(hm, sizeof(hm), "%H:%M", &tm);
+        strftime(date, sizeof(date), "%a %d %b", &tm);
+    }
+    lv_label_set_text(sv_time, hm);
+    lv_label_set_text(sv_date, date);
+    if (!t || lv_tick_elaps(sv_moved) >= 60000) {  /* somewhere else each minute */
+        sv_moved = lv_tick_get();
+        lv_obj_update_layout(sv_clock);
+        int32_t w = lv_obj_get_width(sv_clock), h = lv_obj_get_height(sv_clock);
+        lv_obj_set_pos(sv_clock, 20 + (int32_t)(esp_random() % (uint32_t)LV_MAX(1, SCR_W - 40 - w)),
+                       20 + (int32_t)(esp_random() % (uint32_t)LV_MAX(1, SCR_W - 40 - h)));
+    }
+}
+
+static void saver_clock_stop(void)
+{
+    if (sv_timer) lv_timer_delete(sv_timer);
+    sv_timer = NULL;
+    sv_clock = NULL;                                /* (a child of s_saver: goes with it) */
+}
+
 static void saver_wake_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSED) {
+        saver_clock_stop();
         bsp_display_brightness_set(store_brightness());
     } else if (s_saver) {
         /* removed only once the finger is up, so the waking tap reaches nothing below */
@@ -7483,6 +8008,22 @@ static void saver_sleep(bool lock_now)
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESS_LOST, NULL);
+    if (store_saver_clock() && !lock_now) {        /* dim clock first (not for "lock now") */
+        sv_clock = lv_obj_create(s_saver);
+        lv_obj_remove_style_all(sv_clock);
+        lv_obj_set_size(sv_clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(sv_clock, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(sv_clock, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(sv_clock, LV_OBJ_FLAG_CLICKABLE);
+        sv_time = make_label(sv_clock, &font_timer_36, lv_color_hex(0x9AA0AA));
+        sv_date = make_label(sv_clock, &lv_font_montserrat_20, lv_color_hex(0x6B7280));
+        sv_since = lv_tick_get();
+        saver_clock_tick(NULL);
+        sv_timer = lv_timer_create(saver_clock_tick, 1000, NULL);
+        lv_refr_now(NULL);
+        bsp_display_brightness_set(SAVER_CLOCK_LIGHT);
+        return;
+    }
     lv_refr_now(NULL);                  /* panel shows black before the light goes off */
     bsp_display_brightness_set(0);
 }

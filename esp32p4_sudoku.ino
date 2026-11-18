@@ -29,6 +29,16 @@
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 
+/* A firmware installed from update.bin (Settings > Data) starts on probation:
+ * the Arduino core would keep it at once; instead it is kept once the board
+ * has run for a while (loop() below). If it crashes before, the next restart
+ * goes back to the previous firmware (the bootloader's rollback). */
+extern "C" bool verifyRollbackLater()
+{
+  return true;
+}
+#define KEEP_FIRMWARE_AFTER_MS 15000
+
 /* Why the chip last restarted, if it was not a normal power-on/reset. */
 static const char *abnormal_reset_text(esp_reset_reason_t r)
 {
@@ -84,6 +94,11 @@ void setup()
 
 void loop()
 {
+  static bool kept;
+  if (!kept && millis() > KEEP_FIRMWARE_AFTER_MS) {   /* started up and ran fine: this firmware stays */
+    kept = true;
+    sudoku_ui_mark_ok();
+  }
   devctl_poll();                     /* commands from tools/devctl.py, if any */
   uint32_t wait_ms = lv_timer_handler();
   delay(wait_ms < 5 ? 1 : (wait_ms > 20 ? 20 : wait_ms));

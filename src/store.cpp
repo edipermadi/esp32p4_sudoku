@@ -38,6 +38,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .rules_seen = 0,
     .lock_mode = LOCK_OFF,
     .lock_pin = "",
+    .saver_clock = false,
     .timezone = "UTC",
     .player_id = 0,
     .player_name = "Player 1",
@@ -358,6 +359,17 @@ void store_set_lock_pin(const char *pin)
 {
     snprintf(s_p.lock_pin, sizeof(s_p.lock_pin), "%s", pin ? pin : "");
     stats_db_set_text("lock_pin", s_p.lock_pin);
+}
+
+bool store_saver_clock(void)
+{
+    return s_p.saver_clock;
+}
+
+void store_set_saver_clock(bool on)
+{
+    s_p.saver_clock = on;
+    stats_db_set_int("saver_clock", on);
 }
 
 uint32_t store_rules_seen(void)

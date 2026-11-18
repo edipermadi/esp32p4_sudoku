@@ -85,6 +85,7 @@ typedef struct {
     uint32_t rules_seen;                      /* bit v: variant v's rules card has been shown */
     uint8_t lock_mode;                        /* store_lock_t: the lock screen after a screen timeout */
     char lock_pin[8];                         /* 4 digits (PIN mode), "" = none set */
+    bool saver_clock;                         /* a dim drifting clock before the screen goes dark */
     char timezone[STORE_TZ_LEN];
     int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
     char player_name[STORE_NAME_LEN];
@@ -154,6 +155,11 @@ uint8_t store_lock_mode(void);
 void store_set_lock_mode(uint8_t mode);
 const char *store_lock_pin(void);                 /* 4 digits, or "" */
 void store_set_lock_pin(const char *pin);
+
+/* Screen-saver clock (Settings > Display): at the screen timeout, a dim clock
+ * moving about for SAVER_CLOCK_MIN minutes, then dark. */
+bool store_saver_clock(void);
+void store_set_saver_clock(bool on);
 
 #ifdef __cplusplus
 }
