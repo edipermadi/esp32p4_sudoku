@@ -166,6 +166,11 @@ bool stats_db_take_month(stats_month_t *out);
 void stats_db_query_day(int year, int month, int day);
 bool stats_db_take_day(stats_day_t *out);
 
+/* Deletes sudoku.db and builds a new skeleton with what store.h holds now
+ * (call store_factory_reset() first). The result comes back like an open:
+ * stats_db_take_prefs(). */
+void stats_db_factory_reset(void);
+
 /* Closes the database and unmounts the card (before formatting); waits up
  * to a few seconds. stats_db_start_fresh() mounts and starts a new one. */
 void stats_db_suspend(void);

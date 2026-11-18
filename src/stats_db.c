@@ -37,7 +37,7 @@ typedef struct {                /* CMD_OPEN: what the board has (freed by the wo
 typedef enum {
     CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
-    CMD_MONTH, CMD_DAY,
+    CMD_MONTH, CMD_DAY, CMD_RESET,
 } cmd_type_t;
 typedef struct {
     cmd_type_t type;
@@ -932,6 +932,24 @@ static void do_day(int year, int month, int day)
     xSemaphoreGive(s_lock);
 }
 
+static void do_reset(open_seed_t *seed)
+{
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_game_dirty = false;                     /* a queued save of the old game is void */
+    xSemaphoreGive(s_lock);
+    db_close();
+    if (bsp_sdcard_mount() == ESP_OK) {
+        unlink(DB_PATH "-journal");
+        int r = unlink(DB_PATH);
+        printf("stats_db: factory reset: sudoku.db %s\n", r == 0 ? "deleted" : "was not there");
+    }
+    s_state = ST_OFF;
+    s_player = 0;
+    s_solves = -1;
+    if (seed) seed->fresh = true;
+    do_open(seed);                            /* a new skeleton (also frees the seed) */
+}
+
 static void worker(void *arg)
 {
     sqlite3_initialize();
@@ -971,6 +989,9 @@ static void worker(void *arg)
             break;
         case CMD_MONTH:
             do_month(c.year, c.month);
+            break;
+        case CMD_RESET:
+            do_reset(c.seed);
             break;
         case CMD_DAY:
             do_day(c.year, c.month, c.day);
@@ -1238,6 +1259,24 @@ bool stats_db_take_day(stats_day_t *out)
     s_day_new = false;
     xSemaphoreGive(s_lock);
     return fresh;
+}
+
+void stats_db_factory_reset(void)
+{
+    if (!s_q) return;
+    open_seed_t *seed = malloc(sizeof(*seed));
+    if (seed) {
+        memset(seed, 0, sizeof(*seed));
+        seed->fresh = true;
+        store_get_prefs(&seed->prefs);        /* the defaults, after store_factory_reset() */
+    }
+    cmd_t c = {.type = CMD_RESET, .seed = seed};
+    xSemaphoreTake(s_opened, 0);
+    s_state = ST_OPENING;
+    if (!send(&c)) {
+        free(seed);
+        s_state = ST_ERROR;
+    }
 }
 
 void stats_db_suspend(void)

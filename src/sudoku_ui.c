@@ -166,7 +166,8 @@ static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name 
 static lv_obj_t *st_sd_btn, *st_sd_hint;
 static lv_obj_t *u_ovl;                   /* "USB drive" panel while the computer has the card */
 static lv_obj_t *st_usb_btn, *st_usb_hint;
-static bool u_reloading;                  /* card back: waiting for sudoku.db to reopen */
+static bool u_reloading;                  /* card back / reset: waiting for sudoku.db to (re)open */
+static bool u_reload_home;                /* ... then show Home (factory reset) */
 
 /* list screen */
 static lv_obj_t *l_total, *l_strip, *l_arrow_l, *l_arrow_r;
@@ -191,6 +192,7 @@ static void usb_finish(void);
 static void usb_btn_update(void);
 static void history_poll(void);
 static void history_cb(lv_event_t *e);
+static void apply_loaded_prefs(void);
 static void apply_theme(bool dark);
 
 /* ============================================================= helpers */
@@ -1549,15 +1551,10 @@ static void sd_poll_cb(lv_timer_t *t)
     if (u_ovl && (usb_msc_ejected() || usb_msc_unplugged())) usb_finish();   /* eject, or cable out */
     static store_prefs_t prefs;
     if (u_reloading && stats_db_take_prefs(&prefs)) {
-        /* sudoku.db is back (perhaps a restored copy): take everything from it */
+        /* sudoku.db is back (perhaps a restored copy, or rebuilt): take everything from it */
         u_reloading = false;
         store_apply_prefs(&prefs);
-        g_id = STORE_NO_GAME;
-        sfx_set_enabled(store_sound_enabled());
-        tz_apply(store_timezone());
-        s_sleep_min = store_screen_timeout_min();
-        l_coll = store_last_collection();
-        apply_theme(store_dark_mode());                    /* redraws every screen with it */
+        apply_loaded_prefs();
     }
     if (scr_history) history_poll();
     static stats_player_change_t ch;
@@ -1645,6 +1642,56 @@ static void sd_poll_cb(lv_timer_t *t)
     default:
         break;
     }
+}
+
+/* Everything after the settings changed under the UI (USB restore, factory
+ * reset): sound, clock, timeout, level, and all screens redrawn. */
+static void apply_loaded_prefs(void)
+{
+    g_id = STORE_NO_GAME;
+    p_count = -1;
+    sfx_set_enabled(store_sound_enabled());
+    tz_apply(store_timezone());
+    s_sleep_min = store_screen_timeout_min();
+    l_coll = store_last_collection();
+    apply_theme(store_dark_mode());                    /* redraws every screen with it */
+    if (u_reload_home) {
+        u_reload_home = false;
+        refresh_home();
+        lv_screen_load(scr_home);
+    }
+}
+
+/* ------------------------------------------------------------- factory reset */
+
+static void factory_reset_confirm_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    printf("factory reset\n");
+    wifi_mgr_forget();                             /* network gone (Wi-Fi's NVS keys) */
+    wifi_mgr_set_enabled(false);
+    store_factory_reset();                         /* defaults, no stats, old NVS keys erased */
+    u_reload_home = true;
+    if (stats_db_ready()) {
+        u_reloading = true;                        /* sd_poll_cb applies the rebuilt sudoku.db */
+        stats_db_factory_reset();
+        sudoku_ui_notice("Factory reset: rebuilding sudoku.db...", 3000);
+    } else {
+        apply_loaded_prefs();
+        sudoku_ui_notice("Factory reset done. (No sudoku.db on a card to erase.)", 4000);
+    }
+}
+
+static void factory_reset_cb(lv_event_t *e)
+{
+    lv_obj_t *m = make_msgbox("Factory reset?",
+        "Settings go back to the defaults and the Wi-Fi network is forgotten. sudoku.db is erased: "
+        "all players, statistics, solve history and games in progress. A new, empty sudoku.db is "
+        "made. This can't be undone; to keep a copy, back up sudoku.db first (USB drive).");
+    lv_obj_set_width(m, 600);
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, "Reset", factory_reset_confirm_cb, true);
+    lv_obj_set_style_bg_color(lv_obj_get_child(lv_msgbox_get_footer(m), -1), C_RED, 0);
 }
 
 /* ------------------------------------------------------------- USB drive */
@@ -2573,9 +2620,11 @@ static void build_settings(void)
     lv_obj_t *col = lv_obj_create(scr_settings);
     lv_obj_remove_style_all(col);
     lv_obj_set_pos(col, 40, 84);
-    lv_obj_set_size(col, SCR_W - 80, LV_SIZE_CONTENT);
+    lv_obj_set_size(col, SCR_W - 80, SCR_W - 84);         /* more rows than fit: scrolls */
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(col, 10, 0);
+    lv_obj_set_style_pad_bottom(col, 16, 0);
+    lv_obj_set_scroll_dir(col, LV_DIR_VER);
 
     lv_obj_t *r = settings_row(col, "Dark mode", "Light text on a dark background");
     st_theme_sw = settings_switch(r, s_dark, theme_sw_cb);
@@ -2675,6 +2724,13 @@ static void build_settings(void)
     lv_obj_set_style_text_opa(st_usb_btn, LV_OPA_50, LV_STATE_DISABLED);
     lv_obj_align(st_usb_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     usb_btn_update();
+
+    r = settings_row(col, "Factory reset", "Settings, Wi-Fi network, players and statistics");
+    lv_obj_t *fr = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_WARNING "  Reset", &lv_font_montserrat_18,
+                            factory_reset_cb, NULL);
+    lv_obj_set_style_bg_color(fr, C_RED, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(fr, 0), lv_color_white(), 0);
+    lv_obj_align(fr, LV_ALIGN_RIGHT_MID, 0, 0);
 }
 
 static void build_wifi(void)

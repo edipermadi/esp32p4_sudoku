@@ -73,6 +73,11 @@ typedef struct {
 void store_get_prefs(store_prefs_t *out);
 void store_apply_prefs(const store_prefs_t *in);   /* RAM only */
 
+/* Factory reset of the board side: settings back to the defaults, no game in
+ * progress, no statistics in RAM, and the NVS keys earlier versions wrote
+ * erased (so they can't come back). sudoku.db: stats_db_factory_reset(). */
+void store_factory_reset(void);
+
 /* Who is playing (RAM; stats_db_switch_player() etc. change it in sudoku.db). */
 int32_t store_player_id(void);
 const char *store_player_name(void);

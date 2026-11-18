@@ -23,7 +23,7 @@ typedef struct {
     uint8_t solves[PUZZLE_COUNT];
 } store_stat_t;
 static store_stat_t s_stat;
-static store_prefs_t s_p = {
+static const store_prefs_t DEFAULT_PREFS = {
     .game = {.id = STORE_NO_GAME},
     .last_collection = 0,
     .dark_mode = true,
@@ -33,6 +33,7 @@ static store_prefs_t s_p = {
     .player_id = 0,
     .player_name = "Player 1",
 };
+static store_prefs_t s_p = DEFAULT_PREFS;
 #define s_game (s_p.game)
 
 void store_init(void)
@@ -95,6 +96,17 @@ void store_merge_stats(const uint16_t *best, const uint8_t *fewest, const uint8_
             s_stat.fewest[i] = fewest[i];
         }
         if (solves[i] > s_stat.solves[i]) s_stat.solves[i] = solves[i];
+    }
+}
+
+void store_factory_reset(void)
+{
+    s_p = DEFAULT_PREFS;
+    store_reset_stats();
+    Preferences prefs;
+    if (prefs.begin("sudoku", false)) {        /* the one NVS write left: erase the old keys */
+        prefs.clear();
+        prefs.end();
     }
 }
 
