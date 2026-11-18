@@ -28,7 +28,10 @@
  * Clock: with Wi-Fi connected the time comes from NTP (wifi_mgr.cpp starts
  * SNTP) and the home screen shows it in the chosen time zone.
  *   - game: the 9x9 board, a 1..9 number pad on the right, a timer at the
- *     top, and Undo / Erase / Notes / Restart / Fill at the bottom. Fill puts
+ *     top, and Undo / Erase / Notes / Restart / Fill at the bottom. Puzzles
+ *     made on the board can also be X-Sudoku (the diagonals are tinted and
+ *     count as units) or a 6x6 Mini board (2x3 boxes, a 1..6 pad); the board
+ *     and pad are laid out for the puzzle's variant (generator.h) when it opens. Fill puts
  *     the solution's digit in the selected cell and counts as a hint. Conflicting
  *     digits turn red; a complete board without conflicts is solved (every
  *     embedded puzzle has exactly one solution).
@@ -57,7 +60,6 @@
 #include "timezones.h"
 #include "stats_db.h"
 #include "usb_msc.h"
-#include "solver.h"
 #include "generator.h"
 #include "esp_random.h"
 #include "esp_timer.h"
@@ -110,11 +112,9 @@ static uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
 #define PANE_X      (12 + COLL_W + 12)
 #define PANE_W      (SCR_W - PANE_X - 12)   /* 432 */
 #define TOP_H       60
-#define CELL        64
 #define GRID_X      8
 #define GRID_Y      64
-#define GRID_SIZE   604     /* 4 + 3 * (3*64 + 2*2) + 2*4 + 4 */
-#define BOX_SIZE    196     /* 3*64 + 2*2 */
+#define GRID_SIZE   604     /* 9x9: 4 + 3 * (3*64 + 2*2) + 2*4 + 4 (board_layout) */
 #define PAD_X       (GRID_X + GRID_SIZE + 8)
 #define PAD_W       (SCR_W - PAD_X - 8)
 #define PAD_H       62
@@ -135,6 +135,8 @@ typedef struct {
 } board_t;
 
 static uint16_t g_id = STORE_NO_GAME;
+static int      g_var = VAR_CLASSIC;     /* the puzzle's variant (generator.h) */
+static const sudoku_geom_t *g_geo;       /* and its geometry: units, peers, size */
 static uint8_t  g_given[81];
 static board_t  g_b;
 static bool     g_conflict[81];
@@ -218,8 +220,9 @@ static const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];
 static uint16_t  l_pending_id;
 
 /* game screen */
-static lv_obj_t *g_cells[81], *g_cell_lbl[81];
+static lv_obj_t *g_grid, *g_boxes[9], *g_cells[81], *g_cell_lbl[81];
 static lv_obj_t *g_pad[9], *g_pad_cnt[9];
+static int       g_layout_var = -1;     /* variant the board and pad are laid out for */
 static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
 static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
 static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
@@ -253,6 +256,7 @@ static void fmt_time(char *buf, size_t n, uint32_t s)
 #define GEN_CACHE 24
 static struct {
     uint16_t id;                        /* 0 = free slot */
+    uint8_t variant;                    /* sudoku_variant_t */
     uint8_t level;
     uint8_t givens[81];
     char day[12];                       /* daily puzzle's date, "" otherwise */
@@ -260,24 +264,26 @@ static struct {
 static int s_gen_cache_next;
 static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
 
-static void gen_cache_put(uint16_t id, int level, const uint8_t givens[81], const char *day)
+static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const char *day)
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) return;
     }
     s_gen_cache[s_gen_cache_next].id = id;
+    s_gen_cache[s_gen_cache_next].variant = (uint8_t)variant;
     s_gen_cache[s_gen_cache_next].level = (uint8_t)level;
     memcpy(s_gen_cache[s_gen_cache_next].givens, givens, 81);
     snprintf(s_gen_cache[s_gen_cache_next].day, sizeof(s_gen_cache[0].day), "%s", day ? day : "");
     s_gen_cache_next = (s_gen_cache_next + 1) % GEN_CACHE;
 }
 
-/* givens, level and daily date of a generated puzzle (any may be NULL); false if unknown */
-static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *level, char day[12])
+/* givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown */
+static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12])
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) {
             if (givens) memcpy(givens, s_gen_cache[i].givens, 81);
+            if (variant) *variant = s_gen_cache[i].variant;
             if (level) *level = s_gen_cache[i].level;
             if (day) snprintf(day, 12, "%s", s_gen_cache[i].day);
             return true;
@@ -285,19 +291,29 @@ static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *level, char day[12
     }
     if (id >= PUZZLE_GEN_RAM_BASE) return false;          /* RAM-only, and gone */
     uint8_t g[81];
-    int lv;
+    int lv, var = VAR_CLASSIC;
     char d[12];
-    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, &lv, d)) return false;
-    gen_cache_put(id, lv, g, d);
+    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, &var, &lv, d)) return false;
+    if (var < 0 || var >= VAR_COUNT) var = VAR_CLASSIC;
+    gen_cache_put(id, var, lv, g, d);
     if (givens) memcpy(givens, g, 81);
+    if (variant) *variant = var;
     if (level) *level = lv;
     if (day) snprintf(day, 12, "%s", d);
     return true;
 }
 
-static bool gen_lookup(uint16_t id, uint8_t *givens, int *level)
+static bool gen_lookup(uint16_t id, uint8_t *givens, int *variant, int *level)
 {
-    return gen_lookup_day(id, givens, level, NULL);
+    return gen_lookup_day(id, givens, variant, level, NULL);
+}
+
+/* variant of any puzzle: the built-in ones are classic */
+static int puzzle_variant(uint16_t id)
+{
+    int v = VAR_CLASSIC;
+    if (puzzle_is_generated(id)) gen_lookup(id, NULL, &v, NULL);
+    return v;
 }
 
 /* the givens of any puzzle, built-in or generated */
@@ -308,15 +324,15 @@ static bool puzzle_get(uint16_t id, uint8_t cells[81])
         puzzle_load(id, cells);
         return true;
     }
-    return gen_lookup(id, cells, NULL);
+    return gen_lookup(id, cells, NULL, NULL);
 }
 
 static void puzzle_name(uint16_t id, char *buf, size_t n)
 {
     if (puzzle_is_generated(id)) {
-        int lv = -1;
+        int lv = -1, var = VAR_CLASSIC;
         char day[12] = "";
-        gen_lookup_day(id, NULL, &lv, day);
+        gen_lookup_day(id, NULL, &var, &lv, day);
         if (day[0]) {                                     /* "Daily Hard, 18 Nov" */
             struct tm tm = {0};
             char when[16] = "";
@@ -330,7 +346,8 @@ static void puzzle_name(uint16_t id, char *buf, size_t n)
         }
         unsigned num = id >= PUZZLE_GEN_RAM_BASE ? (unsigned)(id - PUZZLE_GEN_RAM_BASE + 1)
                                                  : (unsigned)(id - PUZZLE_GEN_BASE);
-        snprintf(buf, n, "Generated %s #%u", lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", num);
+        const char *kind = var == VAR_X ? "X-Sudoku" : (var == VAR_MINI ? "Mini" : "Generated");
+        snprintf(buf, n, "%s %s #%u", kind, lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", num);
         return;
     }
     int c = puzzle_collection_of(id);
@@ -378,15 +395,177 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t 
     return l;
 }
 
-/* ============================================================= sudoku rules */
+/* ------------------------------------------------------------- justified text */
+/*
+ * LVGL labels can't justify text, so this widget lays the words out itself:
+ * every line of a paragraph but the last is spread to the full width (left
+ * and right edges flush); the last line, and a line of one word, stay left.
+ * '\n' ends a paragraph. Font, colour and line spacing come from the styles
+ * (inherited, like a label). Words are measured glyph by glyph (UTF-8).
+ * Height follows the text (LV_SIZE_CONTENT). Every dialog (make_msgbox) uses it.
+ */
+typedef struct {
+    char *text;
+    int32_t width;                      /* content width the height was worked out for */
+} just_t;
 
-static bool is_peer(int a, int b)
+#define JUST_MAX_WORDS 64               /* per line */
+
+/* the UTF-8 character at s[*i] (moves *i past it); 0 at n */
+static uint32_t just_utf8_next(const char *s, int n, int *i)
 {
-    int ra = a / 9, ca = a % 9, rb = b / 9, cb = b % 9;
-    return ra == rb || ca == cb || (ra / 3 == rb / 3 && ca / 3 == cb / 3);
+    if (*i >= n) return 0;
+    uint8_t c = (uint8_t)s[(*i)++];
+    int more = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
+    uint32_t cp = more == 3 ? (c & 0x07u) : more == 2 ? (c & 0x0Fu) : more == 1 ? (c & 0x1Fu) : c;
+    while (more-- > 0 && *i < n) cp = (cp << 6) | ((uint8_t)s[(*i)++] & 0x3Fu);
+    return cp;
 }
 
-/* Marks every filled cell that shares a row, column or box with the same digit. */
+static int32_t just_word_w(const lv_font_t *f, const char *s, int n, int32_t letter_space)
+{
+    int32_t w = 0;
+    int i = 0;
+    uint32_t cp = just_utf8_next(s, n, &i);
+    while (cp) {
+        uint32_t next = just_utf8_next(s, n, &i);
+        w += lv_font_get_glyph_width(f, cp, next) + letter_space;
+        cp = next;
+    }
+    return w;
+}
+
+/* lays the text out in width w; with layer, draws it from co's top left. Returns the line count. */
+static int just_run(lv_obj_t *obj, int32_t w, lv_layer_t *layer, const lv_area_t *co)
+{
+    const just_t *j = lv_obj_get_user_data(obj);
+    if (!j || !j->text) return 0;
+    const lv_font_t *f = lv_obj_get_style_text_font(obj, 0);
+    int32_t ls = lv_obj_get_style_text_letter_space(obj, 0);
+    int32_t line_h = lv_font_get_line_height(f) + lv_obj_get_style_text_line_space(obj, 0);
+    int32_t space_w = lv_font_get_glyph_width(f, ' ', 0) + ls;
+    lv_draw_label_dsc_t d;
+    if (layer) {
+        lv_draw_label_dsc_init(&d);
+        d.font = f;
+        d.color = lv_obj_get_style_text_color(obj, 0);
+        d.opa = lv_obj_get_style_text_opa(obj, 0);
+        d.letter_space = ls;
+    }
+    const char *p = j->text;
+    int lines = 0;
+    while (*p) {
+        const char *ws[JUST_MAX_WORDS];
+        int32_t ww[JUST_MAX_WORDS], sum = 0;
+        int wl[JUST_MAX_WORDS], nw = 0;
+        while (*p == ' ') p++;
+        while (*p && *p != '\n') {                  /* words while they fit */
+            const char *e = p;
+            while (*e && *e != ' ' && *e != '\n') e++;
+            int32_t wd = just_word_w(f, p, (int)(e - p), ls);
+            if (nw && (sum + nw * space_w + wd > w || nw == JUST_MAX_WORDS)) break;
+            ws[nw] = p;
+            wl[nw] = (int)(e - p);
+            ww[nw] = wd;
+            sum += wd;
+            nw++;
+            p = e;
+            while (*p == ' ') p++;
+        }
+        bool last = !*p || *p == '\n';
+        if (layer) {
+            int32_t x = 0, spare = w - sum;
+            for (int k = 0; k < nw; k++) {
+                int32_t gap = last || nw < 2 ? k * space_w : spare * k / (nw - 1);
+                lv_area_t a = {.x1 = co->x1 + x + gap, .y1 = co->y1 + lines * line_h};
+                a.x2 = a.x1 + ww[k] + 8;            /* slack: the word never wraps */
+                a.y2 = a.y1 + line_h - 1;
+                d.text = ws[k];
+                d.text_length = (uint32_t)wl[k];
+                lv_draw_label(layer, &d, &a);
+                x += ww[k];
+            }
+        }
+        lines++;
+        if (*p == '\n') p++;
+    }
+    return lines;
+}
+
+static void just_event_cb(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    just_t *j = lv_obj_get_user_data(obj);
+    switch (lv_event_get_code(e)) {
+    case LV_EVENT_GET_SELF_SIZE: {
+        lv_point_t *pt = lv_event_get_param(e);
+        const lv_font_t *f = lv_obj_get_style_text_font(obj, 0);
+        int32_t lsp = lv_obj_get_style_text_line_space(obj, 0);
+        int n = just_run(obj, lv_obj_get_content_width(obj), NULL, NULL);
+        int32_t h = n ? n * (lv_font_get_line_height(f) + lsp) - lsp : 0;
+        if (pt->y < h) pt->y = h;
+        break;
+    }
+    case LV_EVENT_SIZE_CHANGED:                     /* a new width: new line breaks, new height */
+        if (j && j->width != lv_obj_get_content_width(obj)) {
+            j->width = lv_obj_get_content_width(obj);
+            lv_obj_refresh_self_size(obj);
+        }
+        break;
+    case LV_EVENT_DRAW_MAIN_END: {
+        lv_area_t co;
+        lv_obj_get_content_coords(obj, &co);
+        just_run(obj, lv_area_get_width(&co), lv_event_get_layer(e), &co);
+        break;
+    }
+    case LV_EVENT_DELETE:
+        if (j) {
+            lv_free(j->text);
+            lv_free(j);
+        }
+        lv_obj_set_user_data(obj, NULL);
+        break;
+    default:
+        break;
+    }
+}
+
+static void just_set_text(lv_obj_t *obj, const char *text)
+{
+    just_t *j = lv_obj_get_user_data(obj);
+    if (!j) return;
+    lv_free(j->text);
+    j->text = lv_strdup(text ? text : "");
+    lv_obj_refresh_self_size(obj);
+    lv_obj_invalidate(obj);
+}
+
+/* justified text, full width of its parent (font and colour as for make_label) */
+static lv_obj_t *make_just_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, const char *text)
+{
+    lv_obj_t *obj = lv_obj_create(parent);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_scrollable(obj, false);
+    lv_obj_set_clickable(obj, false);
+    if (font) lv_obj_set_style_text_font(obj, font, 0);
+    lv_obj_set_style_text_color(obj, color, 0);
+    just_t *j = lv_malloc_zeroed(sizeof(just_t));
+    lv_obj_set_user_data(obj, j);
+    lv_obj_add_event_cb(obj, just_event_cb, LV_EVENT_ALL, NULL);
+    just_set_text(obj, text);
+    return obj;
+}
+
+/* ============================================================= sudoku rules */
+
+/* cells a and b share a unit of the puzzle being played (row, column, box, diagonal) */
+static bool is_peer(int a, int b)
+{
+    return sudoku_geom_peer(g_geo, a, b);
+}
+
+/* Marks every filled cell that shares a row, column, box (or diagonal) with the same digit. */
 static int compute_conflicts(void)
 {
     int n = 0;
@@ -403,29 +582,31 @@ static int compute_conflicts(void)
     return n;
 }
 
-/* Does the unit (9 cell indices) hold 1-9, each once? */
-static bool unit_complete(const int *cells)
+/* Does the unit hold 1-n, each once? */
+static bool unit_complete(int u)
 {
     uint16_t seen = 0;
-    for (int k = 0; k < 9; k++) {
-        uint8_t v = g_b.val[cells[k]];
+    for (int k = 0; k < g_geo->n; k++) {
+        uint8_t v = g_b.val[g_geo->unit[u][k]];
         if (!v || (seen & (1u << v))) return false;
         seen |= (uint16_t)(1u << v);
     }
     return true;
 }
 
-/* How many of cell i's row, column and box were just completed (0..3). */
+/* How many of cell i's units (row, column, box, diagonals) were just completed. */
 static int units_completed_by(int i)
 {
-    int r = i / 9, c = i % 9, br = r / 3 * 3, bc = c / 3 * 3;
-    int row[9], col[9], box[9];
-    for (int k = 0; k < 9; k++) {
-        row[k] = r * 9 + k;
-        col[k] = k * 9 + c;
-        box[k] = (br + k / 3) * 9 + bc + k % 3;
-    }
-    return unit_complete(row) + unit_complete(col) + unit_complete(box);
+    int n = 0;
+    for (int k = 0; k < g_geo->ncu[i]; k++) n += unit_complete(g_geo->cu[i][k]);
+    return n;
+}
+
+/* the cell's colour with nothing selected: X-Sudoku tints its two diagonals */
+static lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given)
+{
+    lv_color_t bg = given ? C_CELL_GIVEN : C_CELL;
+    return sudoku_geom_on_diag(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
 }
 
 static int filled_count(void)
@@ -523,7 +704,8 @@ static void refresh_board(void)
 {
     int sv = g_sel >= 0 ? g_b.val[g_sel] : 0;
     for (int i = 0; i < 81; i++) {
-        lv_color_t bg = g_given[i] ? C_CELL_GIVEN : C_CELL;
+        if (!g_geo->used[i]) continue;
+        lv_color_t bg = cell_base_bg(g_geo, i, g_given[i]);
         if (g_solved) {
             bg = C_CELL_SOLVED;
         } else if (g_sel >= 0) {
@@ -550,8 +732,8 @@ static void refresh_board(void)
     /* number pad: digits left to place; a finished digit is dimmed */
     int count[10] = {0};
     for (int i = 0; i < 81; i++) count[g_b.val[i]]++;
-    for (int d = 1; d <= 9; d++) {
-        int left = 9 - count[d];
+    for (int d = 1; d <= g_geo->n; d++) {
+        int left = g_geo->n - count[d];
         lv_label_set_text_fmt(g_pad_cnt[d - 1], "%d", left > 0 ? left : 0);
         lv_obj_set_style_opa(g_pad[d - 1], left <= 0 ? LV_OPA_40 : LV_OPA_COVER, 0);
     }
@@ -571,7 +753,7 @@ static void refresh_board(void)
         lv_label_set_text_fmt(g_status, LV_SYMBOL_WARNING "  %d conflicting", bad);
         lv_obj_set_style_text_color(g_status, C_RED, 0);
     } else {
-        lv_label_set_text_fmt(g_status, "Filled %d / 81", filled_count());
+        lv_label_set_text_fmt(g_status, "Filled %d / %d", filled_count(), g_geo->ncells);
         lv_obj_set_style_text_color(g_status, C_MUTED, 0);
     }
 }
@@ -587,7 +769,7 @@ static void solve_commit_cb(lv_timer_t *t)
                           s_solve_started, g_moves, g_nmoves);               /* finished: now */
     if (store_saved_game()->id == s_solve_id) store_clear_game();
     char day[12] = "";
-    if (puzzle_is_generated(s_solve_id) && gen_lookup_day(s_solve_id, NULL, NULL, day) && day[0]) {
+    if (puzzle_is_generated(s_solve_id) && gen_lookup_day(s_solve_id, NULL, NULL, NULL, day) && day[0]) {
         int id, streak;
         bool solved;
         if (stats_db_daily_status(day, &id, &solved, &streak) && solved) {   /* after the solve above (queued first) */
@@ -658,7 +840,7 @@ static void after_move(void)
 {
     hint_drop();                                    /* the board changed: an open hint no longer fits */
     compute_conflicts();
-    bool full = filled_count() == 81;
+    bool full = filled_count() == g_geo->ncells;
     bool ok = true;
     for (int i = 0; i < 81; i++) ok &= !g_conflict[i];
     if (full && ok) on_solved();
@@ -768,8 +950,8 @@ static void placed_sounds(int i, int d)
             clean &= !g_conflict[j];
         }
     }
-    if (n == 9 && clean) sfx_play(SFX_DIGIT_DONE);
-    int units = units_completed_by(i);              /* row / column / box now 1-9 */
+    if (n == g_geo->n && clean) sfx_play(SFX_DIGIT_DONE);
+    int units = units_completed_by(i);              /* row / column / box / diagonal now complete */
     if (units) sfx_play(units > 1 ? SFX_UNITS_DONE : SFX_UNIT_DONE);
 }
 
@@ -793,16 +975,19 @@ static void cell_draw_cb(lv_event_t *e)
     lv_obj_get_coords(cell, &co);
     int sv = g_sel >= 0 ? g_b.val[g_sel] : 0;
 
+    /* three marks per row: 3 rows on a 9x9 board, 2 (centred) on a 6x6 one */
+    int size = lv_area_get_width(&co), pitch = size / 3, rows = (g_geo->n + 2) / 3;
+    int x0 = 1, y0 = rows == 3 ? 2 : (size - rows * pitch) / 2;
     lv_draw_label_dsc_t d;
     lv_draw_label_dsc_init(&d);
-    d.font = &lv_font_montserrat_16;
+    d.font = size >= 80 ? &lv_font_montserrat_22 : &lv_font_montserrat_16;
     d.align = LV_TEXT_ALIGN_CENTER;
-    for (int n = 1; n <= 9; n++) {
+    for (int n = 1; n <= g_geo->n; n++) {
         if (!(g_b.notes[i] & (1u << n))) continue;
         int r = (n - 1) / 3, c = (n - 1) % 3;
         lv_area_t a = {
-            .x1 = co.x1 + 1 + c * 21, .y1 = co.y1 + 2 + r * 21,
-            .x2 = co.x1 + 1 + c * 21 + 20, .y2 = co.y1 + 2 + r * 21 + 20,
+            .x1 = co.x1 + x0 + c * pitch, .y1 = co.y1 + y0 + r * pitch,
+            .x2 = co.x1 + x0 + c * pitch + pitch - 1, .y2 = co.y1 + y0 + r * pitch + pitch - 1,
         };
         d.color = n == sv ? C_ACCENT : C_MUTED;
         d.text = DIGITS[n];
@@ -868,14 +1053,21 @@ static void unit_name(int u, char *buf, size_t n)
 {
     if (u < 9) snprintf(buf, n, "row %d", u + 1);
     else if (u < 18) snprintf(buf, n, "column %d", u - 9 + 1);
-    else snprintf(buf, n, "box %d", u - 18 + 1);
+    else if (u < 27) snprintf(buf, n, "box %d", u - 18 + 1);
+    else snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");   /* from that corner */
+}
+
+/* "row, column or box" (and diagonal on X-Sudoku) */
+static const char *units_word(void)
+{
+    return g_geo->diag ? "row, column, box or diagonal" : "row, column or box";
 }
 
 static void mark_unit(int u, uint8_t v)
 {
-    for (int k = 0; k < 9; k++) {
-        int c = sudoku_unit_cell(u, k);
-        if (h_mark[c] < v) h_mark[c] = v;
+    for (int k = 0; k < g_geo->n; k++) {
+        int c = sudoku_unit_cell(g_var, u, k);
+        if (c >= 0 && h_mark[c] < v) h_mark[c] = v;
     }
 }
 
@@ -892,7 +1084,7 @@ static void hint_render(void)
 {
     const sudoku_step_t *h = &h_info;
     const sudoku_tech_t *t = &h->tech;
-    char text[300], u1[16], u2[16], tech[160] = "";
+    char text[320], u1[24], u2[24], tech[180] = "";
     int r = h->cell / 9 + 1, c = h->cell % 9 + 1;
     memset(h_mark, 0, sizeof(h_mark));
 
@@ -924,7 +1116,7 @@ static void hint_render(void)
     }
 
     if (h_step == 1) {
-        char un[16];
+        char un[24];
         switch (h->kind) {
         case STEP_WRONG:
             snprintf(text, sizeof(text), "Something's not right: check the highlighted cell.");
@@ -947,7 +1139,7 @@ static void hint_render(void)
         lv_label_set_text(lv_obj_get_child(h_act, 0), "More");
     } else {
         h_mark[h->cell] = 2;
-        char un[16];
+        char un[24];
         switch (h->kind) {
         case STEP_WRONG:
             snprintf(text, sizeof(text), "The %d at row %d, column %d is wrong: it isn't part of the solution.",
@@ -956,12 +1148,12 @@ static void hint_render(void)
         case STEP_HIDDEN_SINGLE:
             unit_name(h->unit, un, sizeof(un));
             snprintf(text, sizeof(text), "%s%s%d can only go here in %s: its other empty cells already see a %d "
-                     "in their row, column or box.", tech, t->kind ? "That leaves one place: " : "",
-                     h->digit, un, h->digit);
+                     "in their %s.", tech, t->kind ? "That leaves one place: " : "",
+                     h->digit, un, h->digit, units_word());
             break;
         case STEP_NAKED_SINGLE:
             snprintf(text, sizeof(text), "%sOnly %d fits here (row %d, column %d): every other digit is already "
-                     "in its row, column or box%s.", tech, h->digit, r, c, t->kind ? ", or ruled out above" : "");
+                     "in its %s%s.", tech, h->digit, r, c, units_word(), t->kind ? ", or ruled out above" : "");
             break;
         default:
             snprintf(text, sizeof(text), "The highlighted cell (row %d, column %d) is %d.", r, c, h->digit);
@@ -973,7 +1165,7 @@ static void hint_render(void)
 
     /* the card at the bottom, or at the top when the bottom row matters */
     bool bottom_row = false;
-    for (int i = 72; i < 81; i++) bottom_row |= h_mark[i] != 0;
+    for (int k = 0; k < g_geo->n; k++) bottom_row |= h_mark[(g_geo->n - 1) * 9 + k] != 0;
     lv_obj_set_y(h_card, bottom_row ? 4 : SCR_W - 96);
     lv_obj_set_hidden(h_card, false);
     refresh_board();
@@ -1015,7 +1207,7 @@ static void hint_cb(lv_event_t *e)
         hint_act_cb(e);
         return;
     }
-    if (!sudoku_next_step(g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
+    if (!sudoku_next_step(g_var, g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
     if (g_hints < 0xFFFF) g_hints++;               /* every hint opened counts once */
     refresh_board();                                /* the hint count on the Fill button */
     save_current();
@@ -1064,7 +1256,8 @@ static lv_obj_t *make_msgbox(const char *title, const char *text)
 {
     lv_obj_t *m = lv_msgbox_create(NULL);
     lv_msgbox_add_title(m, title);
-    lv_msgbox_add_text(m, text);
+    /* justified (left and right edges flush); NULL: the caller fills the content */
+    if (text) make_just_text(lv_msgbox_get_content(m), NULL, C_TEXT, text);
     lv_obj_set_width(m, 520);
     lv_obj_set_style_text_font(m, &lv_font_montserrat_20, 0);
     return m;
@@ -1102,14 +1295,14 @@ static void back_cb(lv_event_t *e)
     show_list();
 }
 
-static void gen_start(int level);
+static void gen_start(int variant, int level);
 
 static void win_next_cb(lv_event_t *e)
 {
-    if (puzzle_is_generated(g_id)) {             /* another one of the same level */
-        int lv = GEN_MEDIUM;
-        gen_lookup(g_id, NULL, &lv);
-        gen_start(lv);
+    if (puzzle_is_generated(g_id)) {             /* another one of the same variant and level */
+        int lv = GEN_MEDIUM, var = VAR_CLASSIC;
+        gen_lookup(g_id, NULL, &var, &lv);
+        gen_start(var, lv);
         return;
     }
     int c = puzzle_collection_of(g_id);
@@ -1141,6 +1334,62 @@ static void tick_cb(lv_timer_t *t)
     g_last_tick = now;
 }
 
+/*
+ * Board layout for a variant: boxes and cells inside the GRID_SIZE square at
+ * (GRID_X, GRID_Y), centred, with 4 px lines between boxes and 2 px between
+ * cells. 9x9: 64 px cells; 6x6 (2x3 boxes): 97 px cells. Cells not on the
+ * board (6x6) and boxes it doesn't have are hidden.
+ */
+#define LINE_THICK 4
+#define LINE_THIN  2
+
+static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells)
+{
+    const int n = geo->n, bw = geo->box_w, bh = geo->box_h;
+    const int across = n / bw, down = n / bh;                  /* boxes */
+    int cw = (GRID_SIZE - (across + 1) * LINE_THICK - across * (bw - 1) * LINE_THIN) / n;
+    int ch = (GRID_SIZE - (down + 1) * LINE_THICK - down * (bh - 1) * LINE_THIN) / n;
+    int cs = cw < ch ? cw : ch;
+    int box_w = bw * cs + (bw - 1) * LINE_THIN, box_h = bh * cs + (bh - 1) * LINE_THIN;
+    int w = (across + 1) * LINE_THICK + across * box_w, h = (down + 1) * LINE_THICK + down * box_h;
+    lv_obj_set_pos(grid, GRID_X + (GRID_SIZE - w) / 2, GRID_Y + (GRID_SIZE - h) / 2);
+    lv_obj_set_size(grid, w, h);
+    for (int b = 0; b < 9; b++) {
+        bool on = b < across * down;
+        lv_obj_set_hidden(boxes[b], !on);
+        if (!on) continue;
+        lv_obj_set_pos(boxes[b], LINE_THICK + (b % across) * (box_w + LINE_THICK),
+                       LINE_THICK + (b / across) * (box_h + LINE_THICK));
+        lv_obj_set_size(boxes[b], box_w, box_h);
+    }
+    for (int i = 0; i < 81; i++) {
+        lv_obj_set_hidden(cells[i], !geo->used[i]);
+        if (!geo->used[i]) continue;
+        int r = i / 9, c = i % 9;
+        lv_obj_set_pos(cells[i], LINE_THICK + (c / bw) * (box_w + LINE_THICK) + (c % bw) * (cs + LINE_THIN),
+                       LINE_THICK + (r / bh) * (box_h + LINE_THICK) + (r % bh) * (cs + LINE_THIN));
+        lv_obj_set_size(cells[i], cs, cs);
+    }
+}
+
+/* the game screen's board and number pad (1..n, as tall as the board) for g_var */
+static void game_layout(void)
+{
+    if (!g_geo) g_geo = sudoku_geom(g_var);
+    if (g_layout_var == g_var) return;
+    g_layout_var = g_var;
+    board_layout(g_geo, g_grid, g_boxes, g_cells);
+    const int n = g_geo->n, span = GRID_SIZE - 6;              /* 598: the 9 x 62 px pad, as before */
+    const int h = (span - (n - 1) * PAD_GAP) / n;
+    for (int d = 1; d <= 9; d++) {
+        lv_obj_t *b = g_pad[d - 1];
+        lv_obj_set_hidden(b, d > n);
+        if (d > n) continue;
+        lv_obj_set_pos(b, PAD_X, GRID_Y + 1 + (d - 1) * (h + PAD_GAP) + (span - n * h - (n - 1) * PAD_GAP) / 2);
+        lv_obj_set_size(b, PAD_W, h);
+    }
+}
+
 static void start_game(uint16_t id, bool resume)
 {
     uint8_t given[81];
@@ -1149,8 +1398,14 @@ static void start_game(uint16_t id, bool resume)
         return;
     }
     g_id = id;
+    g_var = puzzle_variant(id);
+    g_geo = sudoku_geom(g_var);
+    game_layout();
+    for (int i = 0; i < 81; i++) {                  /* only the board's cells, digits 1..n */
+        if (!g_geo->used[i] || given[i] > g_geo->n) given[i] = 0;
+    }
     memcpy(g_given, given, sizeof(g_given));
-    g_sol_ok = sudoku_solve(g_given, g_sol);
+    g_sol_ok = sudoku_solve(g_var, g_given, g_sol);
     reset_game();
     const saved_game_t *s = store_saved_game();
     if (resume && s->id == id) {
@@ -1158,7 +1413,9 @@ static void start_game(uint16_t id, bool resume)
         memcpy(g_b.notes, s->notes, sizeof(g_b.notes));
         for (int i = 0; i < 81; i++) {
             if (g_given[i]) g_b.val[i] = g_given[i];   /* givens are never editable */
-            if (g_b.val[i] > 9) g_b.val[i] = 0;
+            if (g_b.val[i] > g_geo->n || !g_geo->used[i]) g_b.val[i] = 0;
+            if (!g_geo->used[i]) g_b.notes[i] = 0;
+            g_b.notes[i] &= g_geo->all;
         }
         g_elapsed_ms = s->elapsed_ms;
         g_mistakes = s->mistakes;
@@ -1206,31 +1463,26 @@ static void build_game(void)
     g_timer = make_label(tb, &font_timer_36, C_TEXT);
     lv_obj_align(g_timer, LV_ALIGN_RIGHT_MID, -6, 0);
 
-    /* board: thick-line background, 9 boxes in thin-line colour, 81 cells */
+    /* board: thick-line background, the boxes in thin-line colour, the cells
+     * (placed by game_layout() for the puzzle's variant) */
     lv_obj_t *grid = lv_obj_create(scr_game);
+    g_grid = grid;
     lv_obj_remove_style_all(grid);
-    lv_obj_set_pos(grid, GRID_X, GRID_Y);
-    lv_obj_set_size(grid, GRID_SIZE, GRID_SIZE);
     lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
     lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
     lv_obj_set_scrollable(grid, false);
     for (int b = 0; b < 9; b++) {
         lv_obj_t *box = lv_obj_create(grid);
         lv_obj_remove_style_all(box);
-        lv_obj_set_pos(box, 4 + (b % 3) * (BOX_SIZE + 4), 4 + (b / 3) * (BOX_SIZE + 4));
-        lv_obj_set_size(box, BOX_SIZE, BOX_SIZE);
         lv_obj_set_style_bg_color(box, C_GRID_THIN, 0);
         lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
         lv_obj_set_scrollable(box, false);
         lv_obj_set_clickable(box, false);
+        g_boxes[b] = box;
     }
     for (int i = 0; i < 81; i++) {
-        int r = i / 9, c = i % 9;
         lv_obj_t *cell = lv_obj_create(grid);
         lv_obj_remove_style_all(cell);
-        lv_obj_set_pos(cell, 4 + (c / 3) * (BOX_SIZE + 4) + (c % 3) * (CELL + 2),
-                             4 + (r / 3) * (BOX_SIZE + 4) + (r % 3) * (CELL + 2));
-        lv_obj_set_size(cell, CELL, CELL);
         lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
         lv_obj_set_clickable(cell, true);
         lv_obj_set_scrollable(cell, false);
@@ -1358,6 +1610,9 @@ static void build_game(void)
     lv_obj_t *b2 = make_btn(card, 0, 0, 128, 60, "Next  " LV_SYMBOL_RIGHT, &lv_font_montserrat_16, win_next_cb, NULL);
     lv_obj_align(b2, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_set_style_bg_color(b2, C_ACCENT, 0);
+
+    g_layout_var = -1;                              /* new widgets: lay them out for the current puzzle */
+    game_layout();
 }
 
 /* ============================================================= replay */
@@ -1374,6 +1629,7 @@ static const uint8_t RP_SPEEDS[] = {1, 2, 4, 8};
 
 static lv_obj_t *scr_replay, *rp_return;            /* the screen, and where Back goes */
 static lv_obj_t *rp_cells[81], *rp_lbl[81];
+static const sudoku_geom_t *rp_geo;                 /* the replayed puzzle's variant */
 static lv_obj_t *rp_play_lbl, *rp_speed_lbl, *rp_slider, *rp_pos, *rp_title, *rp_sub;
 static lv_timer_t *rp_timer;
 static uint8_t rp_given[81];
@@ -1397,15 +1653,16 @@ static void rp_render(void)
     }
     int last = rp_k ? rp_moves[rp_k - 1].cell : -1;
     for (int i = 0; i < 81; i++) {
+        if (!rp_geo->used[i]) continue;
         bool bad = false;
-        for (int j = 0; j < 81 && val[i] && !bad; j++) bad = j != i && val[j] == val[i] && is_peer(i, j);
-        lv_color_t bg = rp_given[i] ? C_CELL_GIVEN : C_CELL;
+        for (int j = 0; j < 81 && val[i] && !bad; j++) bad = j != i && val[j] == val[i] && sudoku_geom_peer(rp_geo, i, j);
+        lv_color_t bg = cell_base_bg(rp_geo, i, rp_given[i]);
         if (i == last) bg = C_CELL_SEL;
         lv_obj_set_style_bg_color(rp_cells[i], bg, 0);
         lv_color_t fg = rp_given[i] ? C_TEXT : (kind[i] == MOVE_FILL ? C_ORANGE : C_DIGIT_USER);
         if (bad && !rp_given[i]) fg = C_RED;
         lv_obj_set_style_text_color(rp_lbl[i], fg, 0);
-        lv_label_set_text_static(rp_lbl[i], DIGITS[val[i]]);
+        lv_label_set_text_static(rp_lbl[i], DIGITS[val[i] <= 9 ? val[i] : 0]);
     }
     char now[16], total[16];
     fmt_time(now, sizeof(now), (rp_k ? rp_moves[rp_k - 1].t_ms : 0) / 1000);
@@ -1493,7 +1750,9 @@ static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
         rp_vt[i] = vt;
         prev_t = rp_moves[i].t_ms;
     }
-    return puzzle_get(id, rp_given);
+    if (!puzzle_get(id, rp_given)) return false;
+    rp_geo = sudoku_geom(puzzle_variant(id));
+    return true;
 }
 
 /* Builds the Replay screen (on the default display) for the prepared log. */
@@ -1512,33 +1771,28 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
 
     lv_obj_t *grid = lv_obj_create(scr);
     lv_obj_remove_style_all(grid);
-    lv_obj_set_pos(grid, GRID_X, GRID_Y);
-    lv_obj_set_size(grid, GRID_SIZE, GRID_SIZE);
     lv_obj_set_style_bg_color(grid, C_GRID_THICK, 0);
     lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
     lv_obj_set_scrollable(grid, false);
+    lv_obj_t *boxes[9];
     for (int b = 0; b < 9; b++) {
         lv_obj_t *box = lv_obj_create(grid);
         lv_obj_remove_style_all(box);
-        lv_obj_set_pos(box, 4 + (b % 3) * (BOX_SIZE + 4), 4 + (b / 3) * (BOX_SIZE + 4));
-        lv_obj_set_size(box, BOX_SIZE, BOX_SIZE);
         lv_obj_set_style_bg_color(box, C_GRID_THIN, 0);
         lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
         lv_obj_set_scrollable(box, false);
+        boxes[b] = box;
     }
     for (int i = 0; i < 81; i++) {
-        int row = i / 9, c = i % 9;
         lv_obj_t *cell = lv_obj_create(grid);
         lv_obj_remove_style_all(cell);
-        lv_obj_set_pos(cell, 4 + (c / 3) * (BOX_SIZE + 4) + (c % 3) * (CELL + 2),
-                             4 + (row / 3) * (BOX_SIZE + 4) + (row % 3) * (CELL + 2));
-        lv_obj_set_size(cell, CELL, CELL);
         lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
         lv_obj_set_scrollable(cell, false);
         rp_cells[i] = cell;
         rp_lbl[i] = make_label(cell, &font_digits_44, C_TEXT);
         lv_obj_center(rp_lbl[i]);
     }
+    board_layout(rp_geo, grid, boxes, rp_cells);
 
     /* controls down the right: start, back, play, forward, end, speed */
     static const char *const SYM[] = {LV_SYMBOL_PREV, LV_SYMBOL_LEFT, LV_SYMBOL_PLAY, LV_SYMBOL_RIGHT,
@@ -1881,6 +2135,7 @@ static void export_start(const stats_replay_t *r)
 static lv_obj_t *gen_box;                           /* the "Generating..." dialog */
 static lv_timer_t *gen_timer;
 static volatile bool gen_done;
+static int gen_var_req;                             /* variant being made (generator.h) */
 static int gen_level_req, gen_level_got;
 static uint8_t gen_givens[81];
 static uint32_t gen_seed;                           /* 0 = random */
@@ -1890,11 +2145,12 @@ static void gen_task(void *arg)
 {
     gen_level_t got = (gen_level_t)gen_level_req;
     uint32_t t0 = (uint32_t)(esp_timer_get_time() / 1000);
-    sudoku_generate((gen_level_t)gen_level_req, gen_seed ? gen_seed : esp_random(), gen_givens, &got);
+    sudoku_generate(gen_var_req, (gen_level_t)gen_level_req, gen_seed ? gen_seed : esp_random(), gen_givens, &got);
     int clues = 0;
     for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
-    printf("generator: %s asked, %s made, %d clues, %u ms\n", GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[got],
-           clues, (unsigned)(esp_timer_get_time() / 1000 - t0));
+    printf("generator: %s %s asked, %s made, %d clues, %u ms\n", VARIANT_NAMES[gen_var_req],
+           GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[got], clues,
+           (unsigned)(esp_timer_get_time() / 1000 - t0));
     gen_level_got = got;
     gen_done = true;
     vTaskDelete(NULL);
@@ -1908,34 +2164,37 @@ static void gen_poll_cb(lv_timer_t *t)
     if (gen_box) lv_msgbox_close(gen_box);
     gen_box = NULL;
     uint16_t id;
-    int gid = stats_db_ready() ? stats_db_gen_add(gen_level_got, gen_givens, gen_day[0] ? gen_day : NULL) : -1;
+    int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, gen_day[0] ? gen_day : NULL)
+                               : -1;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
     } else {
         id = s_gen_ram_next++;                       /* no card: until power-off */
         if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
     }
-    gen_cache_put(id, gen_level_got, gen_givens, gen_day);
+    gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, gen_day);
     if (gen_level_got != gen_level_req && !gen_day[0]) {
-        char msg[80];
-        snprintf(msg, sizeof(msg), "Couldn't make a %s one quickly; this one is %s.",
-                 GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[gen_level_got]);
+        char msg[96];
+        snprintf(msg, sizeof(msg), "Couldn't make a %s %s quickly; this one is %s.", GEN_LEVEL_NAMES[gen_level_req],
+                 gen_var_req == VAR_CLASSIC ? "one" : VARIANT_NAMES[gen_var_req], GEN_LEVEL_NAMES[gen_level_got]);
         sudoku_ui_notice(msg, 4000);
     }
     open_puzzle(id);
 }
 
-/* seed 0 = a random puzzle; a daily one has its date as the seed and day set */
-static void gen_start_ex(int level, uint32_t seed, const char *day)
+/* seed 0 = a random puzzle; a daily one (always classic) has its date as the seed and day set */
+static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
 {
     if (gen_timer) return;                           /* one at a time */
+    gen_var_req = variant >= 0 && variant < VAR_COUNT ? variant : VAR_CLASSIC;
     gen_level_req = level;
     gen_seed = seed;
     snprintf(gen_day, sizeof(gen_day), "%s", day ? day : "");
     gen_done = false;
-    char text[64];
+    char text[80];
     if (day) snprintf(text, sizeof(text), "Making today's %s puzzle...", GEN_LEVEL_NAMES[level]);
-    else snprintf(text, sizeof(text), "Making a new %s puzzle...", GEN_LEVEL_NAMES[level]);
+    else if (gen_var_req == VAR_CLASSIC) snprintf(text, sizeof(text), "Making a new %s puzzle...", GEN_LEVEL_NAMES[level]);
+    else snprintf(text, sizeof(text), "Making a new %s %s puzzle...", GEN_LEVEL_NAMES[level], VARIANT_NAMES[gen_var_req]);
     gen_box = make_msgbox(LV_SYMBOL_REFRESH "  New puzzle", text);
     if (xTaskCreate(gen_task, "gen", 16384, NULL, 2, NULL) != pdPASS) {
         lv_msgbox_close(gen_box);
@@ -1946,9 +2205,9 @@ static void gen_start_ex(int level, uint32_t seed, const char *day)
     gen_timer = lv_timer_create(gen_poll_cb, 50, NULL);
 }
 
-static void gen_start(int level)
+static void gen_start(int variant, int level)
 {
-    gen_start_ex(level, 0, NULL);
+    gen_start_ex(variant, level, 0, NULL);
 }
 
 /* ------------------------------------------------------------- daily puzzle */
@@ -2032,10 +2291,18 @@ static void daily_cb(lv_event_t *e)
         open_puzzle((uint16_t)(PUZZLE_GEN_BASE + id));
         return;
     }
-    gen_start_ex(level, daily_seed(day), day);
+    gen_start_ex(VAR_CLASSIC, level, daily_seed(day), day);
 }
 
 static lv_obj_t *gen_pick;                          /* the level dialog */
+static lv_obj_t *gen_pick_desc;                     /* its line about the variant chosen */
+static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kept until power-off) */
+
+static const char *const GEN_VAR_DESC[VAR_COUNT] = {
+    "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
+    "9x9, and the two tinted diagonals also hold 1-9 once each.",
+    "6x6 with 2x3 boxes: rows, columns and boxes hold 1-6 once each.",
+};
 
 static void gen_pick_close(void)
 {
@@ -2047,7 +2314,16 @@ static void gen_level_cb(lv_event_t *e)
 {
     int level = (int)(intptr_t)lv_event_get_user_data(e);
     gen_pick_close();
-    gen_start(level);
+    gen_start(gen_pick_var, level);
+}
+
+static void gen_var_cb(lv_event_t *e)
+{
+    lv_obj_t *bm = lv_event_get_target_obj(e);
+    uint32_t sel = lv_buttonmatrix_get_selected_button(bm);
+    if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= VAR_COUNT) return;
+    gen_pick_var = (int)sel;
+    just_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
 }
 
 static void gen_cancel_cb(lv_event_t *e)
@@ -2063,11 +2339,35 @@ static void gen_backdrop_cb(lv_event_t *e)
 
 static void new_puzzle_cb(lv_event_t *e)
 {
-    lv_obj_t *m = make_msgbox("New puzzle", "A new puzzle made on the board, with exactly one solution. "
-                                            "Easy and Medium need only singles; Hard needs pairs or "
-                                            "locked candidates; Expert needs more than that.");
+    lv_obj_t *m = make_msgbox("New puzzle", NULL);
     gen_pick = m;
     lv_obj_set_width(m, 600);
+    make_just_text(lv_msgbox_get_content(m), NULL, C_TEXT,
+                   "A new puzzle made on the board, with exactly one solution. Easy and Medium need only "
+                   "singles; Hard needs pairs or locked candidates; Expert needs more than that.");
+
+    /* the variant: Classic, X-Sudoku or Mini 6x6 (one of them checked) */
+    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Mini 6x6", ""};
+    lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
+    lv_buttonmatrix_set_map(vm, VAR_MAP);
+    lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    lv_buttonmatrix_set_one_checked(vm, true);
+    lv_buttonmatrix_set_button_ctrl(vm, (uint32_t)gen_pick_var, LV_BUTTONMATRIX_CTRL_CHECKED);
+    lv_obj_set_size(vm, LV_PCT(100), 64);
+    lv_obj_set_style_pad_all(vm, 0, 0);
+    lv_obj_set_style_pad_column(vm, 8, 0);
+    lv_obj_set_style_margin_top(vm, 14, 0);
+    lv_obj_set_style_border_width(vm, 0, 0);
+    lv_obj_set_style_bg_opa(vm, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_text_font(vm, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_bg_color(vm, C_CARD2, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(vm, C_TEXT, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(vm, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(vm, lv_color_white(), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(vm, gen_var_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    gen_pick_desc = make_just_text(lv_msgbox_get_content(m), &lv_font_montserrat_16, C_MUTED,
+                                   GEN_VAR_DESC[gen_pick_var]);
+    lv_obj_set_style_margin_top(gen_pick_desc, 8, 0);
 
     /* the four levels: big buttons in two rows */
     lv_obj_t *grid = lv_obj_create(lv_msgbox_get_content(m));
@@ -4376,6 +4676,8 @@ esp_err_t sudoku_ui_start(void)
 {
     g_undo = heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM);
     if (!g_undo) return ESP_ERR_NO_MEM;
+    sudoku_geom_init();                             /* before the generator task can use the tables */
+    g_geo = sudoku_geom(VAR_CLASSIC);
 #if LV_USE_PERF_MONITOR
     lv_sysmon_hide_performance(NULL);
 #endif

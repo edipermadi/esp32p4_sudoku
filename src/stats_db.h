@@ -20,9 +20,11 @@
  *              mistakes, saved_at, started_at, hints, moves)    saved after every move
  *       the one unfinished game; cells = 81 digits row by row (0 = empty,
  *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
- *   generated(id, level, givens, created_at, day): puzzles made on the board;
- *       their puzzle id elsewhere is 2000 + id, level "Generated Easy" etc.
- *       day = the date of a daily puzzle (level "Daily Easy" etc.)
+ *   generated(id, level, givens, created_at, day, variant): puzzles made on
+ *       the board; their puzzle id elsewhere is 2000 + id, level "Generated
+ *       Easy", "X-Sudoku Easy" or "Mini Easy" etc. by variant (generator.h:
+ *       0 classic, 1 X-Sudoku, 2 mini 6x6). day = the date of a daily puzzle
+ *       (level "Daily Easy" etc.)
  *   settings(key, value): dark_mode, sound, screen_off_minutes, brightness, volume, time_zone,
  *       last_level, current_player, and migrated_from_nvs (set when the database is first
  *       filled: from what the board has, or, after a format, with just the
@@ -201,8 +203,8 @@ typedef struct {
 /* Puzzles made on the board (generator.h): stores one and returns its id in
  * the generated table (puzzle id = PUZZLE_GEN_BASE + it), or -1 without a
  * database; reads one back. Both wait for the database (milliseconds). */
-int stats_db_gen_add(int level, const uint8_t givens[81], const char *day);   /* day: daily puzzle's date, else NULL */
-bool stats_db_gen_get(int id, uint8_t givens[81], int *level, char day[12]); /* day "" if not a daily (may be NULL) */
+int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const char *day);   /* day: daily's date, else NULL */
+bool stats_db_gen_get(int id, uint8_t givens[81], int *variant, int *level, char day[12]); /* day "" if not a daily */
 /* Daily puzzle of day ('YYYY-MM-DD'): id in the generated table (0 = not
  * made yet), whether the current player solved it, and their streak of
  * days in a row with the daily solved (ending today, or yesterday if not

@@ -99,7 +99,7 @@ static bool s_replay_new;
 static stats_plays_t *s_plays;       /* CMD_PLAYS result (PSRAM) */
 /* CMD_GEN_ADD / CMD_GEN_GET: one call at a time, from the UI task, which waits */
 static struct {
-    int level, id;
+    int level, id, variant;
     uint8_t givens[81];
     char day[12];                /* daily: 'YYYY-MM-DD', "" otherwise */
     bool ok;
@@ -132,7 +132,7 @@ static bool exec(const char *sql)
     return true;
 }
 
-/* table layouts (user_version 8), shared by SCHEMA and the upgrade below */
+/* table layouts (user_version 9), shared by SCHEMA and the upgrade below */
 #define T_PLAYERS \
     "players("                                                                  \
     "  id INTEGER PRIMARY KEY,"                                                 \
@@ -187,7 +187,8 @@ static const char SCHEMA[] =
     "  level INTEGER NOT NULL,"                          /* 0 Easy, 1 Medium, 2 Hard, 3 Expert */
     "  givens TEXT NOT NULL,"                            /* 81 digits row by row, 0 = empty */
     "  created_at INTEGER,"
-    "  day TEXT);";                                      /* daily puzzle: its date 'YYYY-MM-DD', else NULL */
+    "  day TEXT,"                                        /* daily puzzle: its date 'YYYY-MM-DD', else NULL */
+    "  variant INTEGER NOT NULL DEFAULT 0);";            /* 0 classic, 1 X-Sudoku, 2 mini 6x6 */
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -204,7 +205,7 @@ static const char SCHEMA_POST[] =
     "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
     "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
     "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
-    "PRAGMA user_version = 8;";
+    "PRAGMA user_version = 9;";
 
 /* MIN() of SQL is NULL if either side is: keep the known value then */
 #define FEWEST_MERGED "COALESCE(MIN(fewest_mistakes, excluded.fewest_mistakes), fewest_mistakes, excluded.fewest_mistakes)"
@@ -226,16 +227,18 @@ static const char SQL_SOLVE_INSERT[] =
     " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10)";
 
 static int query_int(const char *sql);
-static int gen_level_of(int gid, bool *daily);
+static int gen_level_of(int gid, bool *daily, int *variant);
 
 static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
 {
     sqlite3_bind_int(st, 1, id);
-    if (puzzle_is_generated(id)) {               /* level "Generated Hard", number = generated.id */
+    if (puzzle_is_generated(id)) {               /* level "Generated Hard", "X-Sudoku Hard", "Mini Hard"; number = generated.id */
         char lv[24];
         bool daily = false;
-        int g = gen_level_of(id - PUZZLE_GEN_BASE, &daily);
-        snprintf(lv, sizeof(lv), "%s %s", daily ? "Daily" : "Generated", g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
+        int variant = VAR_CLASSIC;
+        int g = gen_level_of(id - PUZZLE_GEN_BASE, &daily, &variant);
+        const char *kind = daily ? "Daily" : (variant == VAR_X ? "X-Sudoku" : (variant == VAR_MINI ? "Mini" : "Generated"));
+        snprintf(lv, sizeof(lv), "%s %s", kind, g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
         sqlite3_bind_text(st, 2, lv, -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(st, 3, id - PUZZLE_GEN_BASE);
         return;
@@ -431,6 +434,7 @@ static bool upgrade_schema(void)
     if (!has_column("solves", "moves")) ok &= exec("ALTER TABLE solves ADD COLUMN moves BLOB");
     if (!has_column("saved_game", "moves")) ok &= exec("ALTER TABLE saved_game ADD COLUMN moves BLOB");
     if (!has_column("generated", "day")) ok &= exec("ALTER TABLE generated ADD COLUMN day TEXT");
+    if (!has_column("generated", "variant")) ok &= exec("ALTER TABLE generated ADD COLUMN variant INTEGER NOT NULL DEFAULT 0");
 
     bool old_solves = !has_column("solves", "player_id");
     bool old_stats = !has_column("puzzle_stats", "player_id");
@@ -993,16 +997,18 @@ static void do_month(int year, int month)
 
 /* ------------------------------------------------------------- generated puzzles */
 
-static int gen_level_of(int gid, bool *daily)
+static int gen_level_of(int gid, bool *daily, int *variant)
 {
     int level = -1;
     *daily = false;
+    *variant = VAR_CLASSIC;
     sqlite3_stmt *st;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, day FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, day, variant FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, gid);
         if (sqlite3_step(st) == SQLITE_ROW) {
             level = sqlite3_column_int(st, 0);
             *daily = sqlite3_column_type(st, 1) != SQLITE_NULL;
+            *variant = sqlite3_column_int(st, 2);
         }
         sqlite3_finalize(st);
     }
@@ -1017,9 +1023,10 @@ static void do_gen_add(void)
     for (int i = 0; i < 81; i++) cells[i] = (char)('0' + (s_gen.givens[i] <= 9 ? s_gen.givens[i] : 0));
     cells[81] = 0;
     time_t now = time(NULL);
-    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day) VALUES(?1, ?2, ?3, ?4)",
-                                   -1, &st, NULL) == SQLITE_OK) {
+    if (s_db && sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, day, variant)"
+                                         " VALUES(?1, ?2, ?3, ?4, ?5)", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.level);
+        sqlite3_bind_int(st, 5, s_gen.variant);
         sqlite3_bind_text(st, 2, cells, 81, SQLITE_STATIC);
         if (s_gen.day[0]) sqlite3_bind_text(st, 4, s_gen.day, -1, SQLITE_STATIC);
         else sqlite3_bind_null(st, 4);
@@ -1038,7 +1045,8 @@ static void do_gen_get(void)
 {
     s_gen.ok = false;
     sqlite3_stmt *st;
-    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day FROM generated WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT level, givens, day, variant FROM generated WHERE id = ?1", -1, &st,
+                                   NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_gen.id);
         if (sqlite3_step(st) == SQLITE_ROW) {
             const char *g = (const char *)sqlite3_column_text(st, 1);
@@ -1046,6 +1054,7 @@ static void do_gen_get(void)
             snprintf(s_gen.day, sizeof(s_gen.day), "%s", day ? day : "");
             if (g && strlen(g) == 81) {
                 s_gen.level = sqlite3_column_int(st, 0);
+                s_gen.variant = sqlite3_column_int(st, 3);
                 for (int i = 0; i < 81; i++) s_gen.givens[i] = (g[i] >= '0' && g[i] <= '9') ? g[i] - '0' : 0;
                 s_gen.ok = true;
             }
@@ -1485,19 +1494,21 @@ static bool gen_call(cmd_type_t type)
     return xSemaphoreTake(s_gen_done, pdMS_TO_TICKS(3000)) == pdTRUE && s_gen.ok;
 }
 
-int stats_db_gen_add(int level, const uint8_t givens[81], const char *day)
+int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const char *day)
 {
+    s_gen.variant = variant;
     s_gen.level = level;
     memcpy(s_gen.givens, givens, 81);
     snprintf(s_gen.day, sizeof(s_gen.day), "%s", day ? day : "");
     return gen_call(CMD_GEN_ADD) ? s_gen.id : -1;
 }
 
-bool stats_db_gen_get(int id, uint8_t givens[81], int *level, char day[12])
+bool stats_db_gen_get(int id, uint8_t givens[81], int *variant, int *level, char day[12])
 {
     s_gen.id = id;
     if (!gen_call(CMD_GEN_GET)) return false;
     memcpy(givens, s_gen.givens, 81);
+    if (variant) *variant = s_gen.variant;
     if (level) *level = s_gen.level;
     if (day) snprintf(day, 12, "%s", s_gen.day);
     return true;
