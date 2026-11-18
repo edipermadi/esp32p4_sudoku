@@ -22,7 +22,7 @@
  *       longest ago goes); seq orders them, the highest is the one played
  *       last; cells = 81 digits row by row (0 = empty, givens included),
  *       notes = 81 x uint16 little-endian (bit d = mark d)
- *   generated(id, level, givens, created_at, day, variant, regions, cages, marks): puzzles
+ *   generated(id, level, givens, created_at, day, variant, regions, cages, marks, thermos): puzzles
  *       made on the board; their puzzle id elsewhere is 2000 + id, level
  *       "Generated Easy", "X-Sudoku Easy", "Mini Easy", "Hyper Easy" or
  *       "Jigsaw Easy" etc. by variant (generator.h: 0 classic, 1 X-Sudoku,
@@ -30,7 +30,8 @@
  *       (level "Daily Easy" etc.). regions = a Jigsaw puzzle's region map,
  *       81 digits 0-8 row by row; cages = a Killer puzzle's cages,
  *       "sum:cell,cell,...;sum:..." (sudoku_cages_text()); marks = an Even-Odd
- *       or Consecutive puzzle's marks (sudoku_marks_text()); NULL for the others
+ *       or Consecutive puzzle's marks (sudoku_marks_text()); thermos = a
+ *       Thermo puzzle's thermometers (sudoku_thermos_text()); NULL for the others
  *   achievements(player_id, key, unlocked_at): achievements each player has
  *       unlocked (see stats_db_query_achievements()); unlocked_at NULL =
  *       found already done when the table was first filled, or clock not set
@@ -74,7 +75,7 @@ typedef struct {
 /* Statistics rows after the 16 collections: puzzles made on the board, by
  * kind. Their solves are logged with level "<prefix> <Easy|Medium|Hard|Expert>". */
 typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_KILLER, KIND_KNIGHT, KIND_EVENODD,
-               KIND_CONSEC, KIND_MINI, KIND_COUNT } stats_kind_t;
+               KIND_CONSEC, KIND_THERMO, KIND_MINI, KIND_COUNT } stats_kind_t;
 extern const char *const STATS_KIND_NAMES[KIND_COUNT];    /* "New puzzles", "Daily puzzle", "X-Sudoku", ... */
 extern const char *const STATS_KIND_PREFIX[KIND_COUNT];   /* "Generated", "Daily", "X-Sudoku", ... */
 /* the kind of a generated puzzle of a variant (daily ones: KIND_DAILY) */
@@ -174,6 +175,7 @@ bool stats_db_take_cache(uint16_t *best, uint8_t *fewest, uint8_t *solves);
 typedef struct {
     int32_t id;
     char name[STORE_NAME_LEN];
+    uint8_t color;                       /* the player's colour, 0..STATS_PLAYER_COLORS-1 */
     uint16_t solved;                     /* puzzles solved */
     uint32_t solves;                     /* solves logged */
 } stats_player_t;
@@ -185,6 +187,10 @@ typedef struct {
     saved_game_t game;                   /* their game in progress (switched only) */
 } stats_player_change_t;
 
+/* Players have a colour each (shown by their name on leaderboards); a new one
+ * gets the next one round. */
+#define STATS_PLAYER_COLORS 8
+void stats_db_set_player_color(int32_t id, int color);
 /* Asks for the player list (stats_db_take_players()). */
 void stats_db_list_players(void);
 /* Adds a player and switches to them; renames one; switches to one. Results
@@ -251,12 +257,14 @@ typedef struct {
  * puzzle's cages (sudoku_cages_text()), else NULL; day: a daily puzzle's date, else NULL */
 #define STATS_CAGES_LEN 1024
 int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages,
-                     const char *marks, const char *day);
+                     const char *marks, const char *thermos, const char *day);
 /* day "" if not a daily; regions (may be NULL) only filled for a Jigsaw
  * puzzle, cages (STATS_CAGES_LEN, may be NULL) for a Killer one ("" otherwise) */
-/* marks: 82 bytes, may be NULL ("" unless Even-Odd / Consecutive) */
-bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, char *cages, char *marks, int *variant,
-                      int *level, char day[12]);
+/* marks: 82 bytes, may be NULL ("" unless Even-Odd / Consecutive); thermos:
+ * STATS_THERMOS_LEN, may be NULL ("" unless Thermo) */
+#define STATS_THERMOS_LEN 400
+bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, char *cages, char *marks, char *thermos,
+                      int *variant, int *level, char day[12]);
 /* Daily puzzle of day ('YYYY-MM-DD'): id in the generated table (0 = not
  * made yet), whether the current player solved it, and their streak of
  * days in a row with the daily solved (ending today, or yesterday if not
@@ -289,6 +297,7 @@ typedef struct {
     uint32_t seconds;                    /* best time */
     uint16_t mistakes, hints;            /* of that solve */
     uint16_t solves;                     /* times solved */
+    uint8_t color;                       /* the player's colour */
 } stats_board_row_t;
 
 typedef struct {
@@ -301,6 +310,26 @@ typedef struct {
 } stats_board_t;
 void stats_db_query_board(const char *day);
 bool stats_db_take_board(stats_board_t *out);
+
+/* ---------------------------------------------------------------- weekly challenge */
+/* The daily puzzles of a week (Monday to Sunday) added up: per player, how
+ * many of the 7 they solved and the sum of their best times on those;
+ * ranked by days solved (more first), then total time. */
+typedef struct {
+    char player[STORE_NAME_LEN];
+    int32_t player_id;
+    uint8_t color;
+    uint8_t days;                        /* daily puzzles of the week solved */
+    uint32_t total;                      /* their best times added up, seconds */
+    uint16_t best[7];                    /* best time per day (Monday first), 0 = not solved */
+} stats_week_row_t;
+typedef struct {
+    char monday[12];                     /* 'YYYY-MM-DD' */
+    int n;
+    stats_week_row_t rows[STATS_MAX_PLAYERS];
+} stats_week_t;
+void stats_db_query_week(const char *monday);
+bool stats_db_take_week(stats_week_t *out);
 
 /* ---------------------------------------------------------------- achievements */
 /* A fixed list (stats_db.c), each with the player's progress toward it.

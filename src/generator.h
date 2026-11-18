@@ -19,11 +19,14 @@
  *   VAR_CONSEC   Consecutive: Classic rules, and every pair of side-by-side
  *                cells whose digits differ by 1 has a bar between them (no
  *                bar: they don't); every puzzle has its own bars
+ *   VAR_THERMO   Thermo: Classic rules, and along each thermometer the
+ *                digits rise from its bulb; every puzzle has its own
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
  * sudoku_geom_killer_text() for a Killer puzzle's cages,
- * sudoku_geom_marks() for an Even-Odd or Consecutive puzzle's marks.
+ * sudoku_geom_marks() for an Even-Odd or Consecutive puzzle's marks,
+ * sudoku_geom_thermo_text() for a Thermo puzzle's thermometers.
  *
  * Every board is kept in 81 cells, row by row (cell = row * 9 + column); a
  * 6x6 board uses the top-left 6x6 of them and leaves the rest 0. Saved games,
@@ -61,9 +64,9 @@ extern const char *const GEN_LEVEL_NAMES[GEN_LEVELS];   /* "Easy", "Medium", "Ha
 
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
-               VAR_CONSEC, VAR_COUNT } sudoku_variant_t;
+               VAR_CONSEC, VAR_THERMO, VAR_COUNT } sudoku_variant_t;
 
-/* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive" */
+/* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo" */
 extern const char *const VARIANT_NAMES[VAR_COUNT];
 
 /* ---------------------------------------------------------------- geometry */
@@ -73,6 +76,8 @@ extern const char *const VARIANT_NAMES[VAR_COUNT];
 #define UNITS_MAX      33
 #define CAGES_MAX      81               /* Killer: cages per board (1 cell each at most) */
 #define CAGE_NONE      0xFF
+#define THERMOS_MAX    16
+#define THERMO_NONE    0xFF
 
 typedef struct {
     uint8_t variant;                    /* sudoku_variant_t */
@@ -109,6 +114,12 @@ typedef struct {
     /* peers that share no unit (Anti-Knight: the knight's moves) */
     uint8_t nxpeers[81];
     uint8_t xpeers[81][8];
+    /* Thermo: thermometers, each a path of cells from its bulb (digits rise along it) */
+    uint8_t nthermos;
+    uint8_t thermo_n[THERMOS_MAX];
+    uint8_t thermo_cell[THERMOS_MAX][9];
+    uint8_t thermo_of[81];              /* THERMO_NONE = on none (a cell is on one at most) */
+    uint8_t thermo_pos[81];             /* place along it, 0 = the bulb */
 } sudoku_geom_t;
 
 enum { PARITY_NONE = 0, PARITY_EVEN, PARITY_ODD };
@@ -133,6 +144,11 @@ bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
  * (buf: at least 82). */
 bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out);
 bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
+/* A Thermo board from its thermometers as text: "cell,cell,...;cell,..."
+ * (each from its bulb; cells 0..80, side by side or diagonal neighbours, on
+ * one thermometer at most); sudoku_thermos_text() writes it. */
+bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
+bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
 
 static inline bool sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 {
@@ -186,11 +202,12 @@ bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[8
 int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cell (0..n-1) of a unit, or -1 */
 
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
-               TECH_CAGE, TECH_CONSEC } tech_kind_t;
+               TECH_CAGE, TECH_CONSEC, TECH_THERMO } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
     int unit, unit2;         /* pointing: box, line; claiming: line, box; pairs: the unit; cage: the cage;
-                                consecutive: the cell whose candidates its neighbours narrowed */
+                                consecutive: the cell whose candidates its neighbours narrowed;
+                                thermo: the thermometer */
     int digit, digit2;       /* pointing/claiming: digit; pairs: the two digits; cage: bit mask of the
                                 digits its sum still allows in its empty cells */
     int cell1, cell2;        /* pairs: the two cells */

@@ -81,6 +81,8 @@ typedef struct {
     uint8_t volume;                           /* speaker, 0..100 % */
     uint8_t assist;                           /* store_assist_t: what turns red */
     bool show_timer;                          /* the game's clock is shown (it always runs) */
+    uint8_t accent;                           /* accent colour, ACCENT_* (0 = blue) */
+    uint32_t rules_seen;                      /* bit v: variant v's rules card has been shown */
     char timezone[STORE_TZ_LEN];
     int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
     char player_name[STORE_NAME_LEN];
@@ -133,6 +135,15 @@ void store_set_assist(uint8_t assist);
 /* Show the game's clock (Settings > Show timer); it runs and is recorded either way. */
 bool store_show_timer(void);
 void store_set_show_timer(bool on);
+
+/* Accent colour (Settings): 0 blue, 1 teal, 2 green, 3 purple, 4 pink. */
+#define ACCENT_COUNT 5
+uint8_t store_accent(void);
+void store_set_accent(uint8_t accent);
+
+/* Which variants' rules cards were shown already (bit = variant). */
+uint32_t store_rules_seen(void);
+void store_set_rules_seen(uint32_t mask);
 
 #ifdef __cplusplus
 }

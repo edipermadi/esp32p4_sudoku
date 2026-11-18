@@ -6,7 +6,7 @@
 
 const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
 const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
-                                              "Anti-Knight", "Even-Odd", "Consecutive"};
+                                              "Anti-Knight", "Even-Odd", "Consecutive", "Thermo"};
 
 /* sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
 static uint8_t s_mask_sum[1024];
@@ -29,6 +29,7 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
     g->diag = diag;
     g->windows = windows;
     memset(g->cage_of, CAGE_NONE, sizeof(g->cage_of));
+    memset(g->thermo_of, THERMO_NONE, sizeof(g->thermo_of));
     g->all = (uint16_t)(((1u << (n + 1)) - 1) & ~1u);
     for (int r = 0; r < n; r++) {
         for (int c = 0; c < n; c++) {
@@ -106,6 +107,8 @@ void sudoku_geom_init(void)
     g[VAR_EVENODD].variant = VAR_EVENODD;
     g[VAR_CONSEC] = g[VAR_CLASSIC];
     g[VAR_CONSEC].variant = VAR_CONSEC;
+    g[VAR_THERMO] = g[VAR_CLASSIC];
+    g[VAR_THERMO].variant = VAR_THERMO;
     g[VAR_JIGSAW] = g[VAR_CLASSIC];                 /* placeholders: these boards come with their puzzle */
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
     g[VAR_KILLER] = g[VAR_CLASSIC];
@@ -122,7 +125,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
 {
     sudoku_geom_init();
     if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER ||
-        variant == VAR_EVENODD || variant == VAR_CONSEC) {
+        variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -154,6 +157,73 @@ bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
         }
     }
     out->consec_on = variant == VAR_CONSEC;
+    return true;
+}
+
+/* Thermo: a classic board plus thermometers (cells from the bulb) */
+static bool geom_thermo(const uint8_t cells[][9], const uint8_t *lens, int n, sudoku_geom_t *out)
+{
+    if (n < 1 || n > THERMOS_MAX) return false;
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_THERMO;
+    out->nthermos = (uint8_t)n;
+    for (int t = 0; t < n; t++) {
+        if (lens[t] < 2 || lens[t] > 9) return false;
+        out->thermo_n[t] = lens[t];
+        for (int i = 0; i < lens[t]; i++) {
+            int c = cells[t][i];
+            if (c > 80 || out->thermo_of[c] != THERMO_NONE) return false;
+            if (i) {                                     /* a neighbour of the previous cell (diagonals too) */
+                int p = cells[t][i - 1], dr = abs(c / 9 - p / 9), dc = abs(c % 9 - p % 9);
+                if (dr > 1 || dc > 1) return false;
+            }
+            out->thermo_cell[t][i] = (uint8_t)c;
+            out->thermo_of[c] = (uint8_t)t;
+            out->thermo_pos[c] = (uint8_t)i;
+            /* the place along it bounds the digit: the bulb's digit is at most 10 - length, and so on */
+            out->allow[c] &= (uint16_t)(((1u << (10 - lens[t] + i + 1)) - 1) & ~((1u << (i + 1)) - 1));
+        }
+    }
+    return true;
+}
+
+bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX];
+    int n = 0;
+    const char *p = text;
+    while (p && *p) {
+        if (n >= THERMOS_MAX) return false;
+        lens[n] = 0;
+        for (;;) {
+            char *end;
+            long c = strtol(p, &end, 10);
+            if (end == p || c < 0 || c > 80 || lens[n] >= 9) return false;
+            cells[n][lens[n]++] = (uint8_t)c;
+            p = end;
+            if (*p == ',') { p++; continue; }
+            break;
+        }
+        n++;
+        if (*p == ';') p++;
+        else if (*p) return false;
+    }
+    return geom_thermo(cells, lens, n, out);
+}
+
+bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    if (len < 1) return false;
+    buf[0] = 0;
+    for (int t = 0; t < g->nthermos; t++) {
+        for (int i = 0; i < g->thermo_n[t]; i++) {
+            int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d", i ? "," : (t ? ";" : ""), g->thermo_cell[t][i]);
+            if (w < 0 || w >= len - pos) return false;
+            pos += w;
+        }
+    }
     return true;
 }
 
@@ -356,6 +426,18 @@ static uint16_t grid_free(const grid_t *g, int i)
             int w = g->v[nb[k]];
             uint16_t near = (uint16_t)(((1u << (w + 1)) | (1u << (w - 1))) & 0x3FE);
             free &= bar[k] ? near : (uint16_t)~near;
+        }
+    }
+    int t = G->thermo_of[i];
+    if (t != THERMO_NONE && free) {                 /* Thermo: above the cell before it, below the one after */
+        int p = G->thermo_pos[i];
+        if (p > 0) {
+            int v = g->v[G->thermo_cell[t][p - 1]];
+            if (v) free &= (uint16_t)~((1u << (v + 1)) - 1);
+        }
+        if (p + 1 < G->thermo_n[t]) {
+            int v = g->v[G->thermo_cell[t][p + 1]];
+            if (v) free &= (uint16_t)((1u << v) - 1);
         }
     }
     int c = G->cage_of[i];
@@ -635,6 +717,36 @@ static bool consec_logic(logic_t *L)
     return false;
 }
 
+/* Thermo: along a thermometer each cell's digit is above the lowest the cell
+ * before it can be, and below the highest the cell after it can be. */
+static bool thermo_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int t = 0; t < G->nthermos; t++) {
+        int n = G->thermo_n[t], lo[9], hi[9];
+        for (int i = 0; i < n; i++) {
+            int c = G->thermo_cell[t][i];
+            uint16_t m = L->v[c] ? (uint16_t)(1u << L->v[c]) : L->cand[c];
+            if (!m) return false;
+            lo[i] = __builtin_ctz(m);
+            hi[i] = 31 - __builtin_clz(m);
+        }
+        for (int i = 1; i < n; i++) if (lo[i] < lo[i - 1] + 1) lo[i] = lo[i - 1] + 1;
+        for (int i = n - 2; i >= 0; i--) if (hi[i] > hi[i + 1] - 1) hi[i] = hi[i + 1] - 1;
+        for (int i = 0; i < n; i++) {
+            int c = G->thermo_cell[t][i];
+            if (L->v[c]) continue;
+            uint16_t keep = (uint16_t)(hi[i] >= lo[i] ? (((1u << (hi[i] + 1)) - 1) & ~((1u << lo[i]) - 1)) : 0);
+            if (L->cand[c] & ~keep) {
+                eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+                trace(TECH_THERMO, t, -1, L->cand[c], 0, c, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /* pointing / claiming: a digit confined to one line within a box (or to one
  * box within a line) can't be elsewhere in that line (or box). Lines are
  * rows, columns and, on an X board, the diagonals. */
@@ -747,6 +859,7 @@ static int technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (singles(&L)) continue;
         if (G->ncages && cage_logic(&L)) continue;  /* Killer: cage sums count as the simple step */
         if (G->consec_on && consec_logic(&L)) continue;   /* Consecutive: so do the bars */
+        if (G->nthermos && thermo_logic(&L)) continue;     /* Thermo: and the thermometers */
         if (locked_candidates(&L) || pairs(&L)) {
             tier = 2;
             continue;
@@ -764,6 +877,7 @@ static int easy_min_clues(const sudoku_geom_t *G)
     if (G->consec_on) return 12;                    /* the bars say a lot */
     if (G->variant == VAR_EVENODD) return 30;
     if (G->variant == VAR_KNIGHT) return 32;
+    if (G->nthermos) return 28;
     return G->n == 9 ? 36 : 16;
 }
 
@@ -975,6 +1089,40 @@ static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, su
     return geom_killer(cage_of, sums, m, out);
 }
 
+/* ---------------------------------------------------------------- Thermo thermometers */
+
+/* Thermometers over a solved grid: from random cells, a path grows through
+ * neighbours (diagonals too) whose digit is higher, 3 to 6 cells long. */
+static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    int n = 0;
+    for (int tries = 0; tries < 400 && n < want; tries++) {
+        int c = (int)(rnd(rng) % 81), target = 3 + (int)(rnd(rng) % 4);
+        if (used[c] || full[c] > 9 - (target - 1)) continue;
+        int len = 0;
+        cells[n][len++] = (uint8_t)c;
+        while (len < target) {
+            int cur = cells[n][len - 1], r = cur / 9, q = cur % 9, cand[8], nc = 0;
+            for (int dr = -1; dr <= 1; dr++) {
+                for (int dq = -1; dq <= 1; dq++) {
+                    int rr = r + dr, qq = q + dq, o = rr * 9 + qq;
+                    if ((!dr && !dq) || rr < 0 || rr > 8 || qq < 0 || qq > 8 || used[o]) continue;
+                    bool on = false;
+                    for (int k = 0; k < len; k++) on |= cells[n][k] == o;
+                    if (!on && full[o] > full[cur]) cand[nc++] = o;
+                }
+            }
+            if (!nc) break;
+            cells[n][len++] = (uint8_t)cand[rnd(rng) % (uint32_t)nc];
+        }
+        if (len < 3) continue;
+        for (int k = 0; k < len; k++) used[cells[n][k]] = 1;
+        lens[n++] = (uint8_t)len;
+    }
+    return n >= 3 && geom_thermo(cells, lens, n, out);
+}
+
 /* ---------------------------------------------------------------- generating (all variants) */
 
 bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], sudoku_geom_t *board,
@@ -983,7 +1131,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     static sudoku_geom_t *jig;                      /* a board made with its puzzle, being tried (PSRAM) */
     const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
-    const bool own = jigsaw || killer || marks;
+    const bool thermo = variant == VAR_THERMO;
+    const bool own = jigsaw || killer || marks || thermo;
     if (own && !jig && !(jig = malloc(sizeof(*jig)))) return false;
     const sudoku_geom_t *G = own ? jig : sudoku_geom(variant);
     uint32_t rng = seed ? seed : 1;
@@ -1020,6 +1169,9 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             }
             text[81] = 0;
             sudoku_geom_marks(variant, text, jig);
+        } else if (thermo) {                        /* a grid, then thermometers along rising digits */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            if (!thermo_paths(full, &rng, level >= GEN_HARD ? 10 : 7, jig)) continue;
         } else if (variant == VAR_KNIGHT) {         /* not every fill works out: try again */
             if (!random_full_grid(G, full, &rng, 20000)) continue;
         } else {
@@ -1118,8 +1270,8 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
             s_trace = NULL;
             return true;
         }
-        if (!(G->ncages && cage_logic(&L)) && !(G->consec_on && consec_logic(&L)) && !locked_candidates(&L) &&
-            !pairs(&L)) {
+        if (!(G->ncages && cage_logic(&L)) && !(G->consec_on && consec_logic(&L)) &&
+            !(G->nthermos && thermo_logic(&L)) && !locked_candidates(&L) && !pairs(&L)) {
             break;                                                  /* the first one is in out->tech */
         }
     }

@@ -34,6 +34,8 @@ static const store_prefs_t DEFAULT_PREFS = {
     .volume = 70,
     .assist = ASSIST_RULES,
     .show_timer = true,
+    .accent = 0,
+    .rules_seen = 0,
     .timezone = "UTC",
     .player_id = 0,
     .player_name = "Player 1",
@@ -320,6 +322,28 @@ void store_set_show_timer(bool on)
 {
     s_p.show_timer = on;
     stats_db_set_int("show_timer", on);
+}
+
+uint8_t store_accent(void)
+{
+    return s_p.accent < ACCENT_COUNT ? s_p.accent : 0;
+}
+
+void store_set_accent(uint8_t accent)
+{
+    s_p.accent = accent;
+    stats_db_set_int("accent", accent);
+}
+
+uint32_t store_rules_seen(void)
+{
+    return s_p.rules_seen;
+}
+
+void store_set_rules_seen(uint32_t mask)
+{
+    s_p.rules_seen = mask;
+    stats_db_set_int("rules_seen", (int)mask);
 }
 
 uint8_t store_screen_timeout_min(void)

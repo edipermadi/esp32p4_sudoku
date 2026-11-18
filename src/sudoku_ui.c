@@ -106,6 +106,59 @@ static const palette_t PAL_LIGHT = {
 };
 
 const palette_t *ui_pal = &PAL_DARK;
+static palette_t s_pal;                   /* the active scheme with the chosen accent (palette_build) */
+
+/* accent colours (Settings): dark-mode and light-mode shades; 0 = the schemes' own blue */
+static const uint32_t ACCENTS[ACCENT_COUNT][2] = {
+    {0x4F8CFF, 0x2F6FE0}, {0x2DD4BF, 0x0D9488}, {0x4ADE80, 0x16A34A}, {0xA78BFA, 0x7C3AED}, {0xF472B6, 0xDB2777},
+};
+static const char *const ACCENT_NAMES = "Blue\nTeal\nGreen\nPurple\nPink";
+
+static uint32_t mix_hex(uint32_t a, uint32_t b, int pct)   /* pct % of a over b */
+{
+    uint32_t out = 0;
+    for (int sh = 0; sh <= 16; sh += 8) {
+        int ca = (a >> sh) & 0xFF, cb = (b >> sh) & 0xFF;
+        out |= (uint32_t)((ca * pct + cb * (100 - pct)) / 100) << sh;
+    }
+    return out;
+}
+
+/* the dark or light scheme, with the accent and the cell highlights made from it */
+static void palette_build(bool dark, int accent)
+{
+    s_pal = dark ? PAL_DARK : PAL_LIGHT;
+    if (accent > 0 && accent < ACCENT_COUNT) {
+        uint32_t a = ACCENTS[accent][dark ? 0 : 1];
+        s_pal.accent = a;
+        s_pal.cell_sel = mix_hex(a, s_pal.cell, dark ? 55 : 45);
+        s_pal.cell_same = mix_hex(a, s_pal.cell, 25);
+        s_pal.cell_peer = mix_hex(a, s_pal.cell, dark ? 8 : 10);
+        s_pal.digit_user = dark ? mix_hex(a, 0xFFFFFF, 75) : a;
+    }
+    ui_pal = &s_pal;
+}
+
+/* the players' colours (by their names on leaderboards) */
+static lv_color_t player_color(int k)
+{
+    static const uint32_t C[STATS_PLAYER_COLORS] = {0x3E7BFA, 0xE5484D, 0x30A46C, 0xF5A524,
+                                                    0x9E6CF0, 0xE93D82, 0x12A594, 0x8B7355};
+    return lv_color_hex(C[(k % STATS_PLAYER_COLORS + STATS_PLAYER_COLORS) % STATS_PLAYER_COLORS]);
+}
+
+/* a small round dot in a player's colour */
+static lv_obj_t *player_dot(lv_obj_t *parent, int color, int size)
+{
+    lv_obj_t *d = lv_obj_create(parent);
+    lv_obj_remove_style_all(d);
+    lv_obj_set_size(d, size, size);
+    lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(d, player_color(color), 0);
+    lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(d, false);
+    return d;
+}
 #define P ui_pal
 static bool s_dark = true;
 static uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
@@ -293,6 +346,7 @@ typedef struct {
     uint8_t regions[81];                /* Jigsaw: the region map */
     char cages[STATS_CAGES_LEN];        /* Killer: the cages (sudoku_cages_text()), "" = none */
     char marks[82];                     /* Even-Odd / Consecutive: the marks (sudoku_marks_text()), "" = none */
+    char thermos[STATS_THERMOS_LEN];    /* Thermo: the thermometers (sudoku_thermos_text()), "" = none */
     uint8_t givens[81];
     char day[12];                       /* daily puzzle's date, "" otherwise */
 } gen_cache_t;
@@ -301,7 +355,7 @@ static int s_gen_cache_next;
 static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
 
 static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions,
-                          const char *cages, const char *marks, const char *day)
+                          const char *cages, const char *marks, const char *thermos, const char *day)
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) return;
@@ -311,6 +365,7 @@ static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t giv
     else memset(s_gen_cache[s_gen_cache_next].regions, 0, 81);
     snprintf(s_gen_cache[s_gen_cache_next].cages, STATS_CAGES_LEN, "%s", cages ? cages : "");
     snprintf(s_gen_cache[s_gen_cache_next].marks, 82, "%s", marks ? marks : "");
+    snprintf(s_gen_cache[s_gen_cache_next].thermos, STATS_THERMOS_LEN, "%s", thermos ? thermos : "");
     s_gen_cache[s_gen_cache_next].variant = (uint8_t)variant;
     s_gen_cache[s_gen_cache_next].level = (uint8_t)level;
     memcpy(s_gen_cache[s_gen_cache_next].givens, givens, 81);
@@ -319,8 +374,8 @@ static void gen_cache_put(uint16_t id, int variant, int level, const uint8_t giv
 }
 
 /* givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown */
-static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char *cages, char *marks, int *variant,
-                            int *level, char day[12])
+static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char *cages, char *marks, char *thermos,
+                            int *variant, int *level, char day[12])
 {
     for (int i = 0; i < GEN_CACHE; i++) {
         if (s_gen_cache[i].id == id) {
@@ -328,6 +383,7 @@ static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char
             if (regions) memcpy(regions, s_gen_cache[i].regions, 81);
             if (cages) snprintf(cages, STATS_CAGES_LEN, "%s", s_gen_cache[i].cages);
             if (marks) snprintf(marks, 82, "%s", s_gen_cache[i].marks);
+            if (thermos) snprintf(thermos, STATS_THERMOS_LEN, "%s", s_gen_cache[i].thermos);
             if (variant) *variant = s_gen_cache[i].variant;
             if (level) *level = s_gen_cache[i].level;
             if (day) snprintf(day, 12, "%s", s_gen_cache[i].day);
@@ -341,10 +397,13 @@ static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char
     int lv, var = VAR_CLASSIC;
     char d[12];
     char mk[82] = "";
-    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, reg, cg, mk, &var, &lv, d)) return false;
+    static char th[STATS_THERMOS_LEN];                   /* (LVGL task only) */
+    th[0] = 0;
+    if (!stats_db_gen_get(id - PUZZLE_GEN_BASE, g, reg, cg, mk, th, &var, &lv, d)) return false;
     if (var < 0 || var >= VAR_COUNT) var = VAR_CLASSIC;
-    gen_cache_put(id, var, lv, g, reg, cg, mk, d);
+    gen_cache_put(id, var, lv, g, reg, cg, mk, th, d);
     if (marks) snprintf(marks, 82, "%s", mk);
+    if (thermos) snprintf(thermos, STATS_THERMOS_LEN, "%s", th);
     if (givens) memcpy(givens, g, 81);
     if (regions) memcpy(regions, reg, 81);
     if (cages) snprintf(cages, STATS_CAGES_LEN, "%s", cg);
@@ -356,12 +415,12 @@ static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char
 
 static bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12])
 {
-    return gen_lookup_full(id, givens, NULL, NULL, NULL, variant, level, day);
+    return gen_lookup_full(id, givens, NULL, NULL, NULL, NULL, variant, level, day);
 }
 
 static bool gen_lookup(uint16_t id, uint8_t *givens, int *variant, int *level)
 {
-    return gen_lookup_full(id, givens, NULL, NULL, NULL, variant, level, NULL);
+    return gen_lookup_full(id, givens, NULL, NULL, NULL, NULL, variant, level, NULL);
 }
 
 /* variant of any puzzle: the built-in ones are classic */
@@ -382,11 +441,14 @@ static const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *va
     if (!cages && !(cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return sudoku_geom(VAR_CLASSIC);
     cages[0] = 0;
     char marks[82] = "";
-    if (puzzle_is_generated(id)) gen_lookup_full(id, NULL, reg, cages, marks, &v, NULL, NULL);
+    static char thermos[STATS_THERMOS_LEN];         /* (LVGL task only) */
+    thermos[0] = 0;
+    if (puzzle_is_generated(id)) gen_lookup_full(id, NULL, reg, cages, marks, thermos, &v, NULL, NULL);
     if (variant) *variant = v;
     if (v == VAR_JIGSAW && buf && sudoku_geom_jigsaw(reg, buf)) return buf;
     if (v == VAR_KILLER && buf && sudoku_geom_killer_text(cages, buf)) return buf;
     if ((v == VAR_EVENODD || v == VAR_CONSEC) && buf && sudoku_geom_marks(v, marks, buf)) return buf;
+    if (v == VAR_THERMO && buf && sudoku_geom_thermo_text(thermos, buf)) return buf;
     return sudoku_geom(v);                          /* (a broken map or cages: a classic board) */
 }
 
@@ -663,6 +725,12 @@ static int compute_conflicts(void)
             if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) continue;
             bool near = abs(g_b.val[i] - g_b.val[o]) == 1;
             if (near != ((g_geo->consec[i] & bit) != 0)) g_conflict[i] = g_conflict[o] = true;
+        }
+    }
+    for (int t = 0; t < g_geo->nthermos; t++) {     /* Thermo: two digits along it that don't rise */
+        for (int i = 1; i < g_geo->thermo_n[t]; i++) {
+            int a = g_geo->thermo_cell[t][i - 1], b = g_geo->thermo_cell[t][i];
+            if (g_b.val[a] && g_b.val[b] && g_b.val[b] <= g_b.val[a]) g_conflict[a] = g_conflict[b] = true;
         }
     }
     for (int k = 0; k < g_geo->ncages; k++) {       /* Killer: a cage over its sum, or full and short of it */
@@ -1130,6 +1198,7 @@ static void placed_sounds(int i, int d)
 /* ------------------------------------------------------------- events */
 
 static void cell_long_cb(lv_event_t *e);
+static void rules_first_time(void);
 
 static void cell_click_cb(lv_event_t *e)
 {
@@ -1430,6 +1499,7 @@ static const char *units_word(void)
     if (g_geo->variant == VAR_JIGSAW) return "row, column or region";
     if (g_geo->ncages) return "row, column, box or cage";
     if (g_geo->variant == VAR_KNIGHT) return "row, column, box or a knight's move away";
+    if (g_geo->nthermos) return "row, column or box (or the thermometer)";
     return "row, column or box";
 }
 
@@ -1461,7 +1531,19 @@ static void hint_render(void)
     /* where to look: the technique's area if one is needed, else the single's */
     if (h->kind == STEP_WRONG || h->kind == STEP_NAKED_SINGLE || h->kind == STEP_NONE) h_mark[h->cell] = 1;
     if (h->kind == STEP_HIDDEN_SINGLE && !t->kind) mark_unit(h->unit, 1);
-    if (t->kind == TECH_CONSEC) {                   /* Consecutive: the cell and its neighbours */
+    if (t->kind == TECH_THERMO) {                   /* Thermo: the thermometer */
+        int k = t->unit;
+        for (int i = 0; k >= 0 && k < g_geo->nthermos && i < g_geo->thermo_n[k]; i++) h_mark[g_geo->thermo_cell[k][i]] = 1;
+        int c = t->cell1 >= 0 ? t->cell1 : 0;
+        snprintf(u1, sizeof(u1), "this thermometer");
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+        }
+        snprintf(tech, sizeof(tech), "Along the thermometer the digits rise from the bulb, so row %d, column %d can "
+                 "only be %s. ", c / 9 + 1, c % 9 + 1, digs);
+    } else if (t->kind == TECH_CONSEC) {            /* Consecutive: the cell and its neighbours */
         int c = t->unit;
         if (c >= 0 && c < 81) {
             h_mark[c] = 1;
@@ -1852,10 +1934,48 @@ static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     }
 }
 
+/* Thermo: each thermometer as a wide, soft grey line through its cells from
+ * a round bulb (translucent: the digits show through) */
+static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    for (int t = 0; t < geo->nthermos; t++) {
+        lv_area_t a;
+        int px = 0, py = 0, cs = 0;
+        for (int i = 0; i < geo->thermo_n[t]; i++) {
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->thermo_cell[t][i]), &a);
+            int x = (a.x1 + a.x2) / 2, y = (a.y1 + a.y2) / 2;
+            cs = lv_area_get_width(&a);
+            if (i) {
+                lv_draw_line_dsc_t ld;
+                lv_draw_line_dsc_init(&ld);
+                ld.p1.x = px; ld.p1.y = py; ld.p2.x = x; ld.p2.y = y;
+                ld.width = cs * 3 / 10;
+                ld.color = C_MUTED;
+                ld.opa = LV_OPA_40;
+                ld.round_start = ld.round_end = 1;
+                lv_draw_line(layer, &ld);
+            }
+            px = x;
+            py = y;
+        }
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->thermo_cell[t][0]), &a);   /* the bulb */
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.bg_color = C_MUTED;
+        d.bg_opa = LV_OPA_40;
+        d.radius = LV_RADIUS_CIRCLE;
+        int r = cs * 4 / 10;
+        lv_area_t b = {.x1 = (a.x1 + a.x2) / 2 - r, .y1 = (a.y1 + a.y2) / 2 - r,
+                       .x2 = (a.x1 + a.x2) / 2 + r, .y2 = (a.y1 + a.y2) / 2 + r};
+        lv_draw_rect(layer, &d, &b);
+    }
+}
+
 static void board_regions_draw_cb(lv_event_t *e)
 {
     lv_obj_t *grid = lv_event_get_current_target_obj(e);
     const sudoku_geom_t *geo = lv_obj_get_user_data(grid);
+    if (geo && geo->nthermos) board_thermos_draw(grid, geo, lv_event_get_layer(e));
     if (geo && geo->ncages) board_cages_draw(grid, geo, lv_event_get_layer(e));
     if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) board_marks_draw(grid, geo, lv_event_get_layer(e));
     if (!geo || geo->variant != VAR_JIGSAW) return;
@@ -1936,7 +2056,7 @@ static void game_layout(void)
 {
     if (!g_geo) g_geo = sudoku_geom(g_var);
     if (g_layout_var == g_var && g_var != VAR_JIGSAW && g_var != VAR_KILLER && g_var != VAR_EVENODD &&
-        g_var != VAR_CONSEC) {
+        g_var != VAR_CONSEC && g_var != VAR_THERMO) {
         lv_obj_invalidate(g_grid);
         return;
     }
@@ -2001,6 +2121,239 @@ static void start_game(uint16_t id, bool resume)
     refresh_board();
     update_header();
     lv_screen_load(scr_game);
+    rules_first_time();
+}
+
+/* ------------------------------------------------------------- rules card */
+/*
+ * The ? button in the game's top bar: the rules of the puzzle's variant, with
+ * a small drawn example. Shown by itself the first time a variant (other
+ * than Classic) is played (store_rules_seen()).
+ */
+typedef struct {
+    uint8_t w, h;                       /* cells */
+    uint8_t bw, bh;                     /* boxes drawn with thick lines (0 = none) */
+    const char *digits;                 /* w*h: '1'..'9' or '.' */
+    const char *tint;                   /* w*h: '1' = tinted (X, Hyper), may be NULL */
+    const char *regions;                /* w*h region letters: thick lines between them (Jigsaw), may be NULL */
+    const char *parity;                 /* w*h: 'e' shaded, 'o' ring, may be NULL */
+    const char *cross;                  /* w*h: 'x' = can't be the digit (Anti-Knight), may be NULL */
+    const uint8_t *bars;                /* pairs of cells with a bar, ends with 0xFF, may be NULL */
+    const uint8_t *thermo;              /* cells from the bulb, ends with 0xFF, may be NULL */
+    const uint8_t *cages;               /* per cage: sum, cells..., 0xFE; ends with 0xFF; may be NULL */
+} rules_pic_t;
+
+static const uint8_t PIC_BARS[] = {0, 1, 0xFF};    /* 4|5: a bar; 5 3 and 3 7: none */
+static const uint8_t PIC_THERMO[] = {0, 1, 2, 3, 0xFF};
+static const uint8_t PIC_CAGES[] = {11, 0, 1, 2, 0xFE, 7, 3, 7, 0xFE, 0xFF};
+
+static const rules_pic_t RULES_PIC[VAR_COUNT] = {
+    [VAR_CLASSIC] = {3, 3, 3, 3, "591763842", NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+    [VAR_X] = {5, 5, 0, 0, "1...." ".2..." "..3.." "...4." "....5", "1000101010001000101010001", NULL, NULL, NULL, NULL,
+               NULL, NULL},
+    [VAR_MINI] = {6, 4, 3, 2, "123456" "456123" "......" "......", NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+    [VAR_HYPER] = {5, 5, 0, 0, "....." ".123." ".456." ".789." ".....", "0000001110011100111000000", NULL, NULL, NULL, NULL,
+                   NULL, NULL},
+    [VAR_JIGSAW] = {5, 5, 0, 0, ".....", NULL, "aabbb" "aabbc" "adccc" "ddcee" "dddee", NULL, NULL, NULL, NULL, NULL},
+    [VAR_KILLER] = {4, 2, 0, 0, "92..", NULL, NULL, NULL, NULL, NULL, NULL, PIC_CAGES},
+    [VAR_KNIGHT] = {5, 5, 0, 0, "....." "....." "..5.." "....." ".....", NULL, NULL, NULL,
+                    ".x.x." "x...x" "....." "x...x" ".x.x.", NULL, NULL, NULL},
+    [VAR_EVENODD] = {4, 1, 0, 0, "4.7.", NULL, NULL, "e.o.", NULL, NULL, NULL, NULL},
+    [VAR_CONSEC] = {4, 1, 0, 0, "4537", NULL, NULL, NULL, NULL, PIC_BARS, NULL, NULL},
+    [VAR_THERMO] = {4, 1, 0, 0, "2458", NULL, NULL, NULL, NULL, NULL, PIC_THERMO, NULL},
+};
+
+static const char *const RULES_TEXT[VAR_COUNT] = {
+    [VAR_CLASSIC] = "Fill the grid so that every row, every column and every 3x3 box holds the digits 1 to 9, each "
+                    "once. The given digits can't be changed.",
+    [VAR_X] = "Classic rules, and the two long diagonals (tinted) also hold 1 to 9, each once.",
+    [VAR_MINI] = "A 6x6 grid: every row, column and 2x3 box holds 1 to 6, each once.",
+    [VAR_HYPER] = "Classic rules, and the four tinted 3x3 windows also hold 1 to 9, each once.",
+    [VAR_JIGSAW] = "Classic rules, but the boxes are irregular regions of nine cells, outlined with thick lines. "
+                   "Every region holds 1 to 9, each once.",
+    [VAR_KILLER] = "Classic rules, plus cages (dashed outlines): the digits in a cage add up to the small number "
+                   "in its corner, and no digit repeats in a cage. Hold a cell to see which digits can make up "
+                   "its cage.",
+    [VAR_KNIGHT] = "Classic rules, and two cells a chess knight's move apart never hold the same digit: the 5 "
+                   "here means none of the crossed cells can be 5.",
+    [VAR_EVENODD] = "Classic rules, and some cells are marked: a shaded cell holds an even digit (2, 4, 6, 8), a "
+                    "cell with a ring an odd one (1, 3, 5, 7, 9).",
+    [VAR_CONSEC] = "Classic rules, and a bar joins two side-by-side cells whose digits are 1 apart (4 and 5). "
+                   "Where there is no bar, they are not 1 apart (5 and 3, 3 and 7).",
+    [VAR_THERMO] = "Classic rules, and along each thermometer the digits rise from the round bulb: every digit "
+                   "is bigger than the one before it.",
+};
+
+static void rules_pic_draw_cb(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    const rules_pic_t *p = lv_obj_get_user_data(obj);
+    if (!p) return;
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_area_t co;
+    lv_obj_get_coords(obj, &co);
+    const int cs = 40, w = p->w * cs, h = p->h * cs;
+    const int x0 = (co.x1 + co.x2) / 2 - w / 2, y0 = (co.y1 + co.y2) / 2 - h / 2;
+    lv_draw_rect_dsc_t r;
+    lv_draw_line_dsc_t l;
+    for (int i = 0; i < p->w * p->h; i++) {        /* cells */
+        int x = x0 + (i % p->w) * cs, y = y0 + (i / p->w) * cs;
+        lv_draw_rect_dsc_init(&r);
+        lv_color_t bg = C_CELL;
+        if (p->tint && p->tint[i] == '1') bg = lv_color_mix(C_ORANGE, bg, 40);
+        if (p->parity && p->parity[i] == 'e') bg = lv_color_mix(C_GRID_THIN, bg, 150);
+        r.bg_color = bg;
+        r.border_color = C_GRID_THIN;
+        r.border_width = 1;
+        lv_area_t a = {.x1 = x, .y1 = y, .x2 = x + cs, .y2 = y + cs};
+        lv_draw_rect(layer, &r, &a);
+    }
+    lv_draw_line_dsc_init(&l);                      /* thick lines: boxes or regions, and the frame */
+    l.color = C_GRID_THICK;
+    l.width = 3;
+    for (int i = 0; i < p->w * p->h; i++) {
+        int c = i % p->w, rr = i / p->w, x = x0 + c * cs, y = y0 + rr * cs;
+        bool right = c + 1 < p->w && (p->regions ? p->regions[i] != p->regions[i + 1] : p->bw && (c + 1) % p->bw == 0);
+        bool down = rr + 1 < p->h && (p->regions ? p->regions[i] != p->regions[i + p->w] : p->bh && (rr + 1) % p->bh == 0);
+        if (right) { l.p1.x = l.p2.x = x + cs; l.p1.y = y; l.p2.y = y + cs; lv_draw_line(layer, &l); }
+        if (down) { l.p1.y = l.p2.y = y + cs; l.p1.x = x; l.p2.x = x + cs; lv_draw_line(layer, &l); }
+    }
+    lv_draw_rect_dsc_init(&r);
+    r.bg_opa = LV_OPA_TRANSP;
+    r.border_color = C_GRID_THICK;
+    r.border_width = 3;
+    lv_area_t fr = {.x1 = x0 - 1, .y1 = y0 - 1, .x2 = x0 + w + 1, .y2 = y0 + h + 1};
+    lv_draw_rect(layer, &r, &fr);
+    if (p->thermo) {                                /* a thermometer under the digits */
+        lv_draw_line_dsc_init(&l);
+        l.color = C_MUTED;
+        l.opa = LV_OPA_40;
+        l.width = cs * 3 / 10;
+        l.round_start = l.round_end = 1;
+        for (int k = 1; p->thermo[k] != 0xFF; k++) {
+            int a = p->thermo[k - 1], b = p->thermo[k];
+            l.p1.x = x0 + (a % p->w) * cs + cs / 2; l.p1.y = y0 + (a / p->w) * cs + cs / 2;
+            l.p2.x = x0 + (b % p->w) * cs + cs / 2; l.p2.y = y0 + (b / p->w) * cs + cs / 2;
+            lv_draw_line(layer, &l);
+        }
+        lv_draw_rect_dsc_init(&r);
+        r.bg_color = C_MUTED;
+        r.bg_opa = LV_OPA_40;
+        r.radius = LV_RADIUS_CIRCLE;
+        int b = p->thermo[0], cx = x0 + (b % p->w) * cs + cs / 2, cy = y0 + (b / p->w) * cs + cs / 2, rad = cs * 4 / 10;
+        lv_area_t a = {.x1 = cx - rad, .y1 = cy - rad, .x2 = cx + rad, .y2 = cy + rad};
+        lv_draw_rect(layer, &r, &a);
+    }
+    for (int i = 0; p->parity && i < p->w * p->h; i++) {   /* odd rings */
+        if (p->parity[i] != 'o') continue;
+        lv_draw_rect_dsc_init(&r);
+        r.bg_opa = LV_OPA_TRANSP;
+        r.border_color = C_MUTED;
+        r.border_width = 2;
+        r.radius = LV_RADIUS_CIRCLE;
+        int x = x0 + (i % p->w) * cs, y = y0 + (i / p->w) * cs;
+        lv_area_t a = {.x1 = x + 4, .y1 = y + 4, .x2 = x + cs - 4, .y2 = y + cs - 4};
+        lv_draw_rect(layer, &r, &a);
+    }
+    for (int k = 0; p->bars && p->bars[k] != 0xFF; k += 2) {   /* consecutive bars */
+        int a = p->bars[k], b = p->bars[k + 1];
+        lv_draw_rect_dsc_init(&r);
+        r.bg_color = C_ORANGE;
+        r.radius = 3;
+        int x = x0 + (a % p->w + 1) * cs, y = y0 + (a / p->w) * cs + cs / 2;
+        (void)b;
+        lv_area_t ar = {.x1 = x - 4, .y1 = y - 11, .x2 = x + 4, .y2 = y + 11};
+        lv_draw_rect(layer, &r, &ar);
+    }
+    if (p->cages) {                                 /* dashed cages with their sums */
+        const uint8_t *q = p->cages;
+        while (*q != 0xFF) {
+            int sum = *q++, first = *q;
+            uint8_t in[16];
+            int n = 0;
+            while (*q != 0xFE) in[n++] = *q++;
+            q++;
+            lv_draw_line_dsc_init(&l);
+            l.color = C_MUTED;
+            l.width = 1;
+            l.dash_width = 4;
+            l.dash_gap = 3;
+            for (int j = 0; j < n; j++) {
+                int c = in[j], cx = c % p->w, cy = c / p->w, x = x0 + cx * cs, y = y0 + cy * cs;
+                bool up = false, dn = false, lf = false, rt = false;
+                for (int k = 0; k < n; k++) {
+                    up |= in[k] == c - p->w;
+                    dn |= in[k] == c + p->w;
+                    lf |= cx > 0 && in[k] == c - 1;
+                    rt |= cx < p->w - 1 && in[k] == c + 1;
+                }
+                if (!up) { l.p1.x = x + 4; l.p2.x = x + cs - 4; l.p1.y = l.p2.y = y + 4; lv_draw_line(layer, &l); }
+                if (!dn) { l.p1.x = x + 4; l.p2.x = x + cs - 4; l.p1.y = l.p2.y = y + cs - 4; lv_draw_line(layer, &l); }
+                if (!lf) { l.p1.y = y + 4; l.p2.y = y + cs - 4; l.p1.x = l.p2.x = x + 4; lv_draw_line(layer, &l); }
+                if (!rt) { l.p1.y = y + 4; l.p2.y = y + cs - 4; l.p1.x = l.p2.x = x + cs - 4; lv_draw_line(layer, &l); }
+            }
+            char t[4];
+            snprintf(t, sizeof(t), "%d", sum);
+            lv_draw_label_dsc_t d;
+            lv_draw_label_dsc_init(&d);
+            d.font = &lv_font_montserrat_12;
+            d.color = C_TEXT;
+            d.text = t;
+            d.text_local = 1;
+            lv_area_t la = {.x1 = x0 + (first % p->w) * cs + 3, .y1 = y0 + (first / p->w) * cs + 2,
+                            .x2 = x0 + (first % p->w) * cs + 30, .y2 = y0 + (first / p->w) * cs + 16};
+            lv_draw_label(layer, &d, &la);
+        }
+    }
+    for (int i = 0; i < p->w * p->h; i++) {         /* digits and crosses */
+        char t[2] = {0, 0};
+        lv_color_t col = C_TEXT;
+        if (p->digits[i] >= '1' && p->digits[i] <= '9') t[0] = p->digits[i];
+        else if (p->cross && p->cross[i] == 'x') { t[0] = 'x'; col = C_RED; }
+        if (!t[0]) continue;
+        lv_draw_label_dsc_t d;
+        lv_draw_label_dsc_init(&d);
+        d.font = &lv_font_montserrat_22;
+        d.color = col;
+        d.align = LV_TEXT_ALIGN_CENTER;
+        d.text = t;
+        d.text_local = 1;
+        int x = x0 + (i % p->w) * cs, y = y0 + (i / p->w) * cs;
+        lv_area_t a = {.x1 = x, .y1 = y + (cs - 24) / 2, .x2 = x + cs, .y2 = y + cs};
+        lv_draw_label(layer, &d, &a);
+    }
+}
+
+static void rules_show(int variant)
+{
+    if (variant < 0 || variant >= VAR_COUNT) variant = VAR_CLASSIC;
+    char title[40];
+    snprintf(title, sizeof(title), "%s rules", VARIANT_NAMES[variant]);
+    lv_obj_t *m = make_msgbox(title, NULL);
+    lv_obj_set_width(m, 600);
+    lv_obj_t *pic = lv_obj_create(lv_msgbox_get_content(m));
+    lv_obj_remove_style_all(pic);
+    const rules_pic_t *p = &RULES_PIC[variant];
+    lv_obj_set_size(pic, LV_PCT(100), p->h * 40 + 16);
+    lv_obj_set_user_data(pic, (void *)p);
+    lv_obj_add_event_cb(pic, rules_pic_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    lv_obj_t *t = make_just_text(lv_msgbox_get_content(m), NULL, C_TEXT, RULES_TEXT[variant]);
+    lv_obj_set_style_margin_top(t, 10, 0);
+    msgbox_button(m, "OK", mbox_close_cb, true);
+}
+
+static void rules_cb(lv_event_t *e)
+{
+    rules_show(g_var);
+}
+
+/* the first time a variant is played: its rules */
+static void rules_first_time(void)
+{
+    uint32_t seen = store_rules_seen();
+    if (g_var == VAR_CLASSIC || (seen >> g_var & 1)) return;
+    store_set_rules_seen(seen | (1u << g_var));
+    rules_show(g_var);
 }
 
 /* ------------------------------------------------------------- build */
@@ -2013,6 +2366,11 @@ static void build_game(void)
     make_btn(scr_game, 8, 6, 104, 48, LV_SYMBOL_LEFT "  List", &lv_font_montserrat_18, back_cb, NULL);
     g_title = make_label(scr_game, &lv_font_montserrat_22, C_TEXT);
     lv_obj_set_pos(g_title, 126, 6);
+    lv_obj_set_width(g_title, SCR_W - 8 - 200 - 8 - 92 - 8 - 48 - 8 - 126);   /* up to the ? button */
+    lv_label_set_long_mode(g_title, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_t *qb = make_btn(scr_game, SCR_W - 8 - 200 - 8 - 92 - 8 - 48, 6, 48, 48, "?", &lv_font_montserrat_22, rules_cb,
+                            NULL);                   /* the variant's rules */
+    lv_obj_set_style_text_color(lv_obj_get_child(qb, 0), C_ACCENT, 0);
     g_best = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(g_best, 126, 36);
 
@@ -2114,7 +2472,7 @@ static void build_game(void)
     lv_obj_set_hidden(g_hint_cnt, true);
     /* status: top bar, right-aligned on the line under the title, up to the Hint button */
     g_status = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
-    lv_obj_set_width(g_status, SCR_W - 8 - 200 - 8 - 92 - 8 - 126);
+    lv_obj_set_width(g_status, SCR_W - 8 - 200 - 8 - 92 - 8 - 48 - 8 - 126);
     lv_obj_set_style_text_align(g_status, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(g_status, 126, 36);
 
@@ -2724,6 +3082,7 @@ static uint8_t gen_givens[81];
 static sudoku_geom_t *gen_board;                    /* the puzzle's board (Jigsaw regions, Killer cages), PSRAM */
 static char *gen_cages;                             /* STATS_CAGES_LEN, PSRAM */
 static char gen_marks[82];
+static char *gen_thermos;                           /* STATS_THERMOS_LEN, PSRAM */
 static uint32_t gen_seed;                           /* 0 = random */
 static char gen_day[12];                            /* making a daily puzzle: its date */
 
@@ -2737,6 +3096,8 @@ static void gen_task(void *arg)
     if (gen_var_req == VAR_KILLER) sudoku_cages_text(gen_board, gen_cages, STATS_CAGES_LEN);
     gen_marks[0] = 0;
     if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC) sudoku_marks_text(gen_board, gen_marks, 82);
+    gen_thermos[0] = 0;
+    if (gen_var_req == VAR_THERMO) sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);
     int clues = 0;
     for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
     printf("generator: %s %s asked, %s made, %d clues, %u ms\n", VARIANT_NAMES[gen_var_req],
@@ -2758,8 +3119,9 @@ static void gen_poll_cb(lv_timer_t *t)
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
     const char *cages = gen_var_req == VAR_KILLER ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
+    const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,
-                                                  gen_day[0] ? gen_day : NULL)
+                                                  thermos, gen_day[0] ? gen_day : NULL)
                                : -1;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
@@ -2767,7 +3129,7 @@ static void gen_poll_cb(lv_timer_t *t)
         id = s_gen_ram_next++;                       /* no card: until power-off */
         if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
     }
-    gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, regions, cages, marks, gen_day);
+    gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, regions, cages, marks, thermos, gen_day);
     if (gen_level_got != gen_level_req && !gen_day[0]) {
         char msg[96];
         snprintf(msg, sizeof(msg), "Couldn't make a %s %s quickly; this one is %s.", GEN_LEVEL_NAMES[gen_level_req],
@@ -2783,6 +3145,7 @@ static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
     if (gen_timer) return;                           /* one at a time */
     if (!gen_board && !(gen_board = heap_caps_malloc(sizeof(*gen_board), MALLOC_CAP_SPIRAM))) return;
     if (!gen_cages && !(gen_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return;
+    if (!gen_thermos && !(gen_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) return;
     gen_var_req = variant >= 0 && variant < VAR_COUNT ? variant : VAR_CLASSIC;
     gen_level_req = level;
     gen_seed = seed;
@@ -2921,7 +3284,7 @@ static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kep
 
 /* the variants in the New puzzle dialog, in button order */
 static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_MINI,
-                                                 VAR_KNIGHT, VAR_EVENODD, VAR_CONSEC};
+                                                 VAR_KNIGHT, VAR_EVENODD, VAR_CONSEC, VAR_THERMO};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -2932,6 +3295,7 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_KNIGHT] = "9x9, and two cells a chess knight's move apart never hold the same digit.",
     [VAR_EVENODD] = "9x9: shaded cells hold an even digit, cells with a ring an odd one.",
     [VAR_CONSEC] = "9x9: a bar joins every two side-by-side cells whose digits are 1 apart; no bar, they aren't.",
+    [VAR_THERMO] = "9x9 with thermometers: along each one, the digits rise from the round bulb.",
 };
 
 static void gen_pick_close(void)
@@ -2978,7 +3342,7 @@ static void new_puzzle_cb(lv_event_t *e)
 
     /* the variant: Classic, X-Sudoku or Mini 6x6 (one of them checked) */
     static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "\n", "Jigsaw", "Killer", "Mini 6x6", "\n",
-                                          "Anti-Knight", "Even-Odd", "Consecutive", ""};
+                                          "Anti-Knight", "Even-Odd", "Consecutive", "\n", "Thermo", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
@@ -2986,7 +3350,7 @@ static void new_puzzle_cb(lv_event_t *e)
     for (uint32_t i = 0; i < VAR_COUNT; i++) {
         if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
     }
-    lv_obj_set_size(vm, LV_PCT(100), 172);          /* three rows of three */
+    lv_obj_set_size(vm, LV_PCT(100), 226);          /* rows of three */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);
@@ -3226,9 +3590,12 @@ static void puzzles_cb(lv_event_t *e)
     lv_screen_load(scr_list);
 }
 
+static void st_select_tab(int tab);
+
 static void settings_cb(lv_event_t *e)
 {
     lv_label_set_text(st_wifi_lbl, wifi_ui_summary());
+    st_select_tab(0);                               /* Network */
     lv_screen_load(scr_settings);
 }
 
@@ -3890,6 +4257,12 @@ static void export_cb(lv_event_t *e)
     }
     sudoku_ui_notice("Exporting...", 1500);
     stats_db_export_csv();                          /* the result comes back as a message */
+}
+
+static void accent_dd_cb(lv_event_t *e)
+{
+    store_set_accent((uint8_t)lv_dropdown_get_selected(lv_event_get_target_obj(e)));
+    apply_theme(s_dark);                            /* every screen again, in the new colour */
 }
 
 static void assist_dd_cb(lv_event_t *e)
@@ -4739,23 +5112,29 @@ static void build_plays(void)
 
 /* ============================================================= trophies */
 /*
- * Trophies (home screen), three tabs:
+ * Trophies (home screen), four tabs:
  *   Achievements: the current player's list (stats_db.c): unlocked ones with
  *     a trophy and the date, the others with a lock and their progress.
  *   Daily: the leaderboard of one day's daily puzzle, today first (< > for
  *     other days): everyone's best time, fastest first, then who hasn't
  *     solved it.
+ *   Weekly: a week's daily puzzles added up per player: days solved, then
+ *     total time (< > for other weeks).
  *   Records: the current player's bests: fastest solves (overall, clean, and
  *     per kind), most solves in a day, clean solves in a row, longest daily
  *     streak, puzzles solved, time spent.
  * Achievements a solve unlocks pop up at the top of the screen (trophy_toast).
  */
-#define TR_TABS 3                         /* Achievements, Daily, Records */
+#define TR_TABS 4                         /* Achievements, Daily, Weekly, Records */
+#define TR_WEEK 2
+#define TR_RECORDS 3
 #define TR_TAB_Y  72                      /* the tab row, under the title */
 #define TR_TAB_H  52
 #define TR_VIEW_Y (TR_TAB_Y + TR_TAB_H + 12)   /* the open tab's content */
 static lv_obj_t *tr_tab[TR_TABS], *tr_view[TR_TABS];
 static lv_obj_t *tr_ach_count, *tr_ach_list, *tr_rec_list;
+static lv_obj_t *tr_week_lbl, *tr_week_prev, *tr_week_next, *tr_week_list;
+static char tr_monday[12];                /* week on the Weekly tab, "" = this week */
 static lv_obj_t *tr_day_lbl, *tr_day_prev, *tr_day_next, *tr_board_list, *tr_play_btn;
 static int tr_tab_sel;
 static char tr_day[12];                   /* day on the leaderboard, "" = today */
@@ -4938,9 +5317,10 @@ static void render_board(const stats_board_t *b)
         lv_obj_set_width(pos, 40);
         lv_obj_set_style_text_align(pos, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(pos, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_align(player_dot(card, r->color, 12), LV_ALIGN_LEFT_MID, 50, -13);
         lv_obj_t *n = make_label(card, &lv_font_montserrat_20, C_TEXT);
         lv_label_set_text_fmt(n, "%s%s", r->player, me ? "  (you)" : "");
-        lv_obj_align(n, LV_ALIGN_LEFT_MID, 56, -13);
+        lv_obj_align(n, LV_ALIGN_LEFT_MID, 70, -13);
         char line[96];
         snprintf(line, sizeof(line), "%d%s   -   %u mistake%s   -   %u hint%s", rank, ordinal(rank),
                  (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s", (unsigned)r->hints, r->hints == 1 ? "" : "s");
@@ -4950,7 +5330,7 @@ static void render_board(const stats_board_t *b)
         }
         lv_obj_t *sub = make_label(card, &lv_font_montserrat_14, C_MUTED);
         lv_label_set_text(sub, line);
-        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 56, 14);
+        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 70, 14);
         char t[16];
         fmt_time(t, sizeof(t), r->seconds);
         lv_obj_t *tl = make_label(card, &font_timer_36, rank == 1 ? C_ORANGE : C_TEXT);
@@ -4958,6 +5338,91 @@ static void render_board(const stats_board_t *b)
         lv_obj_align(tl, LV_ALIGN_RIGHT_MID, 0, 0);
     }
     lv_obj_scroll_to_y(tr_board_list, 0, LV_ANIM_OFF);
+}
+
+/* Monday of this week ('YYYY-MM-DD'); false while the clock isn't set */
+static bool this_monday(char day[12])
+{
+    time_t now = time(NULL);
+    if (!CLOCK_VALID(now)) return false;
+    struct tm tm;
+    localtime_r(&now, &tm);
+    tm.tm_mday -= (tm.tm_wday + 6) % 7;
+    tm.tm_hour = 12;
+    mktime(&tm);
+    strftime(day, 12, "%Y-%m-%d", &tm);
+    return true;
+}
+
+static void render_week(const stats_week_t *w)
+{
+    char now[12] = "", date[24] = "";
+    bool clock = this_monday(now);
+    struct tm tm = {0};
+    if (sscanf(w->monday, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
+        tm.tm_year -= 1900;
+        tm.tm_mon -= 1;
+        tm.tm_hour = 12;
+        mktime(&tm);
+        strftime(date, sizeof(date), "%d %b %Y", &tm);
+    }
+    bool current = clock && !strcmp(w->monday, now);
+    lv_label_set_text_fmt(tr_week_lbl, "%s %s", current ? "This week, from" : "Week of", date);
+    lv_obj_set_state(tr_week_next, LV_STATE_DISABLED, current);
+    lv_obj_clean(tr_week_list);
+    int shown = 0, rank = 0;
+    for (int i = 0; i < w->n; i++) {
+        const stats_week_row_t *r = &w->rows[i];
+        if (!r->days) continue;
+        shown++;
+        rank++;
+        bool me = r->player_id == store_player_id();
+        lv_obj_t *card = tr_card(tr_week_list, 84);
+        if (me) {
+            lv_obj_set_style_border_color(card, C_ACCENT, 0);
+            lv_obj_set_style_border_width(card, 2, 0);
+        }
+        lv_obj_t *pos = make_label(card, rank == 1 ? &font_icons_24 : &lv_font_montserrat_24, rank == 1 ? C_ORANGE : C_MUTED);
+        if (rank == 1) lv_label_set_text(pos, SYMBOL_STAR);
+        else lv_label_set_text_fmt(pos, "%d", rank);
+        lv_obj_set_width(pos, 40);
+        lv_obj_set_style_text_align(pos, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(pos, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_align(player_dot(card, r->color, 12), LV_ALIGN_LEFT_MID, 50, -16);
+        lv_obj_t *n = make_label(card, &lv_font_montserrat_20, C_TEXT);
+        lv_label_set_text_fmt(n, "%s%s   -   %d of 7 days", r->player, me ? "  (you)" : "", r->days);
+        lv_obj_align(n, LV_ALIGN_LEFT_MID, 70, -16);
+        static const char *const DAYS[7] = {"M", "T", "W", "T", "F", "S", "S"};
+        for (int d = 0; d < 7; d++) {               /* which days: a square each, green if solved */
+            lv_obj_t *sq = lv_obj_create(card);
+            lv_obj_remove_style_all(sq);
+            lv_obj_set_size(sq, 26, 22);
+            lv_obj_set_style_radius(sq, 5, 0);
+            lv_obj_set_style_bg_opa(sq, LV_OPA_COVER, 0);
+            lv_obj_set_style_bg_color(sq, r->best[d] ? C_GREEN : C_CARD2, 0);
+            lv_obj_align(sq, LV_ALIGN_LEFT_MID, 70 + d * 30, 16);
+            lv_obj_t *dl = make_label(sq, &lv_font_montserrat_12, r->best[d] ? lv_color_white() : C_MUTED);
+            lv_label_set_text(dl, DAYS[d]);
+            lv_obj_center(dl);
+        }
+        char t[16];
+        fmt_time(t, sizeof(t), r->total);
+        lv_obj_t *tl = make_label(card, &font_timer_36, rank == 1 ? C_ORANGE : C_TEXT);
+        lv_label_set_text(tl, t);
+        lv_obj_align(tl, LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+    if (!shown) tr_hint(tr_week_list, current ? "No daily puzzle solved this week yet." : "No daily puzzle was solved that week.");
+    lv_obj_scroll_to_y(tr_week_list, 0, LV_ANIM_OFF);
+}
+
+static void tr_week_cb(lv_event_t *e)
+{
+    char now[12];
+    if (!this_monday(now)) return;
+    if (!tr_monday[0]) snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+    day_shift(tr_monday, 7 * (int)(intptr_t)lv_event_get_user_data(e));
+    if (strcmp(tr_monday, now) > 0) snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+    stats_db_query_week(tr_monday);
 }
 
 static void render_records(const stats_records_t *R)
@@ -5016,6 +5481,7 @@ static void tr_ask(void)
     if (!stats_db_ready()) {
         tr_hint(tr_rec_list, "Records are worked out from the solves in sudoku.db: insert a FAT32 microSD card "
                              "before switching on.");
+        tr_hint(tr_week_list, "The weekly challenge needs sudoku.db on a microSD card.");
         lv_label_set_text(tr_ach_count, "");
         tr_hint(tr_ach_list, "Achievements are worked out from the solves in sudoku.db: insert a FAT32 microSD "
                              "card before switching on.");
@@ -5028,8 +5494,20 @@ static void tr_ask(void)
         stats_db_query_achievements();
         return;
     }
-    if (tr_tab_sel == 2) {
+    if (tr_tab_sel == TR_RECORDS) {
         stats_db_query_records();
+        return;
+    }
+    if (tr_tab_sel == TR_WEEK) {
+        char now[12];
+        if (!this_monday(now)) {
+            lv_label_set_text(tr_week_lbl, "");
+            tr_hint(tr_week_list, "The weekly challenge needs today's date: connect Wi-Fi (Settings) so the clock "
+                                  "is set.");
+            return;
+        }
+        if (!tr_monday[0] || strcmp(tr_monday, now) > 0) snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+        stats_db_query_week(tr_monday);
         return;
     }
     char today[12];
@@ -5076,6 +5554,7 @@ static void tr_day_cb(lv_event_t *e)
 static void trophy_cb(lv_event_t *e)
 {
     tr_day[0] = 0;                                       /* the leaderboard opens on today */
+    tr_monday[0] = 0;                                    /* and the weekly one on this week */
     tr_select_tab(tr_tab_sel);
     lv_screen_load(scr_trophy);
 }
@@ -5096,6 +5575,9 @@ static void trophy_poll(void)
     static stats_records_t *r;
     if (!r) r = heap_caps_malloc(sizeof(*r), MALLOC_CAP_SPIRAM);
     if (r && stats_db_take_records(r) && scr_trophy && r->player_id == store_player_id()) render_records(r);
+    static stats_week_t *w;
+    if (!w) w = heap_caps_malloc(sizeof(*w), MALLOC_CAP_SPIRAM);
+    if (w && stats_db_take_week(w) && scr_trophy && !strcmp(w->monday, tr_monday)) render_week(w);
 }
 
 static void build_trophies(void)
@@ -5105,8 +5587,8 @@ static void build_trophies(void)
     lv_obj_t *t = make_label(scr_trophy, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Trophies");
     lv_obj_set_pos(t, 150, 20);
-    static const char *const TABS[TR_TABS] = {SYMBOL_TROPHY "  Achievements", SYMBOL_STAR "  Daily",
-                                              SYMBOL_CHART "  Records"};
+    static const char *const TABS[TR_TABS] = {SYMBOL_TROPHY " Achievements", SYMBOL_STAR "  Daily",
+                                              SYMBOL_CALENDAR "  Weekly", SYMBOL_CHART "  Records"};
     /* the tabs: a row of equal buttons across the page, under the title */
     const int tab_gap = 8, tab_w = (SCR_W - 24 - (TR_TABS - 1) * tab_gap) / TR_TABS;
     for (int i = 0; i < TR_TABS; i++) {
@@ -5159,12 +5641,35 @@ static void build_trophies(void)
     lv_obj_align(tr_play_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_hidden(tr_play_btn, true);
 
+    /* weekly: < week > and the list */
+    lv_obj_t *wv = lv_obj_create(scr_trophy);
+    lv_obj_remove_style_all(wv);
+    lv_obj_set_pos(wv, 12, TR_VIEW_Y);
+    lv_obj_set_size(wv, SCR_W - 24, SCR_W - TR_VIEW_Y - 12);
+    tr_view[TR_WEEK] = wv;
+    tr_week_prev = make_btn(wv, 0, 0, 64, 52, LV_SYMBOL_LEFT, &lv_font_montserrat_22, tr_week_cb, (void *)(intptr_t)-1);
+    tr_week_next = make_btn(wv, SCR_W - 24 - 64, 0, 64, 52, LV_SYMBOL_RIGHT, &lv_font_montserrat_22, tr_week_cb,
+                            (void *)(intptr_t)1);
+    lv_obj_set_style_text_opa(lv_obj_get_child(tr_week_next, 0), LV_OPA_30, LV_STATE_DISABLED);
+    tr_week_lbl = make_label(wv, &lv_font_montserrat_20, C_TEXT);
+    lv_obj_set_width(tr_week_lbl, SCR_W - 24 - 2 * 72);
+    lv_obj_set_style_text_align(tr_week_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(tr_week_lbl, LV_ALIGN_TOP_MID, 0, 14);
+    tr_week_list = lv_obj_create(wv);
+    lv_obj_remove_style_all(tr_week_list);
+    lv_obj_set_pos(tr_week_list, 0, 64);
+    lv_obj_set_size(tr_week_list, SCR_W - 24, SCR_W - TR_VIEW_Y - 12 - 64);
+    lv_obj_set_flex_flow(tr_week_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(tr_week_list, 8, 0);
+    lv_obj_set_scroll_dir(tr_week_list, LV_DIR_VER);
+    tr_hint(tr_week_list, "Loading...");
+
     /* records */
     lv_obj_t *rv = lv_obj_create(scr_trophy);
     lv_obj_remove_style_all(rv);
     lv_obj_set_pos(rv, 12, TR_VIEW_Y);
     lv_obj_set_size(rv, SCR_W - 24, SCR_W - TR_VIEW_Y - 12);
-    tr_view[2] = rv;
+    tr_view[TR_RECORDS] = rv;
     tr_rec_list = lv_obj_create(rv);
     lv_obj_remove_style_all(tr_rec_list);
     lv_obj_set_size(tr_rec_list, SCR_W - 24, SCR_W - TR_VIEW_Y - 12);
@@ -5381,6 +5886,18 @@ static void player_add_cb(lv_event_t *e)
 }
 
 /* one row per player; without sudoku.db just who the board thinks plays */
+static void player_color_cb(lv_event_t *e)
+{
+    int32_t id = (int32_t)(intptr_t)lv_event_get_user_data(e);
+    for (int i = 0; i < p_count; i++) {
+        if (p_players[i].id == id) {
+            stats_db_set_player_color(id, p_players[i].color + 1);   /* the list comes back with it */
+            p_players[i].color = (uint8_t)((p_players[i].color + 1) % STATS_PLAYER_COLORS);
+        }
+    }
+    render_players();
+}
+
 static void render_players(void)
 {
     if (!p_list) return;
@@ -5405,16 +5922,22 @@ static void render_players(void)
         lv_obj_set_clickable(r, !cur);
         lv_obj_add_event_cb(r, player_row_cb, LV_EVENT_CLICKED, (void *)(intptr_t)pl->id);
 
+        /* their colour: tap it for the next one */
+        lv_obj_t *cb = make_btn(r, 0, 0, 44, 44, NULL, NULL, db ? player_color_cb : NULL, (void *)(intptr_t)pl->id);
+        lv_obj_set_style_bg_opa(cb, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_bg_opa(cb, LV_OPA_COVER, LV_STATE_PRESSED);
+        lv_obj_align(cb, LV_ALIGN_LEFT_MID, -8, 0);
+        lv_obj_center(player_dot(cb, db ? pl->color : 0, 22));
         lv_obj_t *nm = make_label(r, &lv_font_montserrat_22, C_TEXT);
         lv_label_set_text(nm, pl->name);
-        lv_obj_align(nm, LV_ALIGN_LEFT_MID, 0, -12);
+        lv_obj_align(nm, LV_ALIGN_LEFT_MID, 44, -12);
         lv_obj_t *sub = make_label(r, &lv_font_montserrat_14, cur ? C_ACCENT : C_MUTED);
         if (cur && db) lv_label_set_text_fmt(sub, "Playing now   -   %u solved, %lu solves", (unsigned)pl->solved,
                                             (unsigned long)pl->solves);
         else if (cur) lv_label_set_text(sub, "Playing now");
         else lv_label_set_text_fmt(sub, "%u solved, %lu solves   -   tap to play", (unsigned)pl->solved,
                                    (unsigned long)pl->solves);
-        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 0, 16);
+        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 44, 16);
         int right = 0;                           /* buttons from the right edge */
         if (db && n > 1) {                       /* the only player can't be deleted */
             lv_obj_t *del = make_btn(r, 0, 0, 56, 48, LV_SYMBOL_TRASH, &lv_font_montserrat_18,
@@ -5483,7 +6006,7 @@ static void build_wifi(void);
 static void apply_theme(bool dark)
 {
     s_dark = dark;
-    P = dark ? &PAL_DARK : &PAL_LIGHT;
+    palette_build(dark, store_accent());
     lv_display_t *disp = lv_display_get_default();
     lv_display_set_theme(disp, lv_theme_default_init(disp, C_ACCENT, C_ORANGE, dark, &lv_font_montserrat_16));
 
@@ -6015,6 +6538,36 @@ static void build_stats(void)
 
 /* one settings row: a card with a title + hint on the left; returns the card
  * so the caller can put a control on its right */
+/* ---- Settings tabs */
+enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
+#define ST_TAB_Y  72
+#define ST_TAB_H  52
+#define ST_PANE_Y (ST_TAB_Y + ST_TAB_H + 12)
+static lv_obj_t *st_tab_btn[ST_TABS], *st_pane[ST_TABS];
+static int st_tab;                                  /* the open tab; Settings opens on Network */
+
+static void st_select_tab(int tab)
+{
+    st_tab = tab;
+    for (int i = 0; i < ST_TABS; i++) {
+        lv_obj_set_state(st_tab_btn[i], LV_STATE_CHECKED, i == tab);
+        lv_obj_set_style_text_color(lv_obj_get_child(st_tab_btn[i], 0), i == tab ? lv_color_white() : C_TEXT, 0);
+        lv_obj_set_hidden(st_pane[i], i != tab);
+    }
+    lv_obj_scroll_to_y(st_pane[tab], 0, LV_ANIM_OFF);
+}
+
+static void st_tab_cb(lv_event_t *e)
+{
+    st_select_tab((int)(intptr_t)lv_event_get_user_data(e));
+}
+
+/* an open dropdown list (time zone) doesn't stay up over another screen */
+static void st_close_lists_cb(lv_event_t *e)
+{
+    if (st_tz_dd) lv_dropdown_close(st_tz_dd);
+}
+
 static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint)
 {
     lv_obj_t *r = lv_obj_create(parent);
@@ -6048,45 +6601,64 @@ static lv_obj_t *settings_switch(lv_obj_t *row, bool on, lv_event_cb_t cb)
 static void build_settings(void)
 {
     scr_settings = make_screen();
+    lv_obj_add_event_cb(scr_settings, st_close_lists_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 
     make_btn(scr_settings, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
     lv_obj_t *t = make_label(scr_settings, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Settings");
     lv_obj_set_pos(t, 150, 20);
 
-    lv_obj_t *col = lv_obj_create(scr_settings);
-    lv_obj_remove_style_all(col);
-    lv_obj_set_pos(col, 40, 84);
-    lv_obj_set_size(col, SCR_W - 80, SCR_W - 84);         /* more rows than fit: scrolls */
-    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(col, 10, 0);
-    lv_obj_set_style_pad_bottom(col, 16, 0);
-    lv_obj_set_scroll_dir(col, LV_DIR_VER);
+    /* the tabs, under the title (Network first, and the one Settings opens on) */
+    static const char *const TABS[ST_TABS] = {LV_SYMBOL_WIFI "  Network", LV_SYMBOL_IMAGE "  Display",
+                                              LV_SYMBOL_VOLUME_MAX "  Sound", LV_SYMBOL_EDIT "  Game",
+                                              LV_SYMBOL_SD_CARD "  Data"};
+    const int gap = 8, tw = (SCR_W - 24 - (ST_TABS - 1) * gap) / ST_TABS;
+    for (int i = 0; i < ST_TABS; i++) {
+        st_tab_btn[i] = make_btn(scr_settings, 12 + i * (tw + gap), ST_TAB_Y, tw, ST_TAB_H, TABS[i],
+                                 &lv_font_montserrat_16, st_tab_cb, (void *)(intptr_t)i);
+        /* each tab's rows: a scrolling column */
+        lv_obj_t *pane = lv_obj_create(scr_settings);
+        lv_obj_remove_style_all(pane);
+        lv_obj_set_pos(pane, 40, ST_PANE_Y);
+        lv_obj_set_size(pane, SCR_W - 80, SCR_W - ST_PANE_Y);
+        lv_obj_set_flex_flow(pane, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_row(pane, 10, 0);
+        lv_obj_set_style_pad_bottom(pane, 16, 0);
+        lv_obj_set_scroll_dir(pane, LV_DIR_VER);
+        st_pane[i] = pane;
+    }
+    lv_obj_t *col = st_pane[ST_DISPLAY];
 
     lv_obj_t *r = settings_row(col, "Dark mode", "Light text on a dark background");
     st_theme_sw = settings_switch(r, s_dark, theme_sw_cb);
 
+    r = settings_row(col, "Accent colour", "Buttons, the selected cell and your digits");
+    settings_dropdown(r, ACCENT_NAMES, store_accent(), 150, accent_dd_cb);
+
     r = settings_row(col, "Brightness", "Screen backlight");
     st_bright_sl = settings_slider(r, 10, 100, store_brightness(), bright_sl_cb, &st_bright_lbl);
-
-    r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
-    st_sound_sw = settings_switch(r, sfx_enabled(), sound_sw_cb);
-
-    r = settings_row(col, "Volume", "Speaker loudness");
-    st_vol_sl = settings_slider(r, 0, 100, store_volume(), vol_sl_cb, &st_vol_lbl);
-
-    r = settings_row(col, "Show timer", "Off: the clock is hidden while you play (times are still kept)");
-    settings_switch(r, store_show_timer(), timer_sw_cb);
-
-    r = settings_row(col, "Mistake check", "Red digits: none, rule breakers, or any wrong digit");
-    st_assist_dd = settings_dropdown(r, "Off\nRules\nSolution", store_assist(), 150, assist_dd_cb);
 
     r = settings_row(col, "Screen off after", "Without a touch. The game pauses; tap to wake.");
     uint32_t sel = 0;
     while (sel < SLEEP_COUNT - 1 && SLEEP_MIN[sel] != s_sleep_min) sel++;
     st_sleep_dd = settings_dropdown(r, SLEEP_OPTIONS, sel, 150, sleep_dd_cb);
 
+    col = st_pane[ST_SOUND];
+    r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
+    st_sound_sw = settings_switch(r, sfx_enabled(), sound_sw_cb);
+
+    r = settings_row(col, "Volume", "Speaker loudness");
+    st_vol_sl = settings_slider(r, 0, 100, store_volume(), vol_sl_cb, &st_vol_lbl);
+
+    col = st_pane[ST_GAME];
+    r = settings_row(col, "Show timer", "Off: the clock is hidden while you play (times are still kept)");
+    settings_switch(r, store_show_timer(), timer_sw_cb);
+
+    r = settings_row(col, "Mistake check", "Red digits: none, rule breakers, or any wrong digit");
+    st_assist_dd = settings_dropdown(r, "Off\nRules\nSolution", store_assist(), 150, assist_dd_cb);
+
     /* Wi-Fi: the whole card opens the Wi-Fi screen */
+    col = st_pane[ST_NETWORK];
     r = settings_row(col, "Wi-Fi", "For the clock (time from the internet)");
     lv_obj_set_clickable(r, true);
     lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
@@ -6101,14 +6673,12 @@ static void build_settings(void)
     lv_label_set_text(st_wifi_lbl, wifi_ui_summary());
     lv_obj_align(st_wifi_lbl, LV_ALIGN_RIGHT_MID, -32, 0);
 
-    /* time zone: IANA names; opens upwards (bottom of the page) */
+    /* time zone: IANA names; the list opens downwards */
     r = settings_row(col, "Time zone", "For the clock on the home screen");
     st_tz_dd = lv_dropdown_create(r);
     lv_obj_set_size(st_tz_dd, 330, 52);
     lv_obj_align(st_tz_dd, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_dropdown_set_options_static(st_tz_dd, tz_dropdown_options());
-    lv_dropdown_set_dir(st_tz_dd, LV_DIR_TOP);
-    lv_dropdown_set_symbol(st_tz_dd, LV_SYMBOL_UP);
     lv_obj_set_style_text_font(st_tz_dd, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(st_tz_dd, C_TEXT, 0);
     lv_obj_set_style_bg_color(st_tz_dd, C_CARD2, 0);
@@ -6124,13 +6694,14 @@ static void build_settings(void)
     lv_obj_set_style_bg_color(dl, C_CARD2, 0);
     lv_obj_set_style_border_width(dl, 0, 0);
     lv_obj_set_style_radius(dl, 8, 0);
-    lv_obj_set_style_max_height(dl, 520, 0);
+    lv_obj_set_style_max_height(dl, 440, 0);       /* down to near the bottom of the screen */
     lv_obj_set_style_bg_color(dl, C_ACCENT, LV_PART_SELECTED | LV_STATE_CHECKED);
     lv_obj_set_style_text_color(dl, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
     lv_dropdown_set_selected(st_tz_dd, (uint32_t)tz_find(store_timezone()));
     tz_show_selected();
     lv_obj_add_event_cb(st_tz_dd, tz_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
+    col = st_pane[ST_DATA];
     r = settings_row(col, "microSD card", "");
     st_sd_hint = lv_obj_get_child(r, 1);           /* status of sudoku.db, see clock_cb */
     char sd[64];
@@ -6162,6 +6733,8 @@ static void build_settings(void)
     lv_obj_set_style_bg_color(fr, C_RED, 0);
     lv_obj_set_style_text_color(lv_obj_get_child(fr, 0), lv_color_white(), 0);
     lv_obj_align(fr, LV_ALIGN_RIGHT_MID, 0, 0);
+
+    st_select_tab(st_tab);                          /* (a rebuild keeps the tab that was open) */
 }
 
 static void build_wifi(void)
