@@ -94,7 +94,7 @@ static uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
 #define BOT_Y       (GRID_Y + GRID_SIZE + 6)
 #define BOT_H       (SCR_W - BOT_Y - 6)
 
-#define SAVE_DELAY_MS    80      /* flash write after the screen has changed */
+#define SAVE_DELAY_MS    80      /* solve bookkeeping once the Solved! dialog is up */
 #define UNDO_MAX         128
 #define MAX_PER_COLL     100
 
@@ -116,6 +116,9 @@ static bool     g_solved;
 static bool     g_paused;
 static uint32_t g_elapsed_ms;
 static uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
+static int64_t  g_started_at;    /* Unix time the puzzle was opened/restarted, 0 = not known yet */
+static uint32_t g_started_tick;  /* lv_tick_get() then, to work it out once NTP sets the clock;
+                                    0 = not this session (resumed with no known start) */
 static uint32_t g_last_tick;
 
 static board_t  g_undo[UNDO_MAX];
@@ -257,17 +260,32 @@ static bool has_progress(void)
 
 /* ============================================================= persistence */
 
-/*
- * The game in progress is saved (to sudoku.db, via store.h) when leaving the
- * game screen and when pausing; statistics when solved. The delay dates from
- * when this went to flash, whose writes blink the panel; it does no harm with
- * the card, whose writes run in the database task anyway.
- */
-static void commit_cb(lv_timer_t *t)
+#define CLOCK_VALID(t) ((t) > 1700000000)      /* set by NTP */
+
+static void mark_started(void)
 {
-    store_commit_game();
+    time_t now = time(NULL);
+    g_started_at = CLOCK_VALID(now) ? (int64_t)now : 0;
+    g_started_tick = lv_tick_get();
+    if (!g_started_tick) g_started_tick = 1;
 }
 
+/* Start time, worked out from uptime if the clock was set after the puzzle
+ * was opened (Wi-Fi connects a few seconds after start-up). */
+static int64_t game_started_at(void)
+{
+    time_t now = time(NULL);
+    if (!g_started_at && g_started_tick && CLOCK_VALID(now)) {
+        g_started_at = (int64_t)now - (int64_t)((lv_tick_get() - g_started_tick) / 1000);
+    }
+    return g_started_at;
+}
+
+/*
+ * The game in progress is saved (to sudoku.db, via store.h) after every move,
+ * when leaving the game screen and when pausing; statistics when solved.
+ * stats_db only writes the newest game, so saving often costs nothing here.
+ */
 static void save_current(void)
 {
     if (g_id == STORE_NO_GAME || g_solved) return;
@@ -279,9 +297,9 @@ static void save_current(void)
     memcpy(sg.notes, g_b.notes, sizeof(sg.notes));
     sg.elapsed_ms = g_elapsed_ms;
     sg.mistakes = g_mistakes;
+    sg.started_at = game_started_at();
     store_set_game(&sg);
-    lv_timer_t *t = lv_timer_create(commit_cb, SAVE_DELAY_MS, NULL);
-    lv_timer_set_repeat_count(t, 1);
+    store_commit_game();
 }
 
 /* ============================================================= game view */
@@ -367,11 +385,12 @@ static void refresh_board(void)
 
 static uint16_t s_solve_id;
 static uint32_t s_solve_secs, s_solve_mistakes;
+static int64_t  s_solve_started;
 
 static void solve_commit_cb(lv_timer_t *t)
 {
     store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
-    stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);   /* card copy, if any */
+    stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_started);   /* finished: now */
     if (store_saved_game()->id == s_solve_id) store_clear_game();
 }
 
@@ -388,6 +407,7 @@ static void on_solved(void)
     s_solve_id = g_id;
     s_solve_secs = secs;
     s_solve_mistakes = g_mistakes;
+    s_solve_started = game_started_at();
     lv_timer_t *ct = lv_timer_create(solve_commit_cb, SAVE_DELAY_MS, NULL);   /* after the dialog is up */
     lv_timer_set_repeat_count(ct, 1);
 
@@ -430,6 +450,7 @@ static void after_move(void)
     for (int i = 0; i < 81; i++) ok &= !g_conflict[i];
     if (full && ok) on_solved();
     refresh_board();
+    save_current();                                 /* every move (not once solved) */
 }
 
 static void push_undo(void)
@@ -571,6 +592,7 @@ static void reset_game(void)
     memset(g_b.notes, 0, sizeof(g_b.notes));
     g_elapsed_ms = 0;
     g_mistakes = 0;
+    mark_started();                                 /* opened or restarted: a new attempt */
     g_undo_len = g_undo_head = 0;
     g_sel = -1;
     g_solved = false;
@@ -675,6 +697,8 @@ static void start_game(uint16_t id, bool resume)
         }
         g_elapsed_ms = s->elapsed_ms;
         g_mistakes = s->mistakes;
+        g_started_at = s->started_at;               /* from when it was first opened */
+        if (!g_started_at) g_started_tick = 0;      /* unknown, and not worked out from this session */
     }
     g_notes_mode = false;
     lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
@@ -1326,7 +1350,7 @@ static void sd_task(void *arg)
         err = bsp_sdcard_check();                  /* still the card found earlier? */
         if (err == ESP_OK) err = bsp_sdcard_format_fat32();
         s_sd_err = err;
-        if (err == ESP_OK) stats_db_resume();      /* fresh sudoku.db, filled from NVS */
+        if (err == ESP_OK) stats_db_start_fresh(); /* new sudoku.db: current settings, no statistics */
         s_sd_state = err == ESP_OK ? SD_DONE : SD_FAILED;
         break;
     }
@@ -1406,15 +1430,16 @@ static void sd_poll_cb(lv_timer_t *t)
     sd_state_t st = s_sd_state;
     if (st == s_sd_seen) return;
     s_sd_seen = st;
-    char sz[24], text[200];
+    char sz[24], text[320];
     switch (st) {
     case SD_FOUND: {
         sd_btn_text("Format", true);
         stats_db_start();                          /* card found after boot: use it for stats too */
         fmt_gb(sz, sizeof(sz), s_sd_bytes);
         snprintf(text, sizeof(text),
-                 "Card \"%s\", %s.\nEverything on it will be erased. It gets one FAT32 "
-                 "partition using the whole card.", s_sd_name, sz);
+                 "Card \"%s\", %s.\nEverything on it will be erased, including sudoku.db with your "
+                 "statistics and solve history. It gets one FAT32 partition using the whole card, "
+                 "and a new sudoku.db with your current settings and the game in progress.", s_sd_name, sz);
         lv_obj_t *m = make_msgbox("Format microSD card?", text);
         msgbox_button(m, "Cancel", sd_format_cancel_cb, false);
         msgbox_button(m, "Format", sd_format_confirm_cb, true);
@@ -1436,8 +1461,14 @@ static void sd_poll_cb(lv_timer_t *t)
         }
         sd_btn_text("Format", true);
         if (st == SD_DONE) {
+            store_reset_stats();                   /* match the new, empty sudoku.db */
+            lv_obj_t *act = lv_screen_active();
+            if (act == scr_home) refresh_home();
+            else if (act == scr_list) refresh_list();
+            else if (act == scr_stats) refresh_stats();
             fmt_gb(sz, sizeof(sz), s_sd_bytes);
-            snprintf(text, sizeof(text), "microSD card formatted: FAT32, one %s partition.", sz);
+            snprintf(text, sizeof(text), "microSD card formatted: FAT32, one %s partition. New sudoku.db "
+                                         "with your current settings; statistics start fresh.", sz);
         } else if (s_sd_err == ESP_ERR_TIMEOUT || s_sd_err == ESP_ERR_INVALID_CRC ||
                    s_sd_err == ESP_ERR_INVALID_RESPONSE) {
             s_sd_present = false;
@@ -2046,7 +2077,10 @@ esp_err_t sudoku_ui_start(void)
             if (stats_db_take_prefs(&prefs)) store_apply_prefs(&prefs);
             static uint16_t c_best[PUZZLE_COUNT];
             static uint8_t c_fewest[PUZZLE_COUNT], c_solves[PUZZLE_COUNT];
-            if (stats_db_take_cache(c_best, c_fewest, c_solves)) store_merge_stats(c_best, c_fewest, c_solves);
+            if (stats_db_take_cache(c_best, c_fewest, c_solves)) {
+                store_reset_stats();                /* sudoku.db is the record: show exactly what it has */
+                store_merge_stats(c_best, c_fewest, c_solves);
+            }
         }
     } else {
         printf("microSD: no card\n");

@@ -24,8 +24,9 @@ typedef struct {
     uint8_t  val[81];          /* 0 = empty; givens included */
     uint16_t notes[81];        /* bit d (1..9) = pencil mark d */
     uint32_t elapsed_ms;
-    uint16_t mistakes;         /* rule-breaking digits placed so far (added later: */
-} saved_game_t;                /* a save without it loads with 0) */
+    uint16_t mistakes;         /* rule-breaking digits placed so far */
+    int64_t  started_at;       /* Unix time the puzzle was opened (or restarted), 0 = unknown */
+} saved_game_t;                /* (older NVS saves end before mistakes or started_at) */
 
 void store_init(void);
 
@@ -39,6 +40,8 @@ bool store_record_solve(uint16_t id, uint32_t seconds, uint32_t mistakes);
 void store_merge_stats(const uint16_t *best, const uint8_t *fewest, const uint8_t *solves);
 /* Copies the RAM statistics out (same layout). */
 void store_copy_stats(uint16_t *best, uint8_t *fewest, uint8_t *solves);
+/* Forgets all statistics in RAM (the card was formatted). */
+void store_reset_stats(void);
 /* Fewest mistakes over all solves (capped at 254), STORE_MISTAKES_UNKNOWN if
  * every solve predates mistake counting or the puzzle is unsolved. */
 uint8_t store_fewest_mistakes(uint16_t id);

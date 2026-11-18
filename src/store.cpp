@@ -48,8 +48,8 @@ void store_init(void)
     } else {
         for (int i = 0; i < PUZZLE_COUNT; i++) s_stat.solves[i] = s_best[i] ? 1 : 0;
     }
-    size_t len = prefs.getBytesLength("game");
-    if (len == sizeof(s_game) || len == offsetof(saved_game_t, mistakes)) {
+    size_t len = prefs.getBytesLength("game");     /* the two layouts NVS ever held */
+    if (len == offsetof(saved_game_t, started_at) || len == offsetof(saved_game_t, mistakes)) {
         prefs.getBytes("game", &s_game, len);
         if (s_game.id >= PUZZLE_COUNT) s_game.id = STORE_NO_GAME;
     }
@@ -94,6 +94,13 @@ void store_merge_stats(const uint16_t *best, const uint8_t *fewest, const uint8_
         }
         if (solves[i] > s_stat.solves[i]) s_stat.solves[i] = solves[i];
     }
+}
+
+void store_reset_stats(void)
+{
+    memset(s_best, 0, sizeof(s_best));
+    memset(s_stat.fewest, STORE_MISTAKES_UNKNOWN, sizeof(s_stat.fewest));
+    memset(s_stat.solves, 0, sizeof(s_stat.solves));
 }
 
 void store_copy_stats(uint16_t *best, uint8_t *fewest, uint8_t *solves)
