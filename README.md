@@ -9,6 +9,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 | ![Home](docs/screenshots/home.png) | ![Puzzles](docs/screenshots/puzzles.png) | ![Game](docs/screenshots/game.png) |
 | **Statistics** | **Trophies** | **Settings** |
 | ![Statistics](docs/screenshots/statistics.png) | ![Trophies](docs/screenshots/trophies.png) | ![Settings](docs/screenshots/settings-display.png) |
+| **Replay** | **Share** | **Rules** |
+| ![Replay](docs/screenshots/replay.png) | ![Share](docs/screenshots/share.png) | ![Rules](docs/screenshots/rules.png) |
 
 Captured from the board over its serial port (see [Screenshots and remote control](#screenshots-and-remote-control)).
 
@@ -60,6 +62,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
   - The bottom bar has seven buttons (Undo, Redo, Erase, Notes, Auto, Restart, Fill); the status line (filled count, conflicts, the locked digit) is in the top bar, under the title.
   - **Fill** puts the right digit (from the puzzle's solution) in the selected cell. Each Fill counts as a hint: the number on the Fill button shows the hints used so far, Undo doesn't take one back, and the count is saved with the game in progress, shown in the "Solved!" dialog and the history, and logged with the solve (`solves.hints`).
   - The number pad shows how many of each digit are still to place. A digit that is complete is dimmed.
+- **Share**: **Share** in the game's second row shows the puzzle as a QR code (black on white in either theme) to scan with a phone. A Classic or imported puzzle is the usual 81-digit string (givens row by row, 0 = empty) that most Sudoku apps can import; a variant is its name, its givens (a 6x6: its 36 cells) and its layout, e.g. `Killer 000... cages=11:0,1;...`, `Jigsaw ... regions=...`, `Thermo ... thermos=...`, `Sandwich ... sums=...`. The text is under the code too. The QR code generator is Project Nayuki's (MIT), copied from LVGL into `src/qrcode/` (the shared `lv_conf.h` has LVGL's QR widget off).
 - **Show timer**: **Settings → Show timer** off hides the game's clock while you play (it shows `--:--`; tap it to pause as before). The time still runs and is recorded, and the Solved dialog shows it.
 - **Head-to-head**: the Solved dialog says how the other players did on the same puzzle: "2nd of 3 - Bo leads with 06:20", "★ 1st of 2: ahead of Bo (07:45)", or "Nobody else has solved this one yet" (best times, from `sudoku.db`).
 - **Export to CSV**: **Settings → Export to CSV** writes `export/solves.csv` (every solve: player, puzzle, level, number, seconds, mistakes, hints, started, finished, in local time), `export/achievements.csv` (every player and achievement: progress, goal, unlocked and when) and `export/records.csv` (every player's records) on the microSD card, for a spreadsheet. Copy them off with **Settings → USB drive**.
@@ -239,6 +242,7 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 esp32p4_sudoku.ino      setup/loop
 src/sudoku_ui.c         home, list, statistics, settings and game screens
 src/devctl.cpp          serial control: screenshots and simulated touches (tools/devctl.py)
+src/qrcode/             Project Nayuki's QR Code generator (MIT), for Share
 src/store.cpp           RAM copy of statistics, saved game and settings; reads the old NVS keys once
 src/stats_db.c          sudoku.db on the microSD card: statistics, saved game, settings, queries
 src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
@@ -251,7 +255,7 @@ src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Anti-Knight, Even-Odd, Consecutive, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
-src/fonts/              Montserrat 44 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart and lightbulb icons at 24/20 px (lv_font_conv)
+src/fonts/              Montserrat 44 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb and QR code icons at 24/20 px (lv_font_conv)
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/devctl.py         screenshots (PNG) and touches over the serial port

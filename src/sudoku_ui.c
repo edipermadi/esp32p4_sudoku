@@ -66,6 +66,7 @@
 #include "video_enc.h"
 #include <sys/stat.h>
 #include "moves.h"
+#include "qrcode/qrcodegen.h"
 #include "esp_heap_caps.h"
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
@@ -85,6 +86,7 @@ LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
 #define SYMBOL_STAR     "\xEF\x80\x85"   /* FontAwesome U+F005 */
 #define SYMBOL_CHART    "\xEF\x88\x81"   /* FontAwesome U+F201 (chart-line) */
 #define SYMBOL_BULB     "\xEF\x83\xAB"   /* FontAwesome U+F0EB (lightbulb) */
+#define SYMBOL_QR       "\xEF\x80\xA9"   /* FontAwesome U+F029 (qrcode) */
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
@@ -2344,6 +2346,111 @@ static void rules_first_time(void)
     rules_show(g_var);
 }
 
+/* ------------------------------------------------------------- share (QR code) */
+/*
+ * The Share button: the puzzle as a QR code to scan with a phone. A Classic
+ * (or imported) puzzle is the usual 81-digit string, givens row by row with 0
+ * for empty, which most Sudoku apps can import; a variant is its name, the
+ * givens and its layout, in the text forms sudoku.db keeps them in.
+ */
+static uint8_t *qr_code;                            /* qrcodegen_BUFFER_LEN_MAX each, PSRAM */
+static uint8_t *qr_temp;
+
+/* the text in the code; false if it doesn't fit buf */
+static bool share_text(char *buf, size_t n)
+{
+    const sudoku_geom_t *G = g_geo;
+    char giv[82];
+    int k = 0;
+    for (int i = 0; i < G->ncells; i++) giv[k++] = (char)('0' + g_given[G->cells[i]]);   /* (6x6: its 36 cells) */
+    giv[k] = 0;
+    if (g_var == VAR_CLASSIC) return (size_t)snprintf(buf, n, "%s", giv) < n;
+    int len = snprintf(buf, n, "%s %s", VARIANT_NAMES[g_var], giv);
+    if (len < 0 || (size_t)len >= n) return false;
+    static char extra[STATS_CAGES_LEN];
+    extra[0] = 0;
+    const char *key = NULL;
+    switch (g_var) {
+    case VAR_JIGSAW:
+        for (int i = 0; i < 81; i++) extra[i] = (char)('0' + G->region[i]);
+        extra[81] = 0;
+        key = "regions";
+        break;
+    case VAR_KILLER: key = sudoku_cages_text(G, extra, sizeof(extra)) ? "cages" : NULL; break;
+    case VAR_EVENODD:
+    case VAR_CONSEC: key = sudoku_marks_text(G, extra, sizeof(extra)) ? "marks" : NULL; break;
+    case VAR_THERMO: key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "thermos" : NULL; break;
+    case VAR_SANDWICH: key = sudoku_sandwich_text(G, extra, sizeof(extra)) ? "sums" : NULL; break;
+    default: break;
+    }
+    if (key) len += snprintf(buf + len, n - (size_t)len, " %s=%s", key, extra);
+    return (size_t)len < n;
+}
+
+/* the code: black modules on white (whatever the theme), with a quiet zone of 3 */
+static void qr_draw_cb(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    int size = qrcodegen_getSize(qr_code);
+    lv_area_t co;
+    lv_obj_get_coords(obj, &co);
+    int w = lv_area_get_width(&co), h = lv_area_get_height(&co), side = w < h ? w : h;
+    int mod = side / (size + 6);                    /* whole pixels per module, the code and its margin fitting */
+    if (mod < 1) mod = 1;
+    int x0 = co.x1 + (w - mod * size) / 2, y0 = co.y1 + (h - mod * size) / 2;
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_color = lv_color_white();
+    d.radius = 6;
+    lv_area_t bg = {.x1 = x0 - 3 * mod, .y1 = y0 - 3 * mod, .x2 = x0 + (size + 3) * mod - 1, .y2 = y0 + (size + 3) * mod - 1};
+    lv_draw_rect(layer, &d, &bg);                   /* white, with the 3-module quiet zone */
+    d.radius = 0;
+    d.bg_color = lv_color_black();
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size;) {                /* a row's runs of dark modules as one rectangle each */
+            if (!qrcodegen_getModule(qr_code, x, y)) { x++; continue; }
+            int x1 = x;
+            while (x < size && qrcodegen_getModule(qr_code, x, y)) x++;
+            lv_area_t a = {.x1 = x0 + x1 * mod, .y1 = y0 + y * mod, .x2 = x0 + x * mod - 1, .y2 = y0 + (y + 1) * mod - 1};
+            lv_draw_rect(layer, &d, &a);
+        }
+    }
+}
+
+static void share_cb(lv_event_t *e)
+{
+    if (g_id == STORE_NO_GAME) return;
+    if (!qr_code) qr_code = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
+    if (!qr_temp) qr_temp = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
+    static char text[STATS_CAGES_LEN + 128];
+    if (!qr_code || !qr_temp || !share_text(text, sizeof(text)) ||
+        !qrcodegen_encodeText(text, qr_temp, qr_code, qrcodegen_Ecc_LOW, qrcodegen_VERSION_MIN, qrcodegen_VERSION_MAX,
+                              qrcodegen_Mask_AUTO, true)) {
+        sudoku_ui_notice("Couldn't make a QR code of this puzzle.", 3000);
+        return;
+    }
+    char name[48], title[64];
+    puzzle_name(g_id, name, sizeof(name));
+    snprintf(title, sizeof(title), SYMBOL_QR "  %s", name);
+    lv_obj_t *m = make_msgbox(title, NULL);
+    lv_obj_set_width(m, 560);
+    lv_obj_set_style_text_font(lv_msgbox_get_header(m), &font_icons_20, 0);
+    lv_obj_t *c = lv_msgbox_get_content(m);
+    lv_obj_t *qr = lv_obj_create(c);
+    lv_obj_remove_style_all(qr);
+    lv_obj_set_size(qr, LV_PCT(100), 340);
+    lv_obj_add_event_cb(qr, qr_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    make_wrap_text(c, &lv_font_montserrat_16, C_MUTED,
+                   g_var == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most Sudoku apps "
+                                          "can import this."
+                                        : "Scan it with a phone: the variant, the givens row by row (0 = empty) and "
+                                          "its layout.");
+    lv_obj_t *t = make_wrap_text(c, &lv_font_montserrat_12, C_TEXT, text);
+    lv_obj_set_style_margin_top(t, 6, 0);
+    msgbox_button(m, "Close", mbox_close_cb, false);
+}
+
 /* ------------------------------------------------------------- build */
 
 static void build_game(void)
@@ -2368,6 +2475,9 @@ static void build_game(void)
                             hint_cb, NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(hb, 0), C_ACCENT, 0);
 
+    lv_obj_t *shb = make_btn(scr_game, 8 + 52 + 8 + 120 + 8, TOOL_Y, 130, 48, SYMBOL_QR "  Share", &font_icons_20,
+                             share_cb, NULL);       /* the puzzle as a QR code */
+    lv_obj_set_style_text_color(lv_obj_get_child(shb, 0), C_ACCENT, 0);
     lv_obj_t *tb = make_btn(scr_game, SCR_W - 8 - 200, TOOL_Y, 200, 48, NULL, NULL, pause_cb, NULL);
     lv_obj_set_style_bg_opa(tb, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(tb, LV_OPA_COVER, LV_STATE_PRESSED);

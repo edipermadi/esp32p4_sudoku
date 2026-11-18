@@ -1,7 +1,7 @@
 # Screenshots for the README: python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
 # Opening the port restarts the board, so this starts on a fresh Home screen.
 # Coordinates are screen pixels (720 x 720). Nothing here changes the game data
-# (no puzzle is played, no setting is changed).
+# (no puzzle is played, no setting is changed). The replay needs one solved game.
 
 wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
 shot docs/screenshots/home.png
@@ -14,6 +14,16 @@ wait 300
 tap 44 262                  # puzzle 1
 wait 600
 shot docs/screenshots/game.png
+tap 261 86                  # Share: the puzzle as a QR code
+wait 800
+shot docs/screenshots/share.png
+tap 360 606                 # Close
+wait 300
+tap 34 86                   # the light bulb: the variant's rules
+wait 600
+shot docs/screenshots/rules.png
+tap 360 500                 # OK
+wait 300
 tap 60 30                   # List
 wait 400
 tap 72 36                   # Home
@@ -22,6 +32,18 @@ wait 400
 tap 513 402                 # Statistics
 wait 800
 shot docs/screenshots/statistics.png
+tap 72 36                   # Home
+wait 400
+
+tap 513 496                 # Gameplays (needs a recorded solve)
+wait 1000
+tap 200 112                 # the newest game
+wait 1500
+tap 360 695                 # halfway along the slider
+wait 500
+shot docs/screenshots/replay.png
+tap 60 30                   # Back
+wait 400
 tap 72 36                   # Home
 wait 400
 
