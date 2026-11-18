@@ -30,6 +30,8 @@ static store_prefs_t s_p = {
     .sound = true,
     .screen_timeout_min = 5,
     .timezone = "UTC",
+    .player_id = 0,
+    .player_name = "Player 1",
 };
 #define s_game (s_p.game)
 
@@ -161,6 +163,22 @@ void store_apply_prefs(const store_prefs_t *in)
     s_p = *in;
     if (s_game.id >= PUZZLE_COUNT) s_game.id = STORE_NO_GAME;
     if (s_p.last_collection >= PUZZLE_COLLECTION_COUNT) s_p.last_collection = 0;
+}
+
+int32_t store_player_id(void)
+{
+    return s_p.player_id;
+}
+
+const char *store_player_name(void)
+{
+    return s_p.player_name;
+}
+
+void store_set_player(int32_t id, const char *name)
+{
+    s_p.player_id = id;
+    snprintf(s_p.player_name, sizeof(s_p.player_name), "%s", name);
 }
 
 uint8_t store_last_collection(void)

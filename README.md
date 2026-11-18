@@ -5,7 +5,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 ## Features
 
 - **1600 puzzles in flash**: the 16 OpenSudoku collections from <https://opensudoku.gitlab.io/>. These are Easy, Medium, Hard and Very Hard, plus Gnome Sudoku sets 1–3 at each of those levels. Each puzzle is packed into 41 bytes, about 64 KB in total. Every puzzle was checked to have exactly one solution.
-- **Home screen**: the time and date at the top (once Wi-Fi has fetched it), the solved count and big buttons. **Continue** resumes the game in progress and only appears when there is one. **Puzzles**, **Statistics** and **Settings** open those screens.
+- **Home screen**: the time and date at the top (once Wi-Fi has fetched it), the solved count and big buttons. **Continue** resumes the game in progress and only appears when there is one. **Players** (at the top, showing who is playing), **Puzzles**, **Statistics** and **Settings** open those screens.
+- **Players**: the **Players** screen lists everyone who plays on the board, with their solved puzzles and solves. Tap a player to play as them; **Add player** and **Rename** ask for a name on an on-screen keyboard (names are unique, ignoring case). The red trash button deletes a player with their statistics, solve history and game in progress, after a confirmation; the last player can't be deleted, and deleting the one playing hands over to the first player left. Each player has their own statistics and their own game in progress, and every solve records who solved it. The Statistics screen shows whose statistics it is. Players are kept in `sudoku.db`; without a card there is just one player.
 - **Puzzle list**
   - Collections are in a row along the top, each with its solved count. Swipe the row sideways, or tap the ‹ › arrows at its ends, to see them all. An arrow only shows while there are more collections that way.
   - Puzzles 1–100 fill the screen below it. Solved ones are green and the game in progress is orange.
@@ -38,11 +39,12 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 - **Wi-Fi and clock**: **Settings → Wi-Fi** opens a screen with an on/off switch, nearby networks (tap one; secured networks ask for the password on an on-screen keyboard) and **Forget**. Once connected, the time comes from NTP (pool.ntp.org) and the home screen shows it. The board remembers the network and reconnects at start-up. Wi-Fi goes through the board's ESP32-C6 co-processor (ESP-Hosted over SDIO); the Wi-Fi code is shared with the `esp32p4_86box` project.
 - **Time zone**: **Settings → Time zone** lists IANA names such as `Asia/Dubai`, with daylight saving where the zone has it.
 - **Game data on the microSD card**: statistics, the game in progress and the settings are kept in `sudoku.db`, a SQLite 3 database in the root of a FAT32 microSD card that is inserted at start-up. Nothing is written to the board's flash for them; only the Wi-Fi network and on/off switch stay on the board (NVS). At start-up the board shows "Starting..." while it opens the database (about a second), then builds the screens with its settings. The **Statistics** screen reads the database with SQL queries; the puzzle list, the home screen and "New best!" use a copy in RAM loaded at start-up. Without a card, the game runs on defaults and keeps changes, the game in progress and solves only until power-off; the "Solved!" dialog warns about this and Settings shows it under **microSD card**. A FAT32 card without `sudoku.db` (a new or empty card) gets a skeleton database at start-up: all tables, the current settings and the game in progress, and no statistics. The screens then show exactly what the database holds. A card without a FAT32 filesystem is not formatted automatically; Settings offers **Format**. (A database from a build before settings moved to the card gets the board's older statistics merged in once.) Open it on a computer with `sqlite3 sudoku.db`:
-  - `solves`: every solve, with `puzzle` (0–1599), `level`, `number` (1–100), `seconds`, `mistakes`, `started_at` (when the puzzle was opened, or restarted) and `finished_at` (when it was solved). Times are Unix time (UTC). The board knows the time once Wi-Fi has set the clock; a puzzle opened before that still gets its start time, worked out from the board's uptime. Earlier solves have no `started_at`.
-  - `puzzle_stats`: per puzzle `best_seconds`, `fewest_mistakes` (NULL if solved before mistakes were counted) and `solves`.
-  - `level_stats` (view): per level solved, solves, fastest, average, average mistakes and solves without mistakes.
-  - `saved_game`: the unfinished game (one row): `cells` holds 81 digits row by row (0 = empty, givens included), `notes` 81 little-endian 16-bit masks (bit d = pencil mark d), plus `elapsed_ms`, `mistakes`, `started_at` and `saved_at`. It is saved after every move.
-  - `settings`: `dark_mode`, `sound`, `screen_off_minutes`, `time_zone`, `last_level`, and `migrated_from_nvs`.
+  - `players`: `id`, `name`, `created_at`. Statistics and saved games that existed before players were added belong to player 1, "Player 1".
+  - `solves`: every solve, with `player_id`, `puzzle` (0–1599), `level`, `number` (1–100), `seconds`, `mistakes`, `started_at` (when the puzzle was opened, or restarted) and `finished_at` (when it was solved). Times are Unix time (UTC). The board knows the time once Wi-Fi has set the clock; a puzzle opened before that still gets its start time, worked out from the board's uptime. Earlier solves have no `started_at`.
+  - `puzzle_stats`: per player and puzzle `best_seconds`, `fewest_mistakes` (NULL if solved before mistakes were counted) and `solves`.
+  - `level_stats` (view): per player and level: solved, solves, fastest, average, average mistakes and solves without mistakes.
+  - `saved_game`: each player's unfinished game (one row per player): `cells` holds 81 digits row by row (0 = empty, givens included), `notes` 81 little-endian 16-bit masks (bit d = pencil mark d), plus `elapsed_ms`, `mistakes`, `started_at` and `saved_at`. It is saved after every move.
+  - `settings`: `dark_mode`, `sound`, `screen_off_minutes`, `time_zone`, `last_level`, `current_player` and `migrated_from_nvs`.
 
   ```
   sqlite3 -box sudoku.db "SELECT level, number, seconds, mistakes, datetime(started_at, 'unixepoch', 'localtime') AS started, datetime(finished_at, 'unixepoch', 'localtime') AS finished FROM solves ORDER BY id DESC LIMIT 10"
@@ -97,7 +99,8 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720�
 | Start the puzzle over           | **Restart** (asks first if there is progress)    |
 | Pause                           | Tap the timer; tap the board to resume           |
 | Back to the list                | **List** (top left); the game is saved           |
-| Back to the home screen         | **Home** (top left of the list, statistics or settings) |
+| Back to the home screen         | **Home** (top left of the list, statistics, players or settings) |
+| Switch or add players          | **Players** on the home screen                   |
 | See solve times and mistakes    | **Statistics** on the home screen; pick a level on the left |
 | Sound on/off                    | **Settings → Sound effects**                     |
 | Light / dark mode               | **Settings → Dark mode**                         |
@@ -150,7 +153,7 @@ src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
-src/fonts/              Montserrat 44 px digits / 36 px timer (lv_font_conv)
+src/fonts/              Montserrat 44 px digits / 36 px timer, FontAwesome person icon (lv_font_conv)
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/opensudoku/       the downloaded .opensudoku collections

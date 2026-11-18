@@ -1,10 +1,11 @@
 /*
- * Statistics database on the microSD card (see stats_db.h).
+ * The game's database on the microSD card (see stats_db.h).
  */
 #include "stats_db.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -30,10 +31,13 @@ typedef struct {                /* PUZZLE_COUNT-sized arrays, as in store.h */
 typedef struct {                /* CMD_OPEN: what the board has (freed by the worker) */
     stats_arrays_t stats;       /* first use: copied into puzzle_stats */
     store_prefs_t prefs;        /* first use: copied in; base for stats_db_take_prefs() */
-    bool fresh;                 /* after a format: no statistics, settings only */
+    bool fresh;                 /* after a format / empty card: no statistics, settings only */
 } open_seed_t;
 
-typedef enum { CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME } cmd_type_t;
+typedef enum {
+    CMD_OPEN, CMD_SOLVE, CMD_QUERY, CMD_SUSPEND, CMD_SET, CMD_GAME,
+    CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
+} cmd_type_t;
 typedef struct {
     cmd_type_t type;
     uint16_t puzzle;
@@ -44,8 +48,8 @@ typedef struct {
     open_seed_t *seed;          /* CMD_OPEN */
     char key[24];               /* CMD_SET */
     bool is_text;
-    int ival;
-    char text[STORE_TZ_LEN];
+    int ival;                   /* CMD_SET value; player id for the player commands */
+    char text[STORE_TZ_LEN];    /* CMD_SET text; player name */
 } cmd_t;
 
 typedef enum { ST_OFF, ST_OPENING, ST_READY, ST_NOT_FAT, ST_ERROR } db_state_t;
@@ -53,16 +57,24 @@ typedef enum { ST_OFF, ST_OPENING, ST_READY, ST_NOT_FAT, ST_ERROR } db_state_t;
 static QueueHandle_t s_q;
 static SemaphoreHandle_t s_suspended, s_opened, s_lock;  /* s_lock guards the results below */
 static volatile db_state_t s_state = ST_OFF;
-static volatile int s_solves = -1;            /* rows in solves, -1 unknown */
+static volatile int s_solves = -1;            /* rows in solves (all players), -1 unknown */
 static sqlite3 *s_db;
 static sqlite3_stmt *s_merge, *s_solve_upsert, *s_solve_insert;
+static int32_t s_player;                      /* worker: who is playing (players.id) */
+static char s_player_name[STORE_NAME_LEN];
 
 /* results handed to the LVGL task */
 static stats_view_t s_view;
 static bool s_view_new;
-static stats_arrays_t *s_cache;               /* set after open, taken once */
+static stats_arrays_t *s_cache;               /* set after open / switch, taken once */
 static store_prefs_t s_prefs_out;
 static bool s_prefs_new;
+static stats_player_t s_players[STATS_MAX_PLAYERS];
+static int s_players_n;
+static bool s_players_new;
+static stats_player_change_t s_change;
+static bool s_change_new;
+static char s_message[96];
 /* the newest game to save (CMD_GAME just says "there is one") */
 static saved_game_t s_game_next;
 static bool s_game_next_has, s_game_dirty;
@@ -81,67 +93,88 @@ static bool exec(const char *sql)
     return true;
 }
 
+/* table layouts (user_version 4), shared by SCHEMA and the upgrade below */
+#define T_PLAYERS \
+    "players("                                                                  \
+    "  id INTEGER PRIMARY KEY,"                                                 \
+    "  name TEXT NOT NULL UNIQUE COLLATE NOCASE,"                               \
+    "  created_at INTEGER)"                 /* Unix time UTC; NULL = clock not set */
+#define T_SOLVES \
+    "solves("                                                                   \
+    "  id INTEGER PRIMARY KEY,"                                                 \
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"                      \
+    "  puzzle INTEGER NOT NULL,"            /* 0..1599, as in the firmware */  \
+    "  level TEXT NOT NULL,"                /* collection, e.g. 'Gnome 2 Hard' */ \
+    "  number INTEGER NOT NULL,"            /* 1..100 within the level */       \
+    "  seconds INTEGER NOT NULL,"                                               \
+    "  mistakes INTEGER NOT NULL,"                                              \
+    "  finished_at INTEGER,"                /* Unix time UTC; NULL = clock not set */ \
+    "  started_at INTEGER)"                 /* when it was opened (or restarted) */
+#define T_PUZZLE_STATS \
+    "puzzle_stats("                                                             \
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"                      \
+    "  puzzle INTEGER NOT NULL,"                                                \
+    "  level TEXT NOT NULL,"                                                    \
+    "  number INTEGER NOT NULL,"                                                \
+    "  best_seconds INTEGER NOT NULL,"                                          \
+    "  fewest_mistakes INTEGER,"            /* NULL = solved before mistakes were counted */ \
+    "  solves INTEGER NOT NULL,"                                                \
+    "  PRIMARY KEY (player_id, puzzle))"
+#define T_SAVED_GAME \
+    "saved_game("                           /* one unfinished game per player */ \
+    "  player_id INTEGER PRIMARY KEY REFERENCES players(id),"                   \
+    "  puzzle INTEGER NOT NULL,"                                                \
+    "  level TEXT NOT NULL,"                                                    \
+    "  number INTEGER NOT NULL,"                                                \
+    "  cells TEXT NOT NULL,"                /* 81 digits, row by row, 0 = empty, givens included */ \
+    "  notes BLOB NOT NULL,"                /* 81 x uint16 LE, bit d = pencil mark d */ \
+    "  elapsed_ms INTEGER NOT NULL,"                                            \
+    "  mistakes INTEGER NOT NULL,"                                              \
+    "  saved_at INTEGER,"                   /* Unix time UTC; NULL = clock not set */ \
+    "  started_at INTEGER)"
+
 static const char SCHEMA[] =
-    "CREATE TABLE IF NOT EXISTS solves("
-    "  id INTEGER PRIMARY KEY,"
-    "  puzzle INTEGER NOT NULL,"          /* 0..1599, as in the firmware */
-    "  level TEXT NOT NULL,"              /* collection, e.g. 'Gnome 2 Hard' */
-    "  number INTEGER NOT NULL,"          /* 1..100 within the level */
-    "  seconds INTEGER NOT NULL,"
-    "  mistakes INTEGER NOT NULL,"
-    "  finished_at INTEGER,"              /* Unix time UTC; NULL = clock not set */
-    "  started_at INTEGER"                /* when it was opened (or restarted) */
-    ");"
+    "CREATE TABLE IF NOT EXISTS " T_PLAYERS ";"
+    "CREATE TABLE IF NOT EXISTS " T_SOLVES ";"
+    "CREATE TABLE IF NOT EXISTS " T_PUZZLE_STATS ";"
+    "CREATE TABLE IF NOT EXISTS " T_SAVED_GAME ";"
+    "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value);";
+
+/* after the upgrade: indexes and the view, always in their current form */
+static const char SCHEMA_POST[] =
     "CREATE INDEX IF NOT EXISTS solves_puzzle ON solves(puzzle);"
-    "CREATE TABLE IF NOT EXISTS puzzle_stats("
-    "  puzzle INTEGER PRIMARY KEY,"
-    "  level TEXT NOT NULL,"
-    "  number INTEGER NOT NULL,"
-    "  best_seconds INTEGER NOT NULL,"
-    "  fewest_mistakes INTEGER,"          /* NULL = solved before mistakes were counted */
-    "  solves INTEGER NOT NULL"
-    ");"
-    "CREATE INDEX IF NOT EXISTS puzzle_stats_level ON puzzle_stats(level, number);"
-    "CREATE VIEW IF NOT EXISTS level_stats AS"
-    "  SELECT level, COUNT(*) AS solved, SUM(solves) AS solves,"
-    "         MIN(best_seconds) AS fastest_seconds,"
-    "         CAST(ROUND(AVG(best_seconds)) AS INTEGER) AS average_seconds,"
-    "         ROUND(AVG(fewest_mistakes), 1) AS average_mistakes,"
-    "         SUM(fewest_mistakes = 0) AS without_mistakes"
-    "  FROM puzzle_stats GROUP BY level ORDER BY MIN(puzzle);"
-    "CREATE TABLE IF NOT EXISTS saved_game("
-    "  slot INTEGER PRIMARY KEY CHECK (slot = 1),"
-    "  puzzle INTEGER NOT NULL,"
-    "  level TEXT NOT NULL,"
-    "  number INTEGER NOT NULL,"
-    "  cells TEXT NOT NULL,"              /* 81 digits, row by row, 0 = empty, givens included */
-    "  notes BLOB NOT NULL,"              /* 81 x uint16 LE, bit d = pencil mark d */
-    "  elapsed_ms INTEGER NOT NULL,"
-    "  mistakes INTEGER NOT NULL,"
-    "  saved_at INTEGER,"                 /* Unix time UTC; NULL = clock not set */
-    "  started_at INTEGER"
-    ");"
-    "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value);"
-    "PRAGMA user_version = 3;";
+    "CREATE INDEX IF NOT EXISTS solves_player ON solves(player_id, puzzle);"
+    "DROP INDEX IF EXISTS puzzle_stats_level;"
+    "CREATE INDEX puzzle_stats_level ON puzzle_stats(player_id, level, number);"
+    "DROP VIEW IF EXISTS level_stats;"
+    "CREATE VIEW level_stats AS"
+    "  SELECT p.name AS player, s.level, COUNT(*) AS solved, SUM(s.solves) AS solves,"
+    "         MIN(s.best_seconds) AS fastest_seconds,"
+    "         CAST(ROUND(AVG(s.best_seconds)) AS INTEGER) AS average_seconds,"
+    "         ROUND(AVG(s.fewest_mistakes), 1) AS average_mistakes,"
+    "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
+    "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
+    "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
+    "PRAGMA user_version = 4;";
 
 /* MIN() of SQL is NULL if either side is: keep the known value then */
 #define FEWEST_MERGED "COALESCE(MIN(fewest_mistakes, excluded.fewest_mistakes), fewest_mistakes, excluded.fewest_mistakes)"
 
-static const char SQL_MERGE[] =       /* idempotent: safe to run at every start */
-    "INSERT INTO puzzle_stats(puzzle, level, number, best_seconds, fewest_mistakes, solves)"
-    " VALUES(?1, ?2, ?3, ?4, ?5, ?6)"
-    " ON CONFLICT(puzzle) DO UPDATE SET best_seconds = MIN(best_seconds, excluded.best_seconds),"
+static const char SQL_MERGE[] =       /* idempotent */
+    "INSERT INTO puzzle_stats(player_id, puzzle, level, number, best_seconds, fewest_mistakes, solves)"
+    " VALUES(?7, ?1, ?2, ?3, ?4, ?5, ?6)"
+    " ON CONFLICT(player_id, puzzle) DO UPDATE SET best_seconds = MIN(best_seconds, excluded.best_seconds),"
     "   fewest_mistakes = " FEWEST_MERGED ", solves = MAX(solves, excluded.solves)";
 
 static const char SQL_SOLVE_UPSERT[] =
-    "INSERT INTO puzzle_stats(puzzle, level, number, best_seconds, fewest_mistakes, solves)"
-    " VALUES(?1, ?2, ?3, ?4, ?5, 1)"
-    " ON CONFLICT(puzzle) DO UPDATE SET best_seconds = MIN(best_seconds, excluded.best_seconds),"
+    "INSERT INTO puzzle_stats(player_id, puzzle, level, number, best_seconds, fewest_mistakes, solves)"
+    " VALUES(?6, ?1, ?2, ?3, ?4, ?5, 1)"
+    " ON CONFLICT(player_id, puzzle) DO UPDATE SET best_seconds = MIN(best_seconds, excluded.best_seconds),"
     "   fewest_mistakes = " FEWEST_MERGED ", solves = solves + 1";
 
 static const char SQL_SOLVE_INSERT[] =
-    "INSERT INTO solves(puzzle, level, number, seconds, mistakes, finished_at, started_at)"
-    " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+    "INSERT INTO solves(player_id, puzzle, level, number, seconds, mistakes, finished_at, started_at)"
+    " VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7)";
 
 static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
 {
@@ -167,7 +200,9 @@ static int query_int(const char *sql)
     int v = -1;
     sqlite3_stmt *st;
     if (sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) == SQLITE_OK) {
-        if (sqlite3_step(st) == SQLITE_ROW) v = sqlite3_column_int(st, 0);
+        if (sqlite3_step(st) == SQLITE_ROW && sqlite3_column_type(st, 0) != SQLITE_NULL) {
+            v = sqlite3_column_int(st, 0);
+        }
         sqlite3_finalize(st);
     }
     return v;
@@ -189,8 +224,13 @@ static void set_setting(const char *key, bool is_text, int ival, const char *tex
 
 static void save_game(const saved_game_t *g)
 {
+    sqlite3_stmt *st;
     if (!g) {
-        exec("DELETE FROM saved_game");
+        if (sqlite3_prepare_v2(s_db, "DELETE FROM saved_game WHERE player_id = ?1", -1, &st, NULL) == SQLITE_OK) {
+            sqlite3_bind_int(st, 1, s_player);
+            step_done(st, "clear game");
+            sqlite3_finalize(st);
+        }
         return;
     }
     char cells[82];
@@ -202,10 +242,10 @@ static void save_game(const saved_game_t *g)
     }
     cells[81] = 0;
     time_t now = time(NULL);
-    sqlite3_stmt *st;
     if (sqlite3_prepare_v2(s_db,
-            "INSERT OR REPLACE INTO saved_game(slot, puzzle, level, number, cells, notes, elapsed_ms, mistakes,"
-            " saved_at, started_at) VALUES(1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", -1, &st, NULL) != SQLITE_OK) {
+            "INSERT OR REPLACE INTO saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms,"
+            " mistakes, saved_at, started_at) VALUES(?10, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            -1, &st, NULL) != SQLITE_OK) {
         return;
     }
     bind_puzzle(st, g->id);
@@ -217,7 +257,38 @@ static void save_game(const saved_game_t *g)
     else sqlite3_bind_null(st, 8);
     if (g->started_at) sqlite3_bind_int64(st, 9, g->started_at);
     else sqlite3_bind_null(st, 9);
+    sqlite3_bind_int(st, 10, s_player);
     step_done(st, "save game");
+    sqlite3_finalize(st);
+}
+
+/* the current player's unfinished game; g->id = STORE_NO_GAME if none */
+static void load_game(saved_game_t *g)
+{
+    memset(g, 0, sizeof(*g));
+    g->id = STORE_NO_GAME;
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, cells, notes, elapsed_ms, mistakes, started_at FROM saved_game"
+                                 " WHERE player_id = ?1", -1, &st, NULL) != SQLITE_OK) {
+        return;
+    }
+    sqlite3_bind_int(st, 1, s_player);
+    if (sqlite3_step(st) == SQLITE_ROW) {
+        int id = sqlite3_column_int(st, 0);
+        const char *cells = (const char *)sqlite3_column_text(st, 1);
+        const uint8_t *notes = (const uint8_t *)sqlite3_column_blob(st, 2);
+        if (id >= 0 && id < PUZZLE_COUNT && cells && strlen(cells) == 81 && notes &&
+            sqlite3_column_bytes(st, 2) == 162) {
+            g->id = id;
+            for (int i = 0; i < 81; i++) {
+                g->val[i] = (cells[i] >= '0' && cells[i] <= '9') ? cells[i] - '0' : 0;
+                g->notes[i] = notes[2 * i] | (notes[2 * i + 1] << 8);
+            }
+            g->elapsed_ms = (uint32_t)sqlite3_column_int64(st, 3);
+            g->mistakes = (uint16_t)sqlite3_column_int(st, 4);
+            g->started_at = sqlite3_column_int64(st, 5);      /* NULL reads as 0 = unknown */
+        }
+    }
     sqlite3_finalize(st);
 }
 
@@ -243,44 +314,9 @@ static void load_prefs(store_prefs_t *p)
         }
         sqlite3_finalize(st);
     }
-    p->game.id = STORE_NO_GAME;
-    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, cells, notes, elapsed_ms, mistakes, started_at FROM saved_game"
-                                 " WHERE slot = 1",
-                           -1, &st, NULL) == SQLITE_OK) {
-        if (sqlite3_step(st) == SQLITE_ROW) {
-            int id = sqlite3_column_int(st, 0);
-            const char *cells = (const char *)sqlite3_column_text(st, 1);
-            const uint8_t *notes = (const uint8_t *)sqlite3_column_blob(st, 2);
-            if (id >= 0 && id < PUZZLE_COUNT && cells && strlen(cells) == 81 && notes &&
-                sqlite3_column_bytes(st, 2) == 162) {
-                saved_game_t *g = &p->game;
-                g->id = id;
-                for (int i = 0; i < 81; i++) {
-                    g->val[i] = (cells[i] >= '0' && cells[i] <= '9') ? cells[i] - '0' : 0;
-                    g->notes[i] = notes[2 * i] | (notes[2 * i + 1] << 8);
-                }
-                g->elapsed_ms = (uint32_t)sqlite3_column_int64(st, 3);
-                g->mistakes = (uint16_t)sqlite3_column_int(st, 4);
-                g->started_at = sqlite3_column_int64(st, 5);      /* NULL reads as 0 = unknown */
-            }
-        }
-        sqlite3_finalize(st);
-    }
-}
-
-/* first use of this database: copy in the settings and game the board has */
-static void migrate_prefs(const store_prefs_t *p)
-{
-    exec("BEGIN");
-    set_setting("dark_mode", false, p->dark_mode, NULL);
-    set_setting("sound", false, p->sound, NULL);
-    set_setting("screen_off_minutes", false, p->screen_timeout_min, NULL);
-    set_setting("time_zone", true, 0, p->timezone);
-    set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
-                                                          ? p->last_collection : 0].name);
-    save_game(p->game.id < PUZZLE_COUNT ? &p->game : NULL);
-    set_setting("migrated_from_nvs", false, 1, NULL);
-    exec("COMMIT");
+    load_game(&p->game);
+    p->player_id = s_player;
+    snprintf(p->player_name, sizeof(p->player_name), "%s", s_player_name);
 }
 
 static bool has_column(const char *table, const char *col)
@@ -297,16 +333,110 @@ static bool has_column(const char *table, const char *col)
 }
 
 /* Databases made by earlier builds: CREATE ... IF NOT EXISTS keeps their old
- * tables, so bring the columns up to date (user_version 1-2 -> 3). */
+ * tables, so bring them up to date (user_version 1-3 -> 4). Their data
+ * becomes player 1's. */
 static bool upgrade_schema(void)
 {
     bool ok = true;
+    exec("DROP VIEW IF EXISTS level_stats");           /* refers to tables rebuilt below */
     if (!has_column("solves", "finished_at") && has_column("solves", "solved_at")) {
         ok &= exec("ALTER TABLE solves RENAME COLUMN solved_at TO finished_at");
     }
     if (!has_column("solves", "started_at")) ok &= exec("ALTER TABLE solves ADD COLUMN started_at INTEGER");
     if (!has_column("saved_game", "started_at")) ok &= exec("ALTER TABLE saved_game ADD COLUMN started_at INTEGER");
+
+    bool old_solves = !has_column("solves", "player_id");
+    bool old_stats = !has_column("puzzle_stats", "player_id");
+    bool old_game = !has_column("saved_game", "player_id");
+    if (!(old_solves || old_stats || old_game)) return ok;
+    ok &= exec("BEGIN");
+    ok &= exec("INSERT OR IGNORE INTO players(id, name) VALUES(1, 'Player 1')");
+    if (old_solves) ok &= exec("ALTER TABLE solves ADD COLUMN player_id INTEGER NOT NULL DEFAULT 1");
+    if (old_stats) {
+        ok &= exec("ALTER TABLE puzzle_stats RENAME TO puzzle_stats_v3");
+        ok &= exec("CREATE TABLE " T_PUZZLE_STATS);
+        ok &= exec("INSERT INTO puzzle_stats(player_id, puzzle, level, number, best_seconds, fewest_mistakes, solves)"
+                   " SELECT 1, puzzle, level, number, best_seconds, fewest_mistakes, solves FROM puzzle_stats_v3");
+        ok &= exec("DROP TABLE puzzle_stats_v3");
+    }
+    if (old_game) {
+        ok &= exec("ALTER TABLE saved_game RENAME TO saved_game_v3");
+        ok &= exec("CREATE TABLE " T_SAVED_GAME);
+        ok &= exec("INSERT INTO saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms, mistakes,"
+                   " saved_at, started_at) SELECT 1, puzzle, level, number, cells, notes, elapsed_ms, mistakes,"
+                   " saved_at, started_at FROM saved_game_v3");
+        ok &= exec("DROP TABLE saved_game_v3");
+    }
+    if (ok) {
+        exec("COMMIT");
+        printf("stats_db: upgraded: existing statistics and game now belong to \"Player 1\"\n");
+    } else {
+        exec("ROLLBACK");
+    }
     return ok;
+}
+
+static bool player_name_of(int32_t id, char *out, size_t n)
+{
+    bool found = false;
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "SELECT name FROM players WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, id);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            snprintf(out, n, "%s", (const char *)sqlite3_column_text(st, 0));
+            found = true;
+        }
+        sqlite3_finalize(st);
+    }
+    return found;
+}
+
+/* new player; returns its id, 0 if the name is taken, -1 on error */
+static int32_t insert_player(const char *name)
+{
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "INSERT INTO players(name, created_at) VALUES(?1, ?2)", -1, &st, NULL) != SQLITE_OK) {
+        return -1;
+    }
+    time_t now = time(NULL);
+    sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
+    if (now > 1700000000) sqlite3_bind_int64(st, 2, now);
+    else sqlite3_bind_null(st, 2);
+    int rc = sqlite3_step(st);
+    sqlite3_finalize(st);
+    if (rc == SQLITE_DONE) return (int32_t)sqlite3_last_insert_rowid(s_db);
+    return (rc & 0xFF) == SQLITE_CONSTRAINT ? 0 : -1;
+}
+
+/* who is playing: settings.current_player if it still exists, else the
+ * first player; a database without players gets one named `name` */
+static void select_current_player(const char *name)
+{
+    int32_t id = query_int("SELECT p.id FROM players p JOIN settings s ON s.key = 'current_player'"
+                           " AND p.id = s.value");
+    if (id <= 0) id = query_int("SELECT MIN(id) FROM players");
+    if (id <= 0) id = insert_player(name && name[0] ? name : "Player 1");
+    if (id <= 0) id = 1;
+    s_player = id;
+    if (!player_name_of(id, s_player_name, sizeof(s_player_name))) {
+        snprintf(s_player_name, sizeof(s_player_name), "Player 1");
+    }
+    set_setting("current_player", false, id, NULL);
+}
+
+/* first use of this database: copy in the settings and game the board has */
+static void migrate_prefs(const store_prefs_t *p)
+{
+    exec("BEGIN");
+    set_setting("dark_mode", false, p->dark_mode, NULL);
+    set_setting("sound", false, p->sound, NULL);
+    set_setting("screen_off_minutes", false, p->screen_timeout_min, NULL);
+    set_setting("time_zone", true, 0, p->timezone);
+    set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
+                                                          ? p->last_collection : 0].name);
+    save_game(p->game.id < PUZZLE_COUNT ? &p->game : NULL);
+    set_setting("migrated_from_nvs", false, 1, NULL);
+    exec("COMMIT");
 }
 
 static void db_close(void)
@@ -329,20 +459,22 @@ static void merge_legacy(const stats_arrays_t *a)
         if (a->fewest[i] == STORE_MISTAKES_UNKNOWN) sqlite3_bind_null(s_merge, 5);
         else sqlite3_bind_int(s_merge, 5, a->fewest[i]);
         sqlite3_bind_int(s_merge, 6, a->solves[i] ? a->solves[i] : 1);
+        sqlite3_bind_int(s_merge, 7, s_player);
         step_done(s_merge, "merge");
     }
     exec("COMMIT");
 }
 
-/* puzzle_stats -> arrays for the RAM copy */
+/* the current player's puzzle_stats -> arrays for the RAM copy */
 static void load_cache(void)
 {
     stats_arrays_t *a = calloc(1, sizeof(*a));
     if (!a) return;
     memset(a->fewest, STORE_MISTAKES_UNKNOWN, sizeof(a->fewest));
     sqlite3_stmt *st;
-    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, best_seconds, fewest_mistakes, solves FROM puzzle_stats",
-                           -1, &st, NULL) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(s_db, "SELECT puzzle, best_seconds, fewest_mistakes, solves FROM puzzle_stats"
+                                 " WHERE player_id = ?1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
         while (sqlite3_step(st) == SQLITE_ROW) {
             int id = sqlite3_column_int(st, 0);
             if (id < 0 || id >= PUZZLE_COUNT) continue;
@@ -360,6 +492,53 @@ static void load_cache(void)
     xSemaphoreTake(s_lock, portMAX_DELAY);
     free(s_cache);
     s_cache = a;
+    xSemaphoreGive(s_lock);
+}
+
+static void do_list(void)
+{
+    stats_player_t list[STATS_MAX_PLAYERS];
+    int n = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db,
+            "SELECT p.id, p.name,"
+            "  (SELECT COUNT(*) FROM puzzle_stats s WHERE s.player_id = p.id),"
+            "  (SELECT COUNT(*) FROM solves v WHERE v.player_id = p.id)"
+            " FROM players p ORDER BY p.id", -1, &st, NULL) == SQLITE_OK) {
+        while (n < STATS_MAX_PLAYERS && sqlite3_step(st) == SQLITE_ROW) {
+            stats_player_t *p = &list[n++];
+            p->id = sqlite3_column_int(st, 0);
+            snprintf(p->name, sizeof(p->name), "%s", (const char *)sqlite3_column_text(st, 1));
+            p->solved = sqlite3_column_int(st, 2);
+            p->solves = sqlite3_column_int(st, 3);
+        }
+        sqlite3_finalize(st);
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    memcpy(s_players, list, sizeof(stats_player_t) * n);
+    s_players_n = n;
+    s_players_new = true;
+    xSemaphoreGive(s_lock);
+}
+
+static void post_message(const char *msg)
+{
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    snprintf(s_message, sizeof(s_message), "%s", msg);
+    xSemaphoreGive(s_lock);
+}
+
+static void post_change(bool switched)
+{
+    static stats_player_change_t ch;
+    memset(&ch, 0, sizeof(ch));
+    ch.id = s_player;
+    snprintf(ch.name, sizeof(ch.name), "%s", s_player_name);
+    ch.switched = switched;
+    if (switched) load_game(&ch.game);
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_change = ch;
+    s_change_new = true;
     xSemaphoreGive(s_lock);
 }
 
@@ -393,7 +572,7 @@ static void do_open_inner(open_seed_t *seed)
         existed = stat(DB_PATH, &st) == 0 && st.st_size > 0;
     }
     /* No sudoku.db yet (an empty card): start a skeleton like after a format,
-     * with the current settings and game but no statistics. */
+     * with the current settings, player and game but no statistics. */
     if (seed && !existed) seed->fresh = true;
     if (sqlite3_open_v2(DB_PATH, &s_db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
         printf("stats_db: open failed: %s\n", s_db ? sqlite3_errmsg(s_db) : "no memory");
@@ -401,7 +580,7 @@ static void do_open_inner(open_seed_t *seed)
         s_state = ST_ERROR;
         return;
     }
-    if (!exec(SCHEMA) || !upgrade_schema() ||
+    if (!exec(SCHEMA) || !upgrade_schema() || !exec(SCHEMA_POST) ||
         sqlite3_prepare_v2(s_db, SQL_MERGE, -1, &s_merge, NULL) != SQLITE_OK ||
         sqlite3_prepare_v2(s_db, SQL_SOLVE_UPSERT, -1, &s_solve_upsert, NULL) != SQLITE_OK ||
         sqlite3_prepare_v2(s_db, SQL_SOLVE_INSERT, -1, &s_solve_insert, NULL) != SQLITE_OK) {
@@ -410,6 +589,7 @@ static void do_open_inner(open_seed_t *seed)
         s_state = ST_ERROR;
         return;
     }
+    select_current_player(seed ? seed->prefs.player_name : NULL);
     if (seed) {
         /* once per database (the marker is written with the settings); a
          * database made after a format must not get the old statistics back */
@@ -417,7 +597,7 @@ static void do_open_inner(open_seed_t *seed)
             if (!seed->fresh) merge_legacy(&seed->stats);
             migrate_prefs(&seed->prefs);
             printf("stats_db: new database: %s\n", seed->fresh
-                   ? "current settings stored, statistics start fresh"
+                   ? "current settings and player stored, statistics start fresh"
                    : "statistics, settings and game copied in from the board");
         }
         store_prefs_t p = seed->prefs;
@@ -429,9 +609,10 @@ static void do_open_inner(open_seed_t *seed)
     }
     load_cache();
     s_solves = query_int("SELECT COUNT(*) FROM solves");
-    int puzzles = query_int("SELECT COUNT(*) FROM puzzle_stats");
+    int players = query_int("SELECT COUNT(*) FROM players");
     s_state = ST_READY;
-    printf("stats_db: %s open, %d solved puzzles, %d solves logged\n", DB_PATH, puzzles, s_solves);
+    printf("stats_db: %s open, %d player%s, playing as \"%s\", %d solves logged\n", DB_PATH,
+           players, players == 1 ? "" : "s", s_player_name, s_solves);
 }
 
 static void do_solve(const cmd_t *c)
@@ -445,10 +626,12 @@ static void do_solve(const cmd_t *c)
     else sqlite3_bind_null(s_solve_insert, 6);
     if (c->started) sqlite3_bind_int64(s_solve_insert, 7, c->started);
     else sqlite3_bind_null(s_solve_insert, 7);
+    sqlite3_bind_int(s_solve_insert, 8, s_player);
     bool ok = step_done(s_solve_insert, "insert solve");
     bind_puzzle(s_solve_upsert, c->puzzle);
     sqlite3_bind_int64(s_solve_upsert, 4, c->seconds ? c->seconds : 1);
     sqlite3_bind_int64(s_solve_upsert, 5, c->mistakes);
+    sqlite3_bind_int(s_solve_upsert, 6, s_player);
     ok = step_done(s_solve_upsert, "update puzzle_stats") && ok;
     if (ok && exec("COMMIT")) {
         if (s_solves >= 0) s_solves++;
@@ -462,13 +645,15 @@ static void do_query(int level)
     static stats_view_t v;                    /* worker-side scratch */
     memset(&v, 0, sizeof(v));
     v.level = level;
+    v.player_id = s_player;
 
     /* per level: same aggregates the screen shows (closed database: empty result) */
     sqlite3_stmt *st;
     if (s_db && sqlite3_prepare_v2(s_db,
             "SELECT level, COUNT(*), TOTAL(fewest_mistakes = 0), COUNT(fewest_mistakes),"
             "       TOTAL(solves), TOTAL(best_seconds), MIN(best_seconds), TOTAL(fewest_mistakes)"
-            " FROM puzzle_stats GROUP BY level", -1, &st, NULL) == SQLITE_OK) {
+            " FROM puzzle_stats WHERE player_id = ?1 GROUP BY level", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
         while (sqlite3_step(st) == SQLITE_ROW) {
             const char *name = (const char *)sqlite3_column_text(st, 0);
             int c = 0;
@@ -500,8 +685,9 @@ static void do_query(int level)
     if (s_db && level >= 0 && level < PUZZLE_COLLECTION_COUNT &&
         sqlite3_prepare_v2(s_db,
             "SELECT number, best_seconds, fewest_mistakes, solves FROM puzzle_stats"
-            " WHERE level = ?1 ORDER BY number", -1, &st, NULL) == SQLITE_OK) {
-        sqlite3_bind_text(st, 1, puzzle_collections[level].name, -1, SQLITE_STATIC);
+            " WHERE player_id = ?1 AND level = ?2 ORDER BY number", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_text(st, 2, puzzle_collections[level].name, -1, SQLITE_STATIC);
         while (v.n_puzzles < STATS_MAX_PUZZLES && sqlite3_step(st) == SQLITE_ROW) {
             stats_puzzle_t *p = &v.puzzles[v.n_puzzles++];
             p->number = sqlite3_column_int(st, 0);
@@ -525,6 +711,139 @@ static void do_query(int level)
     xSemaphoreGive(s_lock);
 }
 
+/* writes the newest queued game, if any (for the player it belongs to) */
+static void flush_game(void)
+{
+    static saved_game_t g;                    /* worker-side copy */
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool dirty = s_game_dirty, has = s_game_next_has;
+    g = s_game_next;
+    s_game_dirty = false;
+    xSemaphoreGive(s_lock);
+    if (dirty && s_db) save_game(has ? &g : NULL);
+}
+
+static void do_switch(int32_t id)
+{
+    if (!s_db) return;
+    char name[STORE_NAME_LEN];
+    if (!player_name_of(id, name, sizeof(name))) {
+        post_message("That player no longer exists.");
+        do_list();
+        return;
+    }
+    flush_game();                             /* the old player's last moves */
+    s_player = id;
+    snprintf(s_player_name, sizeof(s_player_name), "%s", name);
+    set_setting("current_player", false, id, NULL);
+    load_cache();
+    post_change(true);
+    do_list();
+}
+
+/* trims and checks a name typed on the keyboard; false if unusable */
+static bool clean_name(const char *in, char *out, size_t n)
+{
+    while (*in && isspace((unsigned char)*in)) in++;
+    snprintf(out, n, "%s", in);
+    size_t len = strlen(out);
+    while (len && isspace((unsigned char)out[len - 1])) out[--len] = 0;
+    return len > 0;
+}
+
+static void do_add(const char *raw)
+{
+    if (!s_db) return;
+    char name[STORE_NAME_LEN], msg[96];
+    if (!clean_name(raw, name, sizeof(name))) {
+        post_message("Type a name first.");
+        return;
+    }
+    int32_t id = insert_player(name);
+    if (id == 0) {
+        snprintf(msg, sizeof(msg), "There is already a player called \"%s\".", name);
+        post_message(msg);
+        return;
+    }
+    if (id < 0) {
+        post_message("Couldn't add the player.");
+        return;
+    }
+    do_switch(id);                            /* a new player starts playing */
+}
+
+static void do_rename(int32_t id, const char *raw)
+{
+    if (!s_db) return;
+    char name[STORE_NAME_LEN], msg[96];
+    if (!clean_name(raw, name, sizeof(name))) {
+        post_message("Type a name first.");
+        return;
+    }
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "UPDATE players SET name = ?1 WHERE id = ?2", -1, &st, NULL) != SQLITE_OK) return;
+    sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
+    sqlite3_bind_int(st, 2, id);
+    int rc = sqlite3_step(st);
+    sqlite3_finalize(st);
+    if ((rc & 0xFF) == SQLITE_CONSTRAINT) {
+        snprintf(msg, sizeof(msg), "There is already a player called \"%s\".", name);
+        post_message(msg);
+    } else if (rc == SQLITE_DONE && id == s_player) {
+        snprintf(s_player_name, sizeof(s_player_name), "%s", name);
+        post_change(false);
+    }
+    do_list();
+}
+
+static void do_delete(int32_t id)
+{
+    if (!s_db) return;
+    char name[STORE_NAME_LEN], msg[96];
+    if (!player_name_of(id, name, sizeof(name))) {
+        do_list();
+        return;
+    }
+    if (query_int("SELECT COUNT(*) FROM players") <= 1) {
+        post_message("The only player can't be deleted.");
+        return;
+    }
+    bool current = id == s_player;
+    if (current) flush_game();                /* nothing pending may land after the delete */
+    static const char *const sql[] = {
+        "DELETE FROM solves WHERE player_id = ?1",
+        "DELETE FROM puzzle_stats WHERE player_id = ?1",
+        "DELETE FROM saved_game WHERE player_id = ?1",
+        "DELETE FROM players WHERE id = ?1",
+    };
+    bool ok = exec("BEGIN");
+    for (size_t i = 0; ok && i < sizeof(sql) / sizeof(sql[0]); i++) {
+        sqlite3_stmt *st;
+        ok = sqlite3_prepare_v2(s_db, sql[i], -1, &st, NULL) == SQLITE_OK;
+        if (ok) {
+            sqlite3_bind_int(st, 1, id);
+            ok = step_done(st, "delete player");
+            sqlite3_finalize(st);
+        }
+    }
+    if (!ok) {
+        exec("ROLLBACK");
+        post_message("Couldn't delete the player.");
+        return;
+    }
+    exec("COMMIT");
+    s_solves = query_int("SELECT COUNT(*) FROM solves");
+    snprintf(msg, sizeof(msg), "Deleted %s.", name);
+    post_message(msg);
+    printf("stats_db: deleted player \"%s\"\n", name);
+    if (current) {
+        s_player = 0;                         /* gone: any player is "another" now */
+        do_switch(query_int("SELECT MIN(id) FROM players"));
+    } else {
+        do_list();
+    }
+}
+
 static void worker(void *arg)
 {
     sqlite3_initialize();
@@ -538,23 +857,32 @@ static void worker(void *arg)
         case CMD_SET:
             if (s_db) set_setting(c.key, c.is_text, c.ival, c.text);
             break;
-        case CMD_GAME: {
-            static saved_game_t g;               /* worker-side copy of the newest game */
-            xSemaphoreTake(s_lock, portMAX_DELAY);
-            bool has = s_game_next_has;
-            g = s_game_next;
-            s_game_dirty = false;
-            xSemaphoreGive(s_lock);
-            if (s_db) save_game(has ? &g : NULL);
+        case CMD_GAME:
+            flush_game();
             break;
-        }
         case CMD_SOLVE:
             do_solve(&c);
             break;
         case CMD_QUERY:
             do_query(c.level);
             break;
+        case CMD_PLAYERS:
+            do_list();
+            break;
+        case CMD_ADD_PLAYER:
+            do_add(c.text);
+            break;
+        case CMD_RENAME_PLAYER:
+            do_rename(c.ival, c.text);
+            break;
+        case CMD_SWITCH_PLAYER:
+            if (c.ival != s_player) do_switch(c.ival);
+            break;
+        case CMD_DELETE_PLAYER:
+            do_delete(c.ival);
+            break;
         case CMD_SUSPEND:
+            flush_game();
             db_close();
             bsp_sdcard_unmount();
             s_state = ST_OFF;
@@ -601,6 +929,7 @@ static void start(bool fresh)
     /* what the board knows so far (old NVS values + this session) */
     open_seed_t *seed = malloc(sizeof(*seed));
     if (seed) {
+        memset(seed, 0, sizeof(*seed));
         seed->fresh = fresh;
         if (!fresh) store_copy_stats(seed->stats.best, seed->stats.fewest, seed->stats.solves);
         store_get_prefs(&seed->prefs);
@@ -716,6 +1045,71 @@ bool stats_db_take_cache(uint16_t *best, uint8_t *fewest, uint8_t *solves)
     memcpy(solves, a->solves, sizeof(a->solves));
     free(a);
     return true;
+}
+
+void stats_db_list_players(void)
+{
+    cmd_t c = {.type = CMD_PLAYERS};
+    send(&c);
+}
+
+void stats_db_add_player(const char *name)
+{
+    cmd_t c = {.type = CMD_ADD_PLAYER};
+    snprintf(c.text, sizeof(c.text), "%s", name);
+    send(&c);
+}
+
+void stats_db_rename_player(int32_t id, const char *name)
+{
+    cmd_t c = {.type = CMD_RENAME_PLAYER, .ival = id};
+    snprintf(c.text, sizeof(c.text), "%s", name);
+    send(&c);
+}
+
+void stats_db_switch_player(int32_t id)
+{
+    cmd_t c = {.type = CMD_SWITCH_PLAYER, .ival = id};
+    send(&c);
+}
+
+void stats_db_delete_player(int32_t id)
+{
+    cmd_t c = {.type = CMD_DELETE_PLAYER, .ival = id};
+    send(&c);
+}
+
+int stats_db_take_players(stats_player_t *out)
+{
+    if (!s_lock) return -1;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    int n = s_players_new ? s_players_n : -1;
+    if (n > 0) memcpy(out, s_players, sizeof(stats_player_t) * n);
+    s_players_new = false;
+    xSemaphoreGive(s_lock);
+    return n;
+}
+
+bool stats_db_take_player_change(stats_player_change_t *out)
+{
+    if (!s_lock) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_change_new;
+    if (fresh) *out = s_change;
+    s_change_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
+}
+
+bool stats_db_take_message(char *buf, int len)
+{
+    if (!s_lock) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool any = s_message[0] != 0;
+    if (any) snprintf(buf, len, "%s", s_message);
+    s_message[0] = 0;
+    xSemaphoreGive(s_lock);
+    return any;
 }
 
 void stats_db_suspend(void)

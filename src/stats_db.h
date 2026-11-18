@@ -4,20 +4,24 @@
  * Statistics, the game in progress and the settings are kept here (nothing
  * is written to NVS any more, except Wi-Fi's network by wifi_mgr.cpp):
  *
- *   solves(id, puzzle, level, number, seconds, mistakes, finished_at, started_at)
+ *   players(id, name, created_at)
+ *       who plays; settings.current_player is the one playing now. Each
+ *       player has their own statistics and game in progress.
+ *   solves(id, player_id, puzzle, level, number, seconds, mistakes,
+ *          finished_at, started_at)
  *       one row per solve; started_at = when the puzzle was opened (or
  *       restarted), finished_at = when it was solved; Unix time (UTC), NULL
  *       when the clock wasn't set (no Wi-Fi/NTP yet)
- *   puzzle_stats(puzzle, level, number, best_seconds, fewest_mistakes, solves)
+ *   puzzle_stats(player_id, puzzle, level, number, best_seconds, fewest_mistakes, solves)
  *       per puzzle, updated with every solve; fewest_mistakes NULL = solved
  *       before mistakes were counted
- *   level_stats (view): per level solved / fastest / average / mistakes
- *   saved_game(slot = 1, puzzle, level, number, cells, notes, elapsed_ms,
+ *   level_stats (view): per player and level: solved / fastest / average / mistakes
+ *   saved_game(player_id, puzzle, level, number, cells, notes, elapsed_ms,
  *              mistakes, saved_at, started_at)    saved after every move
  *       the one unfinished game; cells = 81 digits row by row (0 = empty,
  *       givens included), notes = 81 x uint16 little-endian (bit d = mark d)
  *   settings(key, value): dark_mode, sound, screen_off_minutes, time_zone,
- *       last_level, and migrated_from_nvs (set when the database is first
+ *       last_level, current_player, and migrated_from_nvs (set when the database is first
  *       filled: from what the board has, or, after a format, with just the
  *       current settings and game)
  *
@@ -53,6 +57,7 @@ typedef struct {
 
 typedef struct {
     int level;                           /* -1 = all levels, else collection index */
+    int32_t player_id;                   /* whose statistics these are */
     stats_level_t levels[PUZZLE_COLLECTION_COUNT];
     stats_level_t total;
     int n_puzzles;                       /* rows in puzzles (level >= 0 only) */
@@ -93,6 +98,41 @@ bool stats_db_take_view(stats_view_t *out);
 /* After opening: copies puzzle_stats out as PUZZLE_COUNT arrays (see
  * store_merge_stats()); true once, when they are new. */
 bool stats_db_take_cache(uint16_t *best, uint8_t *fewest, uint8_t *solves);
+
+/* ---------------------------------------------------------------- players */
+#define STATS_MAX_PLAYERS 16
+
+typedef struct {
+    int32_t id;
+    char name[STORE_NAME_LEN];
+    uint16_t solved;                     /* puzzles solved */
+    uint32_t solves;                     /* solves logged */
+} stats_player_t;
+
+typedef struct {
+    int32_t id;                          /* who plays now */
+    char name[STORE_NAME_LEN];
+    bool switched;                       /* another player: game below + stats cache */
+    saved_game_t game;                   /* their game in progress (switched only) */
+} stats_player_change_t;
+
+/* Asks for the player list (stats_db_take_players()). */
+void stats_db_list_players(void);
+/* Adds a player and switches to them; renames one; switches to one. Results
+ * come back through stats_db_take_player_change() (and the stats cache, the
+ * player list, or stats_db_take_message() for a refusal). The game in
+ * progress is saved for the player it belongs to before a switch. */
+void stats_db_add_player(const char *name);
+void stats_db_rename_player(int32_t id, const char *name);
+void stats_db_switch_player(int32_t id);
+/* Deletes a player with their solves, statistics and game in progress (not
+ * the last one). Deleting the current player switches to the first one left. */
+void stats_db_delete_player(int32_t id);
+/* Newest player list: count, or -1 if none arrived since the last call. */
+int stats_db_take_players(stats_player_t *out);   /* out: STATS_MAX_PLAYERS entries */
+bool stats_db_take_player_change(stats_player_change_t *out);
+/* A message for the user (e.g. "name taken"); false if none. */
+bool stats_db_take_message(char *buf, int len);
 
 /* Closes the database and unmounts the card (before formatting); waits up
  * to a few seconds. stats_db_start_fresh() mounts and starts a new one. */

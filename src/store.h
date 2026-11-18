@@ -60,15 +60,23 @@ void store_clear_game(void);                  /* memory + queued delete */
 /* Everything except statistics, as one block: what sudoku.db is seeded with
  * on first use, and what it hands back at start-up. */
 #define STORE_TZ_LEN 48
+#define STORE_NAME_LEN 24                     /* player name, incl. the terminator */
 typedef struct {
     saved_game_t game;                        /* game.id == STORE_NO_GAME: none */
     uint8_t last_collection;
     bool dark_mode, sound;
     uint8_t screen_timeout_min;
     char timezone[STORE_TZ_LEN];
+    int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
+    char player_name[STORE_NAME_LEN];
 } store_prefs_t;
 void store_get_prefs(store_prefs_t *out);
 void store_apply_prefs(const store_prefs_t *in);   /* RAM only */
+
+/* Who is playing (RAM; stats_db_switch_player() etc. change it in sudoku.db). */
+int32_t store_player_id(void);
+const char *store_player_name(void);
+void store_set_player(int32_t id, const char *name);
 
 uint8_t store_last_collection(void);
 void store_set_last_collection(uint8_t c);

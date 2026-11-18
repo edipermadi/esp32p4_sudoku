@@ -8,6 +8,8 @@
  *     Solved puzzles are green, the game in progress is orange.
  *   - statistics: per level and per puzzle best times, mistakes, solves,
  *     read from sudoku.db on the microSD card (stats_db.c).
+ *   - players: who is playing; switch, add or rename (statistics and the
+ *     game in progress are per player, in sudoku.db).
  *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone,
  *     and formatting the microSD card (FAT32, one partition).
  *   - wifi: on/off, nearby networks, password keyboard (wifi_ui.c).
@@ -50,6 +52,8 @@ static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
 
 LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
 LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
+LV_FONT_DECLARE(font_user_24)     /* person icon, falls back to Montserrat 24 */
+#define SYMBOL_USER "\xEF\x80\x87"  /* FontAwesome U+F007, in font_user_24 */
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
@@ -125,15 +129,20 @@ static board_t  g_undo[UNDO_MAX];
 static int      g_undo_head, g_undo_len;
 
 /* ------------------------------------------------------------- widgets */
-static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_game;
+static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_game;
 
 /* home screen */
-static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date;
+static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player;
+
+/* players screen */
+static lv_obj_t *p_list, *p_add, *p_note;
+static stats_player_t p_players[STATS_MAX_PLAYERS];
+static int p_count = -1;                 /* last list from sudoku.db, -1 = none yet */
 
 /* statistics screen: row 0 of the left column is "All levels" */
 #define X_ROWS (PUZZLE_COLLECTION_COUNT + 1)
 static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
-static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_note;
+static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_note, *x_player;
 static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1 */
 
 /* settings screen */
@@ -159,6 +168,7 @@ static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss;
 
 static void show_list(void);
 static void open_puzzle(uint16_t id);
+static void render_players(void);
 
 /* ============================================================= helpers */
 
@@ -977,6 +987,7 @@ static void refresh_home(void)
         total += store_solved_count(puzzle_collections[c].first, puzzle_collections[c].count);
     }
     lv_label_set_text_fmt(h_total, "%u of %u puzzles solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
+    lv_label_set_text_fmt(h_player, "Playing as %s", store_player_name());
 
     const saved_game_t *s = store_saved_game();
     lv_obj_set_hidden(h_continue, s->id == STORE_NO_GAME);
@@ -1204,6 +1215,7 @@ static void render_stats(const stats_view_t *v, bool from_db)
                               (unsigned)puzzle_collections[c].count);
     }
     lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)v->total.solved, (unsigned)PUZZLE_COUNT);
+    lv_label_set_text_fmt(x_player, "Player: %s", store_player_name());
     stats_select_rows();
     lv_label_set_text(x_note, from_db
         ? "From sudoku.db on the microSD card. Mistake: a placed digit that broke a rule; "
@@ -1420,12 +1432,36 @@ static void sd_poll_cb(lv_timer_t *t)
     static uint16_t c_best[PUZZLE_COUNT];
     static uint8_t c_fewest[PUZZLE_COUNT], c_solves[PUZZLE_COUNT];
     if (stats_db_take_cache(c_best, c_fewest, c_solves)) {
-        store_merge_stats(c_best, c_fewest, c_solves);     /* sudoku.db -> RAM copy */
+        store_reset_stats();                               /* sudoku.db -> RAM copy (this player's) */
+        store_merge_stats(c_best, c_fewest, c_solves);
         lv_obj_t *act = lv_screen_active();
         if (act == scr_home) refresh_home();
         else if (act == scr_list) refresh_list();
         else if (act == scr_stats) refresh_stats();
     }
+
+    static stats_player_change_t ch;
+    if (stats_db_take_player_change(&ch)) {
+        store_set_player(ch.id, ch.name);
+        if (ch.switched) {
+            store_set_game(&ch.game);                      /* their game in progress (RAM only) */
+            g_id = STORE_NO_GAME;                          /* the game screen held someone else's */
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Now playing: %s", ch.name);
+            sudoku_ui_notice(msg, 2500);
+        }
+        refresh_home();
+        render_players();
+    }
+    static stats_player_t list[STATS_MAX_PLAYERS];
+    int n = stats_db_take_players(list);
+    if (n >= 0) {
+        memcpy(p_players, list, sizeof(stats_player_t) * n);
+        p_count = n;
+        render_players();
+    }
+    char msg[96];
+    if (stats_db_take_message(msg, sizeof(msg))) sudoku_ui_notice(msg, 4000);
 
     sd_state_t st = s_sd_state;
     if (st == s_sd_seen) return;
@@ -1488,6 +1524,252 @@ static void sd_poll_cb(lv_timer_t *t)
     }
 }
 
+/* ------------------------------------------------------------- players */
+
+/* name dialog (add or rename), on the top layer with an on-screen keyboard */
+static lv_obj_t *nd_ovl, *nd_ta;
+static int32_t nd_rename_id;             /* 0 = add a player */
+
+static void nd_close(void)
+{
+    if (!nd_ovl) return;
+    lv_obj_delete_async(nd_ovl);
+    nd_ovl = nd_ta = NULL;
+}
+
+static void nd_ok(void)
+{
+    const char *name = lv_textarea_get_text(nd_ta);
+    if (nd_rename_id) stats_db_rename_player(nd_rename_id, name);
+    else stats_db_add_player(name);
+    nd_close();
+}
+
+static void nd_kb_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_READY) nd_ok();
+    else if (code == LV_EVENT_CANCEL) nd_close();
+}
+
+static void nd_btn_cb(lv_event_t *e)
+{
+    if ((intptr_t)lv_event_get_user_data(e)) nd_ok();
+    else nd_close();
+}
+
+static void nd_open(int32_t rename_id, const char *current)
+{
+    nd_close();
+    nd_rename_id = rename_id;
+    nd_ovl = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(nd_ovl);
+    lv_obj_set_size(nd_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(nd_ovl, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(nd_ovl, LV_OPA_70, 0);
+    lv_obj_set_clickable(nd_ovl, true);              /* block touches to the page */
+
+    lv_obj_t *panel = lv_obj_create(nd_ovl);
+    lv_obj_set_size(panel, LV_PCT(92), LV_SIZE_CONTENT);
+    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_style_bg_color(panel, C_CARD, 0);
+    lv_obj_set_style_border_width(panel, 0, 0);
+    lv_obj_set_style_radius(panel, 16, 0);
+    lv_obj_set_style_pad_all(panel, 20, 0);
+    lv_obj_set_style_pad_row(panel, 14, 0);
+    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scrollable(panel, false);
+    lv_obj_t *t = make_label(panel, &lv_font_montserrat_24, C_TEXT);
+    lv_label_set_text(t, rename_id ? "Rename player" : "New player");
+
+    nd_ta = lv_textarea_create(panel);
+    lv_obj_set_width(nd_ta, LV_PCT(100));
+    lv_textarea_set_one_line(nd_ta, true);
+    lv_textarea_set_max_length(nd_ta, STORE_NAME_LEN - 1);
+    lv_textarea_set_placeholder_text(nd_ta, "Name");
+    lv_textarea_set_text(nd_ta, current ? current : "");
+    lv_obj_set_style_text_font(nd_ta, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(nd_ta, C_TEXT, 0);
+    lv_obj_set_style_text_color(nd_ta, C_MUTED, LV_PART_TEXTAREA_PLACEHOLDER);
+    lv_obj_set_style_bg_color(nd_ta, C_BG, 0);
+    lv_obj_set_style_border_color(nd_ta, C_ACCENT, 0);
+    lv_obj_set_style_radius(nd_ta, 10, 0);
+    lv_obj_add_state(nd_ta, LV_STATE_FOCUSED);
+
+    lv_obj_t *row = lv_obj_create(panel);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 12, 0);
+    lv_obj_t *cancel = make_btn(row, 0, 0, 150, 52, "Cancel", &lv_font_montserrat_18, nd_btn_cb, (void *)0);
+    lv_obj_set_style_bg_color(cancel, C_CARD2, 0);
+    lv_obj_t *ok = make_btn(row, 0, 0, 150, 52, rename_id ? "Rename" : "Add", &lv_font_montserrat_18,
+                            nd_btn_cb, (void *)1);
+    lv_obj_set_style_bg_color(ok, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(ok, 0), lv_color_white(), 0);
+
+    lv_obj_t *kb = lv_keyboard_create(nd_ovl);
+    lv_obj_set_size(kb, LV_PCT(100), 330);
+    lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_keyboard_set_textarea(kb, nd_ta);
+    lv_obj_set_style_bg_color(kb, C_BG, 0);
+    lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(kb, 0, 0);
+    lv_obj_set_style_pad_all(kb, 8, 0);
+    lv_obj_set_style_pad_bottom(kb, 30, 0);
+    lv_obj_set_style_pad_gap(kb, 8, 0);
+    lv_obj_set_style_bg_color(kb, C_CARD2, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(kb, C_CARD, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(kb, C_ACCENT, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(kb, C_TEXT, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(kb, C_TEXT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_font(kb, &lv_font_montserrat_22, LV_PART_ITEMS);
+    lv_obj_set_style_radius(kb, 10, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(kb, 0, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
+    lv_obj_add_event_cb(kb, nd_kb_cb, LV_EVENT_ALL, NULL);
+}
+
+static void player_row_cb(lv_event_t *e)
+{
+    int32_t id = (int32_t)(intptr_t)lv_event_get_user_data(e);
+    if (id && id != store_player_id()) stats_db_switch_player(id);
+}
+
+static void player_rename_cb(lv_event_t *e)
+{
+    nd_open((int32_t)(intptr_t)lv_event_get_user_data(e), store_player_name());
+}
+
+static int32_t p_delete_id;
+
+static void player_delete_confirm_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    if (p_delete_id) stats_db_delete_player(p_delete_id);
+    p_delete_id = 0;
+}
+
+static void player_delete_cb(lv_event_t *e)
+{
+    int32_t id = (int32_t)(intptr_t)lv_event_get_user_data(e);
+    const stats_player_t *pl = NULL;
+    for (int i = 0; i < p_count; i++) {
+        if (p_players[i].id == id) pl = &p_players[i];
+    }
+    if (!pl) return;
+    p_delete_id = id;
+    char title[48], text[256];
+    snprintf(title, sizeof(title), "Delete %s?", pl->name);
+    snprintf(text, sizeof(text),
+             "Their statistics (%u solved puzzle%s), solve history (%lu solve%s) and game in progress "
+             "are erased from sudoku.db. This can't be undone.%s",
+             (unsigned)pl->solved, pl->solved == 1 ? "" : "s",
+             (unsigned long)pl->solves, pl->solves == 1 ? "" : "s",
+             id == store_player_id() ? "\nAnother player takes over." : "");
+    lv_obj_t *m = make_msgbox(title, text);
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, LV_SYMBOL_TRASH "  Delete", player_delete_confirm_cb, true);
+    lv_obj_t *del = lv_obj_get_child(lv_msgbox_get_footer(m), -1);
+    lv_obj_set_style_bg_color(del, C_RED, 0);
+}
+
+static void player_add_cb(lv_event_t *e)
+{
+    if (stats_db_ready()) nd_open(0, NULL);
+}
+
+/* one row per player; without sudoku.db just who the board thinks plays */
+static void render_players(void)
+{
+    if (!p_list) return;
+    lv_obj_clean(p_list);
+    bool db = stats_db_ready() && p_count >= 0;
+    int n = db ? p_count : 1;
+    for (int i = 0; i < n; i++) {
+        stats_player_t ram = {.id = store_player_id()};
+        if (!db) snprintf(ram.name, sizeof(ram.name), "%s", store_player_name());
+        const stats_player_t *pl = db ? &p_players[i] : &ram;
+        bool cur = !db || pl->id == store_player_id();
+
+        lv_obj_t *r = lv_obj_create(p_list);
+        lv_obj_set_size(r, LV_PCT(100), 80);
+        lv_obj_set_style_bg_color(r, C_CARD, 0);
+        lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
+        lv_obj_set_style_border_width(r, cur ? 2 : 0, 0);
+        lv_obj_set_style_border_color(r, C_ACCENT, 0);
+        lv_obj_set_style_radius(r, 12, 0);
+        lv_obj_set_style_pad_hor(r, 22, 0);
+        lv_obj_set_scrollable(r, false);
+        lv_obj_set_clickable(r, !cur);
+        lv_obj_add_event_cb(r, player_row_cb, LV_EVENT_CLICKED, (void *)(intptr_t)pl->id);
+
+        lv_obj_t *nm = make_label(r, &lv_font_montserrat_22, C_TEXT);
+        lv_label_set_text(nm, pl->name);
+        lv_obj_align(nm, LV_ALIGN_LEFT_MID, 0, -12);
+        lv_obj_t *sub = make_label(r, &lv_font_montserrat_14, cur ? C_ACCENT : C_MUTED);
+        if (cur && db) lv_label_set_text_fmt(sub, "Playing now   -   %u solved, %lu solves", (unsigned)pl->solved,
+                                            (unsigned long)pl->solves);
+        else if (cur) lv_label_set_text(sub, "Playing now");
+        else lv_label_set_text_fmt(sub, "%u solved, %lu solves   -   tap to play", (unsigned)pl->solved,
+                                   (unsigned long)pl->solves);
+        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 0, 16);
+        int right = 0;                           /* buttons from the right edge */
+        if (db && n > 1) {                       /* the only player can't be deleted */
+            lv_obj_t *del = make_btn(r, 0, 0, 56, 48, LV_SYMBOL_TRASH, &lv_font_montserrat_18,
+                                     player_delete_cb, (void *)(intptr_t)pl->id);
+            lv_obj_set_style_bg_color(del, C_CARD2, 0);
+            lv_obj_set_style_text_color(lv_obj_get_child(del, 0), C_RED, 0);
+            lv_obj_align(del, LV_ALIGN_RIGHT_MID, 0, 0);
+            right = 56 + 10;
+        }
+        if (cur && db) {
+            lv_obj_t *rn = make_btn(r, 0, 0, 130, 48, LV_SYMBOL_EDIT "  Rename", &lv_font_montserrat_16,
+                                    player_rename_cb, (void *)(intptr_t)pl->id);
+            lv_obj_set_style_bg_color(rn, C_CARD2, 0);
+            lv_obj_align(rn, LV_ALIGN_RIGHT_MID, -right, 0);
+        }
+    }
+    lv_obj_set_state(p_add, LV_STATE_DISABLED, !stats_db_ready());
+    lv_label_set_text(p_note, stats_db_ready()
+        ? "Statistics and the game in progress are kept per player in sudoku.db."
+        : "No sudoku.db: insert a FAT32 microSD card before switching on to keep players.");
+}
+
+static void profile_cb(lv_event_t *e)
+{
+    render_players();
+    if (stats_db_ready()) stats_db_list_players();      /* fresh counts; drawn when they arrive */
+    lv_screen_load(scr_profile);
+}
+
+static void build_profile(void)
+{
+    scr_profile = make_screen();
+    make_btn(scr_profile, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
+    lv_obj_t *t = make_label(scr_profile, &lv_font_montserrat_28, C_TEXT);
+    lv_label_set_text(t, "Players");
+    lv_obj_set_pos(t, 150, 20);
+    p_add = make_btn(scr_profile, SCR_W - 12 - 200, 10, 200, 52, LV_SYMBOL_PLUS "  Add player",
+                     &lv_font_montserrat_18, player_add_cb, NULL);
+    lv_obj_set_style_bg_opa(p_add, LV_OPA_50, LV_STATE_DISABLED);
+
+    p_list = lv_obj_create(scr_profile);
+    lv_obj_remove_style_all(p_list);
+    lv_obj_set_pos(p_list, 40, 84);
+    lv_obj_set_size(p_list, SCR_W - 80, SCR_W - 84 - 56);
+    lv_obj_set_flex_flow(p_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(p_list, 12, 0);
+    lv_obj_set_scroll_dir(p_list, LV_DIR_VER);
+
+    p_note = make_label(scr_profile, &lv_font_montserrat_14, C_MUTED);
+    lv_obj_set_width(p_note, SCR_W - 80);
+    lv_label_set_long_mode(p_note, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_pos(p_note, 44, SCR_W - 44);
+    render_players();
+}
+
 static void build_game(void);
 static void build_list(void);
 static void build_home(void);
@@ -1506,7 +1788,7 @@ static void apply_theme(bool dark)
     lv_display_set_theme(disp, lv_theme_default_init(disp, C_ACCENT, C_ORANGE, dark, &lv_font_montserrat_16));
 
     lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
-    lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi;
+    lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi, *old_profile = scr_profile;
     lv_obj_t *act = lv_screen_active();
 
     build_game();
@@ -1515,6 +1797,7 @@ static void apply_theme(bool dark)
     build_stats();
     build_settings();
     build_wifi();
+    build_profile();
     if (g_id != STORE_NO_GAME) {
         lv_obj_set_state(g_notes_btn, LV_STATE_CHECKED, g_notes_mode);
         lv_obj_set_hidden(g_pause_ovl, !g_paused);
@@ -1528,6 +1811,7 @@ static void apply_theme(bool dark)
     lv_obj_t *to = act && act == old_game     ? scr_game
                  : act && act == old_stats    ? scr_stats
                  : act && act == old_wifi     ? scr_wifi
+                 : act && act == old_profile  ? scr_profile
                  : act && act == old_list     ? scr_list
                  : act && act == old_settings ? scr_settings
                  : scr_home;
@@ -1539,6 +1823,7 @@ static void apply_theme(bool dark)
     if (old_settings) lv_obj_delete_async(old_settings);
     if (old_stats) lv_obj_delete_async(old_stats);
     if (old_wifi) lv_obj_delete_async(old_wifi);
+    if (old_profile) lv_obj_delete_async(old_profile);
     if (old_game) lv_obj_delete_async(old_game);
 }
 
@@ -1720,13 +2005,13 @@ static void build_list(void)
 /* big menu button: icon + title, optional muted subtitle below */
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub)
 {
-    lv_obj_t *b = make_btn(parent, 0, 0, 440, 92, NULL, NULL, cb, NULL);
+    lv_obj_t *b = make_btn(parent, 0, 0, 440, 80, NULL, NULL, cb, NULL);
     lv_obj_t *l = make_label(b, &lv_font_montserrat_24, C_TEXT);
     lv_label_set_text(l, text);
     if (sub) {
-        lv_obj_align(l, LV_ALIGN_CENTER, 0, -13);
+        lv_obj_align(l, LV_ALIGN_CENTER, 0, -12);
         *sub = make_label(b, &lv_font_montserrat_16, C_MUTED);
-        lv_obj_align(*sub, LV_ALIGN_CENTER, 0, 19);
+        lv_obj_align(*sub, LV_ALIGN_CENTER, 0, 17);
     } else {
         lv_obj_center(l);
     }
@@ -1748,13 +2033,17 @@ static void build_home(void)
     lv_obj_set_size(col, 440, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(col, 18, 0);
+    lv_obj_set_style_pad_row(col, 14, 0);
     lv_obj_align(col, LV_ALIGN_CENTER, 0, 40);   /* clear of the clock */
 
     lv_obj_t *t = make_label(col, &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Sudoku");
     h_total = make_label(col, &lv_font_montserrat_16, C_MUTED);
     lv_obj_set_style_margin_bottom(h_total, 22, 0);
+
+    /* who is playing, first */
+    lv_obj_t *pb = home_btn(col, SYMBOL_USER "  Players", profile_cb, &h_player);   /* sub: "Playing as ..." */
+    lv_obj_set_style_text_font(lv_obj_get_child(pb, 0), &font_user_24, 0);
 
     /* hidden when there is no game in progress; the flex column closes up */
     h_continue = home_btn(col, LV_SYMBOL_PLAY "  Continue", continue_cb, &h_continue_sub);
@@ -1789,6 +2078,8 @@ static void build_stats(void)
     }
 
     int px = PANE_X, pw = PANE_W;
+    x_player = make_label(scr_stats, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_align(x_player, LV_ALIGN_TOP_RIGHT, -16, 26);
     x_title = make_label(scr_stats, &lv_font_montserrat_22, C_TEXT);
     lv_obj_set_pos(x_title, px + 4, 80);
     x_sum1 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
