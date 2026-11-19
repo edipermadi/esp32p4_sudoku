@@ -4,6 +4,26 @@
 
 Everything the game does, screen by screen. Saving, the microSD card and maintenance are in [Data & storage](data.md).
 
+## Screens
+
+| **Home** | **Puzzles** | **New puzzle** |
+|---|---|---|
+| ![Home](screenshots/home.png) | ![Puzzles](screenshots/puzzles.png) | ![New puzzle](screenshots/new-puzzle.png) |
+| **Learn** | **Enter a puzzle** | **Game** |
+| ![Learn](screenshots/learn.png) | ![Enter a puzzle](screenshots/enter.png) | ![Game](screenshots/game.png) |
+| **Rules card** | **Share** | **Replay** |
+| ![Rules card](screenshots/rules.png) | ![Share](screenshots/share.png) | ![Replay](screenshots/replay.png) |
+| **Statistics** | **Players** | **History** |
+| ![Statistics](screenshots/statistics.png) | ![Players](screenshots/players.png) | ![History](screenshots/history.png) |
+| **Gameplays** | **Trophies** | **Records** |
+| ![Gameplays](screenshots/gameplays.png) | ![Trophies](screenshots/trophies.png) | ![Records](screenshots/trophies-records.png) |
+| **Daily leaderboard** | **Settings → Network** | **Settings → Display** |
+| ![Daily leaderboard](screenshots/trophies-daily.png) | ![Settings, Network tab](screenshots/settings.png) | ![Settings, Display tab](screenshots/settings-display.png) |
+
+The System monitor's tabs are at the [end of this page](#system-monitor-tabs); Settings → Data is in [Data & storage](data.md).
+
+## All features
+
 - **1600 puzzles in flash**: the 16 OpenSudoku collections from <https://opensudoku.gitlab.io/>. These are Easy, Medium, Hard and Very Hard, plus Gnome Sudoku sets 1–3 at each of those levels. Each puzzle is packed into 41 bytes, about 64 KB in total. Every puzzle was checked to have exactly one solution.
 - **Home screen**: the time and date at the top (once Wi-Fi has fetched it), the solved count and big buttons. **Continue** resumes your unfinished game and only appears when there is one; with several (see **Unfinished games**) its line says how many more, and it opens a list to pick from. **Players** (at the top, showing who is playing), **Puzzles**, **Daily puzzle**, **Statistics**, **History**, **Gameplays** and **Settings** open those screens. The buttons stand in one column while they fit; when there are more than fit (with **Continue** showing), they arrange themselves in a grid, two per row.
 - **Players**: the **Players** screen lists everyone who plays on the board, with their solved puzzles and solves. Tap a player to play as them; **Add player** and **Rename** ask for a name on an on-screen keyboard (names are unique, ignoring case). The red trash button deletes a player with their statistics, solve history and game in progress, after a confirmation; the last player can't be deleted, and deleting the one playing hands over to the first player left. Each player has their own statistics and their own game in progress, and every solve records who solved it. The Statistics screen has a player dropdown at the top right (person icon and name): it shows whose statistics these are, and picking another player switches to them. Players are kept in `sudoku.db`; without a card there is just one player.
@@ -81,9 +101,19 @@ Everything the game does, screen by screen. Saving, the microSD card and mainten
   - A fanfare when the puzzle is solved.
   - Turn them on or off under **Settings → Sound effects**.
 - **Settings** is split into tabs under its title: **Network** (Wi-Fi, time zone; the tab Settings opens on), **Display** (dark mode, accent colour, brightness, screen off after, lock screen and PIN, screen-saver clock), **Sound** (sound effects, volume), **Game** (show timer, mistake check) and **Data** (microSD card, USB drive, firmware update, import puzzles, export to CSV, system monitor, factory reset).
-- **System monitor**: **Settings → Data → System monitor** shows, refreshed every second: uptime, CPU temperature, the load on each core and the last reset reason; internal RAM and PSRAM (free, used, lowest free, largest block) and DMA-capable RAM; the firmware's size in its app partition, NVS entries and the microSD card's free space; LVGL's frames drawn per second, how busy it is, draw time per frame, objects and timers; and every FreeRTOS task with its core, priority, state, CPU share (of one core) and free stack. It only reads, nothing is written.
+- **System monitor**: **Settings → Data → System monitor** shows, refreshed every second, in five tabs (**System**, **Memory**, **Storage**, **Graphics**, **Tasks**; it reopens on the tab last used): uptime, CPU temperature, the load on each core and the last reset reason; internal RAM and PSRAM (free, used, lowest free, largest block) and DMA-capable RAM; the firmware's size in its app partition, NVS entries and the microSD card's free space; LVGL's frames drawn per second, how busy it is, draw time per frame, objects and timers; and every FreeRTOS task with its core, priority, state, CPU share (of one core) and free stack; tap **Name**, **Core**, **CPU** or **Stack free** above the list to sort by it (busiest first to begin with; tap again to reverse). It only reads, nothing is written.
 - **Light and dark mode**: switch between colour schemes under **Settings → Dark mode**.
 - **Accent colour**: **Settings → Accent colour** picks Blue (the default), Teal, Green, Purple or Pink for buttons, the selected cell, the same-digit and row/column highlights and your digits, in both schemes.
 - **Player colours**: each player has a colour, shown as a dot by their name on the **Players** screen and the Daily and Weekly leaderboards. Tap the dot on the Players screen for the next of eight colours (`players.color`; new players get one by turn).
 - **Wi-Fi and clock**: on **Settings → Network**, the Wi-Fi row says "Connected  ******" rather than the network's name, so a photo or screenshot doesn't give it away; the eye button next to it shows the name (hidden again the next time Settings opens). **Settings → Wi-Fi** opens a screen with an on/off switch, nearby networks (tap one; secured networks ask for the password on an on-screen keyboard) and **Forget**. Once connected, the time comes from NTP (pool.ntp.org) and the home screen shows it. The board remembers the network and reconnects at start-up. Wi-Fi goes through the board's ESP32-C6 co-processor (ESP-Hosted over SDIO); the Wi-Fi code is shared with the `esp32p4_86box` project.
 - **Time zone**: **Settings → Time zone** lists IANA names such as `Asia/Dubai`, with daylight saving where the zone has it.
+
+## System monitor tabs
+
+**Settings → Data → System monitor**, refreshed every second (see **System monitor** above).
+
+| **System** | **Memory** |
+|---|---|
+| ![System tab](screenshots/sysmon.png) | ![Memory tab](screenshots/sysmon-memory.png) |
+| **Storage** | **Tasks** (sorted by CPU) |
+| ![Storage tab](screenshots/sysmon-storage.png) | ![Tasks tab](screenshots/sysmon-tasks.png) |

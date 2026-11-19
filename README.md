@@ -13,8 +13,10 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã
 | ![Statistics](docs/screenshots/statistics.png) | ![Trophies](docs/screenshots/trophies.png) | ![Settings](docs/screenshots/settings-display.png) |
 | **Replay** | **Share** | **Rules** |
 | ![Replay](docs/screenshots/replay.png) | ![Share](docs/screenshots/share.png) | ![Rules](docs/screenshots/rules.png) |
+| **New puzzle** | **History** | **System monitor** |
+| ![New puzzle](docs/screenshots/new-puzzle.png) | ![History](docs/screenshots/history.png) | ![System monitor](docs/screenshots/sysmon-tasks.png) |
 
-Captured from the board over its serial port (see [Screenshots and remote control](docs/devctl.md)).
+Captured from the board over its serial port (see [Screenshots and remote control](docs/devctl.md)). More, screen by screen, in [Features](docs/features.md#screens).
 
 ## Highlights
 

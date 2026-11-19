@@ -40,6 +40,13 @@ static const int16_t COL_W[] = {196, 60, 60, 84, 96, 108};   /* = the card's 604
 #define COLS ((int)(sizeof(COL_W) / sizeof(COL_W[0])))
 
 static lv_obj_t *s_scr;
+
+enum { SM_SYSTEM = 0, SM_MEMORY, SM_STORAGE, SM_GRAPHICS, SM_TASKS, SM_TABS };
+#define TAB_Y   72
+#define TAB_H   52
+#define PANE_Y  (TAB_Y + TAB_H + 12)
+static lv_obj_t *s_tab_btn[SM_TABS], *s_pane[SM_TABS];
+static int s_tab;                    /* the open tab; kept between visits */
 static lv_timer_t *s_timer;
 static bool s_shown;
 static int s_ticks;
@@ -75,6 +82,10 @@ static int s_prev_n;
 static uint32_t s_prev_total;
 static bool s_have_prev;
 typedef struct { int idx; uint32_t permille; } row_t;   /* permille of one core */
+static row_t rows[MAX_TASKS];        /* the latest sample, in the chosen order (indexes into s_ts) */
+static int s_rows_n;
+static bool s_rows_cpu;              /* rows[].permille is valid (a sample before it) */
+static void show_task_table(void);
 
 /* flash (read once) */
 static uint32_t s_flash_size, s_app_len, s_app_part, s_part_end;
@@ -122,11 +133,13 @@ static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color
     return l;
 }
 
+/* a muted note under a card */
 static void section(lv_obj_t *parent, const char *title)
 {
     lv_obj_t *l = label(parent, &lv_font_montserrat_16, C_MUTED, title);
-    lv_obj_set_style_pad_left(l, 8, 0);
-    lv_obj_set_style_margin_top(l, 8, 0);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_style_pad_hor(l, 8, 0);
 }
 
 static lv_obj_t *card(lv_obj_t *parent)
@@ -285,11 +298,31 @@ static void sd_query(void)
     if (xTaskCreatePinnedToCore(sd_task, "sysmon_sd", 4096, NULL, 2, NULL, 0) != pdPASS) s_sd_busy = false;
 }
 
+/* the table's order: a column (COL_*) and its direction, kept between visits */
+enum { COL_NAME = 0, COL_CORE, COL_PRIO, COL_STATE, COL_CPU, COL_STACK };
+static int s_sort_col = COL_CPU;
+static bool s_sort_desc = true;
+
+static int core_key(const TaskStatus_t *t)
+{
+    return t->xCoreID == tskNO_AFFINITY ? 99 : (int)t->xCoreID;   /* unpinned after the cores */
+}
+
 static int row_cmp(const void *a, const void *b)
 {
     const row_t *x = a, *y = b;
-    if (x->permille != y->permille) return x->permille < y->permille ? 1 : -1;
-    return strcmp(s_ts[x->idx].pcTaskName, s_ts[y->idx].pcTaskName);
+    const TaskStatus_t *tx = &s_ts[x->idx], *ty = &s_ts[y->idx];
+    int c = 0;
+    switch (s_sort_col) {
+    case COL_CORE:  c = core_key(tx) - core_key(ty); break;
+    case COL_CPU:   c = x->permille < y->permille ? -1 : (x->permille > y->permille); break;
+    case COL_STACK: c = tx->usStackHighWaterMark < ty->usStackHighWaterMark ? -1
+                      : (tx->usStackHighWaterMark > ty->usStackHighWaterMark); break;
+    default:        c = strcasecmp(tx->pcTaskName, ty->pcTaskName); break;
+    }
+    if (s_sort_desc) c = -c;
+    if (c == 0) c = strcasecmp(tx->pcTaskName, ty->pcTaskName);   /* ties: by name, A-Z */
+    return c;
 }
 
 /* ------------------------------------------------------------- views */
@@ -300,7 +333,6 @@ static void show_tasks(void)
     UBaseType_t n = uxTaskGetSystemState(s_ts, MAX_TASKS, &total);
     if (n == 0) return;                             /* more than MAX_TASKS: keep the last view */
 
-    static row_t rows[MAX_TASKS];
     uint32_t dt = total - s_prev_total;
     uint32_t idle[2] = {0, 0};
     for (UBaseType_t i = 0; i < n; i++) {
@@ -336,10 +368,18 @@ static void show_tasks(void)
     }
     s_prev_n = (int)n;
     s_prev_total = total;
-    bool had_prev = s_have_prev;
+    s_rows_cpu = s_have_prev;
     s_have_prev = true;
-
     qsort(rows, n, sizeof(row_t), row_cmp);
+    s_rows_n = (int)n;
+    if (s_tab == SM_TASKS) show_task_table();      /* (only on its tab: it's the costly part) */
+}
+
+/* the table from the latest sample (show_tasks) */
+static void show_task_table(void)
+{
+    char buf[16];
+    UBaseType_t n = (UBaseType_t)s_rows_n;
     lv_table_set_row_count(s_table, n);
     for (UBaseType_t r = 0; r < n; r++) {
         const TaskStatus_t *t = &s_ts[rows[r].idx];
@@ -360,7 +400,7 @@ static void show_tasks(void)
         default: break;
         }
         lv_table_set_cell_value(s_table, r, 3, st);
-        if (had_prev) {
+        if (s_rows_cpu) {
             lv_table_set_cell_value_fmt(s_table, r, 4, "%u.%u%%", (unsigned)(rows[r].permille / 10),
                                         (unsigned)(rows[r].permille % 10));
         } else {
@@ -524,6 +564,59 @@ static void tick(lv_timer_t *t)
     show_tasks();
 }
 
+/* ------------------------------------------------------------- sorting */
+static const char *const HDR[] = {"Name", "Core", "Prio", "State", "CPU", "Stack free"};
+#define SORTABLE(c) ((c) == COL_NAME || (c) == COL_CORE || (c) == COL_CPU || (c) == COL_STACK)
+static lv_obj_t *s_hdr[6];
+
+/* the sorted column in the accent colour, with an arrow for the direction */
+static void show_sort_header(void)
+{
+    for (int i = 0; i < COLS; i++) {
+        if (i == s_sort_col) {
+            lv_label_set_text_fmt(s_hdr[i], "%s %s", HDR[i], s_sort_desc ? LV_SYMBOL_DOWN : LV_SYMBOL_UP);
+            lv_obj_set_style_text_color(s_hdr[i], C_ACCENT, 0);
+        } else {
+            lv_label_set_text(s_hdr[i], HDR[i]);
+            lv_obj_set_style_text_color(s_hdr[i], SORTABLE(i) ? C_TEXT : C_MUTED, 0);
+        }
+    }
+}
+
+static void on_sort(lv_event_t *e)
+{
+    int col = (int)(intptr_t)lv_event_get_user_data(e);
+    if (col == s_sort_col) {
+        s_sort_desc = !s_sort_desc;
+    } else {
+        s_sort_col = col;
+        s_sort_desc = col == COL_CPU;               /* busiest first; the others from the top */
+    }
+    show_sort_header();
+    if (s_rows_n > 0) {
+        qsort(rows, (size_t)s_rows_n, sizeof(row_t), row_cmp);
+        show_task_table();
+    }
+}
+
+/* ------------------------------------------------------------- tabs */
+static void select_tab(int tab)
+{
+    s_tab = tab;
+    for (int i = 0; i < SM_TABS; i++) {
+        lv_obj_set_state(s_tab_btn[i], LV_STATE_CHECKED, i == tab);
+        lv_obj_set_style_text_color(lv_obj_get_child(s_tab_btn[i], 0), i == tab ? lv_color_white() : C_TEXT, 0);
+        lv_obj_set_hidden(s_pane[i], i != tab);
+    }
+    lv_obj_scroll_to_y(s_pane[tab], 0, LV_ANIM_OFF);
+    if (s_shown && tab == SM_TASKS) show_task_table();   /* at once, not at the next tick */
+}
+
+static void on_tab(lv_event_t *e)
+{
+    select_tab((int)(intptr_t)lv_event_get_user_data(e));
+}
+
 /* ------------------------------------------------------------- build */
 void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
 {
@@ -548,25 +641,44 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_t *h = label(scr, &lv_font_montserrat_28, C_TEXT, "System monitor");
     lv_obj_set_pos(h, 180, 20);
 
-    /* scrolling body */
-    lv_obj_t *body = lv_obj_create(scr);
-    lv_obj_remove_style_all(body);
-    lv_obj_set_pos(body, 0, 72);
-    lv_obj_set_size(body, 720, 720 - 72);
-    lv_obj_set_style_pad_hor(body, 40, 0);
-    lv_obj_set_style_pad_top(body, 4, 0);
-    lv_obj_set_style_pad_bottom(body, 24, 0);
-    lv_obj_set_style_pad_row(body, 10, 0);
-    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+    /* the tabs, under the title (as on Settings); each tab's cards: a scrolling column */
+    static const char *const TABS[SM_TABS] = {LV_SYMBOL_SETTINGS "  System", LV_SYMBOL_DRIVE "  Memory",
+                                              LV_SYMBOL_SD_CARD "  Storage", LV_SYMBOL_IMAGE "  Graphics",
+                                              LV_SYMBOL_LIST "  Tasks"};
+    const int gap = 8, tw = (720 - 24 - (SM_TABS - 1) * gap) / SM_TABS;
+    for (int i = 0; i < SM_TABS; i++) {
+        lv_obj_t *b = lv_button_create(scr);
+        lv_obj_set_pos(b, 12 + i * (tw + gap), TAB_Y);
+        lv_obj_set_size(b, tw, TAB_H);
+        lv_obj_set_style_bg_color(b, C_CARD, 0);
+        lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_PRESSED);
+        lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_CHECKED);
+        lv_obj_set_style_shadow_width(b, 0, 0);
+        lv_obj_set_style_radius(b, 8, 0);
+        lv_obj_set_style_pad_all(b, 0, 0);
+        lv_obj_add_event_cb(b, on_tab, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_center(label(b, &lv_font_montserrat_16, C_TEXT, TABS[i]));
+        s_tab_btn[i] = b;
+
+        lv_obj_t *pane = lv_obj_create(scr);
+        lv_obj_remove_style_all(pane);
+        lv_obj_set_pos(pane, 40, PANE_Y);
+        lv_obj_set_size(pane, 720 - 80, 720 - PANE_Y);
+        lv_obj_set_flex_flow(pane, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_row(pane, 10, 0);
+        lv_obj_set_style_pad_bottom(pane, 24, 0);
+        lv_obj_set_scroll_dir(pane, LV_DIR_VER);
+        s_pane[i] = pane;
+    }
 
     esp_chip_info_t ci;
     esp_chip_info(&ci);
     char buf[64];
-    snprintf(buf, sizeof(buf), "SYSTEM  |  ESP32-P4 v%u.%u, %u cores, %u MHz", (unsigned)(ci.revision / 100),
+    lv_obj_t *c = card(s_pane[SM_SYSTEM]);
+    lv_obj_t *chip = kv(c, "Chip");
+    snprintf(buf, sizeof(buf), "ESP32-P4 v%u.%u, %u cores, %u MHz", (unsigned)(ci.revision / 100),
              (unsigned)(ci.revision % 100), (unsigned)ci.cores, (unsigned)(esp_clk_cpu_freq() / 1000000));
-    section(body, buf);
-    lv_obj_t *c = card(body);
+    lv_label_set_text(chip, buf);
     s_uptime = kv(c, "Uptime");
     s_temp = kv(c, "CPU temperature");
     s_load0 = kv(c, "CPU load, core 0");
@@ -575,31 +687,27 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     s_reset = kv(c, "Last reset");
     lv_label_set_text(s_reset, reset_text(esp_reset_reason()));
 
-    section(body, "MEMORY");
-    c = card(body);
+    c = card(s_pane[SM_MEMORY]);
     bar_row(c, "Internal RAM", &s_int_bar, &s_int_val, &s_int_sub);
     bar_row(c, "PSRAM", &s_ps_bar, &s_ps_val, &s_ps_sub);
     s_dma_val = kv(c, "DMA-capable free");
 
-    section(body, "STORAGE");
-    c = card(body);
+    c = card(s_pane[SM_STORAGE]);
     bar_row(c, "Firmware", &s_app_bar, &s_app_val, &s_app_sub);
     s_part_val = kv(c, "Flash partitioned");
     bar_row(c, "Settings (NVS)", &s_nvs_bar, &s_nvs_val, NULL);
     bar_row(c, "microSD", &s_sd_bar, &s_sd_val, &s_sd_sub);
 
-    section(body, "GRAPHICS (LVGL)");
-    c = card(body);
+    c = card(s_pane[SM_GRAPHICS]);
     s_fps = kv(c, "Frames drawn per second");
     s_lv_cpu = kv(c, "LVGL busy");
     s_lv_times = kv(c, "Draw time, avg / max");
     s_lv_objs = kv(c, "Objects");
     s_lv_timers = kv(c, "Timers");
 
-    section(body, "TASKS  |  CPU is a share of one core");
-    c = card(body);
+    c = card(s_pane[SM_TASKS]);
     lv_obj_set_style_pad_row(c, 4, 0);
-    static const char *const HDR[] = {"Name", "Core", "Prio", "State", "CPU", "Stack free"};
+    /* the column names; Name, Core, CPU and Stack free sort the table (tap again: reversed) */
     lv_obj_t *hr = lv_obj_create(c);
     lv_obj_remove_style_all(hr);
     lv_obj_set_size(hr, LV_PCT(100), LV_SIZE_CONTENT);
@@ -607,8 +715,19 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     for (int i = 0; i < COLS; i++) {
         lv_obj_t *l = label(hr, &lv_font_montserrat_14, C_MUTED, HDR[i]);
         lv_obj_set_width(l, COL_W[i]);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
         lv_obj_set_style_pad_left(l, 6, 0);
+        lv_obj_set_style_pad_ver(l, 10, 0);            /* a finger-sized target */
+        lv_obj_set_style_radius(l, 6, 0);
+        if (SORTABLE(i)) {
+            lv_obj_set_clickable(l, true);
+            lv_obj_set_style_bg_color(l, C_CARD2, LV_STATE_PRESSED);
+            lv_obj_set_style_bg_opa(l, LV_OPA_COVER, LV_STATE_PRESSED);
+            lv_obj_add_event_cb(l, on_sort, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        }
+        s_hdr[i] = l;
     }
+    show_sort_header();
     s_table = lv_table_create(c);
     lv_obj_set_size(s_table, LV_PCT(100), LV_SIZE_CONTENT);
     lv_table_set_column_count(s_table, COLS);
@@ -627,6 +746,10 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_style_pad_hor(s_table, 6, LV_PART_ITEMS);
     lv_obj_set_scrollable(s_table, false);
     lv_obj_set_clickable(s_table, false);           /* drags scroll the page */
+    section(s_pane[SM_TASKS], "Tap Name, Core, CPU or Stack free to sort, and again to reverse. CPU is a share of "
+                              "one core. Stack free: the least it has had.");
+
+    select_tab(s_tab);                              /* (a rebuild keeps the tab that was open) */
 
     /* LVGL's sysmon report (every 300 ms; its on-screen box stays hidden) */
     lv_display_t *d = lv_obj_get_display(scr);
@@ -658,6 +781,7 @@ void sysmon_ui_set_shown(bool shown)
         s_ticks = 0;
         s_window_t0 = 0;                            /* frame counts from the next tick */
         tick(NULL);                                 /* fill at once (task CPU from the next tick) */
+        select_tab(s_tab);                          /* the tab last open, scrolled to its top */
         lv_timer_resume(s_timer);
     } else {
         lv_timer_pause(s_timer);

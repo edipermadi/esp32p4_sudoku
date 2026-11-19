@@ -1,18 +1,38 @@
-# Screenshots for the README: python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
+# Screenshots for the docs: python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
 # Opening the port restarts the board, so this starts on a fresh Home screen.
 # Coordinates are screen pixels (720 x 720). Nothing here changes the game data
-# (no puzzle is played, no setting is changed). The replay needs one solved game.
+# (no puzzle is played or made, no setting is changed). It expects the Home
+# screen's grid layout (a game in progress, so Continue shows) and one recorded
+# solve (for Gameplays and the replay).
 
 wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
 shot docs/screenshots/home.png
 
-tap 513 308                 # Puzzles
-wait 400
+# ---- Puzzles
+tap 206 355                 # Puzzles
+wait 600
 shot docs/screenshots/puzzles.png
+tap 124 98                  # New puzzle: the variant and level dialog
+wait 800
+shot docs/screenshots/new-puzzle.png
+tap 360 656                 # Cancel
+wait 400
+tap 594 98                  # Learn: the techniques
+wait 800
+shot docs/screenshots/learn.png
+tap 360 656                 # Close
+wait 400
+tap 358 98                  # Enter: a blank board to type a puzzle in
+wait 800
+shot docs/screenshots/enter.png
+tap 66 30                   # Cancel
+wait 500
+
+# ---- a game (Easy #1, only looked at)
 tap 87 162                  # the Easy collection
 wait 300
 tap 44 262                  # puzzle 1
-wait 600
+wait 900
 shot docs/screenshots/game.png
 tap 261 86                  # Share: the puzzle as a QR code
 wait 800
@@ -27,16 +47,27 @@ wait 300
 tap 60 30                   # List
 wait 400
 tap 72 36                   # Home
-wait 400
+wait 500
 
-tap 513 402                 # Statistics
-wait 800
+# ---- Statistics, Players, History, Gameplays, Trophies
+tap 206 449                 # Statistics
+wait 1500
 shot docs/screenshots/statistics.png
 tap 72 36                   # Home
-wait 400
-
-tap 513 496                 # Gameplays (needs a recorded solve)
+wait 500
+tap 206 260                 # Players
 wait 1000
+shot docs/screenshots/players.png
+tap 72 36                   # Home
+wait 500
+tap 513 449                 # History
+wait 1500
+shot docs/screenshots/history.png
+tap 72 36                   # Home
+wait 500
+tap 206 543                 # Gameplays (needs a recorded solve)
+wait 1200
+shot docs/screenshots/gameplays.png
 tap 200 112                 # the newest game
 wait 1500
 tap 360 695                 # halfway along the slider
@@ -45,18 +76,43 @@ shot docs/screenshots/replay.png
 tap 60 30                   # Back
 wait 400
 tap 72 36                   # Home
-wait 400
-
-tap 206 590                 # Trophies
-wait 800
+wait 500
+tap 513 543                 # Trophies
+wait 1200
 shot docs/screenshots/trophies.png
+tap 320 98                  # the Daily tab
+wait 1200
+shot docs/screenshots/trophies-daily.png
+tap 633 98                  # the Records tab
+wait 1200
+shot docs/screenshots/trophies-records.png
 tap 72 36                   # Home
-wait 400
+wait 500
 
-tap 513 590                 # Settings (opens on Network; the network's name is hidden there)
+# ---- Settings and the System monitor
+tap 206 637                 # Settings (opens on Network; the network's name is hidden there)
 wait 800
 # the time zone is blurred: it says where the board is
 shot docs/screenshots/settings.png --blur 330,236,616,286
-tap 186 98                  # the Display tab
+tap 218 98                  # the Display tab
 wait 300
 shot docs/screenshots/settings-display.png
+tap 638 98                  # the Data tab
+wait 400
+shot docs/screenshots/settings-data.png
+tap 300 604                 # System monitor
+wait 2500
+tap 78 98                   # its System tab (it opens on the one used last)
+wait 1200
+shot docs/screenshots/sysmon.png
+tap 218 98                  # Memory
+wait 1200
+shot docs/screenshots/sysmon-memory.png
+tap 358 98                  # Storage
+wait 1200
+shot docs/screenshots/sysmon-storage.png
+tap 638 98                  # Tasks
+wait 2200
+shot docs/screenshots/sysmon-tasks.png
+tap 78 98                   # back to System, so the next visit opens there
+wait 300

@@ -1,6 +1,7 @@
 #pragma once
 /*
- * System monitor screen (Settings > Data > System monitor): uptime, CPU
+ * System monitor screen (Settings > Data > System monitor), in five tabs
+ * (System, Memory, Storage, Graphics, Tasks; the last one open is kept): uptime, CPU
  * temperature and load, internal RAM / PSRAM heap, flash, NVS and microSD
  * usage, LVGL's frame rate and render times, and the FreeRTOS task list with
  * each task's CPU share and free stack. Refreshed once a second while shown.
