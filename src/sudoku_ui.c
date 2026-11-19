@@ -75,6 +75,12 @@
 #include "esp_image_format.h"
 #include "esp_heap_caps.h"
 
+/* Background work (generator, Learn, the puzzle check, firmware update, card
+ * format) runs on core 0: LVGL runs in loopTask on core 1, and core 0 otherwise
+ * only has the system's small tasks. Unpinned tasks would not stay so: on the
+ * ESP32-P4 a task is pinned to the core it is on when it first uses the FPU. */
+#define WORKER_CORE 0
+
 /* "Screen off" dropdown choices, in minutes (0 = never) */
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
 #define SLEEP_OPTIONS "1 min\n2 min\n5 min\n10 min\n15 min\n30 min\nNever"
@@ -3323,7 +3329,7 @@ static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
     else if (gen_var_req == VAR_CLASSIC) snprintf(text, sizeof(text), "Making a new %s puzzle...", GEN_LEVEL_NAMES[level]);
     else snprintf(text, sizeof(text), "Making a new %s %s puzzle...", GEN_LEVEL_NAMES[level], VARIANT_NAMES[gen_var_req]);
     gen_box = make_msgbox(LV_SYMBOL_REFRESH "  New puzzle", text);
-    if (xTaskCreate(gen_task, "gen", 16384, NULL, 2, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(gen_task, "gen", 16384, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
         lv_msgbox_close(gen_box);
         gen_box = NULL;
         sudoku_ui_notice("Couldn't start the generator.", 3000);
@@ -3687,7 +3693,7 @@ static void learn_pick_cb(lv_event_t *e)
     char text[96];
     snprintf(text, sizeof(text), "Finding a puzzle where the next step is a %s...", LEARN_NAMES[target]);
     learn_wait = make_msgbox(LV_SYMBOL_EYE_OPEN "  Learn", text);
-    if (xTaskCreate(learn_task, "learn", 8192, NULL, 2, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(learn_task, "learn", 8192, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
         lv_msgbox_close(learn_wait);
         learn_wait = NULL;
         return;
@@ -3873,7 +3879,8 @@ static void ed_play_cb(lv_event_t *e)
     }
     memcpy(ed_check_cells, ed_val, 81);
     ed_check_state = 1;
-    if (xTaskCreateWithCaps(ed_check_task, "edcheck", 16384, NULL, 2, &ed_check_handle, MALLOC_CAP_SPIRAM) != pdPASS) {
+    if (xTaskCreatePinnedToCoreWithCaps(ed_check_task, "edcheck", 16384, NULL, 2, &ed_check_handle, WORKER_CORE,
+                                        MALLOC_CAP_SPIRAM) != pdPASS) {
         ed_check_state = 0;
         sudoku_ui_notice("Not enough memory to check the puzzle right now.", 3000);
         return;
@@ -4984,7 +4991,7 @@ static void fw_go_cb(lv_event_t *e)
     lv_obj_t *w = make_label(card, &lv_font_montserrat_14, C_MUTED);
     lv_label_set_text(w, "Don't switch off or take the card out.");
     lv_obj_align(w, LV_ALIGN_TOP_MID, 0, 126);
-    if (xTaskCreate(fw_task, "fwupdate", 8192, NULL, 3, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(fw_task, "fwupdate", 8192, NULL, 3, NULL, WORKER_CORE) != pdPASS) {
         lv_obj_delete(fw_ovl);
         fw_ovl = NULL;
         return;
@@ -5145,7 +5152,7 @@ static void sd_task(void *arg)
 static bool sd_run(sd_job_t job)
 {
     s_sd_state = job == SD_JOB_PROBE ? SD_PROBING : SD_FORMATTING;
-    if (xTaskCreate(sd_task, "sd_card", 8192, (void *)(intptr_t)job, 4, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(sd_task, "sd_card", 8192, (void *)(intptr_t)job, 4, NULL, WORKER_CORE) != pdPASS) {
         s_sd_state = SD_IDLE;
         return false;
     }

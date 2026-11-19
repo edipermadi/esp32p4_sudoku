@@ -282,7 +282,7 @@ static void sd_query(void)
         return;
     }
     s_sd_busy = true;
-    if (xTaskCreate(sd_task, "sysmon_sd", 4096, NULL, 2, NULL) != pdPASS) s_sd_busy = false;
+    if (xTaskCreatePinnedToCore(sd_task, "sysmon_sd", 4096, NULL, 2, NULL, 0) != pdPASS) s_sd_busy = false;
 }
 
 static int row_cmp(const void *a, const void *b)

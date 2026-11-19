@@ -2634,9 +2634,12 @@ static void start(bool fresh)
         if (s_genp) s_gen_done = xSemaphoreCreateBinary();
         s_opened = xSemaphoreCreateBinary();
         s_lock = xSemaphoreCreateMutex();
-        /* SQLite wants a deep stack (parser, B-tree balancing) */
+        /* SQLite wants a deep stack (parser, B-tree balancing). Core 0: at priority 3
+         * it would hold up LVGL (priority 1) on core 1 during every query. Unpinned
+         * would not stay so: on the P4 a task is pinned to the core it is on when it
+         * first uses the FPU, and created from setup() that is core 1. */
         if (!s_q || !s_suspended || !s_opened || !s_lock ||
-            xTaskCreate(worker, "stats_db", 16384, NULL, 3, NULL) != pdPASS) {
+            xTaskCreatePinnedToCore(worker, "stats_db", 16384, NULL, 3, NULL, 0) != pdPASS) {
             s_state = ST_ERROR;
             return;
         }

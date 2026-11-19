@@ -165,7 +165,9 @@ esp_err_t sfx_init(void)
     bsp_audio_set_volume(SFX_VOLUME);
     s_queue = xQueueCreate(8, sizeof(uint8_t));
     if (!s_queue) return ESP_ERR_NO_MEM;
-    if (xTaskCreate(sfx_task, "sfx", 4096, NULL, 5, NULL) != pdPASS) return ESP_ERR_NO_MEM;
+    /* core 0, away from LVGL (loopTask, core 1). Unpinned would not stay so: on the
+     * P4 a task is pinned to the core it is on when it first uses the FPU. */
+    if (xTaskCreatePinnedToCore(sfx_task, "sfx", 4096, NULL, 5, NULL, 0) != pdPASS) return ESP_ERR_NO_MEM;
     return ESP_OK;
 }
 
