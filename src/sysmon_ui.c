@@ -817,7 +817,7 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_style_shadow_width(back, 0, 0);
     lv_obj_set_style_radius(back, 8, 0);
     lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *bl = label(back, &lv_font_montserrat_18, C_TEXT, LV_SYMBOL_LEFT "  Settings");
+    lv_obj_t *bl = label(back, &lv_font_montserrat_18, C_TEXT, LV_SYMBOL_LEFT "  Home");
     lv_obj_center(bl);
     lv_obj_t *h = label(scr, &lv_font_montserrat_28, C_TEXT, "System monitor");
     lv_obj_set_pos(h, 180, 20);

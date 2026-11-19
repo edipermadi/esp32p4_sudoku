@@ -1,6 +1,6 @@
 #pragma once
 /*
- * System monitor screen (Settings > Data > System monitor), in five tabs
+ * System monitor screen (Home > System), in five tabs
  * (System, Memory, Storage, Graphics, Tasks; the last one open is kept): uptime, CPU
  * temperature and load, internal RAM / PSRAM heap, flash, NVS and microSD
  * usage, LVGL's frame rate and render times, and the FreeRTOS task list with

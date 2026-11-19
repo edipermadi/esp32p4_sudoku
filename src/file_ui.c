@@ -548,7 +548,7 @@ void file_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_style_shadow_width(back, 0, 0);
     lv_obj_set_style_radius(back, 8, 0);
     lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_center(label(back, &lv_font_montserrat_18, C_TEXT, LV_SYMBOL_LEFT "  Settings"));
+    lv_obj_center(label(back, &lv_font_montserrat_18, C_TEXT, LV_SYMBOL_LEFT "  Home"));
     lv_obj_set_pos(label(scr, &lv_font_montserrat_28, C_TEXT, "Files"), 180, 20);
 
     lv_obj_t *refresh = icon_btn(scr, LV_SYMBOL_REFRESH, C_TEXT, on_refresh, NULL);

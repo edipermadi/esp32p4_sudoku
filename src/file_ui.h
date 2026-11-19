@@ -1,6 +1,6 @@
 #pragma once
 /*
- * Files screen (Settings > Data > Files): the microSD card's folders and
+ * Files screen (Home > Files): the microSD card's folders and
  * files, with their size and date. Tap a folder to open it; each row has
  * Rename (on-screen keyboard) and Delete (asks first; folders only when
  * empty). The game's database (sudoku.db and SQLite's journal files next to

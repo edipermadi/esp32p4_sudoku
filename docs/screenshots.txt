@@ -89,7 +89,7 @@ shot docs/screenshots/trophies-records.png
 tap 72 36                   # Home
 wait 500
 
-# ---- Settings and the System monitor
+# ---- Settings, Files and the System monitor
 tap 206 637                 # Settings (opens on Network; the network's name is hidden there)
 wait 800
 # the time zone is blurred: it says where the board is
@@ -100,12 +100,17 @@ shot docs/screenshots/settings-display.png
 tap 638 98                  # the Data tab
 wait 400
 shot docs/screenshots/settings-data.png
-tap 300 260                 # Files: the card's root
+tap 72 36                   # Home
+wait 500
+tap 513 637                 # Files (Home, page 1): the card's root
 wait 1500
 shot docs/screenshots/files.png
-tap 80 36                   # back to Settings (its Data tab)
+tap 80 36                   # Home
 wait 500
-tap 300 685                 # System monitor (the Data tab's last row on screen)
+swipe 600 450 120 450 300   # the menu's second page
+wait 800
+shot docs/screenshots/home-page2.png
+tap 206 260                 # System (the system monitor)
 wait 2500
 tap 78 98                   # its System tab (it opens on the one used last)
 wait 1200
@@ -122,3 +127,7 @@ wait 2200
 shot docs/screenshots/sysmon-tasks.png
 tap 78 98                   # back to System, so the next visit opens there
 wait 300
+tap 80 36                   # Home
+wait 500
+swipe 120 450 600 450 300   # back to the menu's first page
+wait 500

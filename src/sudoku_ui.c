@@ -290,8 +290,12 @@ static lv_obj_t *scr_trophy;              /* Trophies: achievements, daily leade
 #define HOME_BTN_H      80
 #define HOME_GAP        14
 #define HOME_MENU_MAX_H 470      /* room under the clock, title and count */
-static lv_obj_t *h_menu;
-static int h_menu_grid;                   /* 1 = grid, 0 = column, -1 = not laid out */
+static lv_obj_t *h_menu;                  /* the pages, side by side: swipe between them */
+static int h_menu_grid;                   /* layout signature (home_layout), -1 = not laid out */
+#define HOME_PAGES_MAX 3
+static lv_obj_t *h_page[HOME_PAGES_MAX], *h_dots;
+static lv_obj_t *h_items[16];             /* the menu buttons, in order */
+static int h_nitems, h_npages;
 static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player, *h_daily_sub, *h_daily;
 
 /* history screen */
@@ -4325,21 +4329,61 @@ static void coll_click_cb(lv_event_t *e)
     list_reveal_coll(LV_ANIM_ON);
 }
 
-/* Home menu: a column of full-width buttons while they fit between the
- * header and the bottom of the screen, otherwise a grid of two per row. */
+/* the dots under the menu (small circles, the page shown in the accent colour) */
+static void home_dots(void)
+{
+    if (!h_dots) return;
+    lv_obj_set_hidden(h_dots, h_npages < 2);
+    if (h_npages < 2) return;
+    int cur = (int)((lv_obj_get_scroll_x(h_menu) + HOME_GRID_W / 2) / HOME_GRID_W);
+    for (int p = 0; p < HOME_PAGES_MAX; p++) {
+        lv_obj_t *d = lv_obj_get_child(h_dots, p);
+        lv_obj_set_hidden(d, p >= h_npages);
+        lv_obj_set_style_bg_color(d, p == cur ? C_ACCENT : C_CARD2, 0);
+    }
+}
+
+static void home_scroll_cb(lv_event_t *e)
+{
+    home_dots();
+}
+
+/* Home menu: a column of full-width buttons while they fit between the header and the
+ * bottom of the screen; otherwise a grid of two per row; and when even that doesn't fit,
+ * pages of the grid side by side, swiped between, with dots under them. */
 static void home_layout(void)
 {
+    lv_obj_t *vis[16];
     int n = 0;
-    uint32_t cnt = lv_obj_get_child_count(h_menu);
-    for (uint32_t i = 0; i < cnt; i++) n += !lv_obj_is_hidden(lv_obj_get_child(h_menu, i));
-    int grid = n * HOME_BTN_H + (n - 1) * HOME_GAP > HOME_MENU_MAX_H;
-    if (grid == h_menu_grid) return;
-    h_menu_grid = grid;
-    lv_obj_set_flex_flow(h_menu, grid ? LV_FLEX_FLOW_ROW_WRAP : LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(h_menu, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    for (uint32_t i = 0; i < cnt; i++) {
-        lv_obj_set_width(lv_obj_get_child(h_menu, i), grid ? (HOME_GRID_W - HOME_GAP) / 2 : HOME_COL_W);
+    for (int i = 0; i < h_nitems; i++) if (!lv_obj_is_hidden(h_items[i])) vis[n++] = h_items[i];
+    const int rows = (HOME_MENU_MAX_H + HOME_GAP) / (HOME_BTN_H + HOME_GAP);   /* that fit under the header */
+    bool grid = n > rows;
+    int per_page = grid ? rows * 2 : rows;
+    int npages = (n + per_page - 1) / per_page;
+    if (npages > HOME_PAGES_MAX) npages = HOME_PAGES_MAX;
+    int sig = (grid ? 1000 : 0) + n * 10 + npages;      /* (the same layout: nothing to do) */
+    if (sig == h_menu_grid) return;
+    h_menu_grid = sig;
+    h_npages = npages;
+    for (int p = 0; p < HOME_PAGES_MAX; p++) {
+        lv_obj_set_flex_flow(h_page[p], grid ? LV_FLEX_FLOW_ROW_WRAP : LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(h_page[p], LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+        lv_obj_set_hidden(h_page[p], p >= npages);
     }
+    for (int i = 0; i < h_nitems; i++) {               /* hidden ones wait on page 1 */
+        if (lv_obj_is_hidden(h_items[i])) lv_obj_set_parent(h_items[i], h_page[0]);
+    }
+    for (int k = 0; k < n; k++) {
+        int p = k / per_page;
+        if (p >= npages) p = npages - 1;
+        lv_obj_set_parent(vis[k], h_page[p]);
+        lv_obj_move_to_index(vis[k], -1);              /* (in order on its page) */
+        lv_obj_set_width(vis[k], grid ? (HOME_GRID_W - HOME_GAP) / 2 : HOME_COL_W);
+    }
+    lv_obj_set_scrollable(h_menu, npages > 1);
+    lv_obj_update_layout(h_menu);
+    if (lv_obj_get_scroll_x(h_menu) > (npages - 1) * HOME_GRID_W) lv_obj_scroll_to_x(h_menu, 0, LV_ANIM_OFF);
+    home_dots();
 }
 
 static void refresh_home(void)
@@ -7042,6 +7086,8 @@ static void build_profile(void)
 static void build_game(void);
 static void build_list(void);
 static void build_home(void);
+static void files_open_cb(lv_event_t *e);
+static void sysmon_open_cb(lv_event_t *e);
 static void build_stats(void);
 static void build_settings(void);
 static void build_wifi(void);
@@ -7420,6 +7466,7 @@ static void build_list(void)
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub)
 {
     lv_obj_t *b = make_btn(parent, 0, 0, HOME_COL_W, HOME_BTN_H, NULL, NULL, cb, NULL);
+    if (h_nitems < (int)(sizeof(h_items) / sizeof(h_items[0]))) h_items[h_nitems++] = b;   /* (the menu's order) */
     lv_obj_t *l = make_label(b, &lv_font_montserrat_24, C_TEXT);
     lv_label_set_text(l, text);
     if (sub) {
@@ -7464,37 +7511,69 @@ static void build_home(void)
     h_total = make_label(col, &lv_font_montserrat_16, C_MUTED);
     lv_obj_set_style_margin_bottom(h_total, 22, 0);
 
-    /* the menu: one column, or a grid when they don't all fit (home_layout) */
+    /* the menu: one column, a grid, or pages of the grid to swipe (home_layout) */
     h_menu = lv_obj_create(col);
     lv_obj_remove_style_all(h_menu);
     lv_obj_set_size(h_menu, HOME_GRID_W, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_row(h_menu, HOME_GAP, 0);
-    lv_obj_set_style_pad_column(h_menu, HOME_GAP, 0);
+    lv_obj_set_flex_flow(h_menu, LV_FLEX_FLOW_ROW);
+    lv_obj_set_scroll_dir(h_menu, LV_DIR_HOR);
+    lv_obj_set_scroll_snap_x(h_menu, LV_SCROLL_SNAP_START);
+    lv_obj_set_scroll_one(h_menu, true);                /* a swipe moves one page */
+    lv_obj_set_scrollbar_mode(h_menu, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_add_event_cb(h_menu, home_scroll_cb, LV_EVENT_SCROLL_END, NULL);
+    for (int p = 0; p < HOME_PAGES_MAX; p++) {
+        h_page[p] = lv_obj_create(h_menu);
+        lv_obj_remove_style_all(h_page[p]);
+        lv_obj_set_size(h_page[p], HOME_GRID_W, LV_SIZE_CONTENT);
+        lv_obj_set_style_pad_row(h_page[p], HOME_GAP, 0);
+        lv_obj_set_style_pad_column(h_page[p], HOME_GAP, 0);
+        lv_obj_set_scrollable(h_page[p], false);
+    }
     h_menu_grid = -1;                                   /* not laid out yet */
+    h_nitems = 0;
+    lv_obj_t *const menu = h_page[0];                   /* (home_layout sorts them onto the pages) */
 
     /* who is playing, first */
-    lv_obj_t *pb = home_btn(h_menu, SYMBOL_USER "  Players", profile_cb, &h_player);   /* sub: "Playing as ..." */
+    lv_obj_t *pb = home_btn(menu, SYMBOL_USER "  Players", profile_cb, &h_player);   /* sub: "Playing as ..." */
     lv_obj_set_style_text_font(lv_obj_get_child(pb, 0), &font_icons_24, 0);
 
     /* hidden when there is no game in progress; the flex column closes up */
-    h_continue = home_btn(h_menu, LV_SYMBOL_PLAY "  Continue", continue_cb, &h_continue_sub);
+    h_continue = home_btn(menu, LV_SYMBOL_PLAY "  Continue", continue_cb, &h_continue_sub);
     lv_obj_set_style_bg_color(h_continue, C_LIST_ACTIVE, 0);
     lv_obj_set_style_text_color(lv_obj_get_child(h_continue, 0), lv_color_white(), 0);
     lv_obj_set_style_text_color(h_continue_sub, lv_color_white(), 0);
     lv_obj_set_style_text_opa(h_continue_sub, LV_OPA_80, 0);
 
-    home_btn(h_menu, LV_SYMBOL_LIST "  Puzzles", puzzles_cb, NULL);
-    h_daily = home_btn(h_menu, LV_SYMBOL_BELL "  Daily puzzle", daily_cb, &h_daily_sub);
+    home_btn(menu, LV_SYMBOL_LIST "  Puzzles", puzzles_cb, NULL);
+    h_daily = home_btn(menu, LV_SYMBOL_BELL "  Daily puzzle", daily_cb, &h_daily_sub);
     lv_obj_set_style_bg_opa(h_daily, LV_OPA_40, LV_STATE_DISABLED);       /* greyed out until the clock is set */
     lv_obj_set_style_text_opa(h_daily, LV_OPA_40, LV_STATE_DISABLED);
-    home_btn(h_menu, LV_SYMBOL_BARS "  Statistics", stats_cb, NULL);
-    lv_obj_t *hb = home_btn(h_menu, SYMBOL_CALENDAR "  History", history_cb, NULL);   /* the calendar of games */
+    home_btn(menu, LV_SYMBOL_BARS "  Statistics", stats_cb, NULL);
+    lv_obj_t *hb = home_btn(menu, SYMBOL_CALENDAR "  History", history_cb, NULL);   /* the calendar of games */
     lv_obj_set_style_text_font(lv_obj_get_child(hb, 0), &font_icons_24, 0);
-    home_btn(h_menu, LV_SYMBOL_VIDEO "  Gameplays", plays_cb, NULL);
-    lv_obj_t *tb = home_btn(h_menu, SYMBOL_TROPHY "  Trophies", trophy_cb, &h_trophy_sub);   /* achievements, leaderboard */
+    home_btn(menu, LV_SYMBOL_VIDEO "  Gameplays", plays_cb, NULL);
+    lv_obj_t *tb = home_btn(menu, SYMBOL_TROPHY "  Trophies", trophy_cb, &h_trophy_sub);   /* achievements, leaderboard */
     lv_obj_set_style_text_font(lv_obj_get_child(tb, 0), &font_icons_24, 0);
     lv_label_set_text(h_trophy_sub, stats_db_ready() ? "Achievements and daily leaderboard" : "Needs a microSD card");
-    home_btn(h_menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);
+    home_btn(menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);
+    home_btn(menu, LV_SYMBOL_DIRECTORY "  Files", files_open_cb, NULL);              /* the microSD card */
+    lv_obj_t *sb = home_btn(menu, SYMBOL_CHART "  System", sysmon_open_cb, NULL);    /* system monitor */
+    lv_obj_set_style_text_font(lv_obj_get_child(sb, 0), &font_icons_24, 0);
+
+    h_dots = lv_obj_create(scr_home);                    /* page dots (home_dots) */
+    lv_obj_remove_style_all(h_dots);
+    lv_obj_set_size(h_dots, LV_SIZE_CONTENT, 12);
+    lv_obj_set_flex_flow(h_dots, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(h_dots, 12, 0);
+    for (int p = 0; p < HOME_PAGES_MAX; p++) {
+        lv_obj_t *d = lv_obj_create(h_dots);
+        lv_obj_remove_style_all(d);
+        lv_obj_set_size(d, 12, 12);
+        lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+    }
+    lv_obj_align(h_dots, LV_ALIGN_BOTTOM_MID, 0, -26);
+    lv_obj_set_hidden(h_dots, true);
 
     lv_obj_t *src = make_label(scr_home, &lv_font_montserrat_12, C_MUTED);
     lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
@@ -7690,8 +7769,7 @@ static void sysmon_open_cb(lv_event_t *e)
 static void sysmon_back_cb(lv_event_t *e)
 {
     sysmon_ui_set_shown(false);
-    st_select_tab(ST_DATA);                         /* back to the tab it was opened from */
-    lv_screen_load(scr_settings);
+    lv_screen_load(scr_home);                       /* (opened from the Home menu) */
 }
 
 static void files_open_cb(lv_event_t *e)
@@ -7703,8 +7781,7 @@ static void files_open_cb(lv_event_t *e)
 static void files_back_cb(lv_event_t *e)
 {
     file_ui_set_shown(false);
-    st_select_tab(ST_DATA);
-    lv_screen_load(scr_settings);
+    lv_screen_load(scr_home);                       /* (opened from the Home menu) */
 }
 
 static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint)
@@ -7899,14 +7976,6 @@ static void build_settings(void)
     lv_obj_align(st_sd_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     if (s_sd_state == SD_FORMATTING) sd_btn_text("Formatting...", false);
 
-    /* files on the card: the whole card opens the Files screen */
-    r = settings_row(col, "Files", "Browse the card: rename or delete files");
-    lv_obj_set_clickable(r, true);
-    lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
-    lv_obj_add_event_cb(r, files_open_cb, LV_EVENT_CLICKED, NULL);
-    chev = make_label(r, &lv_font_montserrat_20, C_MUTED);
-    lv_label_set_text(chev, LV_SYMBOL_RIGHT);
-    lv_obj_align(chev, LV_ALIGN_RIGHT_MID, 0, 0);
 
     r = settings_row(col, "USB drive", "");
     st_usb_hint = lv_obj_get_child(r, 1);
@@ -7935,15 +8004,6 @@ static void build_settings(void)
     lv_obj_t *ex = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_SAVE "  Export", &lv_font_montserrat_18, export_cb, NULL);
     lv_obj_set_style_bg_color(ex, C_CARD2, 0);
     lv_obj_align(ex, LV_ALIGN_RIGHT_MID, 0, 0);
-
-    /* system monitor: the whole card opens it, as Wi-Fi's */
-    r = settings_row(col, "System monitor", "Memory, storage, CPU temperature, tasks, LVGL");
-    lv_obj_set_clickable(r, true);
-    lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
-    lv_obj_add_event_cb(r, sysmon_open_cb, LV_EVENT_CLICKED, NULL);
-    chev = make_label(r, &lv_font_montserrat_20, C_MUTED);
-    lv_label_set_text(chev, LV_SYMBOL_RIGHT);
-    lv_obj_align(chev, LV_ALIGN_RIGHT_MID, 0, 0);
 
     r = settings_row(col, "Factory reset", "Settings, Wi-Fi network, players and statistics");
     lv_obj_t *fr = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_WARNING "  Reset", &lv_font_montserrat_18,
