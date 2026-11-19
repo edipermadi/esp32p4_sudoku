@@ -24,6 +24,8 @@
  *     formatting the microSD card (FAT32, one partition), and lending it to a
  *     computer as a USB drive (to back up or restore sudoku.db).
  *   - wifi: on/off, nearby networks, password keyboard (wifi_ui.c).
+ *   - system monitor: heap, flash, microSD, CPU temperature and load, LVGL
+ *     stats and the task list (sysmon_ui.c; Settings > Data).
  *
  * Clock: with Wi-Fi connected the time comes from NTP (wifi_mgr.cpp starts
  * SNTP) and the home screen shows it in the chosen time zone.
@@ -57,6 +59,7 @@
 #include "ui_palette.h"
 #include "wifi_mgr.h"
 #include "wifi_ui.h"
+#include "sysmon_ui.h"
 #include "timezones.h"
 #include "stats_db.h"
 #include "usb_msc.h"
@@ -236,6 +239,7 @@ static int      g_lock;          /* digit-first: the digit locked on the pad (lo
 
 /* ------------------------------------------------------------- widgets */
 static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_history, *scr_game;
+static lv_obj_t *scr_sysmon;
 static lv_obj_t *scr_plays;               /* Gameplays: recorded solves to replay */
 static lv_obj_t *scr_trophy;              /* Trophies: achievements, daily leaderboard */
 
@@ -6790,6 +6794,7 @@ static void build_home(void);
 static void build_stats(void);
 static void build_settings(void);
 static void build_wifi(void);
+static void build_sysmon(void);
 
 /* Switches palette and LVGL theme, then rebuilds every screen around the
  * current state (all of which lives outside the widgets) and shows the
@@ -6803,7 +6808,7 @@ static void apply_theme(bool dark)
 
     lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
     lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi, *old_profile = scr_profile, *old_history = scr_history;
-    lv_obj_t *old_plays = scr_plays, *old_trophy = scr_trophy;
+    lv_obj_t *old_plays = scr_plays, *old_trophy = scr_trophy, *old_sysmon = scr_sysmon;
     lv_obj_t *act = lv_screen_active();
 
     build_game();
@@ -6812,6 +6817,7 @@ static void apply_theme(bool dark)
     build_stats();
     build_settings();
     build_wifi();
+    build_sysmon();
     build_profile();
     build_history();
     build_plays();
@@ -6829,6 +6835,7 @@ static void apply_theme(bool dark)
     lv_obj_t *to = act && act == old_game     ? scr_game
                  : act && act == old_stats    ? scr_stats
                  : act && act == old_wifi     ? scr_wifi
+                 : act && act == old_sysmon   ? scr_sysmon
                  : act && act == old_profile  ? scr_profile
                  : act && act == old_history  ? scr_history
                  : act && act == old_plays    ? scr_plays
@@ -6846,6 +6853,7 @@ static void apply_theme(bool dark)
     if (old_settings) lv_obj_delete_async(old_settings);
     if (old_stats) lv_obj_delete_async(old_stats);
     if (old_wifi) lv_obj_delete_async(old_wifi);
+    if (old_sysmon) lv_obj_delete_async(old_sysmon);
     if (old_profile) lv_obj_delete_async(old_profile);
     if (old_history) lv_obj_delete_async(old_history);
     if (old_plays) lv_obj_delete_async(old_plays);
@@ -7385,6 +7393,19 @@ static void st_close_lists_cb(lv_event_t *e)
     if (st_tz_dd) lv_dropdown_close(st_tz_dd);
 }
 
+static void sysmon_open_cb(lv_event_t *e)
+{
+    lv_screen_load(scr_sysmon);
+    sysmon_ui_set_shown(true);
+}
+
+static void sysmon_back_cb(lv_event_t *e)
+{
+    sysmon_ui_set_shown(false);
+    st_select_tab(ST_DATA);                         /* back to the tab it was opened from */
+    lv_screen_load(scr_settings);
+}
+
 static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint)
 {
     lv_obj_t *r = lv_obj_create(parent);
@@ -7580,6 +7601,15 @@ static void build_settings(void)
     lv_obj_set_style_bg_color(ex, C_CARD2, 0);
     lv_obj_align(ex, LV_ALIGN_RIGHT_MID, 0, 0);
 
+    /* system monitor: the whole card opens it, as Wi-Fi's */
+    r = settings_row(col, "System monitor", "Memory, storage, CPU temperature, tasks, LVGL");
+    lv_obj_set_clickable(r, true);
+    lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(r, sysmon_open_cb, LV_EVENT_CLICKED, NULL);
+    chev = make_label(r, &lv_font_montserrat_20, C_MUTED);
+    lv_label_set_text(chev, LV_SYMBOL_RIGHT);
+    lv_obj_align(chev, LV_ALIGN_RIGHT_MID, 0, 0);
+
     r = settings_row(col, "Factory reset", "Settings, Wi-Fi network, players and statistics");
     lv_obj_t *fr = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_WARNING "  Reset", &lv_font_montserrat_18,
                             factory_reset_cb, NULL);
@@ -7594,6 +7624,12 @@ static void build_wifi(void)
 {
     scr_wifi = make_screen();
     wifi_ui_create(scr_wifi, wifi_back_cb);
+}
+
+static void build_sysmon(void)
+{
+    scr_sysmon = make_screen();
+    sysmon_ui_create(scr_sysmon, sysmon_back_cb);
 }
 
 /* ============================================================= start */
