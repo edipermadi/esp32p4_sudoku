@@ -44,7 +44,8 @@ typedef enum {
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
     CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
-    CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM,
+    CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM, CMD_BM_GET, CMD_BM_SET, CMD_BM_LIST, CMD_SEEN_GET, CMD_SEEN_SET,
+    CMD_ATTACK, CMD_ATTACK_BOARD,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -136,6 +137,12 @@ typedef struct {
     uint8_t solved_bits[16];
     char source[STATS_IMPORT_NAME];   /* CMD_GEN_SOURCE result */
     int number;
+    int nids;                    /* CMD_BM_LIST result */
+    uint16_t ids[STATS_MAX_BOOKMARKS];
+    bool flag;                   /* CMD_BM_GET / CMD_SEEN_GET result */
+    char what[16];               /* CMD_SEEN_GET */
+    int nattack;                 /* CMD_ATTACK_BOARD result */
+    stats_attack_row_t attack[STATS_ATTACK_ROWS];
     int ngames;                  /* CMD_LIST_GAMES result */
     stats_game_row_t games[STATS_MAX_GAMES];
 } gen_call_t;
@@ -271,7 +278,23 @@ static const char SCHEMA[] =
     "  player_id INTEGER NOT NULL REFERENCES players(id),"
     "  technique INTEGER NOT NULL,"                      /* Learn's list, 0 Hidden single .. 9 XY-Wing */
     "  at INTEGER,"
-    "  PRIMARY KEY (player_id, technique));";
+    "  PRIMARY KEY (player_id, technique));"
+    "CREATE TABLE IF NOT EXISTS bookmarks("              /* starred puzzles, per player */
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"
+    "  puzzle INTEGER NOT NULL,"
+    "  at INTEGER,"
+    "  PRIMARY KEY (player_id, puzzle));"
+    "CREATE TABLE IF NOT EXISTS seen("                   /* shown once per player: 'tour' */
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"
+    "  what TEXT NOT NULL,"
+    "  at INTEGER,"
+    "  PRIMARY KEY (player_id, what));"
+    "CREATE TABLE IF NOT EXISTS attack("                 /* time attack runs: Easy puzzles solved in 10 minutes */
+    "  id INTEGER PRIMARY KEY,"
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"
+    "  finished_at INTEGER,"
+    "  solved INTEGER NOT NULL,"
+    "  mistakes INTEGER);";
 
 /* after the upgrade: indexes and the view, always in their current form */
 static const char SCHEMA_POST[] =
@@ -583,6 +606,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "no_notes")) p->no_notes = v != 0;
             else if (!strcmp(k, "left_hand")) p->left_hand = v != 0;
             else if (!strcmp(k, "big_digits")) p->big_digits = v != 0;
+            else if (!strcmp(k, "hint_nudge")) p->hint_nudge = v != 0;
             else if (!strcmp(k, "night_mode")) p->night_mode = v != 0;
             else if (!strcmp(k, "night_start")) p->night_start = v >= 0 && v < 24 ? v : 22;
             else if (!strcmp(k, "night_end")) p->night_end = v >= 0 && v < 24 ? v : 7;
@@ -754,6 +778,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("no_notes", false, p->no_notes, NULL);
     set_setting("left_hand", false, p->left_hand, NULL);
     set_setting("big_digits", false, p->big_digits, NULL);
+    set_setting("hint_nudge", false, p->hint_nudge, NULL);
     set_setting("night_mode", false, p->night_mode, NULL);
     set_setting("night_start", false, p->night_start, NULL);
     set_setting("night_end", false, p->night_end, NULL);
@@ -972,6 +997,66 @@ static void do_solve(const cmd_t *c)
     } else {
         exec("ROLLBACK");
     }
+}
+
+/* bookmarks, seen, time attack: small reads (gen_call, the UI waits) and writes */
+static void do_small_get(cmd_type_t type)
+{
+    sqlite3_stmt *st;
+    s_gen.flag = false;
+    s_gen.nids = s_gen.nattack = 0;
+    const char *sql = type == CMD_BM_GET ? "SELECT 1 FROM bookmarks WHERE player_id = ?1 AND puzzle = ?2"
+                    : type == CMD_BM_LIST ? "SELECT puzzle FROM bookmarks WHERE player_id = ?1 ORDER BY at DESC, rowid DESC"
+                    : type == CMD_SEEN_GET ? "SELECT 1 FROM seen WHERE player_id = ?1 AND what = ?3"
+                    : "SELECT p.name, MAX(a.solved), COUNT(*), p.id = ?1 FROM attack a JOIN players p ON p.id = a.player_id"
+                      " GROUP BY a.player_id ORDER BY 2 DESC, MIN(a.finished_at)";
+    bool ok = s_db && sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) == SQLITE_OK;
+    if (ok) {
+        sqlite3_bind_int(st, 1, s_player);
+        if (type == CMD_BM_GET) sqlite3_bind_int(st, 2, s_gen.puzzle);
+        if (type == CMD_SEEN_GET) sqlite3_bind_text(st, 3, s_gen.what, -1, SQLITE_STATIC);
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            if (type == CMD_BM_LIST) {
+                if (s_gen.nids < STATS_MAX_BOOKMARKS) s_gen.ids[s_gen.nids++] = (uint16_t)sqlite3_column_int(st, 0);
+            } else if (type == CMD_ATTACK_BOARD) {
+                if (s_gen.nattack >= STATS_ATTACK_ROWS) break;
+                stats_attack_row_t *r = &s_gen.attack[s_gen.nattack++];
+                const unsigned char *n = sqlite3_column_text(st, 0);
+                snprintf(r->name, sizeof(r->name), "%s", n ? (const char *)n : "?");
+                r->best = sqlite3_column_int(st, 1);
+                r->runs = sqlite3_column_int(st, 2);
+                r->me = sqlite3_column_int(st, 3) != 0;
+            } else {
+                s_gen.flag = true;
+            }
+        }
+        sqlite3_finalize(st);
+    }
+    s_gen.ok = ok;
+    xSemaphoreGive(s_gen_done);
+}
+
+static void do_small_set(const cmd_t *c)
+{
+    sqlite3_stmt *st;
+    const char *sql;
+    if (c->type == CMD_BM_SET) sql = c->ival ? "INSERT OR IGNORE INTO bookmarks(player_id, puzzle, at) VALUES(?1, ?2, ?3)"
+                                             : "DELETE FROM bookmarks WHERE player_id = ?1 AND puzzle = ?2";
+    else if (c->type == CMD_SEEN_SET) sql = c->ival ? "INSERT OR IGNORE INTO seen(player_id, what, at) VALUES(?1, ?4, ?3)"
+                                                    : "DELETE FROM seen WHERE player_id = ?1 AND what = ?4";
+    else sql = "INSERT INTO attack(player_id, finished_at, solved, mistakes) VALUES(?1, ?3, ?2, ?5)";
+    if (!s_db || sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) != SQLITE_OK) return;
+    time_t now = time(NULL);
+    sqlite3_bind_int(st, 1, s_player);
+    if (sqlite3_bind_parameter_index(st, "?2")) sqlite3_bind_int(st, 2, c->type == CMD_ATTACK ? c->ival : c->puzzle);
+    if (sqlite3_bind_parameter_index(st, "?3")) {
+        if (now > 1700000000) sqlite3_bind_int64(st, 3, now);
+        else sqlite3_bind_null(st, 3);
+    }
+    if (sqlite3_bind_parameter_index(st, "?4")) sqlite3_bind_text(st, 4, c->text, -1, SQLITE_TRANSIENT);
+    if (sqlite3_bind_parameter_index(st, "?5")) sqlite3_bind_int(st, 5, (int)c->mistakes);
+    step_done(st, "bookmark/seen/attack");
+    sqlite3_finalize(st);
 }
 
 static void do_weeksum(void)
@@ -1271,6 +1356,9 @@ static void do_delete(int32_t id)
         "DELETE FROM saved_game WHERE player_id = ?1",
         "DELETE FROM achievements WHERE player_id = ?1",
         "DELETE FROM learned WHERE player_id = ?1",
+        "DELETE FROM bookmarks WHERE player_id = ?1",
+        "DELETE FROM seen WHERE player_id = ?1",
+        "DELETE FROM attack WHERE player_id = ?1",
         "DELETE FROM players WHERE id = ?1",
     };
     bool ok = exec("BEGIN");
@@ -2635,6 +2723,17 @@ static void worker(void *arg)
         case CMD_WEEKSUM:
             do_weeksum();
             break;
+        case CMD_BM_GET:
+        case CMD_BM_LIST:
+        case CMD_SEEN_GET:
+        case CMD_ATTACK_BOARD:
+            do_small_get(c.type);
+            break;
+        case CMD_BM_SET:
+        case CMD_SEEN_SET:
+        case CMD_ATTACK:
+            do_small_set(&c);
+            break;
         case CMD_GAME:
             flush_game();
             break;
@@ -2865,6 +2964,57 @@ bool stats_db_take_insights(stats_insights_t *out)
     s_ins_new = false;
     xSemaphoreGive(s_lock);
     return fresh;
+}
+
+static bool gen_call(cmd_type_t type);
+
+bool stats_db_bookmarked(uint16_t puzzle)
+{
+    if (!s_genp) return false;
+    s_gen.puzzle = puzzle;
+    return gen_call(CMD_BM_GET) && s_gen.flag;
+}
+
+void stats_db_set_bookmark(uint16_t puzzle, bool on)
+{
+    cmd_t c = {.type = CMD_BM_SET, .puzzle = puzzle, .ival = on};
+    send(&c);
+}
+
+int stats_db_bookmarks(uint16_t *ids, int max)
+{
+    if (!s_genp || !gen_call(CMD_BM_LIST)) return -1;
+    int n = s_gen.nids < max ? s_gen.nids : max;
+    memcpy(ids, s_gen.ids, sizeof(uint16_t) * (size_t)n);
+    return n;
+}
+
+bool stats_db_seen(const char *what)
+{
+    if (!s_genp) return true;                       /* no database: don't nag every time */
+    snprintf(s_gen.what, sizeof(s_gen.what), "%s", what);
+    return !gen_call(CMD_SEEN_GET) || s_gen.flag;
+}
+
+void stats_db_set_seen(const char *what, bool seen)
+{
+    cmd_t c = {.type = CMD_SEEN_SET, .ival = seen};
+    snprintf(c.text, sizeof(c.text), "%s", what);
+    send(&c);
+}
+
+void stats_db_record_attack(int solved, int mistakes)
+{
+    cmd_t c = {.type = CMD_ATTACK, .ival = solved, .mistakes = (uint32_t)mistakes};
+    send(&c);
+}
+
+int stats_db_attack_board(stats_attack_row_t *rows, int max)
+{
+    if (!s_genp || !gen_call(CMD_ATTACK_BOARD)) return -1;
+    int n = s_gen.nattack < max ? s_gen.nattack : max;
+    memcpy(rows, s_gen.attack, sizeof(*rows) * (size_t)n);
+    return n;
 }
 
 void stats_db_learned(int technique)

@@ -1,7 +1,8 @@
 # Screenshots for the docs: python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
 # Opening the port restarts the board, so this starts on a fresh Home screen.
 # Coordinates are screen pixels (720 x 720). Nothing here changes the game data
-# (no puzzle is played or made, no setting is changed). It expects one recorded
+# (no puzzle is played or made, no setting is changed). The game screen tour must
+# have been seen (tour.png is taken by hand). It expects one recorded
 # solve (for Gameplays and the replay); the Home menu always has its two pages.
 
 wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
@@ -20,6 +21,11 @@ tap 594 98                  # Learn: the techniques
 wait 800
 shot docs/screenshots/learn.png
 tap 360 628                 # Close (the list scrolls above it)
+wait 400
+tap 365 36                  # Starred: the bookmarked puzzles
+wait 900
+shot docs/screenshots/starred.png
+tap 360 408                 # Close (with none starred; each one moves it down)
 wait 400
 tap 358 98                  # Enter: a blank board to type a puzzle in
 wait 800
@@ -93,18 +99,11 @@ shot docs/screenshots/trophies-records.png
 tap 72 36                   # Home
 wait 500
 
-# ---- Settings, Files and the System monitor
-tap 206 637                 # Settings (opens on Network; the network's name is hidden there)
-wait 800
-# the time zone is blurred: it says where the board is
-shot docs/screenshots/settings.png --blur 330,236,616,286
-tap 218 98                  # the Display tab
-wait 300
-shot docs/screenshots/settings-display.png
-tap 638 98                  # the Data tab
-wait 400
-shot docs/screenshots/settings-data.png
-tap 72 36                   # Home
+# ---- Time attack, Files, Settings and the System monitor
+tap 206 637                 # Time attack (Home, page 1): the rules and the leaderboard
+wait 1200
+shot docs/screenshots/time-attack.png
+tap 214 448                 # Close (with no runs yet; the leaderboard's rows move it down)
 wait 500
 tap 513 637                 # Files (Home, page 1): the card's root
 wait 1500
@@ -114,7 +113,22 @@ wait 500
 swipe 600 450 120 450 300   # the menu's second page
 wait 800
 shot docs/screenshots/home-page2.png
-tap 206 260                 # System (the system monitor)
+tap 206 260                 # Settings (opens on Network; the network's name is hidden there)
+wait 800
+# the time zone is blurred: it says where the board is
+shot docs/screenshots/settings.png --blur 330,236,616,286
+tap 218 98                  # the Display tab
+wait 300
+shot docs/screenshots/settings-display.png
+tap 498 98                  # the Game tab
+wait 300
+shot docs/screenshots/settings-game.png
+tap 638 98                  # the Data tab
+wait 400
+shot docs/screenshots/settings-data.png
+tap 72 36                   # Home (the menu stays on its second page)
+wait 500
+tap 513 260                 # System (the system monitor)
 wait 2500
 tap 78 98                   # its System tab (it opens on the one used last)
 wait 1200

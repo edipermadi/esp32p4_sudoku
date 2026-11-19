@@ -43,6 +43,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .no_notes = false,
     .left_hand = false,
     .big_digits = false,
+    .hint_nudge = false,
     .night_mode = false,
     .night_start = 22,
     .night_end = 7,
@@ -411,6 +412,17 @@ void store_set_left_hand(bool on)
 {
     s_p.left_hand = on;
     stats_db_set_int("left_hand", on);
+}
+
+bool store_hint_nudge(void)
+{
+    return s_p.hint_nudge;
+}
+
+void store_set_hint_nudge(bool on)
+{
+    s_p.hint_nudge = on;
+    stats_db_set_int("hint_nudge", on);
 }
 
 bool store_big_digits(void)

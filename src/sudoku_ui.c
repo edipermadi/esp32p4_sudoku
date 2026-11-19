@@ -266,6 +266,20 @@ static uint8_t  h_mark[81];      /* hint highlight: 0, 1 = where to look, 2 = th
 static int      h_step;          /* 0 = no hint open, 1 = nudge shown, 2 = reason shown */
 static sudoku_step_t h_info;
 static int      g_practice = -1;  /* Learn: the technique being practised (LEARN_*), -1 = a real game */
+/* Time attack (Home): Easy puzzles one after another for 10 minutes. Its games
+ * aren't kept (no Continue); its solves count as usual. */
+#define ATK_MS (10u * 60u * 1000u)
+static bool     g_attack;         /* this game is part of a run */
+static uint32_t atk_used_ms;      /* the run's earlier puzzles */
+static int      atk_solved, atk_mistakes;
+static uint16_t atk_last;
+static bool     g_starred;        /* the puzzle is bookmarked (the star in the top bar) */
+static lv_obj_t *g_star_btn;
+static lv_obj_t *tour_ovl;        /* the game screen's tour, while it's up */
+static void atk_open_next(void);
+static void atk_finish(void);
+static void tour_maybe(void);
+static bool hint_nudge(void);
 static lv_obj_t *h_card, *h_text, *h_act;
 static void hint_drop(void);
 static int      g_nmoves;
@@ -417,6 +431,7 @@ static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss,
 static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
 static lv_obj_t *g_win_h2h;      /* Solved dialog: how others did on this puzzle */
 static lv_obj_t *g_undo_btn, *g_redo_btn;
+static lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the tour points at them) */
 
 static void show_list(void);
 static void open_puzzle(uint16_t id);
@@ -932,7 +947,7 @@ static int64_t game_started_at(void)
  */
 static void save_current(void)
 {
-    if (g_id == STORE_NO_GAME || g_solved || g_practice >= 0) return;   /* (practice games aren't kept) */
+    if (g_id == STORE_NO_GAME || g_solved || g_practice >= 0 || g_attack) return;   /* (practice, time attack: not kept) */
     const saved_game_t *s = store_saved_game();
     if (!has_progress() && s->id != g_id) return;   /* only looked at it: keep the slot as is */
     saved_game_t sg;
@@ -955,6 +970,14 @@ static void save_current(void)
 static void update_timer_label(void)
 {
     char buf[16];
+    if (g_attack) {                                 /* the run's time left (always shown) */
+        uint32_t used = atk_used_ms + g_elapsed_ms;
+        uint32_t left = used >= ATK_MS ? 0 : ATK_MS - used;
+        fmt_time(buf, sizeof(buf), (left + 999) / 1000);
+        if (strcmp(lv_label_get_text(g_timer), buf) != 0) lv_label_set_text(g_timer, buf);
+        lv_obj_set_style_text_color(g_timer, g_paused ? C_MUTED : (left < 60000 ? C_ORANGE : C_TEXT), 0);
+        return;
+    }
     fmt_time(buf, sizeof(buf), g_elapsed_ms / 1000);
     if (!store_show_timer() && !g_solved) snprintf(buf, sizeof(buf), "--:--");   /* Settings > Show timer off */
     if (strcmp(lv_label_get_text(g_timer), buf) != 0) lv_label_set_text(g_timer, buf);
@@ -966,9 +989,21 @@ static void update_header(void)
     char name[40], best[24], buf[48];
     puzzle_name(g_id, name, sizeof(name));
     if (g_practice >= 0) snprintf(name, sizeof(name), "Practice: %s", LEARN_NAMES[g_practice]);
+    if (g_attack) {
+        char n2[40];
+        snprintf(n2, sizeof(n2), "Time attack: %s", name);
+        snprintf(name, sizeof(name), "%s", n2);
+    }
     lv_label_set_text(g_title, name);
+    /* the star: puzzles that stay (not Learn's, nor ones kept only in RAM) */
+    bool can_star = g_practice < 0 && stats_db_ready() && g_id < PUZZLE_GEN_RAM_BASE;
+    lv_obj_set_hidden(g_star_btn, !can_star);
+    lv_obj_set_style_text_color(lv_obj_get_child(g_star_btn, 0), g_starred ? C_ORANGE : C_MUTED, 0);
     uint32_t b = store_best_time(g_id);
-    if (b) {
+    if (g_attack) {
+        snprintf(buf, sizeof(buf), LV_SYMBOL_CHARGE "  %d solved in this run", atk_solved);
+        lv_obj_set_style_text_color(g_best, C_ORANGE, 0);
+    } else if (b) {
         fmt_time(best, sizeof(best), b);
         snprintf(buf, sizeof(buf), LV_SYMBOL_OK "  Best %s", best);
         lv_obj_set_style_text_color(g_best, C_GREEN, 0);
@@ -977,8 +1012,10 @@ static void update_header(void)
         lv_obj_set_style_text_color(g_best, C_MUTED, 0);
     }
     lv_label_set_text(g_best, buf);
-    lv_label_set_text(g_timer_icon, g_solved ? LV_SYMBOL_OK : (g_paused ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE));
-    lv_obj_set_style_text_color(g_timer_icon, g_solved ? C_GREEN : C_MUTED, 0);
+    bool done = g_solved && !g_attack;              /* (a run's end isn't a solve: the bolt) */
+    lv_label_set_text(g_timer_icon, g_attack && g_solved ? LV_SYMBOL_CHARGE
+                                    : done ? LV_SYMBOL_OK : (g_paused ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE));
+    lv_obj_set_style_text_color(g_timer_icon, done ? C_GREEN : (g_attack && g_solved ? C_ORANGE : C_MUTED), 0);
     update_timer_label();
 }
 
@@ -1105,6 +1142,22 @@ static void on_solved(void)
     if (g_practice >= 0) {                          /* Learn: not recorded */
         sudoku_ui_notice("Solved! Practice games aren't saved or counted: Learn has more techniques.", 4000);
         update_header();
+        return;
+    }
+    if (g_attack) {                                 /* Time attack: counted, and straight on to the next */
+        uint32_t secs = (g_elapsed_ms + 500) / 1000;
+        store_record_solve(g_id, secs, g_mistakes);
+        stats_db_record_solve(g_id, secs, g_mistakes, g_hints, game_started_at(), g_moves, g_nmoves, g_flags);
+        atk_used_ms += g_elapsed_ms;
+        g_elapsed_ms = 0;
+        atk_solved++;
+        atk_mistakes += g_mistakes;
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Solved! %d in this run. Next one...", atk_solved);
+        sudoku_ui_notice(msg, 1500);
+        update_header();
+        lv_timer_t *nt = lv_timer_create((lv_timer_cb_t)atk_open_next, 900, NULL);
+        lv_timer_set_repeat_count(nt, 1);
         return;
     }
     uint32_t secs = (g_elapsed_ms + 500) / 1000;
@@ -1244,6 +1297,10 @@ static void enter_digit(int d)
 static void fill_cb(lv_event_t *e)
 {
     if (g_solved || g_paused) return;
+    if (g_attack) {
+        sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
+        return;
+    }
     if (!g_sol_ok) {
         sudoku_ui_notice("Fill isn't available: this puzzle has no solution.", 3000);
         return;
@@ -1640,6 +1697,12 @@ static void mark_unit(int u, uint8_t v)
 }
 
 /* closes the hint without redrawing (the caller does) */
+/* Settings > Game > Hints: Nudge only: where to look, nothing more (Learn keeps the full hint) */
+static bool hint_nudge(void)
+{
+    return store_hint_nudge() && g_practice < 0;
+}
+
 static void hint_drop(void)
 {
     if (!h_step) return;
@@ -1785,7 +1848,8 @@ static void hint_render(void)
             else snprintf(text, sizeof(text), "Look at the highlighted cell: only one digit fits.");
             break;
         default:
-            snprintf(text, sizeof(text), "No simple step here: this needs advanced techniques. More shows one cell.");
+            snprintf(text, sizeof(text), hint_nudge() ? "No simple step here: this needs advanced techniques."
+                                                       : "No simple step here: this needs advanced techniques. More shows one cell.");
             break;
         }
         lv_label_set_text(lv_obj_get_child(h_act, 0), "More");
@@ -1814,6 +1878,7 @@ static void hint_render(void)
         lv_label_set_text(lv_obj_get_child(h_act, 0), h->kind == STEP_WRONG ? "Erase it" : "Place it");
     }
     lv_label_set_text(h_text, text);
+    lv_obj_set_hidden(h_act, h_step == 1 && hint_nudge());   /* Settings > Game > Hints: Nudge only */
 
     /* the card at the bottom, or at the top when the bottom row matters */
     /* as tall as its text needs (a technique and its single take 4-6 lines), at least the
@@ -1838,6 +1903,7 @@ static void hint_render(void)
 static void hint_act_cb(lv_event_t *e)
 {
     if (!h_step || g_solved || g_paused) return;
+    if (h_step == 1 && hint_nudge()) return;
     if (h_step == 1) {
         h_step = 2;
         hint_render();
@@ -1868,7 +1934,12 @@ static void hint_close_cb(lv_event_t *e)
 static void hint_cb(lv_event_t *e)
 {
     if (g_solved || g_paused || !g_sol_ok) return;
+    if (g_attack) {
+        sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
+        return;
+    }
     if (h_step) {                                   /* already open: same as More / Place it */
+        if (hint_nudge()) return;                   /* (a nudge goes no further) */
         hint_act_cb(e);
         return;
     }
@@ -1962,8 +2033,32 @@ static void restart_cb(lv_event_t *e)
     msgbox_button(m, "Restart", restart_confirm_cb, true);
 }
 
+static void show_home(void);
+
+static void atk_stop_cb(lv_event_t *e)
+{
+    lv_msgbox_close(lv_event_get_user_data(e));
+    g_attack = false;                               /* (not recorded: the run wasn't finished) */
+    g_solved = true;
+    show_home();
+}
+
+static void atk_keep_cb(lv_event_t *e)
+{
+    lv_msgbox_close(lv_event_get_user_data(e));
+    set_paused(false);
+}
+
 static void back_cb(lv_event_t *e)
 {
+    if (g_attack && !g_solved) {
+        set_paused(true);
+        lv_obj_t *m = make_msgbox(LV_SYMBOL_CHARGE "  Stop the run?", "A time attack only counts when its 10 "
+                                  "minutes are up. Puzzles solved so far still count as solves.");
+        msgbox_button(m, "Keep going", atk_keep_cb, false);
+        msgbox_button(m, "Stop", atk_stop_cb, true);
+        return;
+    }
     save_current();
     show_list();
 }
@@ -2006,10 +2101,11 @@ static void win_hide_cb(lv_event_t *e)
 static void tick_cb(lv_timer_t *t)
 {
     uint32_t now = lv_tick_get();
-    bool running = g_id != STORE_NO_GAME && lv_screen_active() == scr_game && !g_solved && !g_paused;
+    bool running = g_id != STORE_NO_GAME && lv_screen_active() == scr_game && !g_solved && !g_paused && !tour_ovl;
     if (running) {
         g_elapsed_ms += now - g_last_tick;
         update_timer_label();
+        if (g_attack && atk_used_ms + g_elapsed_ms >= ATK_MS) atk_finish();
     }
     g_last_tick = now;
 }
@@ -2291,6 +2387,7 @@ static void game_layout(void)
 static void start_game(uint16_t id, bool resume)
 {
     g_practice = -1;                                /* (learn_open sets it after) */
+    g_attack = false;                               /* (atk_open_next sets it after) */
     uint8_t given[81];
     if (!puzzle_get(id, given)) {
         sudoku_ui_notice("This puzzle isn't available (it was made on the board, and sudoku.db is missing).", 4000);
@@ -2336,9 +2433,285 @@ static void start_game(uint16_t id, bool resume)
     g_last_tick = lv_tick_get();
     compute_conflicts();
     refresh_board();
+    g_starred = id < PUZZLE_GEN_RAM_BASE && stats_db_bookmarked(id);
     update_header();
     lv_screen_load(scr_game);
     rules_first_time();
+    tour_maybe();
+}
+
+/* ------------------------------------------------------------- the tour */
+/*
+ * A first look at the game screen: the board, the pad, the tools, Hint, the
+ * top bar and the timer, one at a time, each lit up with the rest dimmed. Once
+ * per player (sudoku.db: seen 'tour'), the first time a puzzle is opened;
+ * Settings > Game > Game screen tour shows it again. The clock stands still.
+ */
+#define TOUR_STEPS 6
+static int tour_step;
+
+static void tour_area(int step, lv_area_t *a)
+{
+    lv_obj_t *o[4] = {NULL};
+    switch (step) {
+    case 0: o[0] = g_grid; break;
+    case 1: o[0] = g_pad[0]; o[1] = g_pad[8]; break;
+    case 2: o[0] = g_undo_btn; o[1] = g_fill_btn; break;
+    case 3: o[0] = g_hint_btn; break;
+    case 4: o[0] = g_bulb_btn; o[1] = lv_obj_is_hidden(g_star_btn) ? g_hint_btn : g_star_btn; break;
+    default: o[0] = g_timer_btn; break;
+    }
+    lv_obj_get_coords(o[0], a);
+    for (int i = 1; i < 4 && o[i]; i++) {
+        lv_area_t b;
+        lv_obj_get_coords(o[i], &b);
+        if (b.x1 < a->x1) a->x1 = b.x1;
+        if (b.y1 < a->y1) a->y1 = b.y1;
+        if (b.x2 > a->x2) a->x2 = b.x2;
+        if (b.y2 > a->y2) a->y2 = b.y2;
+    }
+    lv_area_increase(a, 4, 4);
+}
+
+static void tour_show(int step);
+
+static void tour_end(void)
+{
+    if (!tour_ovl) return;
+    lv_obj_delete(tour_ovl);
+    tour_ovl = NULL;
+    stats_db_set_seen("tour", true);
+    g_last_tick = lv_tick_get();                    /* (the clock goes on from now) */
+}
+
+static void tour_next_cb(lv_event_t *e)
+{
+    if (tour_step + 1 >= TOUR_STEPS) tour_end();
+    else tour_show(tour_step + 1);
+}
+
+static void tour_skip_cb(lv_event_t *e)
+{
+    tour_end();
+}
+
+static void tour_dim(int x1, int y1, int x2, int y2)
+{
+    if (x2 <= x1 || y2 <= y1) return;
+    lv_obj_t *r = lv_obj_create(tour_ovl);
+    lv_obj_remove_style_all(r);
+    lv_obj_set_pos(r, x1, y1);
+    lv_obj_set_size(r, x2 - x1, y2 - y1);
+    lv_obj_set_style_bg_color(r, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(r, LV_OPA_60, 0);
+    lv_obj_remove_flag(r, LV_OBJ_FLAG_CLICKABLE);
+}
+
+static void tour_show(int step)
+{
+    static const char *const TITLE[TOUR_STEPS] = {"The board", "The number pad", "Tools", "Hint", "The top bar",
+                                                  "The timer"};
+    static const char *const TEXT[TOUR_STEPS] = {
+        "Tap a cell, then a digit to put it there. Hold a cell to paint it a colour (in Killer: to see what its "
+        "cage can hold).",
+        "Puts the digit in the selected cell; the small number is how many are still to place. Hold a digit to "
+        "light it up everywhere, then tap cells to place it.",
+        "Undo and Redo; Erase a cell; Notes puts digits in as pencil marks; Auto adds all the marks at once; "
+        "Restart; Fill puts the right digit in the selected cell (it counts as a hint).",
+        "Shows where to look next. More then shows the cell and why, and Place it puts the digit in.",
+        "The light bulb: this puzzle's rules. Share: the puzzle as a QR code. The star keeps it under Puzzles > "
+        "Starred. List goes back to the puzzles: the game is saved after every move.",
+        "Tap the timer to pause: the board is hidden until you go on. That's all - enjoy the puzzle!",
+    };
+    tour_step = step;
+    if (!tour_ovl) {
+        tour_ovl = lv_obj_create(lv_layer_top());
+        lv_obj_remove_style_all(tour_ovl);
+        lv_obj_set_size(tour_ovl, SCR_W, SCR_W);
+        lv_obj_add_flag(tour_ovl, LV_OBJ_FLAG_CLICKABLE);   /* nothing under it takes a tap */
+        lv_obj_set_scrollable(tour_ovl, false);
+    }
+    lv_obj_clean(tour_ovl);
+    lv_area_t a;
+    tour_area(step, &a);
+    tour_dim(0, 0, SCR_W, a.y1);                    /* everything but the target, dimmed */
+    tour_dim(0, a.y2 + 1, SCR_W, SCR_W);
+    tour_dim(0, a.y1, a.x1, a.y2 + 1);
+    tour_dim(a.x2 + 1, a.y1, SCR_W, a.y2 + 1);
+    lv_obj_t *ring = lv_obj_create(tour_ovl);
+    lv_obj_remove_style_all(ring);
+    lv_obj_set_pos(ring, a.x1, a.y1);
+    lv_obj_set_size(ring, lv_area_get_width(&a), lv_area_get_height(&a));
+    lv_obj_set_style_border_color(ring, C_ACCENT, 0);
+    lv_obj_set_style_border_width(ring, 3, 0);
+    lv_obj_set_style_radius(ring, 8, 0);
+    lv_obj_remove_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *card = lv_obj_create(tour_ovl);
+    lv_obj_set_width(card, 560);
+    lv_obj_set_height(card, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_color(card, C_ACCENT, 0);
+    lv_obj_set_style_border_width(card, 2, 0);
+    lv_obj_set_style_radius(card, 12, 0);
+    lv_obj_set_style_pad_all(card, 16, 0);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(card, 10, 0);
+    lv_obj_set_scrollable(card, false);
+    lv_obj_t *t = make_label(card, &lv_font_montserrat_22, C_TEXT);
+    lv_label_set_text_fmt(t, "%s", TITLE[step]);
+    const char *text = TEXT[step];
+    if (step == 3 && store_hint_nudge()) text = "Shows where to look next (Settings > Game > Hints: Nudge only).";
+    lv_obj_t *x = make_wrap_text(card, &lv_font_montserrat_18, C_TEXT, text);
+    lv_obj_set_width(x, LV_PCT(100));
+    lv_obj_t *row = lv_obj_create(card);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), 52);
+    lv_obj_t *n = make_label(row, &lv_font_montserrat_16, C_MUTED);
+    lv_label_set_text_fmt(n, "%d of %d", step + 1, TOUR_STEPS);
+    lv_obj_align(n, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *nb = make_btn(row, 0, 0, 140, 52, step + 1 < TOUR_STEPS ? "Next  " LV_SYMBOL_RIGHT : "Done",
+                            &lv_font_montserrat_18, tour_next_cb, NULL);
+    lv_obj_set_style_bg_color(nb, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(nb, 0), lv_color_white(), 0);
+    lv_obj_align(nb, LV_ALIGN_RIGHT_MID, 0, 0);
+    if (step + 1 < TOUR_STEPS) {
+        lv_obj_t *sb = make_btn(row, 0, 0, 110, 52, "Skip", &lv_font_montserrat_18, tour_skip_cb, NULL);
+        lv_obj_set_style_bg_color(sb, C_CARD2, 0);
+        lv_obj_align(sb, LV_ALIGN_RIGHT_MID, -150, 0);
+    }
+    lv_obj_update_layout(card);
+    int h = lv_obj_get_height(card), y;
+    if (a.y1 >= h + 16) y = a.y1 - h - 10;          /* above the target, or below it, or over its lower part */
+    else if (SCR_W - a.y2 >= h + 16) y = a.y2 + 10;
+    else y = SCR_W - h - 80;
+    lv_obj_set_pos(card, (SCR_W - 560) / 2, y);
+}
+
+static void tour_check_cb(lv_timer_t *t)
+{
+    if (tour_ovl || lv_screen_active() != scr_game || g_practice >= 0 || g_attack || g_solved || !stats_db_ready())
+        return;
+    lv_obj_t *top = lv_layer_top();                 /* the rules card, a notice: another time */
+    for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
+        if (!lv_obj_is_hidden(lv_obj_get_child(top, (int32_t)i))) return;
+    }
+    if (stats_db_seen("tour")) return;
+    hint_drop();
+    tour_show(0);
+}
+
+static void tour_maybe(void)
+{
+    lv_timer_t *t = lv_timer_create(tour_check_cb, 500, NULL);   /* (after Learn / Time attack set their flags) */
+    lv_timer_set_repeat_count(t, 1);
+}
+
+/* ------------------------------------------------------------- time attack */
+
+static void atk_open_next(void)
+{
+    if (!g_attack) return;                          /* stopped meanwhile */
+    const puzzle_collection_t *pc = &puzzle_collections[0];   /* Easy */
+    uint16_t id;
+    int tries = 0;
+    do {
+        id = (uint16_t)(pc->first + esp_random() % pc->count);
+    } while (++tries < 20 && (id == atk_last || id == store_saved_game()->id));   /* (not the Continue game) */
+    atk_last = id;
+    uint32_t used = atk_used_ms;
+    start_game(id, false);
+    g_attack = true;
+    atk_used_ms = used;
+    g_flags = 0;                                    /* (no challenges in a run) */
+    challenge_ui();
+    update_header();
+}
+
+static void atk_start(void)
+{
+    atk_used_ms = 0;
+    atk_solved = atk_mistakes = 0;
+    atk_last = STORE_NO_GAME;
+    g_attack = true;
+    atk_open_next();
+}
+
+static void atk_board_fill(lv_obj_t *c)
+{
+    stats_attack_row_t rows[STATS_ATTACK_ROWS];
+    int n = stats_db_attack_board(rows, STATS_ATTACK_ROWS);
+    if (n <= 0) {
+        make_wrap_text(c, &lv_font_montserrat_18, C_MUTED, n < 0 ? "The leaderboard needs sudoku.db on a microSD card."
+                                                                  : "No runs yet: be the first on the leaderboard.");
+        return;
+    }
+    lv_obj_t *hd = make_label(c, &lv_font_montserrat_16, C_MUTED);
+    lv_label_set_text(hd, "Leaderboard: best run");
+    for (int i = 0; i < n; i++) {
+        lv_obj_t *r = lv_obj_create(c);
+        lv_obj_remove_style_all(r);
+        lv_obj_set_size(r, LV_PCT(100), 32);
+        lv_color_t col = rows[i].me ? C_ACCENT : C_TEXT;
+        lv_obj_t *l = make_label(r, &lv_font_montserrat_18, col);
+        lv_label_set_text_fmt(l, "%d.  %s", i + 1, rows[i].name);
+        lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_t *v = make_label(r, &lv_font_montserrat_18, col);
+        lv_label_set_text_fmt(v, "%d solved   (%d run%s)", rows[i].best, rows[i].runs, rows[i].runs == 1 ? "" : "s");
+        lv_obj_align(v, LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+}
+
+static void atk_go_cb(lv_event_t *e)
+{
+    lv_msgbox_close(lv_event_get_user_data(e));
+    atk_start();
+}
+
+static void atk_home_cb(lv_event_t *e)
+{
+    lv_msgbox_close(lv_event_get_user_data(e));
+    show_home();
+}
+
+/* Home > Time attack: the rules, the leaderboard, Start */
+static void attack_cb(lv_event_t *e)
+{
+    lv_obj_t *m = make_msgbox(LV_SYMBOL_CHARGE "  Time attack", NULL);
+    lv_obj_set_width(m, 600);
+    lv_obj_t *c = lv_msgbox_get_content(m);
+    lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(c, 4, 0);
+    lv_obj_t *x = make_wrap_text(c, &lv_font_montserrat_18, C_TEXT, "Solve as many Easy puzzles as you can in 10 "
+                                 "minutes: the next one opens as soon as one is solved. Hint and Fill are off; pausing "
+                                 "stops the clock and hides the board. Solves count as usual.");
+    lv_obj_set_style_margin_bottom(x, 10, 0);
+    atk_board_fill(c);
+    msgbox_button(m, "Close", mbox_close_cb, false);
+    msgbox_button(m, "Start", atk_go_cb, true);
+}
+
+/* the 10 minutes are up: the run's result, recorded, and the leaderboard */
+static void atk_finish(void)
+{
+    g_solved = true;                                /* (g_attack stays: the header and 0:00 stay too) */                                /* (the board can't be changed now) */
+    hint_drop();
+    stats_db_record_attack(atk_solved, atk_mistakes);
+    sfx_play(SFX_SOLVED);
+    char t[96];
+    snprintf(t, sizeof(t), "Time's up! You solved %d Easy puzzle%s, with %d mistake%s.", atk_solved,
+             atk_solved == 1 ? "" : "s", atk_mistakes, atk_mistakes == 1 ? "" : "s");
+    lv_obj_t *m = make_msgbox(LV_SYMBOL_CHARGE "  Time attack", NULL);
+    lv_obj_set_width(m, 600);
+    lv_obj_t *c = lv_msgbox_get_content(m);
+    lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(c, 4, 0);
+    lv_obj_t *x = make_wrap_text(c, &lv_font_montserrat_20, C_TEXT, t);
+    lv_obj_set_style_margin_bottom(x, 10, 0);
+    atk_board_fill(c);                              /* (the run above is queued first: it's in) */
+    msgbox_button(m, "Home", atk_home_cb, false);
+    msgbox_button(m, "Again", atk_go_cb, true);
+    update_header();
 }
 
 /* ------------------------------------------------------------- rules card */
@@ -2726,6 +3099,17 @@ static void share_cb(lv_event_t *e)
     }
 }
 
+/* ------------------------------------------------------------- bookmarks */
+
+static void star_cb(lv_event_t *e)
+{
+    if (g_practice >= 0 || g_id >= PUZZLE_GEN_RAM_BASE) return;
+    g_starred = !g_starred;
+    stats_db_set_bookmark(g_id, g_starred);
+    update_header();
+    sudoku_ui_notice(g_starred ? "Starred: it's under Puzzles > Starred." : "No longer starred.", 2000);
+}
+
 /* ------------------------------------------------------------- build */
 
 static void build_game(void)
@@ -2743,19 +3127,24 @@ static void build_game(void)
     lv_obj_t *qb = make_btn(scr_game, 8, TOOL_Y, 52, 48, SYMBOL_BULB, &font_icons_24, rules_cb,
                             NULL);                   /* the variant's rules */
     lv_obj_set_style_text_color(lv_obj_get_child(qb, 0), C_ACCENT, 0);
+    g_bulb_btn = qb;
     g_best = make_label(scr_game, &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(g_best, 126, 36);
 
     lv_obj_t *hb = make_btn(scr_game, 8 + 52 + 8, TOOL_Y, 120, 48, LV_SYMBOL_EYE_OPEN "  Hint", &lv_font_montserrat_18,
                             hint_cb, NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(hb, 0), C_ACCENT, 0);
+    g_hint_btn = hb;
 
     lv_obj_t *shb = make_btn(scr_game, 8 + 52 + 8 + 120 + 8, TOOL_Y, 130, 48, SYMBOL_QR "  Share", &font_icons_20,
                              share_cb, NULL);       /* the puzzle as a QR code */
     lv_obj_set_style_text_color(lv_obj_get_child(shb, 0), C_ACCENT, 0);
+    g_star_btn = make_btn(scr_game, 8 + 52 + 8 + 120 + 8 + 130 + 8, TOOL_Y, 52, 48, SYMBOL_STAR, &font_icons_24,
+                          star_cb, NULL);           /* bookmark it (Puzzles > Starred) */
     lv_obj_t *tb = make_btn(scr_game, SCR_W - 8 - 200, TOOL_Y, 200, 48, NULL, NULL, pause_cb, NULL);
     lv_obj_set_style_bg_opa(tb, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(tb, LV_OPA_COVER, LV_STATE_PRESSED);
+    g_timer_btn = tb;
     g_timer_icon = make_label(tb, &lv_font_montserrat_20, C_MUTED);
     lv_obj_align(g_timer_icon, LV_ALIGN_LEFT_MID, 12, 0);
     g_timer = make_label(tb, &font_timer_36, C_TEXT);
@@ -2851,6 +3240,7 @@ static void build_game(void)
     bx += bw + gap;
     lv_obj_t *fb = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_OK "  Fill", &lv_font_montserrat_16,
                             fill_cb, NULL);
+    g_fill_btn = fb;
     g_hint_cnt = make_label(fb, &lv_font_montserrat_12, C_ORANGE);     /* hints used */
     lv_obj_align(g_hint_cnt, LV_ALIGN_TOP_RIGHT, -5, 2);
     lv_obj_set_hidden(g_hint_cnt, true);
@@ -7848,6 +8238,56 @@ static lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name
 #define L_STRIP_Y (L_BTN_Y + 52 + 10)
 #define L_GRID_Y  (L_STRIP_Y + 108)
 
+/* Puzzles > Starred: the player's bookmarks, newest first; a tap opens one */
+static void starred_open_cb(lv_event_t *e)
+{
+    lv_obj_t *m = lv_obj_get_parent(lv_obj_get_parent(lv_event_get_current_target_obj(e)));   /* row > content > box */
+    uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
+    lv_msgbox_close(m);
+    open_puzzle(id);
+}
+
+static void starred_cb(lv_event_t *e)
+{
+    static uint16_t ids[STATS_MAX_BOOKMARKS];
+    int n = stats_db_bookmarks(ids, STATS_MAX_BOOKMARKS);
+    lv_obj_t *m = make_msgbox(SYMBOL_STAR "  Starred", NULL);
+    lv_obj_set_style_text_font(lv_msgbox_get_header(m), &font_icons_20, 0);
+    lv_obj_set_width(m, 600);
+    lv_obj_t *c = lv_msgbox_get_content(m);
+    lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(c, 8, 0);
+    lv_obj_set_style_max_height(c, 470, 0);
+    if (n <= 0) {
+        make_wrap_text(c, &lv_font_montserrat_18, C_MUTED, n < 0 ? "Stars need sudoku.db on a microSD card."
+                       : "No starred puzzles yet: tap the star next to Share on the game screen to keep one here.");
+    }
+    for (int i = 0; i < n; i++) {
+        char name[40], t[16], sub[48];
+        puzzle_name(ids[i], name, sizeof(name));
+        uint32_t b = store_best_time(ids[i]);
+        if (b) {
+            fmt_time(t, sizeof(t), b);
+            snprintf(sub, sizeof(sub), LV_SYMBOL_OK "  Best %s", t);
+        } else {
+            snprintf(sub, sizeof(sub), store_saved_game()->id == ids[i] ? "In progress" : "Not solved yet");
+        }
+        lv_obj_t *r = lv_button_create(c);
+        lv_obj_set_size(r, LV_PCT(100), 64);
+        lv_obj_set_style_bg_color(r, C_CARD2, 0);
+        lv_obj_set_style_shadow_width(r, 0, 0);
+        lv_obj_set_style_radius(r, 10, 0);
+        lv_obj_t *l = make_label(r, &lv_font_montserrat_20, C_TEXT);
+        lv_label_set_text(l, name);
+        lv_obj_align(l, LV_ALIGN_LEFT_MID, 4, 0);
+        lv_obj_t *v = make_label(r, &lv_font_montserrat_16, b ? C_GREEN : C_MUTED);
+        lv_label_set_text(v, sub);
+        lv_obj_align(v, LV_ALIGN_RIGHT_MID, -4, 0);
+        lv_obj_add_event_cb(r, starred_open_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)ids[i]);
+    }
+    msgbox_button(m, "Close", mbox_close_cb, false);
+}
+
 static void build_list(void)
 {
     scr_list = make_screen();
@@ -7858,6 +8298,8 @@ static void build_list(void)
     lv_obj_set_pos(t, 150, 20);
     l_total = make_label(scr_list, &lv_font_montserrat_16, C_MUTED);
     lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -16, 28);
+    lv_obj_t *stb = make_btn(scr_list, 290, 10, 150, 52, SYMBOL_STAR "  Starred", &font_icons_20, starred_cb, NULL);
+    lv_obj_set_style_text_color(lv_obj_get_child(stb, 0), C_ORANGE, 0);
     /* under the title: New puzzle, Enter (type one in) and Learn, across the page */
     const int bw = (SCR_W - 24 - 2 * 8) / 3;
     lv_obj_t *nb = make_btn(scr_list, 12, L_BTN_Y, bw, 52, LV_SYMBOL_PLUS "  New puzzle", &lv_font_montserrat_18,
@@ -8044,8 +8486,9 @@ static void build_home(void)
     lv_obj_t *tb = home_btn(menu, SYMBOL_TROPHY "  Trophies", trophy_cb, &h_trophy_sub);   /* achievements, leaderboard */
     lv_obj_set_style_text_font(lv_obj_get_child(tb, 0), &font_icons_24, 0);
     lv_label_set_text(h_trophy_sub, stats_db_ready() ? "Achievements and daily leaderboard" : "Needs a microSD card");
-    home_btn(menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);
+    home_btn(menu, LV_SYMBOL_CHARGE "  Time attack", attack_cb, NULL);              /* 10 minutes of Easy puzzles */
     home_btn(menu, LV_SYMBOL_DIRECTORY "  Files", files_open_cb, NULL);              /* the microSD card */
+    home_btn(menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);              /* (the second page) */
     lv_obj_t *sb = home_btn(menu, SYMBOL_CHART "  System", sysmon_open_cb, NULL);    /* system monitor */
     lv_obj_set_style_text_font(lv_obj_get_child(sb, 0), &font_icons_24, 0);
 
@@ -8252,6 +8695,21 @@ static void st_close_lists_cb(lv_event_t *e)
     if (st_tz_dd) lv_dropdown_close(st_tz_dd);
 }
 
+static void hint_mode_dd_cb(lv_event_t *e)
+{
+    store_set_hint_nudge(lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1);
+}
+
+static void tour_again_cb(lv_event_t *e)
+{
+    if (!stats_db_ready()) {
+        sudoku_ui_notice("The tour needs sudoku.db on a microSD card.", 3000);
+        return;
+    }
+    stats_db_set_seen("tour", false);
+    sudoku_ui_notice("The tour shows the next time you open a puzzle.", 3000);
+}
+
 static void big_digits_dd_cb(lv_event_t *e)
 {
     store_set_big_digits(lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1);
@@ -8420,6 +8878,15 @@ static void build_settings(void)
 
     r = settings_row(col, "Left-handed", "The number pad on the left of the board");
     settings_switch(r, store_left_hand(), left_hand_sw_cb);
+
+    r = settings_row(col, "Hints", "Nudge only: where to look, without More and Place it");
+    settings_dropdown(r, "Full\nNudge only", store_hint_nudge() ? 1 : 0, 170, hint_mode_dd_cb);
+
+    r = settings_row(col, "Game screen tour", "A first look at the board and its buttons");
+    lv_obj_t *tb = make_btn(r, 0, 0, 170, 52, "Show again", &lv_font_montserrat_18, tour_again_cb, NULL);
+    lv_obj_set_style_bg_color(tb, C_CARD2, 0);          /* (like the dropdowns) */
+    lv_obj_set_style_text_color(lv_obj_get_child(tb, 0), C_ACCENT, 0);
+    lv_obj_align(tb, LV_ALIGN_RIGHT_MID, 0, 0);
 
     /* Wi-Fi: the whole card opens the Wi-Fi screen */
     col = st_pane[ST_NETWORK];

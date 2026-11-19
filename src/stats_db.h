@@ -177,6 +177,28 @@ bool stats_db_take_insights(stats_insights_t *out);
 /* The current player finished a Learn practice (placed the digit its technique leads
  * to): technique = Learn's list index 0..9. May unlock achievements (as a solve does). */
 void stats_db_learned(int technique);
+
+/* Bookmarks (the star on the game screen; Puzzles > Starred), per player.
+ * stats_db_bookmarks: newest first, at most max; -1 without a database. */
+#define STATS_MAX_BOOKMARKS 64
+bool stats_db_bookmarked(uint16_t puzzle);
+void stats_db_set_bookmark(uint16_t puzzle, bool on);
+int stats_db_bookmarks(uint16_t *ids, int max);
+
+/* Things the current player has seen once ("tour": the game screen's tour) */
+bool stats_db_seen(const char *what);
+void stats_db_set_seen(const char *what, bool seen);
+
+/* Time attack: a finished run (Easy puzzles solved in 10 minutes), and the
+ * leaderboard: each player's best run, best first */
+#define STATS_ATTACK_ROWS 8
+typedef struct {
+    char name[STORE_NAME_LEN];
+    int best, runs;
+    bool me;
+} stats_attack_row_t;
+void stats_db_record_attack(int solved, int mistakes);
+int stats_db_attack_board(stats_attack_row_t *rows, int max);
 /* The log sudoku.db had for the saved game it loaded last (at start-up, a
  * player switch or stats_db_load_game()): count, puzzle = which game it belongs to. */
 int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max);
