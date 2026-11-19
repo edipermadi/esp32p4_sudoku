@@ -161,6 +161,14 @@
 /** Align the start address of draw_buf addresses to this many bytes. */
 #define LV_DRAW_BUF_ALIGN 64
 
+/* For the PPA draw unit (LV_USE_PPA below). It checks the Kconfig name of the
+ * alignment, which a non-Kconfig build doesn't define. */
+#define CONFIG_LV_DRAW_BUF_ALIGN LV_DRAW_BUF_ALIGN
+/* The PPA unit calls esp_cache_get_line_size_by_addr(), which ESP-IDF 5.5 (esp32
+ * Arduino core 3.3.x) doesn't have yet. On the ESP32-P4 the L1 and L2 data cache
+ * lines are both 64 bytes. Remove once the core ships an ESP-IDF that has it. */
+#define esp_cache_get_line_size_by_addr(p) ((size_t)64)
+
 /** 3x3 matrix API (lv_matrix_t) for transformations. Requires floating point support.
  *
  *  Enable: LV_USE_FLOAT
@@ -522,13 +530,13 @@
  *
  *  Enable: LV_USE_DRAW_SW
  */
-#define LV_USE_PPA 0
+#define LV_USE_PPA 1
 
 #if LV_USE_PPA
 /** Let the PPA also draw images. Only simple cases qualify: unscaled,
  *  unrotated, fully opaque and without masks.
  */
-#define LV_USE_PPA_IMG 0
+#define LV_USE_PPA_IMG 1
 
 #define LV_PPA_BURST_LENGTH 128
 

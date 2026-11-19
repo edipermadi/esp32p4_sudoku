@@ -3,7 +3,7 @@
 [← README](../README.md) · [Features](features.md) · [How to play](how-to-play.md) · [Data & storage](data.md) · [Building](building.md) · [Development](development.md) · [Remote control](devctl.md)
 
 1. Install **esp32 Arduino core 3.3.x**.
-2. Install **LVGL 9.6.0** and put `lv_conf.h` at `~/Arduino/libraries/lv_conf.h`. It needs Montserrat 12–28 enabled. `extras/lv_conf.h` is the one the firmware is built with (CI copies it there); keep the two in step.
+2. Install **LVGL 9.6.0** and put `lv_conf.h` at `~/Arduino/libraries/lv_conf.h`. It needs Montserrat 12–28 enabled. `extras/lv_conf.h` is the one the firmware is built with (CI copies it there); keep the two in step. It turns on LVGL's PPA draw unit (`LV_USE_PPA`, `LV_USE_PPA_IMG`): the ESP32-P4's Pixel Processing Accelerator draws plain fills and images, which makes full-screen redraws 6–34% faster (measured with `bench`, see [Remote control](devctl.md)). Two extra lines there make it build with the esp32 core's ESP-IDF 5.5; they are explained in the file.
 3. Choose these settings in the Tools menu:
 
    | Setting          | Value                                   |

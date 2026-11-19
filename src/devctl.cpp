@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <esp_heap_caps.h>
+#include <esp_timer.h>
 
 #define LINE_MAX     256                /* command line, or an upload's data line */
 #define CHUNK        96                 /* coded bytes per S line (128 base64 characters) */
@@ -482,6 +483,23 @@ static void run(char *line)
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
                       (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         if (n >= 1 && a[0]) heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);   /* "heap 1": per region */
+    } else if (!strcmp(cmd, "bench")) {          /* N full-screen redraws of the screen shown */
+        int frames = n >= 1 && a[0] > 0 ? a[0] : 30;
+        lv_obj_t *scr = lv_screen_active();
+        lv_refr_now(NULL);                          /* nothing pending before the clock starts */
+        uint32_t mx = 0, mn = UINT32_MAX;
+        int64_t t0 = esp_timer_get_time();
+        for (int i = 0; i < frames; i++) {
+            int64_t s = esp_timer_get_time();
+            lv_obj_invalidate(scr);
+            lv_refr_now(NULL);
+            uint32_t d = (uint32_t)(esp_timer_get_time() - s);
+            if (d > mx) mx = d;
+            if (d < mn) mn = d;
+        }
+        uint32_t avg = (uint32_t)((esp_timer_get_time() - t0) / frames);
+        Serial.printf("BENCH %d frames: avg %u us, min %u us, max %u us (%u.%u fps)\n", frames, (unsigned)avg,
+                      (unsigned)mn, (unsigned)mx, (unsigned)(10000000 / avg / 10), (unsigned)(10000000 / avg % 10));
     } else if (!strcmp(cmd, "screenoff")) {
         sudoku_ui_screen_off();                     /* as the timeout: black, then the lock screen if on */
         pump(200);
