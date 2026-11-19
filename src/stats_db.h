@@ -148,7 +148,10 @@ bool stats_db_load_game(uint16_t puzzle, saved_game_t *out);
 /* Logs a finished puzzle (finished now) and updates its puzzle_stats row.
  * started_at: Unix time it was opened, 0 = unknown. */
 void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,
-                           int64_t started_at, const game_move_t *moves, int nmoves);
+                           int64_t started_at, const game_move_t *moves, int nmoves, uint32_t flags);
+/* The current player finished a Learn practice (placed the digit its technique leads
+ * to): technique = Learn's list index 0..9. May unlock achievements (as a solve does). */
+void stats_db_learned(int technique);
 /* The log sudoku.db had for the saved game it loaded last (at start-up, a
  * player switch or stats_db_load_game()): count, puzzle = which game it belongs to. */
 int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max);
@@ -234,6 +237,7 @@ typedef struct {
     uint16_t hints;                      /* cells filled with Fill */
     int64_t solve_id;                    /* solves.id, 0 for a game in progress */
     bool has_moves;                      /* a move log was recorded: it can be replayed */
+    uint32_t flags;                      /* GAME_FLAG_* (store.h): the no-notes challenge, techniques hinted */
 } stats_day_row_t;
 
 typedef struct {
@@ -304,6 +308,7 @@ typedef struct {
     uint16_t mistakes, hints;            /* of that solve */
     uint16_t solves;                     /* times solved */
     uint8_t color;                       /* the player's colour */
+    uint32_t flags;                      /* of the best solve: GAME_FLAG_* (store.h) */
 } stats_board_row_t;
 
 typedef struct {
@@ -369,7 +374,7 @@ bool stats_db_take_week(stats_week_t *out);
  * They are checked after every solve; newly unlocked ones come back through
  * stats_db_take_unlocked(). Achievements already earned when this firmware
  * first opens a database are recorded quietly. */
-#define STATS_ACH_MAX 32
+#define STATS_ACH_MAX 40
 
 typedef enum { ACH_UNIT_COUNT = 0, ACH_UNIT_MINUTES, ACH_UNIT_DAYS } ach_unit_t;
 

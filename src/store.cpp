@@ -40,6 +40,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .lock_pin = "",
     .saver_clock = false,
     .cvd = false,
+    .no_notes = false,
     .night_mode = false,
     .night_start = 22,
     .night_end = 7,
@@ -386,6 +387,17 @@ void store_set_cvd(bool on)
 {
     s_p.cvd = on;
     stats_db_set_int("cvd", on);
+}
+
+bool store_no_notes(void)
+{
+    return s_p.no_notes;
+}
+
+void store_set_no_notes(bool on)
+{
+    s_p.no_notes = on;
+    stats_db_set_int("no_notes", on);
 }
 
 bool store_night_mode(void)

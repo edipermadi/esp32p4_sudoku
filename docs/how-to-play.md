@@ -33,6 +33,8 @@
 | Accent colour                   | **Settings → Accent colour**                     |
 | A player's colour               | Tap the dot by their name on **Players**         |
 | Practise a technique            | **Puzzles → Learn**                              |
+| Play without notes             | **Settings → Game → No-notes challenge**, then a new puzzle |
+| Share today's daily result       | Solve the daily puzzle, then the QR button in the Solved dialog |
 | Add puzzle files                | Copy them to `puzzles/` on the card, then **Settings → Data → Import puzzles** |
 | Export to a spreadsheet         | **Settings → Export to CSV**, then **USB drive** |
 | Switch or add players          | **Players** on the home screen                   |

@@ -20,7 +20,7 @@ wait 400
 tap 594 98                  # Learn: the techniques
 wait 800
 shot docs/screenshots/learn.png
-tap 360 656                 # Close
+tap 360 628                 # Close (the list scrolls above it)
 wait 400
 tap 358 98                  # Enter: a blank board to type a puzzle in
 wait 800

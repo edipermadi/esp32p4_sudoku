@@ -29,7 +29,13 @@ typedef struct {
     int64_t  started_at;       /* Unix time the puzzle was opened (or restarted), 0 = unknown */
     uint16_t hints;            /* cells filled with Fill (the solution) so far */
     uint8_t  colors[81];       /* cell colours (0 = none, 1..CELL_COLORS) */
+    uint32_t flags;            /* GAME_FLAG_*, and bit k = a hint showed technique k (tech_kind_t) */
 } saved_game_t;
+
+/* saved_game_t.flags (also solves.flags in sudoku.db): bits 0..15 are the techniques
+ * (1 << TECH_*, generator.h) the game's hints explained; above them: */
+#define GAME_FLAG_NO_NOTES (1u << 20)   /* the no-notes challenge: Notes and Auto off */
+#define GAME_FLAG_TECHS    0xFFFFu
 #define CELL_COLORS 6                /* (older NVS saves end before mistakes or started_at) */
 
 void store_init(void);
@@ -87,6 +93,7 @@ typedef struct {
     char lock_pin[8];                         /* 4 digits (PIN mode), "" = none set */
     bool saver_clock;                         /* a dim drifting clock before the screen goes dark */
     bool cvd;                                 /* colour-blind friendly colours (Okabe-Ito) */
+    bool no_notes;                            /* new games start in the no-notes challenge */
     bool night_mode;                          /* dark and dimmer between night_start and night_end */
     uint8_t night_start, night_end;           /* hours 0..23, local time */
     uint8_t night_brightness;                 /* backlight at night, 10..100 % (at most the day's) */
@@ -166,6 +173,8 @@ bool store_saver_clock(void);
 void store_set_saver_clock(bool on);
 bool store_cvd(void);
 void store_set_cvd(bool on);
+bool store_no_notes(void);
+void store_set_no_notes(bool on);
 bool store_night_mode(void);
 void store_set_night_mode(bool on);
 uint8_t store_night_start(void);

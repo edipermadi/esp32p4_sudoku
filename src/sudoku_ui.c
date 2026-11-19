@@ -255,6 +255,8 @@ static bool     g_paused;
 static uint32_t g_elapsed_ms;
 static uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
 static uint16_t g_hints;         /* cells filled with Fill (undo doesn't remove them either) */
+static uint32_t g_flags;         /* GAME_FLAG_* (store.h): the no-notes challenge, techniques the hints showed */
+static lv_obj_t *g_auto_btn, *g_win_badge, *g_win_share;
 static uint8_t  g_sol[81];       /* the solution, for Fill */
 static game_move_t *g_moves;     /* move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
 static uint8_t  h_mark[81];      /* hint highlight: 0, 1 = where to look, 2 = the cell */
@@ -324,6 +326,11 @@ static void pin_change_cb(lv_event_t *e);
 static void night_check(lv_timer_t *t);
 static void apply_theme(bool dark);
 static lv_obj_t *st_night_bright_lbl;
+
+static void no_notes_sw_cb(lv_event_t *e)
+{
+    store_set_no_notes(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));   /* (games started from now) */
+}
 
 static void cvd_sw_cb(lv_event_t *e)
 {
@@ -915,6 +922,7 @@ static void save_current(void)
     sg.elapsed_ms = g_elapsed_ms;
     sg.mistakes = g_mistakes;
     sg.hints = g_hints;
+    sg.flags = g_flags;
     sg.started_at = game_started_at();
     store_set_game(&sg);
     store_set_game_moves(g_moves, g_nmoves);
@@ -1028,14 +1036,14 @@ static void refresh_board(void)
 }
 
 static uint16_t s_solve_id;
-static uint32_t s_solve_secs, s_solve_mistakes, s_solve_hints;
+static uint32_t s_solve_secs, s_solve_mistakes, s_solve_hints, s_solve_flags;
 static int64_t  s_solve_started;
 
 static void solve_commit_cb(lv_timer_t *t)
 {
     store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
     stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_hints,
-                          s_solve_started, g_moves, g_nmoves);               /* finished: now */
+                          s_solve_started, g_moves, g_nmoves, s_solve_flags);   /* finished: now */
     /* head-to-head: where this leaves the player among everyone who solved it (after the solve above) */
     stats_h2h_t h;
     char line[96] = "";
@@ -1086,6 +1094,7 @@ static void on_solved(void)
     s_solve_secs = secs;
     s_solve_mistakes = g_mistakes;
     s_solve_hints = g_hints;
+    s_solve_flags = g_flags;
     s_solve_started = game_started_at();
     lv_timer_t *ct = lv_timer_create(solve_commit_cb, SAVE_DELAY_MS, NULL);   /* after the dialog is up */
     lv_timer_set_repeat_count(ct, 1);
@@ -1120,6 +1129,10 @@ static void on_solved(void)
         lv_label_set_text_fmt(g_win_hint, "%u hint%s used", (unsigned)g_hints, g_hints == 1 ? "" : "s");
         lv_obj_set_style_text_color(g_win_hint, C_ORANGE, 0);
     }
+    lv_obj_set_hidden(g_win_badge, !(g_flags & GAME_FLAG_NO_NOTES));
+    char day[12] = "";                              /* a daily puzzle: its result can be shared */
+    lv_obj_set_hidden(g_win_share, !(puzzle_is_generated(g_id) && gen_lookup_day(g_id, NULL, NULL, NULL, day) &&
+                                     day[0]));
     if (!stats_db_ready()) {
         sudoku_ui_notice("No sudoku.db on a microSD card: this result is kept only until the board is "
                          "switched off.", 6000);
@@ -1453,7 +1466,7 @@ static void pad_long_cb(lv_event_t *e)
  * pencil marks (replacing its notes). Undo takes it back. */
 static void auto_notes_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused) return;
+    if (g_solved || g_paused || (g_flags & GAME_FLAG_NO_NOTES)) return;
     uint16_t notes[81];
     int changed = 0;
     for (int k = 0; k < g_geo->ncells; k++) {
@@ -1520,7 +1533,23 @@ static void redo_cb(lv_event_t *e)
 
 static void notes_cb(lv_event_t *e)
 {
+    if (g_flags & GAME_FLAG_NO_NOTES) {             /* (the button is off in the challenge anyway) */
+        lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
+        return;
+    }
     g_notes_mode = lv_obj_has_state(g_notes_btn, LV_STATE_CHECKED);
+}
+
+/* the no-notes challenge: Notes and Auto off (dimmed) for this game */
+static void challenge_ui(void)
+{
+    bool on = (g_flags & GAME_FLAG_NO_NOTES) != 0;
+    if (on) {
+        g_notes_mode = false;
+        lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
+    }
+    lv_obj_set_state(g_notes_btn, LV_STATE_DISABLED, on);
+    if (g_auto_btn) lv_obj_set_state(g_auto_btn, LV_STATE_DISABLED, on);
 }
 
 static void set_paused(bool p)
@@ -1800,6 +1829,7 @@ static void hint_act_cb(lv_event_t *e)
     } else {
         place_digit(i, d);
         record_move(i, d, MOVE_FILL);
+        if (g_practice >= 0) stats_db_learned(g_practice);   /* Learn: this technique practised (Graduate) */
     }
     g_sel = i;
     after_move();                                   /* closes the hint */
@@ -1821,6 +1851,7 @@ static void hint_cb(lv_event_t *e)
     }
     if (!sudoku_next_step(g_geo, g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
     if (g_hints < 0xFFFF) g_hints++;               /* every hint opened counts once */
+    if (h_info.tech.kind > 0 && h_info.tech.kind < 16) g_flags |= 1u << h_info.tech.kind;   /* (achievements) */
     refresh_board();                                /* the hint count on the Fill button */
     save_current();
     h_step = 1;
@@ -1840,6 +1871,7 @@ static void reset_game(void)
     g_elapsed_ms = 0;
     g_mistakes = 0;
     g_hints = 0;
+    g_flags = store_no_notes() ? GAME_FLAG_NO_NOTES : 0;   /* (Settings > Game: the no-notes challenge) */
     g_nmoves = 0;                                   /* a new attempt, a new log */
     hint_drop();
     mark_started();                                 /* opened or restarted: a new attempt */
@@ -2260,6 +2292,7 @@ static void start_game(uint16_t id, bool resume)
         g_elapsed_ms = s->elapsed_ms;
         g_mistakes = s->mistakes;
         g_hints = s->hints;
+        g_flags = s->flags;                         /* (a game keeps the challenge it started with) */
         const game_move_t *sm;
         int sn = store_game_moves(&sm);
         if (sn > 0 && (g_moves || (g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX,
@@ -2272,6 +2305,7 @@ static void start_game(uint16_t id, bool resume)
     }
     g_notes_mode = false;
     lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
+    challenge_ui();
     g_last_tick = lv_tick_get();
     compute_conflicts();
     refresh_board();
@@ -2603,21 +2637,16 @@ static void qr_draw_cb(lv_event_t *e)
     }
 }
 
-static void share_cb(lv_event_t *e)
+/* a QR code of text in a dialog, the note under it, then the text itself */
+static bool qr_dialog(const char *title, const char *text, const char *note)
 {
-    if (g_id == STORE_NO_GAME) return;
     if (!qr_code) qr_code = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
     if (!qr_temp) qr_temp = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
-    static char text[STATS_CAGES_LEN + 128];
-    if (!qr_code || !qr_temp || !share_text(text, sizeof(text)) ||
+    if (!qr_code || !qr_temp ||
         !qrcodegen_encodeText(text, qr_temp, qr_code, qrcodegen_Ecc_LOW, qrcodegen_VERSION_MIN, qrcodegen_VERSION_MAX,
                               qrcodegen_Mask_AUTO, true)) {
-        sudoku_ui_notice("Couldn't make a QR code of this puzzle.", 3000);
-        return;
+        return false;
     }
-    char name[48], title[64];
-    puzzle_name(g_id, name, sizeof(name));
-    snprintf(title, sizeof(title), SYMBOL_QR "  %s", name);
     lv_obj_t *m = make_msgbox(title, NULL);
     lv_obj_set_width(m, 560);
     lv_obj_set_style_text_font(lv_msgbox_get_header(m), &font_icons_20, 0);
@@ -2626,14 +2655,48 @@ static void share_cb(lv_event_t *e)
     lv_obj_remove_style_all(qr);
     lv_obj_set_size(qr, LV_PCT(100), 340);
     lv_obj_add_event_cb(qr, qr_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
-    make_wrap_text(c, &lv_font_montserrat_16, C_MUTED,
-                   g_var == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most Sudoku apps "
-                                          "can import this."
-                                        : "Scan it with a phone: the variant, the givens row by row (0 = empty) and "
-                                          "its layout.");
+    make_wrap_text(c, &lv_font_montserrat_16, C_MUTED, note);
     lv_obj_t *t = make_wrap_text(c, &lv_font_montserrat_12, C_TEXT, text);
     lv_obj_set_style_margin_top(t, 6, 0);
     msgbox_button(m, "Close", mbox_close_cb, false);
+    return true;
+}
+
+/* Solved dialog of a daily puzzle: the result as a QR code, for a phone (and a message to friends) */
+static void win_share_cb(lv_event_t *e)
+{
+    char day[12] = "", kind[48] = "", t[16];
+    int var = 0, lv = 0;
+    if (!puzzle_is_generated(s_solve_id) || !gen_lookup_day(s_solve_id, NULL, &var, &lv, day) || !day[0]) return;
+    daily_kind_text(var, lv, kind, sizeof(kind));
+    fmt_time(t, sizeof(t), s_solve_secs);
+    char hints[24];
+    if (s_solve_hints) snprintf(hints, sizeof(hints), "%u hint%s", (unsigned)s_solve_hints, s_solve_hints == 1 ? "" : "s");
+    else snprintf(hints, sizeof(hints), "no hints");
+    static char text[256];
+    snprintf(text, sizeof(text), "Sudoku daily %s (%s)\n%s: solved in %s, %u mistake%s, %s%s\nESP32-P4 Sudoku",
+             day, kind, store_player_name(), t, (unsigned)s_solve_mistakes, s_solve_mistakes == 1 ? "" : "s", hints,
+             (s_solve_flags & GAME_FLAG_NO_NOTES) ? ", no notes" : "");
+    if (!qr_dialog(SYMBOL_QR "  Today's result", text,
+                   "Scan it with a phone to send it to friends: the day, the puzzle, your time and mistakes.")) {
+        sudoku_ui_notice("Couldn't make a QR code of the result.", 3000);
+    }
+}
+
+static void share_cb(lv_event_t *e)
+{
+    if (g_id == STORE_NO_GAME) return;
+    static char text[STATS_CAGES_LEN + 128];
+    char name[48], title[64];
+    puzzle_name(g_id, name, sizeof(name));
+    snprintf(title, sizeof(title), SYMBOL_QR "  %s", name);
+    if (!share_text(text, sizeof(text)) ||
+        !qr_dialog(title, text, g_var == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most "
+                                                       "Sudoku apps can import this."
+                                                     : "Scan it with a phone: the variant, the givens row by row "
+                                                       "(0 = empty) and its layout.")) {
+        sudoku_ui_notice("Couldn't make a QR code of this puzzle.", 3000);
+    }
 }
 
 /* ------------------------------------------------------------- build */
@@ -2752,7 +2815,10 @@ static void build_game(void)
     lv_obj_set_checkable(g_notes_btn, true);
     lv_obj_add_event_cb(g_notes_btn, notes_cb, LV_EVENT_VALUE_CHANGED, NULL);
     bx += bw + gap;
-    make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LIST "  Auto", &lv_font_montserrat_16, auto_notes_cb, NULL);
+    g_auto_btn = make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LIST "  Auto", &lv_font_montserrat_16,
+                          auto_notes_cb, NULL);
+    lv_obj_set_style_opa(g_auto_btn, LV_OPA_40, LV_STATE_DISABLED);   /* (the no-notes challenge) */
+    lv_obj_set_style_opa(g_notes_btn, LV_OPA_40, LV_STATE_DISABLED);
     bx += bw + gap;
     make_btn(scr_game, bx, BOT_Y, bw, BOT_H, LV_SYMBOL_REFRESH "  Restart", &lv_font_montserrat_16, restart_cb, NULL);
     bx += bw + gap;
@@ -2829,6 +2895,14 @@ static void build_game(void)
     lv_obj_set_style_text_align(g_win_h2h, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(g_win_h2h, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_align(g_win_h2h, LV_ALIGN_TOP_MID, 0, 220);
+    g_win_badge = make_label(card, &lv_font_montserrat_16, C_ACCENT);   /* the no-notes challenge */
+    lv_label_set_text(g_win_badge, LV_SYMBOL_EDIT "  No-notes challenge: done without notes");
+    lv_obj_align(g_win_badge, LV_ALIGN_TOP_MID, 0, 250);
+    lv_obj_set_hidden(g_win_badge, true);
+    g_win_share = make_btn(card, 0, 0, 56, 48, SYMBOL_QR, &font_icons_20, win_share_cb, NULL);   /* daily: share */
+    lv_obj_set_style_bg_color(g_win_share, C_CARD2, 0);
+    lv_obj_align(g_win_share, LV_ALIGN_TOP_RIGHT, 0, 0);
+    lv_obj_set_hidden(g_win_share, true);
 
     lv_obj_t *b1 = make_btn(card, 0, 0, 128, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_16, win_list_cb, NULL);
     lv_obj_align(b1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -3819,6 +3893,8 @@ static void learn_poll_cb(lv_timer_t *t)
     /* the puzzle, at that point, as a practice game */
     start_game(learn_id, false);
     g_practice = learn_target;
+    g_flags = 0;                                    /* (practice: never the no-notes challenge) */
+    challenge_ui();
     uint8_t given[81];
     puzzle_load(learn_id, given);
     for (int i = 0; i < 81; i++) {
@@ -5705,6 +5781,10 @@ static void render_day(const stats_day_t *d)
             snprintf(line + len, sizeof(line) - len, "   -   %u hint%s",
                      (unsigned)r->hints, r->hints == 1 ? "" : "s");
         }
+        if (r->flags & GAME_FLAG_NO_NOTES) {
+            size_t len = strlen(line);
+            snprintf(line + len, sizeof(line) - len, "   -   no notes");
+        }
         lv_label_set_text(what, line);
         hz_row_solve[i] = 0;
         if (!r->in_progress && r->has_moves && r->solve_id) {     /* tap to watch it again */
@@ -5989,6 +6069,10 @@ static void render_plays(const stats_plays_t *p)
         if (r->hints) {
             size_t len = strlen(line);
             snprintf(line + len, sizeof(line) - len, "   -   %u hint%s", (unsigned)r->hints, r->hints == 1 ? "" : "s");
+        }
+        if (r->flags & GAME_FLAG_NO_NOTES) {
+            size_t len = strlen(line);
+            snprintf(line + len, sizeof(line) - len, "   -   no notes");
         }
         lv_label_set_text(what, line);
         lv_obj_align(what, LV_ALIGN_LEFT_MID, 0, 14);
@@ -6280,6 +6364,10 @@ static void render_board(const stats_board_t *b)
         char line[96];
         snprintf(line, sizeof(line), "%d%s   -   %u mistake%s   -   %u hint%s", rank, ordinal(rank),
                  (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s", (unsigned)r->hints, r->hints == 1 ? "" : "s");
+        if (r->flags & GAME_FLAG_NO_NOTES) {        /* the no-notes challenge: its badge */
+            size_t len = strlen(line);
+            snprintf(line + len, sizeof(line) - len, "   -   no notes");
+        }
         if (r->solves > 1) {
             size_t len = strlen(line);
             snprintf(line + len, sizeof(line) - len, "   -   solved %u times", (unsigned)r->solves);
@@ -7745,6 +7833,9 @@ static void build_settings(void)
 
     r = settings_row(col, "Mistake check", "Red digits: none, rule breakers, or any wrong digit");
     st_assist_dd = settings_dropdown(r, "Off\nRules\nSolution", store_assist(), 150, assist_dd_cb);
+
+    r = settings_row(col, "No-notes challenge", "New games: Notes and Auto off; solves get a badge");
+    settings_switch(r, store_no_notes(), no_notes_sw_cb);
 
     /* Wi-Fi: the whole card opens the Wi-Fi screen */
     col = st_pane[ST_NETWORK];
