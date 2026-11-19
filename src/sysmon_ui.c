@@ -30,6 +30,8 @@
 #include "esp_vfs_fat.h"
 #include "nvs.h"
 #include "driver/temperature_sensor.h"
+#include "esp_mac.h"
+#include "wifi_mgr.h"
 
 #define REFRESH_MS   1000
 #define SD_EVERY     10               /* ticks between microSD free-space counts */
@@ -53,6 +55,7 @@ static int s_ticks;
 
 /* overview */
 static lv_obj_t *s_uptime, *s_temp, *s_load0, *s_load1, *s_ntasks, *s_reset;
+static lv_obj_t *s_ip, *s_wifi_mac, *s_eth_mac;
 /* memory */
 static lv_obj_t *s_int_bar, *s_int_val, *s_int_sub;
 static lv_obj_t *s_ps_bar, *s_ps_val, *s_ps_sub;
@@ -537,6 +540,13 @@ static void show_overview(void)
     }
     set_text(s_uptime, buf);
 
+    wifi_status_t ws;                               /* (a snapshot: wifi_mgr never blocks here) */
+    wifi_mgr_get_status(&ws);
+    set_text(s_ip, ws.state == WIFI_ST_CONNECTED ? ws.ip
+                   : ws.state == WIFI_ST_OFF ? "Wi-Fi off"
+                   : ws.state == WIFI_ST_CONNECTING ? "Connecting..." : "Not connected");
+    set_text(s_wifi_mac, ws.mac[0] ? ws.mac : (ws.state == WIFI_ST_OFF ? "Wi-Fi off" : "-"));
+
     float c;
     if (s_tsens && temperature_sensor_get_celsius(s_tsens, &c) == ESP_OK) {
         int t10 = (int)(c * 10 + (c >= 0 ? 0.5f : -0.5f));
@@ -562,6 +572,177 @@ static void tick(lv_timer_t *t)
     show_storage();
     show_lvgl();
     show_tasks();
+}
+
+/* ------------------------------------------------------------- history */
+/* The last hour, a sample every 10 s, kept from start-up whether the page is open or
+ * not: CPU load per core (from the idle tasks' run time), temperature, free internal
+ * RAM. Shown as graphs on the System and Memory tabs. */
+#define HIST_N     360
+#define HIST_MS    10000
+#define HIST_NONE  INT16_MIN
+static int16_t h_load[2][HIST_N], h_temp[HIST_N], h_ram[HIST_N];   /* %, degrees C x10, KB */
+static int16_t h_rssi[HIST_N];                      /* Wi-Fi signal, dBm (HIST_NONE: not connected) */
+static int h_count, h_pos;                          /* samples kept; the next slot */
+static lv_timer_t *h_timer;
+static uint32_t h_idle_prev[2];
+static int64_t h_t_prev;
+static lv_obj_t *s_ch_cpu, *s_ch_temp, *s_ch_ram, *s_ch_cpu_lbl, *s_ch_temp_lbl, *s_ch_ram_lbl;
+static lv_obj_t *s_ch_rssi, *s_ch_rssi_lbl;
+static lv_chart_series_t *s_se_c0, *s_se_c1, *s_se_temp, *s_se_ram, *s_se_rssi;
+
+/* how a signal level reads (the usual rule of thumb) */
+static const char *rssi_word(int dbm)
+{
+    return dbm >= -55 ? "excellent" : dbm >= -67 ? "good" : dbm >= -75 ? "fair" : "weak";
+}
+
+static int32_t hist_pt(int16_t v) { return v == HIST_NONE ? LV_CHART_POINT_NONE : v; }
+
+/* the labels over the graphs, and the temperature graph's range (it follows the data) */
+static void hist_show(void)
+{
+    if (!s_ch_cpu || h_count == 0) return;
+    int last = (h_pos + HIST_N - 1) % HIST_N;
+    int peak = 0, tmin = INT16_MAX, tmax = INT16_MIN, rmin = INT16_MAX, smin = INT16_MAX, smax = INT16_MIN;
+    for (int i = 0; i < h_count; i++) {
+        int k = (h_pos + HIST_N - 1 - i) % HIST_N;
+        for (int c = 0; c < 2; c++) if (h_load[c][k] != HIST_NONE && h_load[c][k] > peak) peak = h_load[c][k];
+        if (h_temp[k] != HIST_NONE) {
+            if (h_temp[k] < tmin) tmin = h_temp[k];
+            if (h_temp[k] > tmax) tmax = h_temp[k];
+        }
+        if (h_ram[k] < rmin) rmin = h_ram[k];
+        if (h_rssi[k] != HIST_NONE) {
+            if (h_rssi[k] < smin) smin = h_rssi[k];
+            if (h_rssi[k] > smax) smax = h_rssi[k];
+        }
+    }
+    char buf[96];
+    snprintf(buf, sizeof(buf), "CPU load: now %d%% / %d%%, peak %d%%", h_load[0][last], h_load[1][last], peak);
+    set_text(s_ch_cpu_lbl, buf);
+    if (tmin <= tmax) {
+        snprintf(buf, sizeof(buf), "Temperature: now %d.%d, %d.%d to %d.%d \xC2\xB0" "C", h_temp[last] / 10,
+                 abs(h_temp[last] % 10), tmin / 10, abs(tmin % 10), tmax / 10, abs(tmax % 10));
+        lv_chart_set_axis_range(s_ch_temp, LV_CHART_AXIS_PRIMARY_Y, (tmin / 10 - 2) * 10, (tmax / 10 + 3) * 10);
+    } else {
+        snprintf(buf, sizeof(buf), "Temperature: no reading");
+    }
+    set_text(s_ch_temp_lbl, buf);
+    char a[16], b[16];
+    fmt_bytes(a, sizeof(a), (uint64_t)h_ram[last] * 1024);
+    fmt_bytes(b, sizeof(b), (uint64_t)rmin * 1024);
+    snprintf(buf, sizeof(buf), "Free internal RAM: now %s, lowest %s", a, b);
+    set_text(s_ch_ram_lbl, buf);
+    if (h_rssi[last] != HIST_NONE) {
+        snprintf(buf, sizeof(buf), "Wi-Fi signal: now %d dBm (%s), %d to %d", h_rssi[last], rssi_word(h_rssi[last]),
+                 smin, smax);
+    } else if (smin <= smax) {
+        snprintf(buf, sizeof(buf), "Wi-Fi signal: not connected now; was %d to %d dBm", smin, smax);
+    } else {
+        snprintf(buf, sizeof(buf), "Wi-Fi signal: not connected");
+    }
+    set_text(s_ch_rssi_lbl, buf);
+}
+
+static void hist_sample(lv_timer_t *t)
+{
+    int64_t now = esp_timer_get_time();
+    int load[2];
+    for (int c = 0; c < 2; c++) {
+        uint32_t idle = ulTaskGetIdleRunTimeCounterForCore(c);   /* microseconds (esp_timer) */
+        uint32_t dt = (uint32_t)(now - h_t_prev), di = idle - h_idle_prev[c];
+        int l = dt ? 100 - (int)((uint64_t)di * 100 / dt) : 0;
+        load[c] = l < 0 ? 0 : (l > 100 ? 100 : l);
+        h_idle_prev[c] = idle;
+    }
+    bool first = h_t_prev == 0;
+    h_t_prev = now;
+    if (first) return;                              /* (a load needs two readings) */
+
+    int16_t temp = HIST_NONE;
+    if (!s_tsens) {
+        temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
+        if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK) s_tsens = NULL;
+    }
+    if (s_tsens) {                                  /* on only for the reading, unless the page has it on */
+        if (!s_shown) temperature_sensor_enable(s_tsens);
+        float c;
+        if (temperature_sensor_get_celsius(s_tsens, &c) == ESP_OK) temp = (int16_t)(c * 10 + (c >= 0 ? 0.5f : -0.5f));
+        if (!s_shown) temperature_sensor_disable(s_tsens);
+    }
+    int16_t ram = (int16_t)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024);
+    wifi_status_t ws;                               /* (wifi_mgr's snapshot: its RSSI is fresh while connected) */
+    wifi_mgr_get_status(&ws);
+    int16_t rssi = ws.state == WIFI_ST_CONNECTED && ws.rssi < 0 ? (int16_t)ws.rssi : HIST_NONE;
+
+    h_load[0][h_pos] = (int16_t)load[0];
+    h_load[1][h_pos] = (int16_t)load[1];
+    h_temp[h_pos] = temp;
+    h_ram[h_pos] = ram;
+    h_rssi[h_pos] = rssi;
+    h_pos = (h_pos + 1) % HIST_N;
+    if (h_count < HIST_N) h_count++;
+    if (s_ch_cpu) {                                 /* (the graphs: one more point each, shifted left) */
+        lv_chart_set_next_value(s_ch_cpu, s_se_c0, load[0]);
+        lv_chart_set_next_value(s_ch_cpu, s_se_c1, load[1]);
+        lv_chart_set_next_value(s_ch_temp, s_se_temp, hist_pt(temp));
+        lv_chart_set_next_value(s_ch_ram, s_se_ram, ram);
+        lv_chart_set_next_value(s_ch_rssi, s_se_rssi, hist_pt(rssi));
+        hist_show();
+    }
+}
+
+/* a graph card: a title line, the graph, "1 hour ago ... now" under it */
+static lv_obj_t *graph_card(lv_obj_t *pane, lv_obj_t **title)
+{
+    lv_obj_t *c = card(pane);
+    lv_obj_set_style_pad_row(c, 8, 0);
+    *title = label(c, &lv_font_montserrat_18, C_TEXT, "Collecting (a point every 10 s)...");
+    lv_obj_t *ch = lv_chart_create(c);
+    lv_obj_set_size(ch, LV_PCT(100), 140);
+    lv_chart_set_type(ch, LV_CHART_TYPE_LINE);
+    lv_chart_set_point_count(ch, HIST_N);
+    lv_chart_set_update_mode(ch, LV_CHART_UPDATE_MODE_SHIFT);
+    lv_chart_set_div_line_count(ch, 5, 7);
+    lv_obj_set_style_bg_color(ch, C_BG, 0);
+    lv_obj_set_style_bg_opa(ch, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(ch, 0, 0);
+    lv_obj_set_style_radius(ch, 8, 0);
+    lv_obj_set_style_pad_all(ch, 6, 0);
+    lv_obj_set_style_line_color(ch, C_CARD2, LV_PART_MAIN);     /* the grid */
+    lv_obj_set_style_line_width(ch, 2, LV_PART_ITEMS);
+    lv_obj_set_style_width(ch, 0, LV_PART_INDICATOR);           /* no dots: 360 points */
+    lv_obj_set_style_height(ch, 0, LV_PART_INDICATOR);
+    lv_obj_set_clickable(ch, false);                            /* drags scroll the page */
+    lv_obj_set_scrollable(ch, false);
+    lv_obj_t *row = lv_obj_create(c);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    label(row, &lv_font_montserrat_14, C_MUTED, "1 hour ago");
+    label(row, &lv_font_montserrat_14, C_MUTED, "now");
+    return ch;
+}
+
+/* the graphs from the samples kept (after a rebuild, or on the page's first build) */
+static void hist_fill(void)
+{
+    lv_chart_set_all_values(s_ch_cpu, s_se_c0, LV_CHART_POINT_NONE);
+    lv_chart_set_all_values(s_ch_cpu, s_se_c1, LV_CHART_POINT_NONE);
+    lv_chart_set_all_values(s_ch_temp, s_se_temp, LV_CHART_POINT_NONE);
+    lv_chart_set_all_values(s_ch_ram, s_se_ram, LV_CHART_POINT_NONE);
+    lv_chart_set_all_values(s_ch_rssi, s_se_rssi, LV_CHART_POINT_NONE);
+    for (int i = 0; i < h_count; i++) {
+        int k = (h_pos + HIST_N - h_count + i) % HIST_N;     /* oldest first */
+        lv_chart_set_next_value(s_ch_cpu, s_se_c0, h_load[0][k]);
+        lv_chart_set_next_value(s_ch_cpu, s_se_c1, h_load[1][k]);
+        lv_chart_set_next_value(s_ch_temp, s_se_temp, hist_pt(h_temp[k]));
+        lv_chart_set_next_value(s_ch_ram, s_se_ram, h_ram[k]);
+        lv_chart_set_next_value(s_ch_rssi, s_se_rssi, hist_pt(h_rssi[k]));
+    }
+    hist_show();
 }
 
 /* ------------------------------------------------------------- sorting */
@@ -686,11 +867,37 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     s_ntasks = kv(c, "Tasks");
     s_reset = kv(c, "Last reset");
     lv_label_set_text(s_reset, reset_text(esp_reset_reason()));
+    s_ip = kv(c, "IP address");
+    s_wifi_mac = kv(c, "Wi-Fi MAC");
+    s_eth_mac = kv(c, "Ethernet MAC");
+    uint8_t m[6];
+    if (esp_read_mac(m, ESP_MAC_ETH) == ESP_OK) {   /* the P4's own, from its factory MAC (eFuse) */
+        lv_label_set_text_fmt(s_eth_mac, "%02x:%02x:%02x:%02x:%02x:%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
+    }
+
+    s_ch_cpu = graph_card(s_pane[SM_SYSTEM], &s_ch_cpu_lbl);
+    lv_chart_set_axis_range(s_ch_cpu, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
+    s_se_c0 = lv_chart_add_series(s_ch_cpu, C_ACCENT, LV_CHART_AXIS_PRIMARY_Y);
+    s_se_c1 = lv_chart_add_series(s_ch_cpu, C_ORANGE, LV_CHART_AXIS_PRIMARY_Y);
+    section(s_pane[SM_SYSTEM], "CPU load, last hour: core 0 in the accent colour, core 1 (the screen) in orange.");
+    s_ch_temp = graph_card(s_pane[SM_SYSTEM], &s_ch_temp_lbl);
+    s_se_temp = lv_chart_add_series(s_ch_temp, C_RED, LV_CHART_AXIS_PRIMARY_Y);
+    s_ch_rssi = graph_card(s_pane[SM_SYSTEM], &s_ch_rssi_lbl);
+    lv_chart_set_axis_range(s_ch_rssi, LV_CHART_AXIS_PRIMARY_Y, -95, -30);   /* dBm: weak at the bottom */
+    s_se_rssi = lv_chart_add_series(s_ch_rssi, C_ACCENT, LV_CHART_AXIS_PRIMARY_Y);
+    section(s_pane[SM_SYSTEM], "Wi-Fi signal, last hour, from -95 dBm (bottom) to -30 dBm (top); a gap while "
+                               "not connected. Above -67 dBm is good.");
 
     c = card(s_pane[SM_MEMORY]);
     bar_row(c, "Internal RAM", &s_int_bar, &s_int_val, &s_int_sub);
     bar_row(c, "PSRAM", &s_ps_bar, &s_ps_val, &s_ps_sub);
     s_dma_val = kv(c, "DMA-capable free");
+
+    s_ch_ram = graph_card(s_pane[SM_MEMORY], &s_ch_ram_lbl);
+    lv_chart_set_axis_range(s_ch_ram, LV_CHART_AXIS_PRIMARY_Y, 0,
+                            (int32_t)(heap_caps_get_total_size(MALLOC_CAP_INTERNAL) / 1024));
+    s_se_ram = lv_chart_add_series(s_ch_ram, C_GREEN, LV_CHART_AXIS_PRIMARY_Y);
+    section(s_pane[SM_MEMORY], "Free internal RAM, last hour (the graph's height is all of it).");
 
     c = card(s_pane[SM_STORAGE]);
     bar_row(c, "Firmware", &s_app_bar, &s_app_val, &s_app_sub);
@@ -750,6 +957,11 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
                               "one core. Stack free: the least it has had.");
 
     select_tab(s_tab);                              /* (a rebuild keeps the tab that was open) */
+    hist_fill();
+    if (!h_timer) {                                 /* the history runs from start-up, page or not */
+        h_timer = lv_timer_create(hist_sample, HIST_MS, NULL);
+        hist_sample(NULL);                          /* (the first idle reading) */
+    }
 
     /* LVGL's sysmon report (every 300 ms; its on-screen box stays hidden) */
     lv_display_t *d = lv_obj_get_display(scr);

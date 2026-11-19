@@ -37,6 +37,7 @@ typedef struct {
     int rssi;                 /* dBm while connected */
     char saved_ssid[33];      /* remembered network, "" if none */
     char fail_reason[48];
+    char mac[18];             /* the station's MAC (the C6's), "aa:bb:..": "" until the radio first started */
 } wifi_status_t;
 
 typedef struct {

@@ -109,7 +109,8 @@ tap 300 685                 # System monitor (the Data tab's last row on screen)
 wait 2500
 tap 78 98                   # its System tab (it opens on the one used last)
 wait 1200
-shot docs/screenshots/sysmon.png
+# the IP address and the MAC addresses are blurred: they identify the board and the network
+shot docs/screenshots/sysmon.png --blur 300,388,668,486
 tap 218 98                  # Memory
 wait 1200
 shot docs/screenshots/sysmon-memory.png

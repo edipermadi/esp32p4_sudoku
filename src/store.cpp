@@ -39,6 +39,11 @@ static const store_prefs_t DEFAULT_PREFS = {
     .lock_mode = LOCK_OFF,
     .lock_pin = "",
     .saver_clock = false,
+    .cvd = false,
+    .night_mode = false,
+    .night_start = 22,
+    .night_end = 7,
+    .night_brightness = 20,
     .timezone = "UTC",
     .player_id = 0,
     .player_name = "Player 1",
@@ -370,6 +375,57 @@ void store_set_saver_clock(bool on)
 {
     s_p.saver_clock = on;
     stats_db_set_int("saver_clock", on);
+}
+
+bool store_cvd(void)
+{
+    return s_p.cvd;
+}
+
+void store_set_cvd(bool on)
+{
+    s_p.cvd = on;
+    stats_db_set_int("cvd", on);
+}
+
+bool store_night_mode(void)
+{
+    return s_p.night_mode;
+}
+
+void store_set_night_mode(bool on)
+{
+    s_p.night_mode = on;
+    stats_db_set_int("night_mode", on);
+}
+
+uint8_t store_night_start(void)
+{
+    return s_p.night_start < 24 ? s_p.night_start : 22;
+}
+
+uint8_t store_night_end(void)
+{
+    return s_p.night_end < 24 ? s_p.night_end : 7;
+}
+
+void store_set_night_hours(uint8_t start, uint8_t end)
+{
+    s_p.night_start = start;
+    s_p.night_end = end;
+    stats_db_set_int("night_start", start);
+    stats_db_set_int("night_end", end);
+}
+
+uint8_t store_night_brightness(void)
+{
+    return s_p.night_brightness;
+}
+
+void store_set_night_brightness(uint8_t percent)
+{
+    s_p.night_brightness = percent;
+    stats_db_set_int("night_brightness", percent);
 }
 
 uint32_t store_rules_seen(void)

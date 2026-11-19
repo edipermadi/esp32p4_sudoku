@@ -745,10 +745,22 @@ static void trace(int kind, int unit, int unit2, int d1, int d2, int c1, int c2)
     s_trace->kind = kind;
     s_trace->unit = unit;
     s_trace->unit2 = unit2;
+    s_trace->unit3 = -1;
     s_trace->digit = d1;
     s_trace->digit2 = d2;
     s_trace->cell1 = c1;
     s_trace->cell2 = c2;
+    s_trace->ncells = 0;
+}
+
+/* the same, with a third line and the cells that make the pattern */
+static void trace_cells(int kind, int unit, int unit2, int unit3, int d1, int d2, const int *cells, int n)
+{
+    if (!s_trace || s_trace->kind != TECH_NONE) return;
+    trace(kind, unit, unit2, d1, d2, -1, -1);
+    s_trace->unit3 = unit3;
+    s_trace->ncells = n > 9 ? 9 : n;
+    for (int i = 0; i < s_trace->ncells; i++) s_trace->cells[i] = (uint8_t)cells[i];
 }
 
 static bool eliminate(logic_t *L, int c, uint16_t bits)
@@ -1003,6 +1015,149 @@ static bool pairs(logic_t *L)
                 }
                 if (changed) {
                     trace(TECH_HIDDEN_PAIR, u, -1, d1, d2, cells[0], cells[1]);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/* ---- advanced techniques: hints and Learn only (sudoku_next_step). Grading leaves
+ * them out, so the levels mean what they did. Each relies only on the board's units
+ * (rows, columns, boxes, and diagonals / windows / regions where the variant has them),
+ * which every variant keeps, so the eliminations are sound for all of them. */
+
+/* naked triple: three cells of a unit whose candidates are three digits between them */
+static bool naked_triple(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    const int n = G->n;
+    for (int ui = 0; ui < G->nunits; ui++) {
+        int u = G->unit_ids[ui], cs[9], m = 0;
+        for (int k = 0; k < n; k++) {
+            int c = G->unit[u][k], p = __builtin_popcount(L->cand[c]);
+            if (!L->v[c] && p >= 2 && p <= 3) cs[m++] = c;
+        }
+        for (int a = 0; a < m; a++) {
+            for (int b = a + 1; b < m; b++) {
+                for (int e = b + 1; e < m; e++) {
+                    uint16_t un = (uint16_t)(L->cand[cs[a]] | L->cand[cs[b]] | L->cand[cs[e]]);
+                    if (__builtin_popcount(un) != 3) continue;
+                    bool changed = false;
+                    for (int k = 0; k < n; k++) {
+                        int c = G->unit[u][k];
+                        if (c != cs[a] && c != cs[b] && c != cs[e]) changed |= eliminate(L, c, un);
+                    }
+                    if (changed) {
+                        const int cells[3] = {cs[a], cs[b], cs[e]};
+                        trace_cells(TECH_NAKED_TRIPLE, u, -1, -1, un, 0, cells, 3);
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/* X-Wing (size 2) and Swordfish (size 3): in `size` rows a digit's places all lie in
+ * the same `size` columns, so it can't be anywhere else in those columns (or the
+ * same with rows and columns swapped) */
+static bool fish(logic_t *L, int size)
+{
+    const sudoku_geom_t *G = L->G;
+    const int n = G->n;
+    for (int orient = 0; orient < 2; orient++) {   /* 0: base rows, cover columns; 1: the other way */
+#define FISH_CELL(line, pos) (orient ? (pos) * 9 + (line) : (line) * 9 + (pos))
+        for (int d = 1; d <= n; d++) {
+            const uint16_t m = (uint16_t)(1u << d);
+            int line[9], nl = 0;
+            uint16_t pos[9];
+            for (int i = 0; i < n; i++) {
+                uint16_t p = 0;
+                bool placed = false;
+                for (int j = 0; j < n; j++) {
+                    int c = FISH_CELL(i, j);
+                    if (L->v[c] == d) placed = true;
+                    else if (L->cand[c] & m) p |= (uint16_t)(1u << j);
+                }
+                int k = __builtin_popcount(p);
+                if (!placed && k >= 2 && k <= size) {
+                    line[nl] = i;
+                    pos[nl++] = p;
+                }
+            }
+            int pick[3];
+            for (pick[0] = 0; pick[0] < nl; pick[0]++) {
+                for (pick[1] = pick[0] + 1; pick[1] < nl; pick[1]++) {
+                    for (pick[2] = size == 3 ? pick[1] + 1 : nl; pick[2] < (size == 3 ? nl : nl + 1); pick[2]++) {
+                        uint16_t cover = (uint16_t)(pos[pick[0]] | pos[pick[1]] | (size == 3 ? pos[pick[2]] : 0));
+                        if (__builtin_popcount(cover) != size) continue;
+                        bool base[9] = {false};
+                        for (int s = 0; s < size; s++) base[line[pick[s]]] = true;
+                        bool changed = false;
+                        for (int j = 0; j < n; j++) {
+                            if (!(cover >> j & 1)) continue;
+                            for (int i = 0; i < n; i++) {
+                                if (!base[i]) changed |= eliminate(L, FISH_CELL(i, j), m);
+                            }
+                        }
+                        if (changed) {
+                            int cells[9], nc = 0;
+                            for (int s = 0; s < size; s++) {
+                                for (int j = 0; j < n; j++) {
+                                    if (pos[pick[s]] >> j & 1) cells[nc++] = FISH_CELL(line[pick[s]], j);
+                                }
+                            }
+                            const int u0 = orient * 9;    /* rows are units 0..8, columns 9..17 */
+                            trace_cells(size == 2 ? TECH_X_WING : TECH_SWORDFISH, u0 + line[pick[0]],
+                                        u0 + line[pick[1]], size == 3 ? u0 + line[pick[2]] : -1, d, cover,
+                                        cells, nc);
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+#undef FISH_CELL
+    }
+    return false;
+}
+
+/* XY-Wing: a pivot that can only be x or y sees one cell that can only be x or z
+ * and another that can only be y or z. Whichever the pivot is, one of the two is z,
+ * so no cell that sees both of them can be z. */
+static bool xy_wing(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int k = 0; k < G->ncells; k++) {
+        int p = G->cells[k];
+        uint16_t pm = L->cand[p];
+        if (L->v[p] || __builtin_popcount(pm) != 2) continue;
+        for (int i = 0; i < G->npeers[p]; i++) {
+            int a = G->peers[p][i];
+            uint16_t am = L->cand[a];
+            if (L->v[a] || __builtin_popcount(am) != 2 || __builtin_popcount(am & pm) != 1) continue;
+            uint16_t z = (uint16_t)(am & ~pm);                   /* a is x or z */
+            uint16_t want = (uint16_t)((pm & ~am) | z);          /* b must be y or z */
+            for (int j = 0; j < G->npeers[p]; j++) {
+                int b = G->peers[p][j];
+                if (b == a || L->v[b] || L->cand[b] != want) continue;
+                bool changed = false;
+                for (int q = 0; q < G->ncells; q++) {
+                    int c = G->cells[q];
+                    if (c == a || c == b || c == p) continue;
+                    if (sudoku_geom_peer(G, c, a) && sudoku_geom_peer(G, c, b)) changed |= eliminate(L, c, z);
+                }
+                if (changed) {
+                    const int cells[3] = {p, a, b};
+                    bool first = s_trace && s_trace->kind == TECH_NONE;
+                    trace_cells(TECH_XY_WING, -1, -1, -1, __builtin_ctz(z), pm, cells, 3);
+                    if (first) {                                 /* the pincers' two digits each */
+                        s_trace->cell1 = am;
+                        s_trace->cell2 = want;
+                    }
                     return true;
                 }
             }
@@ -1453,7 +1608,7 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
         }
         if (!(G->ncages && cage_logic(&L)) && !(G->consec_on && consec_logic(&L)) &&
             !(G->nthermos && thermo_logic(&L)) && !(G->sandwich && sandwich_logic(&L)) && !locked_candidates(&L) &&
-            !pairs(&L)) {
+            !pairs(&L) && !naked_triple(&L) && !fish(&L, 2) && !fish(&L, 3) && !xy_wing(&L)) {
             break;                                                  /* the first one is in out->tech */
         }
     }
@@ -1471,6 +1626,48 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
     out->digit = best >= 0 ? solution[best] : 0;
     memset(&out->tech, 0, sizeof(out->tech));
     return best >= 0;
+}
+
+bool sudoku_step_with(const sudoku_geom_t *G, const uint8_t vals[81], const uint8_t solution[81], int tech,
+                      sudoku_step_t *out)
+{
+    static logic_t L;
+    memset(out, 0, sizeof(*out));
+    out->cell = out->unit = -1;
+    for (int k = 0; k < G->ncells; k++) {
+        int c = G->cells[k];
+        if (vals[c] && vals[c] != solution[c]) return false;     /* not from a wrong board */
+    }
+    logic_load(&L, G, vals);
+    if (!L.empty || L.broken) return false;
+    int d, u;
+    if (find_hidden_single(&L, &d, &u) >= 0 || find_naked_single(&L, &d) >= 0) return false;
+    s_trace = &out->tech;
+    bool ok = false;
+    switch (tech) {
+    case TECH_POINTING:
+    case TECH_CLAIMING:     ok = locked_candidates(&L); break;
+    case TECH_NAKED_PAIR:
+    case TECH_HIDDEN_PAIR:  ok = pairs(&L); break;
+    case TECH_NAKED_TRIPLE: ok = naked_triple(&L); break;
+    case TECH_X_WING:       ok = fish(&L, 2); break;
+    case TECH_SWORDFISH:    ok = fish(&L, 3); break;
+    case TECH_XY_WING:      ok = xy_wing(&L); break;
+    }
+    s_trace = NULL;
+    if (!ok || out->tech.kind != tech || L.broken) return false;
+    int c = find_hidden_single(&L, &d, &u);
+    if (c >= 0) {
+        out->kind = STEP_HIDDEN_SINGLE;
+        out->unit = u;
+    } else if ((c = find_naked_single(&L, &d)) >= 0) {
+        out->kind = STEP_NAKED_SINGLE;
+    } else {
+        return false;                                   /* it narrowed things down, but no single yet */
+    }
+    out->cell = c;
+    out->digit = d;
+    return d == solution[c];
 }
 
 int sudoku_unit_cell(const sudoku_geom_t *G, int unit, int k)

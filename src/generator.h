@@ -215,16 +215,26 @@ bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[8
 /* ---------------------------------------------------------------- hints */
 int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cell (0..n-1) of a unit, or -1 */
 
+/* The last four are for hints and Learn only: grading (sudoku_grade) doesn't use them, so Hard
+ * still means "pairs or locked candidates" and Expert "more than that". */
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
-               TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH } tech_kind_t;
+               TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH,
+               TECH_NAKED_TRIPLE, TECH_X_WING, TECH_SWORDFISH, TECH_XY_WING } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
-    int unit, unit2;         /* pointing: box, line; claiming: line, box; pairs: the unit; cage: the cage;
-                                consecutive: the cell whose candidates its neighbours narrowed;
-                                thermo: the thermometer; sandwich: the row or column */
-    int digit, digit2;       /* pointing/claiming: digit; pairs: the two digits; cage: bit mask of the
-                                digits its sum still allows in its empty cells */
-    int cell1, cell2;        /* pairs: the two cells */
+    int unit, unit2, unit3;  /* pointing: box, line; claiming: line, box; pairs, triple: the unit; cage: the
+                                cage; consecutive: the cell whose candidates its neighbours narrowed;
+                                thermo: the thermometer; sandwich: the row or column; X-Wing, Swordfish:
+                                the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
+    int digit, digit2;       /* pointing/claiming, X-Wing, Swordfish: digit; pairs: the two digits; triple:
+                                bit mask of its three digits; cage: bit mask of the digits its sum still
+                                allows in its empty cells; X-Wing, Swordfish: digit2 = bit mask of the
+                                cover lines' indexes (columns, or rows, 0..8); XY-Wing: digit = the one
+                                ruled out (z), digit2 = the pivot's two digits (bit mask) */
+    int cell1, cell2;        /* pairs: the two cells; XY-Wing: the two pincers' digits (bit masks) */
+    int ncells;              /* triple, X-Wing, Swordfish, XY-Wing: the cells that make it (XY-Wing: the
+                                pivot first, then the two pincers) */
+    uint8_t cells[9];
 } sudoku_tech_t;
 
 typedef enum {
@@ -243,6 +253,14 @@ typedef struct {
 /* The next step a person would take on the board vals (81, 0 = empty;
  * givens included), knowing the solution. False if the board is full. */
 bool sudoku_next_step(const sudoku_geom_t *g, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out);
+
+/* For Learn: true if, on the board vals, the technique `tech` (TECH_POINTING ...
+ * TECH_XY_WING) opens up a single that wasn't there before: no single is left
+ * now, and after that technique (and nothing else) one appears. *out is then that
+ * single with the technique in out->tech, like sudoku_next_step() gives it. The
+ * technique may not be the only way forward; it is one that works there. */
+bool sudoku_step_with(const sudoku_geom_t *g, const uint8_t vals[81], const uint8_t solution[81], int tech,
+                      sudoku_step_t *out);
 
 #ifdef __cplusplus
 }

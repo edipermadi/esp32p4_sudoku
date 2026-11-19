@@ -564,6 +564,11 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "lock_mode")) p->lock_mode = v >= LOCK_OFF && v <= LOCK_PIN ? v : LOCK_OFF;
             else if (!strcmp(k, "lock_pin") && t) snprintf(p->lock_pin, sizeof(p->lock_pin), "%s", t);
             else if (!strcmp(k, "saver_clock")) p->saver_clock = v != 0;
+            else if (!strcmp(k, "cvd")) p->cvd = v != 0;
+            else if (!strcmp(k, "night_mode")) p->night_mode = v != 0;
+            else if (!strcmp(k, "night_start")) p->night_start = v >= 0 && v < 24 ? v : 22;
+            else if (!strcmp(k, "night_end")) p->night_end = v >= 0 && v < 24 ? v : 7;
+            else if (!strcmp(k, "night_brightness")) p->night_brightness = v < 10 ? 10 : (v > 100 ? 100 : v);
             else if (!strcmp(k, "time_zone") && t) snprintf(p->timezone, sizeof(p->timezone), "%s", t);
             else if (!strcmp(k, "last_level") && t) {
                 for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
@@ -725,6 +730,11 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("lock_mode", false, p->lock_mode, NULL);
     set_setting("lock_pin", true, 0, p->lock_pin);
     set_setting("saver_clock", false, p->saver_clock, NULL);
+    set_setting("cvd", false, p->cvd, NULL);
+    set_setting("night_mode", false, p->night_mode, NULL);
+    set_setting("night_start", false, p->night_start, NULL);
+    set_setting("night_end", false, p->night_end, NULL);
+    set_setting("night_brightness", false, p->night_brightness, NULL);
     set_setting("time_zone", true, 0, p->timezone);
     set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
                                                           ? p->last_collection : 0].name);

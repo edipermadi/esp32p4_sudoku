@@ -86,6 +86,10 @@ typedef struct {
     uint8_t lock_mode;                        /* store_lock_t: the lock screen after a screen timeout */
     char lock_pin[8];                         /* 4 digits (PIN mode), "" = none set */
     bool saver_clock;                         /* a dim drifting clock before the screen goes dark */
+    bool cvd;                                 /* colour-blind friendly colours (Okabe-Ito) */
+    bool night_mode;                          /* dark and dimmer between night_start and night_end */
+    uint8_t night_start, night_end;           /* hours 0..23, local time */
+    uint8_t night_brightness;                 /* backlight at night, 10..100 % (at most the day's) */
     char timezone[STORE_TZ_LEN];
     int32_t player_id;                        /* who is playing (players.id in sudoku.db) */
     char player_name[STORE_NAME_LEN];
@@ -160,6 +164,15 @@ void store_set_lock_pin(const char *pin);
  * moving about for SAVER_CLOCK_MIN minutes, then dark. */
 bool store_saver_clock(void);
 void store_set_saver_clock(bool on);
+bool store_cvd(void);
+void store_set_cvd(bool on);
+bool store_night_mode(void);
+void store_set_night_mode(bool on);
+uint8_t store_night_start(void);
+uint8_t store_night_end(void);
+void store_set_night_hours(uint8_t start, uint8_t end);
+uint8_t store_night_brightness(void);
+void store_set_night_brightness(uint8_t percent);
 
 #ifdef __cplusplus
 }

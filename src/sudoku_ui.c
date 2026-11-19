@@ -132,6 +132,21 @@ static const uint32_t ACCENTS[ACCENT_COUNT][2] = {
 };
 static const char *const ACCENT_NAMES = "Blue\nTeal\nGreen\nPurple\nPink";
 
+/* Night mode (Settings > Display): between the night hours, dark mode and the backlight
+ * at most the night brightness. Only the switch-over changes things (night_check), so
+ * dark mode or brightness changed by hand during the night stay as they are until morning.
+ * s_night: the night look is on now. */
+static bool s_night;
+static lv_obj_t *s_saver;   /* black cover on the system layer while the screen is off */
+
+/* the backlight for "on": the day's setting, or less at night */
+static int effective_brightness(void)
+{
+    int b = store_brightness();
+    if (s_night && store_night_brightness() < b) b = store_night_brightness();
+    return b;
+}
+
 static uint32_t mix_hex(uint32_t a, uint32_t b, int pct)   /* pct % of a over b */
 {
     uint32_t out = 0;
@@ -153,6 +168,21 @@ static void palette_build(bool dark, int accent)
         s_pal.cell_same = mix_hex(a, s_pal.cell, 25);
         s_pal.cell_peer = mix_hex(a, s_pal.cell, dark ? 8 : 10);
         s_pal.digit_user = dark ? mix_hex(a, 0xFFFFFF, 75) : a;
+    }
+    if (store_cvd()) {
+        /* Colour-blind friendly (Settings > Display): the Okabe-Ito colours. Red and green
+         * look alike to most colour-blind people; vermillion (mistakes), bluish green (solved,
+         * complete) and yellow-orange (in progress) stay apart, and apart from the blues,
+         * in lightness as well as hue. */
+        if (dark) {
+            s_pal.red = 0xFF8A3D;         s_pal.green = 0x3CC9A7;     s_pal.orange = 0xF2B638;
+            s_pal.cell_bad = 0x55300F;    s_pal.cell_solved = 0x113D36;
+            s_pal.list_solved = 0x0E7D66; s_pal.list_active = 0xA87C10;
+        } else {
+            s_pal.red = 0xD55E00;         s_pal.green = 0x00876A;     s_pal.orange = 0xC98A00;
+            s_pal.cell_bad = 0xFBDCC4;    s_pal.cell_solved = 0xCDEFE6;
+            s_pal.list_solved = 0x009E73; s_pal.list_active = 0xE69F00;
+        }
     }
     ui_pal = &s_pal;
 }
@@ -291,6 +321,39 @@ static lv_obj_t *st_wifi_eye;               /* shows the network's name (hidden 
 static lv_obj_t *st_lock_dd, *st_pin_btn;   /* the lock screen: Off / Swipe / PIN, and Change PIN */
 static void lock_dd_cb(lv_event_t *e);
 static void pin_change_cb(lv_event_t *e);
+static void night_check(lv_timer_t *t);
+static void apply_theme(bool dark);
+static lv_obj_t *st_night_bright_lbl;
+
+static void cvd_sw_cb(lv_event_t *e)
+{
+    store_set_cvd(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+    apply_theme(s_dark);                            /* every screen again, in the new colours */
+}
+
+static void night_sw_cb(lv_event_t *e)
+{
+    store_set_night_mode(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+    night_check(NULL);                              /* at once (also off: back to the day look) */
+}
+
+static lv_obj_t *st_night_from, *st_night_to;
+
+static void night_hours_cb(lv_event_t *e)
+{
+    store_set_night_hours((uint8_t)lv_dropdown_get_selected(st_night_from),
+                          (uint8_t)lv_dropdown_get_selected(st_night_to));
+    night_check(NULL);
+}
+
+static void night_bright_cb(lv_event_t *e)
+{
+    int v = lv_slider_get_value(lv_event_get_target_obj(e));
+    lv_label_set_text_fmt(st_night_bright_lbl, "%d%%", v);
+    if (s_night) bsp_display_brightness_set(v < store_brightness() ? v : store_brightness());   /* see it now */
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_night_brightness((uint8_t)v);
+}
+
 static void saver_clock_sw_cb(lv_event_t *e)
 {
     store_set_saver_clock(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
@@ -333,9 +396,11 @@ static lv_obj_t *g_undo_btn, *g_redo_btn;
 static void show_list(void);
 static void open_puzzle(uint16_t id);
 /* Learn: the techniques there are practice puzzles for */
-enum { LEARN_HIDDEN = 0, LEARN_NAKED, LEARN_POINTING, LEARN_CLAIMING, LEARN_NAKED_PAIR, LEARN_HIDDEN_PAIR, LEARN_COUNT };
+enum { LEARN_HIDDEN = 0, LEARN_NAKED, LEARN_POINTING, LEARN_CLAIMING, LEARN_NAKED_PAIR, LEARN_HIDDEN_PAIR,
+       LEARN_NAKED_TRIPLE, LEARN_X_WING, LEARN_SWORDFISH, LEARN_XY_WING, LEARN_COUNT };
 static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
-                                                     "Naked pair", "Hidden pair"};
+                                                     "Naked pair", "Hidden pair", "Naked triple", "X-Wing",
+                                                     "Swordfish", "XY-Wing"};
 static void daily_kind_text(int variant, int level, char *buf, size_t n);
 /* the current player's unfinished games in sudoku.db (most recent first), refreshed with the list and home */
 static stats_game_row_t s_games[STATS_MAX_GAMES];
@@ -1501,6 +1566,19 @@ static const char *units_word(void)
     return "row, column or box";
 }
 
+/* "1, 4 or 7" from a candidate bit mask */
+static void digit_list(int mask, const char *last_word, char *buf, size_t n)
+{
+    int ds[9], k = 0;
+    for (int d = 1; d <= 9; d++) if (mask >> d & 1) ds[k++] = d;
+    size_t len = 0;
+    buf[0] = 0;
+    for (int i = 0; i < k; i++) {
+        len += snprintf(buf + len, n - len, "%s%d", i == 0 ? "" : (i == k - 1 ? " " : ", "), ds[i]);
+        if (i == k - 2 && len < n) len += snprintf(buf + len, n - len, " %s", last_word);
+    }
+}
+
 static void mark_unit(int u, uint8_t v)
 {
     for (int k = 0; k < g_geo->n; k++) {
@@ -1522,7 +1600,7 @@ static void hint_render(void)
 {
     const sudoku_step_t *h = &h_info;
     const sudoku_tech_t *t = &h->tech;
-    char text[320], u1[24], u2[24], tech[180] = "";
+    char text[360], u1[48], u2[24], tech[260] = "";
     int r = h->cell / 9 + 1, c = h->cell % 9 + 1;
     memset(h_mark, 0, sizeof(h_mark));
 
@@ -1576,6 +1654,43 @@ static void hint_render(void)
         snprintf(tech, sizeof(tech), "The cage at row %d, column %d adds up to %d: with what's in it and around "
                  "it, its empty cells can only be %s. ", c0 / 9 + 1, c0 % 9 + 1,
                  k >= 0 && k < g_geo->ncages ? g_geo->cage_sum[k] : 0, digs);
+    } else if (t->kind == TECH_NAKED_TRIPLE || t->kind == TECH_X_WING || t->kind == TECH_SWORDFISH ||
+               t->kind == TECH_XY_WING) {
+        for (int i = 0; i < t->ncells; i++) h_mark[t->cells[i]] = 1;   /* the cells that make the pattern */
+        char digs[24];
+        if (t->kind == TECH_NAKED_TRIPLE) {
+            unit_name(t->unit, u1, sizeof(u1));
+            digit_list(t->digit, "or", digs, sizeof(digs));
+            snprintf(tech, sizeof(tech), "In %s, three cells can only be %s between them, so no other cell "
+                     "there can be any of those. ", u1, digs);
+        } else if (t->kind == TECH_XY_WING) {
+            int p = t->cells[0], a = t->cells[1], b = t->cells[2], z = t->digit;
+            int x = __builtin_ctz((unsigned)(t->digit2 & t->cell1)), y = __builtin_ctz((unsigned)(t->digit2 & t->cell2));
+            snprintf(u1, sizeof(u1), "the three highlighted cells");
+            snprintf(tech, sizeof(tech), "Row %d, column %d can only be %d or %d. If it's %d, row %d, column %d is %d; "
+                     "if it's %d, row %d, column %d is %d. Either way one of them is %d, so no cell that sees both "
+                     "can be %d. ", p / 9 + 1, p % 9 + 1, x, y, x, a / 9 + 1, a % 9 + 1, z, y, b / 9 + 1, b % 9 + 1,
+                     z, z, z);
+        } else {                                    /* X-Wing, Swordfish: base lines, cover lines */
+            bool rows = t->unit < 9;
+            const char *base = rows ? "rows" : "columns", *cov = rows ? "columns" : "rows";
+            int lines[3] = {t->unit, t->unit2, t->unit3}, nb = t->kind == TECH_X_WING ? 2 : 3;
+            char bl[24] = "", cl[24] = "";
+            size_t lb = 0, lc = 0;
+            for (int i = 0; i < nb; i++) {
+                lb += snprintf(bl + lb, sizeof(bl) - lb, "%s%d", i == 0 ? "" : (i == nb - 1 ? " and " : ", "),
+                               lines[i] % 9 + 1);
+            }
+            for (int j = 0, k = 0; j < 9; j++) {
+                if (!(t->digit2 >> j & 1)) continue;
+                lc += snprintf(cl + lc, sizeof(cl) - lc, "%s%d", k == 0 ? "" : (k == nb - 1 ? " and " : ", "), j + 1);
+                k++;
+            }
+            snprintf(u1, sizeof(u1), "%s %s", base, bl);
+            snprintf(tech, sizeof(tech), "In %s %s, %d can only be in %s %s. %s %s must put their %ds in those %s, "
+                     "so no other cell of %s %s can be %d. ", base, bl, t->digit, cov, cl,
+                     nb == 2 ? "Both" : "All three", base, t->digit, cov, cov, cl, t->digit);
+        }
     } else if (t->kind) {
         mark_unit(t->unit, 1);
         unit_name(t->unit, u1, sizeof(u1));
@@ -1649,9 +1764,21 @@ static void hint_render(void)
     lv_label_set_text(h_text, text);
 
     /* the card at the bottom, or at the top when the bottom row matters */
-    bool bottom_row = false;
-    for (int k = 0; k < g_geo->n; k++) bottom_row |= h_mark[(g_geo->n - 1) * 9 + k] != 0;
-    lv_obj_set_y(h_card, bottom_row ? 4 : SCR_W - 96);
+    /* as tall as its text needs (a technique and its single take 4-6 lines), at least the
+     * buttons' height; at the bottom (growing upwards) unless it would cover a highlighted
+     * cell there, then at the top (growing downwards) */
+    lv_obj_update_layout(h_text);
+    int32_t ch = lv_obj_get_height(h_text) + 28;
+    if (ch < 92) ch = 92;
+    lv_obj_set_height(h_card, ch);
+    bool covered = false;
+    for (int i = 0; i < 81 && !covered; i++) {
+        if (!h_mark[i] || !g_cells[i]) continue;
+        lv_area_t co;
+        lv_obj_get_coords(g_cells[i], &co);
+        covered = co.y2 > SCR_W - 4 - ch;
+    }
+    lv_obj_set_y(h_card, covered ? 4 : SCR_W - 4 - ch);
     lv_obj_set_hidden(h_card, false);
     refresh_board();
 }
@@ -3580,7 +3707,24 @@ static const char *const LEARN_DESC[LEARN_COUNT] = {
     "On a line, a digit's places all lie in one box: the rest of that box can't have it.",
     "Two cells of a unit can only be the same two digits: no other cell there can be either.",
     "Two digits fit only the same two cells of a unit: those cells can't be anything else.",
+    "Three cells of a unit can only be the same three digits between them: no other cell there can.",
+    "In two rows a digit fits only the same two columns: it can't be elsewhere in those columns.",
+    "The same with three rows and three columns (or three columns and three rows).",
+    "A cell that is x or y sees an x-or-z and a y-or-z cell: one of those is z, so what sees both isn't.",
 };
+
+/* the techniques that sudoku_step_with() finds a lesson position for (the newer, rarer ones:
+ * the hint engine seldom reaches them first, so any position where they open a single will do) */
+static int learn_tech(int target)
+{
+    switch (target) {
+    case LEARN_NAKED_TRIPLE: return TECH_NAKED_TRIPLE;
+    case LEARN_X_WING:       return TECH_X_WING;
+    case LEARN_SWORDFISH:    return TECH_SWORDFISH;
+    case LEARN_XY_WING:      return TECH_XY_WING;
+    }
+    return TECH_NONE;
+}
 
 static lv_obj_t *learn_box, *learn_wait;
 static lv_timer_t *learn_timer;
@@ -3639,11 +3783,15 @@ static void learn_task(void *arg)
         uint16_t id = (uint16_t)(puzzle_collections[c].first + (esp_random() % puzzle_collections[c].count));
         puzzle_load(id, vals);
         if (!sudoku_solve(G, vals, sol)) continue;
-        sudoku_step_t st;
+        sudoku_step_t st, w;
+        const int tech = learn_tech(target);
         for (int step = 0; step < 81 && !found; step++) {
             if (target == LEARN_NAKED && step >= 8 && learn_find_naked(vals, sol, &st)) found = 1;
             else if (!sudoku_next_step(G, vals, sol, &st) || st.cell < 0) break;
-            else if (learn_match(target, &st)) found = 1;
+            else if (tech && (st.tech.kind || st.kind == STEP_NONE) && sudoku_step_with(G, vals, sol, tech, &w)) {
+                st = w;                             /* stuck on singles, and this technique opens one */
+                found = 1;
+            } else if (!tech && learn_match(target, &st)) found = 1;
             if (found) {
                 learn_id = id;
                 memcpy(learn_vals, vals, 81);
@@ -3716,11 +3864,13 @@ static void learn_cb(lv_event_t *e)
     learn_box = m;
     lv_obj_set_width(m, 640);
     lv_obj_t *c = lv_msgbox_get_content(m);
+    lv_obj_set_height(c, 500);                      /* ten techniques: the list scrolls */
+    lv_obj_set_scroll_dir(c, LV_DIR_VER);
     make_wrap_text(c, &lv_font_montserrat_16, C_MUTED,
                    "Pick one: a puzzle opens where it's the next step, with the hint showing where to look. "
                    "Practice games aren't saved or counted.");
     for (int i = 0; i < LEARN_COUNT; i++) {
-        lv_obj_t *row = make_btn(c, 0, 0, 0, 64, NULL, NULL, learn_pick_cb, (void *)(intptr_t)i);
+        lv_obj_t *row = make_btn(c, 0, 0, 0, 86, NULL, NULL, learn_pick_cb, (void *)(intptr_t)i);   /* 2 lines */
         lv_obj_set_width(row, LV_PCT(100));
         lv_obj_set_style_bg_color(row, C_CARD2, 0);
         lv_obj_set_style_margin_top(row, 8, 0);
@@ -3729,7 +3879,7 @@ static void learn_cb(lv_event_t *e)
         lv_obj_align(n, LV_ALIGN_TOP_LEFT, 14, 8);
         lv_obj_t *d = make_label(row, &lv_font_montserrat_14, C_MUTED);
         lv_obj_set_width(d, 580);
-        lv_label_set_long_mode(d, LV_LABEL_LONG_MODE_DOTS);
+        lv_label_set_long_mode(d, LV_LABEL_LONG_MODE_WRAP);   /* (the descriptions take up to two lines) */
         lv_label_set_text(d, LEARN_DESC[i]);
         lv_obj_align(d, LV_ALIGN_TOP_LEFT, 14, 36);
     }
@@ -4798,7 +4948,8 @@ static void sound_sw_cb(lv_event_t *e)
 static void bright_sl_cb(lv_event_t *e)
 {
     int v = lv_slider_get_value(st_bright_sl);
-    bsp_display_brightness_set(v);
+    int nb = store_night_brightness();
+    bsp_display_brightness_set(s_night && store_night_mode() && nb < v ? nb : v);   /* (at night: at most that) */
     lv_label_set_text_fmt(st_bright_lbl, "%d%%", v);
     if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_brightness((uint8_t)v);
 }
@@ -5335,11 +5486,13 @@ static void apply_loaded_prefs(void)
     p_count = -1;
     sfx_set_enabled(store_sound_enabled());
     bsp_audio_set_volume(store_volume());
-    bsp_display_brightness_set(store_brightness());
+    bsp_display_brightness_set(effective_brightness());
     tz_apply(store_timezone());
     s_sleep_min = store_screen_timeout_min();
     l_coll = store_last_collection();
+    s_night = false;                                   /* (re-checked just below, from these settings) */
     apply_theme(store_dark_mode());                    /* redraws every screen with it */
+    night_check(NULL);
     if (u_reload_home) {
         u_reload_home = false;
         refresh_home();
@@ -7401,6 +7554,39 @@ static void st_tab_cb(lv_event_t *e)
     st_select_tab((int)(intptr_t)lv_event_get_user_data(e));
 }
 
+/* Night mode: switches the night look on or off when the night hours start or end
+ * (every 20 s, and at once when its settings change). Waits while a dialog is open on
+ * the top layer (a theme change rebuilds the screens under it), for 5 minutes at most. */
+static void night_check(lv_timer_t *t)
+{
+    static int waited;
+    bool want = false;
+    time_t now = time(NULL);
+    if (store_night_mode() && now > 1700000000) {   /* (needs the clock: Wi-Fi) */
+        struct tm tm;
+        localtime_r(&now, &tm);
+        int h = tm.tm_hour, a = store_night_start(), b = store_night_end();
+        want = a != b && (a < b ? (h >= a && h < b) : (h >= a || h < b));   /* (22-7 spans midnight) */
+    }
+    if (want == s_night) {
+        waited = 0;
+        return;
+    }
+    lv_obj_t *top = lv_layer_top();
+    for (uint32_t i = 0; t && waited < 15 && i < lv_obj_get_child_count(top); i++) {
+        if (!lv_obj_is_hidden(lv_obj_get_child(top, (int32_t)i))) {
+            waited++;
+            return;                                 /* try again at the next check */
+        }
+    }
+    waited = 0;
+    s_night = want;
+    bool dark = want || store_dark_mode();
+    if (dark != s_dark) apply_theme(dark);
+    if (!s_saver) bsp_display_brightness_set(effective_brightness());   /* (off stays off) */
+    printf("night mode: %s\n", want ? "on" : "off");
+}
+
 /* an open dropdown list (time zone) doesn't stay up over another screen */
 static void st_close_lists_cb(lv_event_t *e)
 {
@@ -7502,6 +7688,9 @@ static void build_settings(void)
     r = settings_row(col, "Accent colour", "Buttons, the selected cell and your digits");
     settings_dropdown(r, ACCENT_NAMES, store_accent(), 150, accent_dd_cb);
 
+    r = settings_row(col, "Colour-blind friendly", "Orange-red and blue-green in place of red and green");
+    settings_switch(r, store_cvd(), cvd_sw_cb);
+
     r = settings_row(col, "Brightness", "Screen backlight");
     st_bright_sl = settings_slider(r, 10, 100, store_brightness(), bright_sl_cb, &st_bright_lbl);
 
@@ -7523,6 +7712,25 @@ static void build_settings(void)
 
     r = settings_row(col, "Screen-saver clock", "A dim clock for 10 min before the screen goes dark");
     settings_switch(r, store_saver_clock(), saver_clock_sw_cb);
+
+    r = settings_row(col, "Night mode", "Dark and dimmer at night (needs the clock: Wi-Fi)");
+    settings_switch(r, store_night_mode(), night_sw_cb);
+
+    static char hours[24 * 6];                      /* "00:00\n01:00\n...23:00" */
+    if (!hours[0]) {
+        size_t len = 0;
+        for (int h = 0; h < 24; h++) len += snprintf(hours + len, sizeof(hours) - len, "%s%02d:00", h ? "\n" : "", h);
+    }
+    r = settings_row(col, "Night hours", "From - to, local time");
+    st_night_to = settings_dropdown(r, hours, store_night_end(), 110, night_hours_cb);
+    st_night_from = settings_dropdown(r, hours, store_night_start(), 110, night_hours_cb);
+    lv_obj_align(st_night_from, LV_ALIGN_RIGHT_MID, -150, 0);
+    lv_obj_t *to = make_label(r, &lv_font_montserrat_18, C_MUTED);
+    lv_label_set_text(to, "-");
+    lv_obj_align(to, LV_ALIGN_RIGHT_MID, -126, 0);
+
+    r = settings_row(col, "Night brightness", "At most the day's brightness");
+    settings_slider(r, 10, 100, store_night_brightness(), night_bright_cb, &st_night_bright_lbl);
 
     col = st_pane[ST_SOUND];
     r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
@@ -8006,7 +8214,6 @@ static void pin_change_cb(lv_event_t *e)
     pin_setup_open(false);
 }
 
-static lv_obj_t *s_saver;   /* black cover on the system layer while the screen is off */
 
 /*
  * Screen-saver clock (Settings > Display): at the timeout the black cover
@@ -8063,7 +8270,7 @@ static void saver_wake_cb(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSED) {
         saver_clock_stop();
-        bsp_display_brightness_set(store_brightness());
+        bsp_display_brightness_set(effective_brightness());
     } else if (s_saver) {
         /* removed only once the finger is up, so the waking tap reaches nothing below */
         lv_obj_delete_async(s_saver);
@@ -8185,7 +8392,7 @@ esp_err_t sudoku_ui_start(void)
 
     sfx_set_enabled(store_sound_enabled());
     bsp_audio_set_volume(store_volume());
-    bsp_display_brightness_set(store_brightness());
+    bsp_display_brightness_set(effective_brightness());
     for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in)) {
         lv_indev_add_event_cb(in, touch_sound_cb, LV_EVENT_PRESSED, NULL);
     }
@@ -8199,6 +8406,7 @@ esp_err_t sudoku_ui_start(void)
     lv_timer_create(tick_cb, 200, NULL);
     lv_timer_create(saver_cb, 1000, NULL);
     lv_timer_create(clock_cb, 1000, NULL);
+    lv_timer_create(night_check, 20000, NULL);         /* night mode: dark and dimmer at night */
     lv_timer_create(sd_poll_cb, 100, NULL);
     clock_cb(NULL);
     return ESP_OK;

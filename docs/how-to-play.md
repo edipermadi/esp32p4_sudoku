@@ -44,6 +44,8 @@
 | What turns red                  | **Settings → Mistake check** (Off / Rules / Solution) |
 | Speaker volume                  | **Settings → Volume** (0–100 %; a tick plays at the new level) |
 | Light / dark mode               | **Settings → Dark mode**                         |
+| Dark and dim at night           | **Settings → Display → Night mode**, then the hours |
+| Colours for colour blindness    | **Settings → Display → Colour-blind friendly**   |
 | Screen timeout                  | **Settings → Screen off after**                  |
 | Connect to Wi-Fi                | **Settings → Wi-Fi**, switch on, tap a network   |
 | Time zone                       | **Settings → Time zone**                         |

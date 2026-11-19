@@ -118,6 +118,19 @@ static void on_disconnect(arduino_event_id_t ev, arduino_event_info_t info)
     s_last_reason = info.wifi_sta_disconnected.reason;
 }
 
+/* The station's MAC, from the C6 (a round trip over SDIO), kept once known. Right after
+ * the radio starts it can still read all zeros: tried again when a network connects. */
+static void read_mac(void)
+{
+    if (s_st.mac[0]) return;
+    String mac = WiFi.macAddress();
+    if (mac.length() != 17 || mac == "00:00:00:00:00:00") return;
+    mac.toLowerCase();
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    strlcpy(s_st.mac, mac.c_str(), sizeof(s_st.mac));
+    xSemaphoreGive(s_lock);
+}
+
 static bool radio_up(void)
 {
     if (s_radio_up) {
@@ -138,6 +151,7 @@ static bool radio_up(void)
     }
     WiFi.setAutoReconnect(true);
     s_radio_up = true;
+    read_mac();
     set_state(WIFI_ST_IDLE);
     return true;
 }
@@ -343,6 +357,7 @@ static void poll(void)
             configTzTime(tz ? tz : "UTC0", "pool.ntp.org", "time.google.com", "time.cloudflare.com");
             s_sntp_started = true;
         }
+        read_mac();
         String ip = WiFi.localIP().toString();
         int rssi = WiFi.RSSI();
         xSemaphoreTake(s_lock, portMAX_DELAY);
