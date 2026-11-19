@@ -1,9 +1,8 @@
 # Screenshots for the docs: python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
 # Opening the port restarts the board, so this starts on a fresh Home screen.
 # Coordinates are screen pixels (720 x 720). Nothing here changes the game data
-# (no puzzle is played or made, no setting is changed). It expects the Home
-# screen's grid layout (a game in progress, so Continue shows) and one recorded
-# solve (for Gameplays and the replay).
+# (no puzzle is played or made, no setting is changed). It expects one recorded
+# solve (for Gameplays and the replay); the Home menu always has its two pages.
 
 wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
 shot docs/screenshots/home.png

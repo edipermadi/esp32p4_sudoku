@@ -25,7 +25,7 @@ The System monitor's tabs are at the [end of this page](#system-monitor-tabs); S
 ## All features
 
 - **1600 puzzles in flash**: the 16 OpenSudoku collections from <https://opensudoku.gitlab.io/>. These are Easy, Medium, Hard and Very Hard, plus Gnome Sudoku sets 1–3 at each of those levels. Each puzzle is packed into 41 bytes, about 64 KB in total. Every puzzle was checked to have exactly one solution.
-- **Home screen**: the time and date at the top (once Wi-Fi has fetched it), the solved count and big buttons. **Continue** resumes your unfinished game and only appears when there is one; with several (see **Unfinished games**) its line says how many more, and it opens a list to pick from. **Players** (at the top, showing who is playing), **Puzzles**, **Daily puzzle**, **Statistics**, **History**, **Gameplays**, **Trophies**, **Settings**, **Files** and **System** (the system monitor) open those screens. The buttons stand in one column while they fit, then in a grid of two per row; when even the grid doesn't fit (five rows: ten buttons), the menu has pages side by side: swipe left or right, and dots under it show which page is shown (with **Continue** showing, **System** is on the second page).
+- **Home screen**: the time and date at the top (once Wi-Fi has fetched it), the solved count and big buttons. **Continue** resumes your unfinished game; when there is none it stays in its place, greyed out, with "No game in progress"; with several (see **Unfinished games**) its line says how many more, and it opens a list to pick from. **Players** (at the top, showing who is playing), **Puzzles**, **Daily puzzle**, **Statistics**, **History**, **Gameplays**, **Trophies**, **Settings**, **Files** and **System** (the system monitor) open those screens. The buttons stand in one column while they fit, then in a grid of two per row; when even the grid doesn't fit (five rows: ten buttons), the menu has pages side by side: swipe left or right, and dots under it show which page is shown (with eleven buttons, **System** is on the second page).
 - **Players**: the **Players** screen lists everyone who plays on the board, with their solved puzzles and solves. Tap a player to play as them; **Add player** and **Rename** ask for a name on an on-screen keyboard (names are unique, ignoring case). The red trash button deletes a player with their statistics, solve history and game in progress, after a confirmation; the last player can't be deleted, and deleting the one playing hands over to the first player left. Each player has their own statistics and their own game in progress, and every solve records who solved it. The Statistics screen has a player dropdown at the top right (person icon and name): it shows whose statistics these are, and picking another player switches to them. Players are kept in `sudoku.db`; without a card there is just one player.
 - **History**: **History** on the home screen shows a calendar (‹ › change the month). Days on which anyone finished a puzzle or started one that is still in progress are highlighted. A small orange badge on each highlighted day shows how many games that was (puzzles solved plus games in progress started that day). Tap a day for who played what: player, level and puzzle number, time taken, mistakes, hints, and when it was started and solved (or "in progress"). Dates are local, in the time zone from Settings, and come from `sudoku.db`; solves from before the clock was set (Wi-Fi/NTP) have no date and don't appear.
 - **New puzzle (generator)**: besides the 1600 built-in puzzles, **Puzzles → New puzzle** makes a fresh one on the board at the level you pick. It fills a random complete grid, then takes clues away in symmetric pairs as long as exactly one solution remains, and grades the result the way a person would solve it: **Easy** and **Medium** need only singles (Easy keeps 36 or more clues), **Hard** needs locked candidates (pointing/claiming) or naked/hidden pairs, **Expert** needs more than that. It takes well under a second; if a level can't be hit after many tries, you get the closest one and a note saying so. **Next** in the "Solved!" dialog makes another one of the same level. Generated puzzles are named "Generated Hard #12" and so on, are saved in `sudoku.db` (table `generated`), and work everywhere the built-in ones do: continue, History, Gameplays, Replay and MP4 export. They don't count in the per-level tables on the Statistics screen. Without a microSD card they last until power-off.
@@ -115,7 +115,7 @@ The System monitor's tabs are at the [end of this page](#system-monitor-tabs); S
 
 ## Home menu, second page
 
-With **Continue** showing there are eleven buttons: the menu turns into pages. Swipe left for **System**.
+There are eleven buttons: the menu turns into pages. Swipe left for **System**.
 
 | **Home, page 2** |
 |---|
@@ -123,7 +123,7 @@ With **Continue** showing there are eleven buttons: the menu turns into pages. S
 
 ## System monitor tabs
 
-**System** on the home screen (the menu's second page while **Continue** shows), refreshed every second (see **System monitor** above).
+**System** on the home screen (the menu's second page), refreshed every second (see **System monitor** above).
 
 | **System** | **Memory** |
 |---|---|

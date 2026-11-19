@@ -4402,13 +4402,21 @@ static void refresh_home(void)
     uint32_t ms = s->id != STORE_NO_GAME ? s->elapsed_ms : (s_ngames ? s_games[0].elapsed_ms : 0);
     int others = 0;
     for (int i = 0; i < s_ngames; i++) others += s_games[i].puzzle != last;
-    lv_obj_set_hidden(h_continue, last == STORE_NO_GAME);
-    if (last != STORE_NO_GAME) {
+    /* Continue stays in its place: greyed out (like Daily puzzle without the clock) when
+     * there is nothing to continue, so the menu doesn't shift around */
+    bool any = last != STORE_NO_GAME;
+    lv_obj_set_state(h_continue, LV_STATE_DISABLED, !any);
+    lv_obj_set_style_bg_color(h_continue, any ? C_LIST_ACTIVE : C_CARD, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(h_continue, 0), any ? lv_color_white() : C_TEXT, 0);
+    lv_obj_set_style_text_color(h_continue_sub, any ? lv_color_white() : C_MUTED, 0);
+    if (any) {
         char name[40], t[16];
         puzzle_name(last, name, sizeof(name));
         fmt_time(t, sizeof(t), ms / 1000);
         if (others) lv_label_set_text_fmt(h_continue_sub, "%s  -  %s   (+%d more)", name, t, others);
         else lv_label_set_text_fmt(h_continue_sub, "%s  -  %s", name, t);
+    } else {
+        lv_label_set_text(h_continue_sub, "No game in progress");
     }
     daily_btn_update();
     if (stats_db_ready()) stats_db_query_achievements();   /* the Trophies line (trophy_poll) */
@@ -7537,8 +7545,10 @@ static void build_home(void)
     lv_obj_t *pb = home_btn(menu, SYMBOL_USER "  Players", profile_cb, &h_player);   /* sub: "Playing as ..." */
     lv_obj_set_style_text_font(lv_obj_get_child(pb, 0), &font_icons_24, 0);
 
-    /* hidden when there is no game in progress; the flex column closes up */
+    /* greyed out when there is no game in progress (refresh_home) */
     h_continue = home_btn(menu, LV_SYMBOL_PLAY "  Continue", continue_cb, &h_continue_sub);
+    lv_obj_set_style_bg_opa(h_continue, LV_OPA_40, LV_STATE_DISABLED);    /* as Daily puzzle's */
+    lv_obj_set_style_text_opa(h_continue, LV_OPA_40, LV_STATE_DISABLED);
     lv_obj_set_style_bg_color(h_continue, C_LIST_ACTIVE, 0);
     lv_obj_set_style_text_color(lv_obj_get_child(h_continue, 0), lv_color_white(), 0);
     lv_obj_set_style_text_color(h_continue_sub, lv_color_white(), 0);
