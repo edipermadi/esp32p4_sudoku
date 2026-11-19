@@ -33,6 +33,8 @@
 | Accent colour                   | **Settings → Accent colour**                     |
 | A player's colour               | Tap the dot by their name on **Players**         |
 | Practise a technique            | **Puzzles → Learn**                              |
+| Bigger digits on the board      | **Settings → Display → Digit size** → Large      |
+| This week against last week     | Tap the "puzzles solved" line on the home screen  |
 | Number pad on the left          | **Settings → Game → Left-handed**                |
 | Save a screenshot               | The picture button in the Solved dialog or on Replay |
 | See where your mistakes are     | **Statistics → Insights**                        |

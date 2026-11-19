@@ -44,7 +44,7 @@ typedef enum {
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
     CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
-    CMD_LEARNED, CMD_INSIGHTS,
+    CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -147,6 +147,8 @@ static stats_board_t *s_board;       /* CMD_BOARD result (PSRAM, like the ones b
 static bool s_board_new;
 static stats_achievements_t *s_ach;  /* CMD_ACH result */
 static stats_insights_t *s_ins;      /* CMD_INSIGHTS result */
+static stats_weeksum_t s_wks;        /* CMD_WEEKSUM result */
+static bool s_wks_new;
 static bool s_ins_new;
 static bool s_ach_new;
 static char s_unlocked[160];         /* titles unlocked by the last solve */
@@ -580,6 +582,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "cvd")) p->cvd = v != 0;
             else if (!strcmp(k, "no_notes")) p->no_notes = v != 0;
             else if (!strcmp(k, "left_hand")) p->left_hand = v != 0;
+            else if (!strcmp(k, "big_digits")) p->big_digits = v != 0;
             else if (!strcmp(k, "night_mode")) p->night_mode = v != 0;
             else if (!strcmp(k, "night_start")) p->night_start = v >= 0 && v < 24 ? v : 22;
             else if (!strcmp(k, "night_end")) p->night_end = v >= 0 && v < 24 ? v : 7;
@@ -750,6 +753,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("cvd", false, p->cvd, NULL);
     set_setting("no_notes", false, p->no_notes, NULL);
     set_setting("left_hand", false, p->left_hand, NULL);
+    set_setting("big_digits", false, p->big_digits, NULL);
     set_setting("night_mode", false, p->night_mode, NULL);
     set_setting("night_start", false, p->night_start, NULL);
     set_setting("night_end", false, p->night_end, NULL);
@@ -968,6 +972,35 @@ static void do_solve(const cmd_t *c)
     } else {
         exec("ROLLBACK");
     }
+}
+
+static void do_weeksum(void)
+{
+    stats_weeksum_t w;
+    memset(&w, 0, sizeof(w));
+    sqlite3_stmt *st;
+    /* a week = its Monday: 'weekday 0' moves to the Sunday that ends it, '-6 days' back to Monday */
+    if (s_db && sqlite3_prepare_v2(s_db,
+            "SELECT wk != date('now', 'localtime', 'weekday 0', '-6 days'), COUNT(*), MIN(seconds), AVG(seconds),"
+            "       AVG(mistakes) * 10, TOTAL(hints) FROM ("
+            "  SELECT date(finished_at, 'unixepoch', 'localtime', 'weekday 0', '-6 days') AS wk, seconds, mistakes,"
+            "         hints FROM solves WHERE player_id = ?1 AND finished_at IS NOT NULL)"
+            " WHERE wk >= date('now', 'localtime', 'weekday 0', '-13 days') GROUP BY 1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            int k = sqlite3_column_int(st, 0) ? 1 : 0;
+            w.n[k] = sqlite3_column_int(st, 1);
+            w.best[k] = (uint32_t)sqlite3_column_int64(st, 2);
+            w.avg[k] = (uint32_t)(sqlite3_column_double(st, 3) + 0.5);
+            w.mist10[k] = (uint16_t)(sqlite3_column_double(st, 4) + 0.5);
+            w.hints[k] = (uint32_t)sqlite3_column_int64(st, 5);
+        }
+        sqlite3_finalize(st);
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_wks = w;
+    s_wks_new = true;
+    xSemaphoreGive(s_lock);
 }
 
 static void do_insights(void)
@@ -1731,7 +1764,7 @@ static const ach_def_t ACH[] = {
     /* techniques: solves.flags bit k = a hint showed technique k (TECH_X_WING 10, TECH_SWORDFISH 11,
      * TECH_XY_WING 12); learned = Learn practices finished */
     {"graduate", "Graduate", "Finish a Learn practice of all ten techniques (place the digit each leads to).", 10,
-     ACH_UNIT_COUNT, "SELECT COUNT(DISTINCT technique) FROM learned WHERE player_id = ?1"},
+     ACH_UNIT_COUNT, "SELECT COUNT(DISTINCT technique) FROM learned WHERE player_id = ?1 AND technique < 10"},
     {"fish", "Gone fishing", "Solve a puzzle where a hint showed an X-Wing or a Swordfish.", 1, ACH_UNIT_COUNT,
      "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND (flags & 3072) != 0"},
     {"wing", "On a wing", "Solve a puzzle where a hint showed an XY-Wing.", 1, ACH_UNIT_COUNT,
@@ -2599,6 +2632,9 @@ static void worker(void *arg)
         case CMD_INSIGHTS:
             do_insights();
             break;
+        case CMD_WEEKSUM:
+            do_weeksum();
+            break;
         case CMD_GAME:
             flush_game();
             break;
@@ -2793,6 +2829,23 @@ bool stats_db_take_prefs(store_prefs_t *out)
     bool fresh = s_prefs_new;
     if (fresh) *out = s_prefs_out;
     s_prefs_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
+}
+
+void stats_db_query_weeksum(void)
+{
+    cmd_t c = {.type = CMD_WEEKSUM};
+    send(&c);
+}
+
+bool stats_db_take_weeksum(stats_weeksum_t *out)
+{
+    if (!s_lock) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_wks_new;
+    if (fresh) *out = s_wks;
+    s_wks_new = false;
     xSemaphoreGive(s_lock);
     return fresh;
 }

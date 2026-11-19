@@ -149,6 +149,17 @@ bool stats_db_load_game(uint16_t puzzle, saved_game_t *out);
  * started_at: Unix time it was opened, 0 = unknown. */
 void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,
                            int64_t started_at, const game_move_t *moves, int nmoves, uint32_t flags);
+/* The current player's week (Monday to Sunday, local time) and the one before:
+ * [0] this week, [1] last week. Needs the clock (solves' finished_at). */
+typedef struct {
+    int n[2];                            /* puzzles solved */
+    uint32_t best[2], avg[2];            /* seconds (0: none) */
+    uint16_t mist10[2];                  /* mistakes per puzzle, x10 */
+    uint32_t hints[2];
+} stats_weeksum_t;
+void stats_db_query_weeksum(void);
+bool stats_db_take_weeksum(stats_weeksum_t *out);
+
 /* Mistake insights (Statistics): from the move logs of the current player's last
  * STATS_INSIGHT_SOLVES solves (9x9 ones). A solved game's last board is its solution,
  * so a digit placed by hand that isn't the cell's last one was a mistake. */

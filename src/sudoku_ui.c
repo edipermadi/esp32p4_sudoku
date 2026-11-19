@@ -91,6 +91,8 @@ static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
 #define SLEEP_COUNT   (sizeof(SLEEP_MIN) / sizeof(SLEEP_MIN[0]))
 
 LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
+LV_FONT_DECLARE(font_digits_52)   /* the same, larger (Settings > Display > Digit size) */
+#define DIGIT_FONT (store_big_digits() ? &font_digits_52 : &font_digits_44)
 LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
 LV_FONT_DECLARE(font_icons_24)    /* the two icons below + Montserrat 24 as fallback */
 LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
@@ -334,6 +336,8 @@ static lv_obj_t *st_night_bright_lbl;
 
 static void game_layout(void);
 
+static void big_digits_dd_cb(lv_event_t *e);
+
 static void left_hand_sw_cb(lv_event_t *e)
 {
     store_set_left_hand(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
@@ -418,10 +422,12 @@ static void show_list(void);
 static void open_puzzle(uint16_t id);
 /* Learn: the techniques there are practice puzzles for */
 enum { LEARN_HIDDEN = 0, LEARN_NAKED, LEARN_POINTING, LEARN_CLAIMING, LEARN_NAKED_PAIR, LEARN_HIDDEN_PAIR,
-       LEARN_NAKED_TRIPLE, LEARN_X_WING, LEARN_SWORDFISH, LEARN_XY_WING, LEARN_COUNT };
+       LEARN_NAKED_TRIPLE, LEARN_X_WING, LEARN_SWORDFISH, LEARN_XY_WING,
+       LEARN_CAGE, LEARN_THERMO, LEARN_SANDWICH, LEARN_CONSEC, LEARN_COUNT };   /* (the last four: variant rules) */
 static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
                                                      "Naked pair", "Hidden pair", "Naked triple", "X-Wing",
-                                                     "Swordfish", "XY-Wing"};
+                                                     "Swordfish", "XY-Wing", "Killer cage", "Thermometer",
+                                                     "Sandwich clue", "Consecutive bars"};
 static void daily_kind_text(int variant, int level, char *buf, size_t n);
 /* the current player's unfinished games in sudoku.db (most recent first), refreshed with the list and home */
 static stats_game_row_t s_games[STATS_MAX_GAMES];
@@ -1435,7 +1441,9 @@ static void cell_draw_cb(lv_event_t *e)
     int vpitch = pitch;
     lv_draw_label_dsc_t d;
     lv_draw_label_dsc_init(&d);
-    d.font = size >= 80 ? &lv_font_montserrat_22 : &lv_font_montserrat_16;
+    const bool big = store_big_digits();            /* (Digit size: Large) */
+    d.font = size >= 80 ? (big ? &lv_font_montserrat_24 : &lv_font_montserrat_22)
+                        : (big ? &lv_font_montserrat_18 : &lv_font_montserrat_16);
     if (g_geo->ncages) {                            /* Killer: smaller, below the cage sum in the corner */
         d.font = &lv_font_montserrat_12;
         y0 = 13;
@@ -2785,7 +2793,7 @@ static void build_game(void)
         lv_obj_add_event_cb(cell, cell_click_cb, LV_EVENT_PRESSED, (void *)(intptr_t)i);
         lv_obj_add_event_cb(cell, cell_long_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);   /* colours, cage sums */
         lv_obj_add_event_cb(cell, cell_draw_cb, LV_EVENT_DRAW_MAIN_END, (void *)(intptr_t)i);
-        lv_obj_t *l = make_label(cell, &font_digits_44, C_TEXT);
+        lv_obj_t *l = make_label(cell, DIGIT_FONT, C_TEXT);
         lv_obj_center(l);
         g_cells[i] = cell;
         g_cell_lbl[i] = l;
@@ -3379,7 +3387,7 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
         lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
         lv_obj_set_scrollable(cell, false);
         rp_cells[i] = cell;
-        rp_lbl[i] = make_label(cell, &font_digits_44, C_TEXT);
+        rp_lbl[i] = make_label(cell, DIGIT_FONT, C_TEXT);
         lv_obj_center(rp_lbl[i]);
     }
     lv_obj_t *clues[18];
@@ -3800,9 +3808,11 @@ static void gen_poll_cb(lv_timer_t *t)
 }
 
 /* seed 0 = a random puzzle; a daily one (always classic) has its date as the seed and day set */
+static lv_timer_t *learn_timer;                     /* (Learn: its variant lessons use the generator too) */
+
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
 {
-    if (gen_timer) return;                           /* one at a time */
+    if (gen_timer || learn_timer) return;            /* one at a time */
     if (!gen_board && !(gen_board = heap_caps_malloc(sizeof(*gen_board), MALLOC_CAP_SPIRAM))) return;
     if (!gen_cages && !(gen_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return;
     if (!gen_thermos && !(gen_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) return;
@@ -4072,7 +4082,34 @@ static const char *const LEARN_DESC[LEARN_COUNT] = {
     "In two rows a digit fits only the same two columns: it can't be elsewhere in those columns.",
     "The same with three rows and three columns (or three columns and three rows).",
     "A cell that is x or y sees an x-or-z and a y-or-z cell: one of those is z, so what sees both isn't.",
+    "A cage's sum allows only some sets of digits: with what's around it, its cells narrow down.",
+    "Digits rise from the bulb: each cell lies between what the cells before and after it can be.",
+    "The sum between a row's 1 and 9 leaves the 1 and the 9 only a few places in that row or column.",
+    "A bar: the two cells differ by 1. No bar: they don't. Both narrow down a cell's digits.",
 };
+
+/* the variant lessons: a new puzzle of that variant (made on the spot, kept in RAM only) */
+static int learn_variant(int target)
+{
+    switch (target) {
+    case LEARN_CAGE:     return VAR_KILLER;
+    case LEARN_THERMO:   return VAR_THERMO;
+    case LEARN_SANDWICH: return VAR_SANDWICH;
+    case LEARN_CONSEC:   return VAR_CONSEC;
+    }
+    return -1;
+}
+
+static int learn_variant_tech(int target)
+{
+    switch (target) {
+    case LEARN_CAGE:     return TECH_CAGE;
+    case LEARN_THERMO:   return TECH_THERMO;
+    case LEARN_SANDWICH: return TECH_SANDWICH;
+    case LEARN_CONSEC:   return TECH_CONSEC;
+    }
+    return TECH_NONE;
+}
 
 /* the techniques that sudoku_step_with() finds a lesson position for (the newer, rarer ones:
  * the hint engine seldom reaches them first, so any position where they open a single will do) */
@@ -4130,11 +4167,50 @@ static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudo
     return false;
 }
 
+/* a variant lesson's puzzle, for learn_poll_cb to put in the RAM cache */
+static uint8_t learn_givens[81];
+static sudoku_geom_t *learn_board;                  /* PSRAM */
+static char *learn_cages, *learn_thermos;           /* PSRAM */
+static char learn_marks[82];
+
+static int learn_variant_find(int target)
+{
+    static uint8_t vals[81], sol[81];
+    const int var = learn_variant(target), tech = learn_variant_tech(target);
+    for (int tries = 0; tries < 6; tries++) {      /* most puzzles have one early; a few seconds each at most */
+        gen_level_t got;
+        if (!sudoku_generate(var, GEN_MEDIUM, esp_random(), learn_givens, learn_board, &got)) continue;
+        if (!sudoku_solve(learn_board, learn_givens, sol)) continue;
+        memcpy(vals, learn_givens, 81);
+        for (int step = 0; step < 81; step++) {
+            sudoku_step_t st;
+            if (!sudoku_next_step(learn_board, vals, sol, &st) || st.cell < 0) break;
+            if (st.tech.kind == tech) {
+                memcpy(learn_vals, vals, 81);
+                learn_step = st;
+                learn_cages[0] = learn_marks[0] = learn_thermos[0] = 0;
+                if (var == VAR_KILLER) sudoku_cages_text(learn_board, learn_cages, STATS_CAGES_LEN);
+                if (var == VAR_CONSEC) sudoku_marks_text(learn_board, learn_marks, sizeof(learn_marks));
+                if (var == VAR_SANDWICH) sudoku_sandwich_text(learn_board, learn_marks, sizeof(learn_marks));
+                if (var == VAR_THERMO) sudoku_thermos_text(learn_board, learn_thermos, STATS_THERMOS_LEN);
+                return 1;
+            }
+            vals[st.cell] = (uint8_t)st.digit;      /* on to the next step */
+        }
+    }
+    return 2;
+}
+
 static void learn_task(void *arg)
 {
     static uint8_t vals[81], sol[81];
     const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
     const int target = learn_target;
+    if (learn_variant(target) >= 0) {
+        learn_state = learn_variant_find(target);
+        vTaskDelete(NULL);
+        return;
+    }
     /* the harder collections first for the harder techniques */
     uint32_t r = esp_random();
     int found = 0;
@@ -4178,12 +4254,19 @@ static void learn_poll_cb(lv_timer_t *t)
         return;
     }
     /* the puzzle, at that point, as a practice game */
+    int var = learn_variant(learn_target);
+    if (var >= 0) {                                 /* made just now: kept in RAM only, as without a card */
+        learn_id = s_gen_ram_next++;
+        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+        gen_cache_put(learn_id, var, GEN_MEDIUM, learn_givens, NULL, var == VAR_KILLER ? learn_cages : NULL,
+                      learn_marks[0] ? learn_marks : NULL, learn_thermos[0] ? learn_thermos : NULL, NULL);
+    }
     start_game(learn_id, false);
     g_practice = learn_target;
     g_flags = 0;                                    /* (practice: never the no-notes challenge) */
     challenge_ui();
     uint8_t given[81];
-    puzzle_load(learn_id, given);
+    puzzle_get(learn_id, given);
     for (int i = 0; i < 81; i++) {
         if (!given[i]) g_b.val[i] = learn_vals[i];
     }
@@ -4202,12 +4285,22 @@ static void learn_pick_cb(lv_event_t *e)
     if (learn_box) lv_msgbox_close_async(learn_box);
     learn_box = NULL;
     if (learn_timer) return;
+    char text[120];
+    if (learn_variant(target) >= 0) {
+        if (gen_timer) return;                      /* New puzzle is using the generator (one at a time) */
+        if (!learn_board && !(learn_board = heap_caps_malloc(sizeof(*learn_board), MALLOC_CAP_SPIRAM))) return;
+        if (!learn_cages && !(learn_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return;
+        if (!learn_thermos && !(learn_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) return;
+        snprintf(text, sizeof(text), "Making a %s puzzle where the next step uses its rule...",
+                 VARIANT_NAMES[learn_variant(target)]);
+    } else {
+        snprintf(text, sizeof(text), "Finding a puzzle where the next step is a %s...", LEARN_NAMES[target]);
+    }
     learn_target = target;
     learn_state = 0;
-    char text[96];
-    snprintf(text, sizeof(text), "Finding a puzzle where the next step is a %s...", LEARN_NAMES[target]);
     learn_wait = make_msgbox(LV_SYMBOL_EYE_OPEN "  Learn", text);
-    if (xTaskCreatePinnedToCore(learn_task, "learn", 8192, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
+    /* 16 KB: the variant lessons run the generator (as gen_task); 8 KB overflowed */
+    if (xTaskCreatePinnedToCore(learn_task, "learn", 16384, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
         lv_msgbox_close(learn_wait);
         learn_wait = NULL;
         return;
@@ -4233,6 +4326,11 @@ static void learn_cb(lv_event_t *e)
                    "Pick one: a puzzle opens where it's the next step, with the hint showing where to look. "
                    "Practice games aren't saved or counted.");
     for (int i = 0; i < LEARN_COUNT; i++) {
+        if (i == LEARN_CAGE) {                      /* the variants' own rules: a heading over them */
+            lv_obj_t *hd = make_wrap_text(c, &lv_font_montserrat_16, C_MUTED,
+                                          "Variant rules: a new puzzle of that kind is made (a few seconds).");
+            lv_obj_set_style_margin_top(hd, 14, 0);
+        }
         lv_obj_t *row = make_btn(c, 0, 0, 0, 86, NULL, NULL, learn_pick_cb, (void *)(intptr_t)i);   /* 2 lines */
         lv_obj_set_width(row, LV_PCT(100));
         lv_obj_set_style_bg_color(row, C_CARD2, 0);
@@ -4669,13 +4767,103 @@ static void home_layout(void)
     home_dots();
 }
 
+/* ------------------------------------------------------------- the week (Home) */
+/* The "puzzles solved" line also says how this week is going; a tap compares it
+ * with last week (stats_db_query_weeksum: needs the clock, so only once it's set). */
+static stats_weeksum_t h_week;
+static bool h_week_ok;
+static unsigned h_total_n;
+
+static void home_total_text(void)
+{
+    char t[16], line[128];
+    int len = snprintf(line, sizeof(line), "%u of %u puzzles solved", h_total_n, (unsigned)PUZZLE_COUNT);
+    if (h_week_ok) {
+        len += snprintf(line + len, sizeof(line) - len, "   -   this week: %d", h_week.n[0]);
+        if (h_week.n[0]) {
+            fmt_time(t, sizeof(t), h_week.best[0]);
+            len += snprintf(line + len, sizeof(line) - len, ", best %s", t);
+        }
+        snprintf(line + len, sizeof(line) - len, "  " LV_SYMBOL_RIGHT);
+    }
+    lv_label_set_text(h_total, line);
+}
+
+static void week_row(lv_obj_t *parent, const char *name, const char *a, const char *b, bool head)
+{
+    lv_obj_t *r = lv_obj_create(parent);
+    lv_obj_remove_style_all(r);
+    lv_obj_set_size(r, LV_PCT(100), 34);
+    const lv_font_t *f = &lv_font_montserrat_18;
+    lv_obj_t *l = make_label(r, f, head ? C_MUTED : C_TEXT);
+    lv_label_set_text(l, name);
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *x = make_label(r, f, head ? C_MUTED : C_TEXT);
+    lv_label_set_text(x, a);
+    lv_obj_align(x, LV_ALIGN_RIGHT_MID, -150, 0);
+    lv_obj_t *y = make_label(r, f, C_MUTED);
+    lv_label_set_text(y, b);
+    lv_obj_align(y, LV_ALIGN_RIGHT_MID, 0, 0);
+}
+
+static void week_cb(lv_event_t *e)
+{
+    if (!h_week_ok) return;
+    const stats_weeksum_t *w = &h_week;
+    lv_obj_t *m = make_msgbox(SYMBOL_CALENDAR "  This week", NULL);
+    lv_obj_set_width(m, 600);
+    lv_obj_set_style_text_font(lv_msgbox_get_header(m), &font_icons_20, 0);
+    lv_obj_t *c = lv_msgbox_get_content(m);
+    lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
+    char a[24], b[24];
+    week_row(c, "", "This week", "Last week", true);
+    snprintf(a, sizeof(a), "%d", w->n[0]); snprintf(b, sizeof(b), "%d", w->n[1]);
+    week_row(c, "Solved", a, b, false);
+    for (int k = 0; k < 2; k++) {
+        char *o = k ? b : a;
+        if (w->n[k]) fmt_time(o, 24, w->best[k]); else snprintf(o, 24, "-");
+    }
+    week_row(c, "Fastest", a, b, false);
+    for (int k = 0; k < 2; k++) {
+        char *o = k ? b : a;
+        if (w->n[k]) fmt_time(o, 24, w->avg[k]); else snprintf(o, 24, "-");
+    }
+    week_row(c, "Average time", a, b, false);
+    for (int k = 0; k < 2; k++) {
+        char *o = k ? b : a;
+        if (w->n[k]) snprintf(o, 24, "%u.%u", w->mist10[k] / 10, w->mist10[k] % 10); else snprintf(o, 24, "-");
+    }
+    week_row(c, "Mistakes per puzzle", a, b, false);
+    snprintf(a, sizeof(a), "%lu", (unsigned long)w->hints[0]); snprintf(b, sizeof(b), "%lu", (unsigned long)w->hints[1]);
+    week_row(c, "Hints", a, b, false);
+    char verdict[128] = "";
+    if (w->n[0] && w->n[1]) {
+        int dm = (int)w->mist10[1] - (int)w->mist10[0];
+        int dt = (int)w->avg[1] - (int)w->avg[0];
+        char t[16];
+        fmt_time(t, sizeof(t), (uint32_t)(dt < 0 ? -dt : dt));
+        snprintf(verdict, sizeof(verdict), "%s%d.%d %s mistakes per puzzle, and %s %s on average than last week.",
+                 "", (dm < 0 ? -dm : dm) / 10, (dm < 0 ? -dm : dm) % 10, dm >= 0 ? "fewer" : "more",
+                 t, dt >= 0 ? "faster" : "slower");
+    } else if (w->n[0]) {
+        snprintf(verdict, sizeof(verdict), "Nothing solved last week to compare with.");
+    } else {
+        snprintf(verdict, sizeof(verdict), "Nothing solved yet this week: the week starts on Monday.");
+    }
+    lv_obj_t *v = make_wrap_text(c, &lv_font_montserrat_18, C_ACCENT, verdict);
+    lv_obj_set_style_margin_top(v, 10, 0);
+    msgbox_button(m, "Close", mbox_close_cb, false);
+}
+
 static void refresh_home(void)
 {
     uint16_t total = 0;
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
         total += store_solved_count(puzzle_collections[c].first, puzzle_collections[c].count);
     }
-    lv_label_set_text_fmt(h_total, "%u of %u puzzles solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
+    h_total_n = total;
+    home_total_text();
+    if (stats_db_ready() && time(NULL) > 1700000000) stats_db_query_weeksum();   /* (clock_cb picks it up) */
     lv_label_set_text_fmt(h_player, "Playing as %s", store_player_name());
 
     const saved_game_t *s = store_saved_game();
@@ -4832,6 +5020,11 @@ static void clock_cb(lv_timer_t *t)
     if (strcmp(key, daily_key) != 0) {
         strcpy(daily_key, key);
         daily_btn_update();
+        if (valid && stats_db_ready()) stats_db_query_weeksum();   /* the clock is set, or a new day */
+    }
+    if (stats_db_take_weeksum(&h_week)) {
+        h_week_ok = valid;
+        home_total_text();
     }
     if (valid) {
         struct tm tm;
@@ -7801,6 +7994,9 @@ static void build_home(void)
     lv_label_set_text(t, "Sudoku");
     h_total = make_label(col, &lv_font_montserrat_16, C_MUTED);
     lv_obj_set_style_margin_bottom(h_total, 22, 0);
+    lv_obj_set_clickable(h_total, true);                 /* the week, compared with the last (week_cb) */
+    lv_obj_set_ext_click_area(h_total, 12);
+    lv_obj_add_event_cb(h_total, week_cb, LV_EVENT_CLICKED, NULL);
 
     /* the menu: one column, a grid, or pages of the grid to swipe (home_layout) */
     h_menu = lv_obj_create(col);
@@ -8056,6 +8252,15 @@ static void st_close_lists_cb(lv_event_t *e)
     if (st_tz_dd) lv_dropdown_close(st_tz_dd);
 }
 
+static void big_digits_dd_cb(lv_event_t *e)
+{
+    store_set_big_digits(lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1);
+    for (int i = 0; i < 81; i++) {                  /* the game's board now (Replay: when it opens) */
+        if (g_cell_lbl[i]) lv_obj_set_style_text_font(g_cell_lbl[i], DIGIT_FONT, 0);
+        if (g_cells[i]) lv_obj_invalidate(g_cells[i]);   /* (the pencil marks too) */
+    }
+}
+
 static void sysmon_open_cb(lv_event_t *e)
 {
     lv_screen_load(scr_sysmon);
@@ -8151,6 +8356,9 @@ static void build_settings(void)
 
     r = settings_row(col, "Colour-blind friendly", "Orange-red and blue-green in place of red and green");
     settings_switch(r, store_cvd(), cvd_sw_cb);
+
+    r = settings_row(col, "Digit size", "The board's digits and pencil marks");
+    settings_dropdown(r, "Normal\nLarge", store_big_digits() ? 1 : 0, 150, big_digits_dd_cb);
 
     r = settings_row(col, "Brightness", "Screen backlight");
     st_bright_sl = settings_slider(r, 10, 100, store_brightness(), bright_sl_cb, &st_bright_lbl);

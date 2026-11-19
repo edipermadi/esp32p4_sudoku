@@ -42,6 +42,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .cvd = false,
     .no_notes = false,
     .left_hand = false,
+    .big_digits = false,
     .night_mode = false,
     .night_start = 22,
     .night_end = 7,
@@ -410,6 +411,17 @@ void store_set_left_hand(bool on)
 {
     s_p.left_hand = on;
     stats_db_set_int("left_hand", on);
+}
+
+bool store_big_digits(void)
+{
+    return s_p.big_digits;
+}
+
+void store_set_big_digits(bool on)
+{
+    s_p.big_digits = on;
+    stats_db_set_int("big_digits", on);
 }
 
 bool store_night_mode(void)
