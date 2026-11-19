@@ -1,6 +1,6 @@
 /*
- * LVGL v9 port: partial rendering into two PSRAM draw buffers, copied to the
- * DPI frame buffer by DMA2D. Flush completion is signalled from the DPI
+ * LVGL v9 port: partial rendering into two full-screen PSRAM draw buffers, copied
+ * to the DPI frame buffer by DMA2D. Flush completion is signalled from the DPI
  * "color transfer done" callback, as in ESP-IDF's mipi_dsi LVGL example.
  *
  * Rotation (lv_display_set_rotation): LVGL renders in the rotated coordinate
@@ -18,7 +18,19 @@
 
 static const char *TAG = "bsp_lvgl";
 
-#define DRAW_BUF_LINES 80
+/* Draw buffers: lines per strip, and where (1 = internal SRAM, 0 = PSRAM). Overridable
+ * with -D for measuring (devctl "bench"). The whole screen: LVGL walks the objects and
+ * lays out the text once per strip, and on this board that costs more than the pixels.
+ * Full-screen redraws measured (bench, PPA on): 80-line strips 30-64 ms per frame,
+ * 240 lines 27-54 ms, the whole screen 26-48 ms (13-33 % less than 80 lines); smaller
+ * strips in internal SRAM were slower still (20 lines: up to 106 ms) and take the
+ * internal RAM MP4 export needs. Costs 2 x 1 MB of PSRAM (and the rotation buffer). */
+#ifndef DRAW_BUF_LINES
+#define DRAW_BUF_LINES BSP_LCD_V_RES
+#endif
+#ifndef DRAW_BUF_INTERNAL
+#define DRAW_BUF_INTERNAL 0
+#endif
 
 static void *s_rot_buf;                 /* rotated copy of the strip being flushed */
 
@@ -108,8 +120,10 @@ esp_err_t bsp_lvgl_start(void)
     lv_display_set_flush_cb(disp, lvgl_flush_cb);
 
     size_t buf_bytes = BSP_LCD_H_RES * DRAW_BUF_LINES * (BSP_LCD_BITS_PER_PIXEL / 8);
-    void *buf1 = heap_caps_aligned_alloc(64, buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    void *buf2 = heap_caps_aligned_alloc(64, buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    const uint32_t caps = DRAW_BUF_INTERNAL ? (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT)
+                                            : (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    void *buf1 = heap_caps_aligned_alloc(64, buf_bytes, caps);
+    void *buf2 = heap_caps_aligned_alloc(64, buf_bytes, caps);
     ESP_RETURN_ON_FALSE(buf1 && buf2, ESP_ERR_NO_MEM, TAG, "draw buffer alloc failed (PSRAM enabled?)");
     /* same size as a draw buffer: a strip has the same pixel count either way round */
     s_rot_buf = heap_caps_aligned_alloc(64, buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
