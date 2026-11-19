@@ -42,6 +42,7 @@ src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
 src/wifi_ui.c           Wi-Fi screen: networks, password keyboard
+src/file_ui.c           Files screen: browse, rename and delete on the card; sudoku.db protected
 src/sysmon_ui.c         system monitor screen: heap, flash, microSD, temperature, tasks, LVGL
 src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files

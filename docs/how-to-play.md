@@ -49,6 +49,7 @@
 | Time zone                       | **Settings → Time zone**                         |
 | Back up / restore `sudoku.db`  | **Settings → USB drive → Connect**; plug into USB OTG |
 | Format the microSD card         | **Settings → microSD card → Format**, confirm    |
+| Rename or delete a file on the card | **Settings → Data → Files**, then the pencil or the bin on its row |
 
 The small number on each pad button is how many of that digit are still to place. Red digits break a row, column or box rule. The puzzle is solved when every cell is filled and nothing is red. Each puzzle has exactly one solution, so the solution is always the intended one.
 

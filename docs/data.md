@@ -4,9 +4,11 @@
 
 Where the game keeps its data (`sudoku.db` on the microSD card), and the maintenance tools under **Settings → Data**.
 
-| **Settings → Data** | **System monitor → Storage** |
-|---|---|
-| ![Settings, Data tab](screenshots/settings-data.png) | ![System monitor, Storage tab](screenshots/sysmon-storage.png) |
+| **Settings → Data** | **Files** | **System monitor → Storage** |
+|---|---|---|
+| ![Settings, Data tab](screenshots/settings-data.png) | ![Files](screenshots/files.png) | ![System monitor, Storage tab](screenshots/sysmon-storage.png) |
+
+**Files** (Settings → Data) renames and deletes files on the card from the board itself; `sudoku.db` is locked there. See [Features](features.md) for the details.
 
 - **Game data on the microSD card**: statistics, the game in progress and the settings are kept in `sudoku.db`, a SQLite 3 database in the root of a FAT32 microSD card that is inserted at start-up. Nothing is written to the board's flash for them; only the Wi-Fi network and on/off switch stay on the board (NVS). At start-up the board shows "Starting..." while it opens the database (about a second), then builds the screens with its settings. The **Statistics** screen reads the database with SQL queries; the puzzle list, the home screen and "New best!" use a copy in RAM loaded at start-up. Without a card, the game runs on defaults and keeps changes, the game in progress and solves only until power-off; the "Solved!" dialog warns about this and Settings shows it under **microSD card**. A FAT32 card without `sudoku.db` (a new or empty card) gets a skeleton database at start-up: all tables, the current settings and the game in progress, and no statistics. The screens then show exactly what the database holds. A card without a FAT32 filesystem is not formatted automatically; Settings offers **Format**. (A database from a build before settings moved to the card gets the board's older statistics merged in once.) Open it on a computer with `sqlite3 sudoku.db`:
   - `players`: `id`, `name`, `created_at`, `color` (0–7; NULL = by id). Statistics and saved games that existed before players were added belong to player 1, "Player 1".

@@ -100,7 +100,12 @@ shot docs/screenshots/settings-display.png
 tap 638 98                  # the Data tab
 wait 400
 shot docs/screenshots/settings-data.png
-tap 300 604                 # System monitor
+tap 300 260                 # Files: the card's root
+wait 1500
+shot docs/screenshots/files.png
+tap 80 36                   # back to Settings (its Data tab)
+wait 500
+tap 300 685                 # System monitor (the Data tab's last row on screen)
 wait 2500
 tap 78 98                   # its System tab (it opens on the one used last)
 wait 1200

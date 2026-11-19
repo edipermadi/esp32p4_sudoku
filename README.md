@@ -25,7 +25,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 - **Helpers**: pencil marks, Auto notes, digit-first entry, cell colours, undo/redo, mistake check, step-by-step hints and a Learn mode for techniques.
 - **Players, statistics and trophies**: per-player progress, a history calendar, charts, achievements, daily and weekly leaderboards.
 - **Replays**: every solve can be played back, or exported as an H.264 MP4 video.
-- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, puzzle import, USB drive mode and firmware updates from the card.
+- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, puzzle import, a file manager (the database protected), USB drive mode and firmware updates from the card.
 - **Wi-Fi clock**, light and dark mode, accent colours, lock screen, screen-saver clock, synthesised sound effects and a system monitor.
 
 ## Documentation
