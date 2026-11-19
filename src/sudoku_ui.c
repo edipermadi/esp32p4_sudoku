@@ -3224,7 +3224,7 @@ static void history_replay_poll(void)
 #define RX_DIR        BSP_SD_MOUNT_POINT "/replays"
 
 static lv_display_t *rx_disp;
-static uint16_t *rx_fb;
+static uint8_t *rx_fb;              /* RGB888 (see video_enc.c: RGB565 gave the video a green cast) */
 static video_enc_t *rx_enc;
 static lv_timer_t *rx_timer;
 static int rx_frame, rx_frames, rx_last_k;
@@ -3365,7 +3365,7 @@ static void export_start(const stats_replay_t *r)
     mkdir(RX_DIR, 0775);                            /* fine if it exists */
     snprintf(rx_path, sizeof(rx_path), RX_DIR "/%s.mp4", file);
 
-    rx_fb = heap_caps_aligned_alloc(64, SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
+    rx_fb = heap_caps_aligned_alloc(64, SCR_W * SCR_W * 3, MALLOC_CAP_SPIRAM);
     rx_enc = rx_fb ? video_enc_open(rx_path, SCR_W, SCR_W, RX_FPS, rx_frames + 8) : NULL;
     if (!rx_enc) {
         printf("export: %s didn't open (frame buffer %s)\n", rx_path, rx_fb ? "ok" : "no memory");
@@ -3378,8 +3378,8 @@ static void export_start(const stats_replay_t *r)
     /* the Replay screen on an invisible display that renders into rx_fb */
     lv_display_t *main_disp = lv_display_get_default();
     rx_disp = lv_display_create(SCR_W, SCR_W);
-    lv_display_set_color_format(rx_disp, LV_COLOR_FORMAT_RGB565);
-    lv_display_set_buffers(rx_disp, rx_fb, NULL, SCR_W * SCR_W * 2, LV_DISPLAY_RENDER_MODE_FULL);
+    lv_display_set_color_format(rx_disp, LV_COLOR_FORMAT_RGB888);   /* (the encoder input: video_enc.c) */
+    lv_display_set_buffers(rx_disp, rx_fb, NULL, SCR_W * SCR_W * 3, LV_DISPLAY_RENDER_MODE_FULL);
     lv_display_set_flush_cb(rx_disp, rx_flush_cb);
     lv_display_set_theme(rx_disp, lv_display_get_theme(main_disp));
 #if LV_USE_PERF_MONITOR
