@@ -44,7 +44,7 @@ typedef enum {
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
     CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
-    CMD_LEARNED,
+    CMD_LEARNED, CMD_INSIGHTS,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -146,6 +146,8 @@ static bool s_plays_new;
 static stats_board_t *s_board;       /* CMD_BOARD result (PSRAM, like the ones below) */
 static bool s_board_new;
 static stats_achievements_t *s_ach;  /* CMD_ACH result */
+static stats_insights_t *s_ins;      /* CMD_INSIGHTS result */
+static bool s_ins_new;
 static bool s_ach_new;
 static char s_unlocked[160];         /* titles unlocked by the last solve */
 static stats_records_t *s_records;   /* CMD_RECORDS result (PSRAM) */
@@ -577,6 +579,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "saver_clock")) p->saver_clock = v != 0;
             else if (!strcmp(k, "cvd")) p->cvd = v != 0;
             else if (!strcmp(k, "no_notes")) p->no_notes = v != 0;
+            else if (!strcmp(k, "left_hand")) p->left_hand = v != 0;
             else if (!strcmp(k, "night_mode")) p->night_mode = v != 0;
             else if (!strcmp(k, "night_start")) p->night_start = v >= 0 && v < 24 ? v : 22;
             else if (!strcmp(k, "night_end")) p->night_end = v >= 0 && v < 24 ? v : 7;
@@ -746,6 +749,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("saver_clock", false, p->saver_clock, NULL);
     set_setting("cvd", false, p->cvd, NULL);
     set_setting("no_notes", false, p->no_notes, NULL);
+    set_setting("left_hand", false, p->left_hand, NULL);
     set_setting("night_mode", false, p->night_mode, NULL);
     set_setting("night_start", false, p->night_start, NULL);
     set_setting("night_end", false, p->night_end, NULL);
@@ -964,6 +968,47 @@ static void do_solve(const cmd_t *c)
     } else {
         exec("ROLLBACK");
     }
+}
+
+static void do_insights(void)
+{
+    static stats_insights_t *ip;
+    static game_move_t *mv;
+    if (!psram_buf((void **)&ip, sizeof(*ip)) || !psram_buf((void **)&s_ins, sizeof(*s_ins)) ||
+        !psram_buf((void **)&mv, sizeof(game_move_t) * GAME_MOVES_MAX)) return;
+    stats_insights_t *const in = ip;
+    memset(in, 0, sizeof(*in));
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db,
+            "SELECT s.moves FROM solves s LEFT JOIN generated g ON s.puzzle = 2000 + g.id"
+            " WHERE s.player_id = ?1 AND s.moves IS NOT NULL AND COALESCE(g.variant, 0) != 2"   /* (not 6x6) */
+            " ORDER BY s.id DESC LIMIT ?2", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_player);
+        sqlite3_bind_int(st, 2, STATS_INSIGHT_SOLVES);
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            int n = moves_unpack((const uint8_t *)sqlite3_column_blob(st, 0), sqlite3_column_bytes(st, 0), mv,
+                                 GAME_MOVES_MAX);
+            if (n <= 0) continue;
+            uint8_t last[81] = {0};                 /* the solved board (the cells the player filled) */
+            for (int i = 0; i < n; i++) last[mv[i].cell] = mv[i].digit;
+            in->solves++;
+            for (int i = 0; i < n; i++) {
+                const game_move_t *m = &mv[i];
+                if (m->kind != MOVE_HAND || !m->digit || !last[m->cell]) continue;   /* by hand, a digit */
+                in->placed++;
+                if (m->digit == last[m->cell]) continue;
+                in->wrong++;
+                in->by_digit[m->digit]++;
+                in->by_box[(m->cell / 27) * 3 + (m->cell % 9) / 3]++;
+                in->pair[m->digit][last[m->cell]]++;
+            }
+        }
+        sqlite3_finalize(st);
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    *s_ins = *in;
+    s_ins_new = true;
+    xSemaphoreGive(s_lock);
 }
 
 static void do_learned(int technique)
@@ -2551,6 +2596,9 @@ static void worker(void *arg)
         case CMD_LEARNED:
             do_learned(c.ival);
             break;
+        case CMD_INSIGHTS:
+            do_insights();
+            break;
         case CMD_GAME:
             flush_game();
             break;
@@ -2745,6 +2793,23 @@ bool stats_db_take_prefs(store_prefs_t *out)
     bool fresh = s_prefs_new;
     if (fresh) *out = s_prefs_out;
     s_prefs_new = false;
+    xSemaphoreGive(s_lock);
+    return fresh;
+}
+
+void stats_db_query_insights(void)
+{
+    cmd_t c = {.type = CMD_INSIGHTS};
+    send(&c);
+}
+
+bool stats_db_take_insights(stats_insights_t *out)
+{
+    if (!s_lock || !s_ins) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool fresh = s_ins_new;
+    if (fresh) *out = *s_ins;
+    s_ins_new = false;
     xSemaphoreGive(s_lock);
     return fresh;
 }

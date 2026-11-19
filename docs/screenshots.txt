@@ -52,6 +52,11 @@ wait 500
 tap 206 449                 # Statistics
 wait 1500
 shot docs/screenshots/statistics.png
+tap 453 98                  # Insights: mistakes, from the move logs
+wait 2000
+shot docs/screenshots/insights.png
+tap 360 650                 # Close
+wait 500
 tap 72 36                   # Home
 wait 500
 tap 206 260                 # Players

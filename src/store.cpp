@@ -41,6 +41,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .saver_clock = false,
     .cvd = false,
     .no_notes = false,
+    .left_hand = false,
     .night_mode = false,
     .night_start = 22,
     .night_end = 7,
@@ -398,6 +399,17 @@ void store_set_no_notes(bool on)
 {
     s_p.no_notes = on;
     stats_db_set_int("no_notes", on);
+}
+
+bool store_left_hand(void)
+{
+    return s_p.left_hand;
+}
+
+void store_set_left_hand(bool on)
+{
+    s_p.left_hand = on;
+    stats_db_set_int("left_hand", on);
 }
 
 bool store_night_mode(void)

@@ -58,12 +58,117 @@ static char s_scan_path[PATH_MAX_B];
 /* dialogs (top layer): rename with a keyboard, delete confirmation */
 static lv_obj_t *s_dlg, *s_dlg_title, *s_dlg_msg, *s_ta, *s_kb, *s_dlg_ok;
 static int s_dlg_idx = -1;
-static bool s_dlg_rename;
+enum { DLG_RENAME, DLG_TRASH, DLG_PURGE, DLG_EMPTY };
+static int s_dlg_mode;
+
+/* Recycle bin: deleting moves things into TRASH_DIR, named after where they were
+ * ("replays/a.mp4" -> "replays%2Fa.mp4", "%" -> "%25"; "2~" in front if that name is
+ * taken), so Restore can put them back. Deleting there, or Empty, removes them for good
+ * (by the job task: a folder can hold many files). */
+#define TRASH_NAME ".trash"
+#define TRASH_DIR  BSP_SD_MOUNT_POINT "/" TRASH_NAME
+static lv_obj_t *s_empty_btn;
+static volatile bool s_job_busy, s_job_done;
+static char s_job_path[PATH_MAX_B + NAME_MAX_B];   /* "" = every item in the bin */
+static char s_job_msg[96];
 
 /* ------------------------------------------------------------- helpers */
 static bool at_root(void)
 {
     return strcmp(s_path, BSP_SD_MOUNT_POINT) == 0;
+}
+
+static bool in_trash(void)
+{
+    return strcmp(s_path, TRASH_DIR) == 0;
+}
+
+/* "replays/a.mp4" -> "replays%2Fa.mp4"; false if it doesn't fit a FAT name */
+static bool trash_encode(const char *rel, char *out, size_t n)
+{
+    size_t k = 0;
+    for (const char *p = rel; *p; p++) {
+        const char *put = *p == '/' ? "%2F" : (*p == '%' ? "%25" : NULL);
+        size_t need = put ? 3 : 1;
+        if (k + need >= n || k + need > 240) return false;   /* (room for a "99~" in front) */
+        if (put) memcpy(out + k, put, 3);
+        else out[k] = *p;
+        k += need;
+    }
+    out[k] = 0;
+    return k > 0;
+}
+
+/* the bin's name of an item -> where it was, relative to the card's root */
+static void trash_decode(const char *name, char *out, size_t n)
+{
+    const char *p = name;
+    while (*p >= '0' && *p <= '9') p++;
+    if (p != name && *p == '~') name = p + 1;      /* a "2~" added for a taken name */
+    size_t k = 0;
+    for (p = name; *p && k + 1 < n; p++) {
+        if (p[0] == '%' && p[1] == '2' && (p[2] == 'F' || p[2] == 'f')) { out[k++] = '/'; p += 2; }
+        else if (p[0] == '%' && p[1] == '2' && p[2] == '5') { out[k++] = '%'; p += 2; }
+        else out[k++] = *p;
+    }
+    out[k] = 0;
+}
+
+/* deletes path, and everything in it if it is a folder (job task) */
+static int rm_rf(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0) return -1;
+    if (!S_ISDIR(st.st_mode)) return unlink(path);
+    DIR *d = opendir(path);
+    if (d) {
+        struct dirent *de;
+        while ((de = readdir(d)) != NULL) {
+            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+            char *child = malloc(strlen(path) + strlen(de->d_name) + 2);
+            if (!child) break;
+            sprintf(child, "%s/%s", path, de->d_name);
+            rm_rf(child);
+            free(child);
+        }
+        closedir(d);
+    }
+    return rmdir(path);
+}
+
+static void job_task(void *arg)
+{
+    int n = 0, failed = 0;
+    if (s_job_path[0]) {                           /* one item */
+        if (rm_rf(s_job_path) == 0) n++; else failed++;
+    } else {                                        /* Empty: everything in the bin */
+        DIR *d = opendir(TRASH_DIR);
+        if (d) {
+            struct dirent *de;
+            static char p[PATH_MAX_B + NAME_MAX_B];
+            while ((de = readdir(d)) != NULL) {
+                if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+                snprintf(p, sizeof(p), "%s/%s", TRASH_DIR, de->d_name);
+                if (rm_rf(p) == 0) n++; else failed++;
+            }
+            closedir(d);
+        }
+    }
+    if (failed) snprintf(s_job_msg, sizeof(s_job_msg), "Deleted %d; %d couldn't be.", n, failed);
+    else s_job_msg[0] = 0;
+    printf("files: deleted for good: %d (%d failed)\n", n, failed);
+    s_job_done = true;
+    s_job_busy = false;
+    vTaskDelete(NULL);
+}
+
+static void job_start(const char *path)
+{
+    if (s_job_busy) return;
+    strlcpy(s_job_path, path ? path : "", sizeof(s_job_path));
+    s_job_busy = true;
+    lv_label_set_text(s_count_lbl, "Deleting...");
+    if (xTaskCreatePinnedToCore(job_task, "files_rm", 8192, NULL, 2, NULL, 0) != pdPASS) s_job_busy = false;
 }
 
 static bool is_protected_name(const char *name)
@@ -256,34 +361,90 @@ static void do_rename(void)
     rescan();
 }
 
-static void do_delete(void)
+/* moves the entry into the Recycle bin */
+static void do_trash(void)
 {
     if (s_dlg_idx < 0 || s_dlg_idx >= s_n) return;
     const entry_t *e = &s_ent[s_dlg_idx];
-    if (is_protected_name(e->name)) {               /* (no Delete button on it; belt and braces) */
+    if (is_protected_name(e->name) || (at_root() && !strcmp(e->name, TRASH_NAME))) {   /* (no button) */
         dlg_close();
         return;
     }
-    char full[PATH_MAX_B + NAME_MAX_B];
-    snprintf(full, sizeof(full), "%s/%s", s_path, e->name);
-    int r = e->dir ? rmdir(full) : unlink(full);
-    if (r != 0) {
-        int err = errno;
-        dlg_error(e->dir && (err == ENOTEMPTY || err == EEXIST || err == EACCES)
-                      ? "Only an empty folder can be deleted: delete what's in it first."
-                      : strerror(err));
+    char rel[PATH_MAX_B + NAME_MAX_B], enc[NAME_MAX_B], from[PATH_MAX_B + NAME_MAX_B], to[PATH_MAX_B + NAME_MAX_B];
+    snprintf(rel, sizeof(rel), "%s/%s", s_path + strlen(BSP_SD_MOUNT_POINT) + (at_root() ? 0 : 1), e->name);
+    if (rel[0] == '/') memmove(rel, rel + 1, strlen(rel));
+    if (!trash_encode(rel, enc, sizeof(enc))) {
+        dlg_error("Its path is too long for the Recycle bin.");
         return;
     }
-    printf("files: deleted %s\n", full);
+    mkdir(TRASH_DIR, 0775);                         /* (already there: fine) */
+    snprintf(from, sizeof(from), "%s/%s", s_path, e->name);
+    struct stat st;
+    snprintf(to, sizeof(to), "%s/%s", TRASH_DIR, enc);
+    for (int k = 2; stat(to, &st) == 0 && k < 100; k++) {   /* that name is taken in the bin */
+        snprintf(to, sizeof(to), "%s/%d~%s", TRASH_DIR, k, enc);
+    }
+    if (rename(from, to) != 0) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "Couldn't move it to the Recycle bin (%s).", strerror(errno));
+        dlg_error(msg);
+        return;
+    }
+    printf("files: %s -> %s\n", from, to);
     dlg_close();
     rescan();
+}
+
+/* puts a bin item back where it was (making the folders on the way if they're gone) */
+static void do_restore(int idx)
+{
+    if (idx < 0 || idx >= s_n) return;
+    char rel[PATH_MAX_B], from[PATH_MAX_B + NAME_MAX_B], to[PATH_MAX_B + NAME_MAX_B];
+    trash_decode(s_ent[idx].name, rel, sizeof(rel));
+    snprintf(from, sizeof(from), "%s/%s", TRASH_DIR, s_ent[idx].name);
+    snprintf(to, sizeof(to), "%s/%s", BSP_SD_MOUNT_POINT, rel);
+    const char *base = strrchr(rel, '/') ? strrchr(rel, '/') + 1 : rel;
+    if (base == rel && is_protected_name(rel)) return;   /* (a root name of the database: never) */
+    struct stat st;
+    if (stat(to, &st) == 0) {
+        char msg[160];
+        snprintf(msg, sizeof(msg), "Can't restore: something is already at %s.", rel);
+        printf("files: %s\n", msg);
+        lv_label_set_text(s_count_lbl, "Name taken");
+        return;
+    }
+    for (char *p = to + strlen(BSP_SD_MOUNT_POINT) + 1; (p = strchr(p, '/')) != NULL; p++) {
+        *p = 0;                                     /* its folders, if they were deleted since */
+        mkdir(to, 0775);
+        *p = '/';
+    }
+    if (rename(from, to) != 0) {
+        printf("files: restore %s failed (%s)\n", rel, strerror(errno));
+        lv_label_set_text(s_count_lbl, "Couldn't restore");
+        return;
+    }
+    printf("files: restored %s\n", to);
+    rescan();
+}
+
+static void do_purge(void)                          /* one bin item, for good */
+{
+    if (s_dlg_idx < 0 || s_dlg_idx >= s_n) return;
+    char p[PATH_MAX_B + NAME_MAX_B];
+    snprintf(p, sizeof(p), "%s/%s", TRASH_DIR, s_ent[s_dlg_idx].name);
+    dlg_close();
+    job_start(p);
 }
 
 static void on_dlg_cancel(lv_event_t *e) { dlg_close(); }
 static void on_dlg_ok(lv_event_t *e)
 {
-    if (s_dlg_rename) do_rename();
-    else do_delete();
+    switch (s_dlg_mode) {
+    case DLG_RENAME: do_rename(); break;
+    case DLG_TRASH:  do_trash(); break;
+    case DLG_PURGE:  do_purge(); break;
+    case DLG_EMPTY:  dlg_close(); job_start(NULL); break;
+    }
 }
 
 static void on_kb(lv_event_t *e)
@@ -365,15 +526,29 @@ static void build_dialog(void)
     lv_obj_set_hidden(s_dlg, true);
 }
 
-static void dlg_open(int idx, bool rename)
+static void dlg_open(int idx, int mode)
 {
-    if (idx < 0 || idx >= s_n) return;
-    const entry_t *e = &s_ent[idx];
+    if (mode != DLG_EMPTY && (idx < 0 || idx >= s_n)) return;
+    const entry_t *e = mode != DLG_EMPTY ? &s_ent[idx] : NULL;
+    bool rename = mode == DLG_RENAME;
     s_dlg_idx = idx;
-    s_dlg_rename = rename;
+    s_dlg_mode = mode;
     lv_obj_set_style_text_color(s_dlg_msg, C_MUTED, 0);
     lv_obj_t *ok_lbl = lv_obj_get_child(s_dlg_ok, 0);
-    if (rename) {
+    if (mode == DLG_EMPTY) {
+        lv_label_set_text(s_dlg_title, "Empty the Recycle bin?");
+        lv_label_set_text_fmt(s_dlg_msg, "%d item%s, deleted for good. This can't be undone.", s_n, s_n == 1 ? "" : "s");
+        lv_label_set_text(ok_lbl, "Empty");
+        lv_obj_set_style_bg_color(s_dlg_ok, C_RED, 0);
+    } else if (mode == DLG_PURGE) {
+        char orig[PATH_MAX_B];
+        trash_decode(e->name, orig, sizeof(orig));
+        lv_label_set_text_fmt(s_dlg_title, "Delete %s for good?", orig);
+        lv_label_set_text(s_dlg_msg, e->dir ? "The folder and everything in it. This can't be undone."
+                                            : "This can't be undone.");
+        lv_label_set_text(ok_lbl, "Delete");
+        lv_obj_set_style_bg_color(s_dlg_ok, C_RED, 0);
+    } else if (rename) {
         lv_label_set_text_fmt(s_dlg_title, "Rename %s", e->dir ? "folder" : "file");
         lv_label_set_text(s_dlg_msg, "The new name, in the same folder.");
         lv_textarea_set_text(s_ta, e->name);
@@ -382,8 +557,10 @@ static void dlg_open(int idx, bool rename)
         lv_obj_set_style_bg_color(s_dlg_ok, C_ACCENT, 0);
     } else {
         lv_label_set_text_fmt(s_dlg_title, "Delete %s?", e->name);
-        lv_label_set_text(s_dlg_msg, e->dir ? "The folder must be empty. This can't be undone."
-                                            : "This can't be undone.");
+        lv_label_set_text(s_dlg_msg, e->dir ? "The folder and what's in it go to the Recycle bin: restore them "
+                                              "from there, or empty it to free the space."
+                                            : "It goes to the Recycle bin: restore it from there, or empty it to "
+                                              "free the space.");
         lv_label_set_text(ok_lbl, "Delete");
         lv_obj_set_style_bg_color(s_dlg_ok, C_RED, 0);
     }
@@ -396,18 +573,28 @@ static void dlg_open(int idx, bool rename)
 /* (not while the folder is read again: the worker is rewriting s_ent) */
 static void on_rename(lv_event_t *e)
 {
-    if (!s_busy) dlg_open((int)(intptr_t)lv_event_get_user_data(e), true);
+    if (!s_busy && !s_job_busy) dlg_open((int)(intptr_t)lv_event_get_user_data(e), DLG_RENAME);
 }
 
 static void on_delete(lv_event_t *e)
 {
-    if (!s_busy) dlg_open((int)(intptr_t)lv_event_get_user_data(e), false);
+    if (!s_busy && !s_job_busy) dlg_open((int)(intptr_t)lv_event_get_user_data(e), in_trash() ? DLG_PURGE : DLG_TRASH);
+}
+
+static void on_restore(lv_event_t *e)
+{
+    if (!s_busy && !s_job_busy) do_restore((int)(intptr_t)lv_event_get_user_data(e));
+}
+
+static void on_empty(lv_event_t *e)
+{
+    if (!s_busy && !s_job_busy && s_n > 0) dlg_open(-1, DLG_EMPTY);
 }
 
 static void on_row(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= s_n || !s_ent[i].dir || s_busy) return;
+    if (i < 0 || i >= s_n || !s_ent[i].dir || s_busy || in_trash()) return;
     size_t len = strlen(s_path);
     if (len + 1 + strlen(s_ent[i].name) >= sizeof(s_path)) return;
     snprintf(s_path + len, sizeof(s_path) - len, "/%s", s_ent[i].name);
@@ -428,8 +615,9 @@ static void show_list(void)
 {
     lv_obj_clean(s_list);
     lv_obj_scroll_to_y(s_list, 0, LV_ANIM_OFF);
-    lv_label_set_text(s_path_lbl, s_path);
+    lv_label_set_text(s_path_lbl, in_trash() ? "Recycle bin" : s_path);
     lv_obj_set_hidden(s_up, at_root());
+    lv_obj_set_hidden(s_empty_btn, !in_trash() || s_n <= 0);
 
     if (s_n < 0) {
         lv_label_set_text(s_count_lbl, "");
@@ -446,13 +634,16 @@ static void show_list(void)
         lv_label_set_text_fmt(s_count_lbl, "%d item%s", s_n, s_n == 1 ? "" : "s");
     }
     if (s_n == 0) {
-        lv_obj_t *l = label(s_list, &lv_font_montserrat_20, C_MUTED, "This folder is empty.");
+        lv_obj_t *l = label(s_list, &lv_font_montserrat_20, C_MUTED,
+                            in_trash() ? "The Recycle bin is empty." : "This folder is empty.");
         lv_obj_set_style_pad_all(l, 12, 0);
         return;
     }
     for (int i = 0; i < s_n; i++) {
         const entry_t *e = &s_ent[i];
         bool prot = is_protected_name(e->name);
+        bool bin = at_root() && e->dir && !strcmp(e->name, TRASH_NAME);   /* the Recycle bin itself */
+        bool trashed = in_trash();                  /* an item in it: Restore, Delete for good */
 
         lv_obj_t *r = lv_obj_create(s_list);
         lv_obj_remove_style_all(r);
@@ -466,15 +657,15 @@ static void show_list(void)
         lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
         lv_obj_set_style_border_color(r, C_CARD2, 0);
         lv_obj_set_style_border_width(r, i < s_n - 1 ? 1 : 0, 0);
-        if (e->dir) {                               /* a folder opens on a tap */
+        if (e->dir && !trashed) {                   /* a folder opens on a tap (not one in the bin) */
             lv_obj_set_clickable(r, true);
             lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
             lv_obj_set_style_bg_opa(r, LV_OPA_COVER, LV_STATE_PRESSED);
             lv_obj_add_event_cb(r, on_row, LV_EVENT_CLICKED, (void *)(intptr_t)i);
         }
 
-        lv_obj_t *ic = label(r, &lv_font_montserrat_24, e->dir ? C_ACCENT : C_MUTED,
-                             e->dir ? LV_SYMBOL_DIRECTORY : LV_SYMBOL_FILE);
+        lv_obj_t *ic = label(r, &lv_font_montserrat_24, bin ? C_ORANGE : (e->dir ? C_ACCENT : C_MUTED),
+                             bin ? LV_SYMBOL_TRASH : (e->dir ? LV_SYMBOL_DIRECTORY : LV_SYMBOL_FILE));
         lv_obj_set_width(ic, 30);
 
         lv_obj_t *col = lv_obj_create(r);
@@ -484,7 +675,11 @@ static void show_list(void)
         lv_obj_set_height(col, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(col, 2, 0);
-        lv_obj_t *nm = label(col, &lv_font_montserrat_20, C_TEXT, e->name);
+        char shown[PATH_MAX_B];
+        if (bin) strlcpy(shown, "Recycle bin", sizeof(shown));
+        else if (trashed) trash_decode(e->name, shown, sizeof(shown));   /* where it was */
+        else strlcpy(shown, e->name, sizeof(shown));
+        lv_obj_t *nm = label(col, &lv_font_montserrat_20, C_TEXT, shown);
         lv_obj_set_width(nm, LV_PCT(100));
         lv_label_set_long_mode(nm, LV_LABEL_LONG_MODE_DOTS);
 
@@ -497,6 +692,8 @@ static void show_list(void)
         if (prot) {
             fmt_size(size, sizeof(size), e->size);
             snprintf(sub, sizeof(sub), "%s  -  the game's database: protected", size);
+        } else if (bin) {
+            snprintf(sub, sizeof(sub), "Deleted files and folders: restore them, or delete them for good");
         } else if (e->dir) {
             snprintf(sub, sizeof(sub), "Folder%s%s", when[0] ? "  -  " : "", when);
         } else {
@@ -510,6 +707,11 @@ static void show_list(void)
         if (prot) {
             lv_obj_t *lk = label(r, &font_icons_24, C_ORANGE, SYMBOL_LOCK);
             lv_obj_set_style_pad_hor(lk, 16, 0);
+        } else if (bin) {
+            /* (opens on a tap; not renamed or deleted itself) */
+        } else if (trashed) {
+            icon_btn(r, LV_SYMBOL_UPLOAD, C_TEXT, on_restore, (void *)(intptr_t)i);   /* Restore */
+            icon_btn(r, LV_SYMBOL_TRASH, C_RED, on_delete, (void *)(intptr_t)i);      /* for good */
         } else {
             icon_btn(r, LV_SYMBOL_EDIT, C_TEXT, on_rename, (void *)(intptr_t)i);
             icon_btn(r, LV_SYMBOL_TRASH, C_RED, on_delete, (void *)(intptr_t)i);
@@ -522,6 +724,10 @@ static void poll(lv_timer_t *t)
     if (s_done) {
         s_done = false;
         show_list();
+    }
+    if (s_job_done) {                               /* deleted for good: read the bin again */
+        s_job_done = false;
+        rescan();
     }
 }
 
@@ -554,6 +760,10 @@ void file_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_t *refresh = icon_btn(scr, LV_SYMBOL_REFRESH, C_TEXT, on_refresh, NULL);
     lv_obj_set_size(refresh, 60, 52);
     lv_obj_align(refresh, LV_ALIGN_TOP_RIGHT, -12, 10);
+    s_empty_btn = icon_btn(scr, LV_SYMBOL_TRASH "  Empty", C_RED, on_empty, NULL);   /* in the bin */
+    lv_obj_set_size(s_empty_btn, 130, 52);
+    lv_obj_align(s_empty_btn, LV_ALIGN_TOP_RIGHT, -206, 10);
+    lv_obj_set_hidden(s_empty_btn, true);
     s_up = icon_btn(scr, LV_SYMBOL_UP "  Up", C_TEXT, on_up, NULL);
     lv_obj_set_size(s_up, 110, 52);
     lv_obj_align(s_up, LV_ALIGN_TOP_RIGHT, -84, 10);

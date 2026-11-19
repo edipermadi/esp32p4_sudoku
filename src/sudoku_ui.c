@@ -71,6 +71,7 @@
 #include "esp_timer.h"
 #include "video_enc.h"
 #include <sys/stat.h>
+#include <unistd.h>
 #include "moves.h"
 #include "qrcode/qrcodegen.h"
 #include "esp_ota_ops.h"
@@ -331,6 +332,14 @@ static void night_check(lv_timer_t *t);
 static void apply_theme(bool dark);
 static lv_obj_t *st_night_bright_lbl;
 
+static void game_layout(void);
+
+static void left_hand_sw_cb(lv_event_t *e)
+{
+    store_set_left_hand(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+    game_layout();                                  /* the game screen moves its board and pad now */
+}
+
 static void no_notes_sw_cb(lv_event_t *e)
 {
     store_set_no_notes(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));   /* (games started from now) */
@@ -398,6 +407,7 @@ static lv_obj_t *g_grid, *g_boxes[9], *g_cells[81], *g_cell_lbl[81];
 static lv_obj_t *g_clues[18];                       /* Sandwich: the sums by the rows and columns */
 static lv_obj_t *g_pad[9], *g_pad_cnt[9];
 static int       g_layout_var = -1;     /* variant the board and pad are laid out for */
+static bool      g_layout_left;         /* ... and on which side the pad is (Left-handed) */
 static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
 static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
 static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
@@ -425,6 +435,7 @@ static void history_poll(void);
 static void history_cb(lv_event_t *e);
 static void apply_loaded_prefs(void);
 static void win_replay_cb(lv_event_t *e);
+static void screenshot_cb(lv_event_t *e);
 static void plays_poll(void);
 static void trophy_poll(void);
 static void lock_now_cb(lv_event_t *e);
@@ -2179,7 +2190,7 @@ static void board_regions_draw_cb(lv_event_t *e)
 /* clues: 18 labels on the board's screen for a Sandwich's sums (rows, then
  * columns), hidden for the other variants; may be NULL */
 static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
-                         lv_obj_t *const *clues)
+                         lv_obj_t *const *clues, int x0)
 {
     lv_obj_set_user_data(grid, (void *)geo);
     for (int i = 0; clues && i < 18; i++) lv_obj_set_hidden(clues[i], !geo->sandwich);
@@ -2188,7 +2199,7 @@ static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *con
          * region borders are drawn over them (board_regions_draw_cb) */
         const int cs = (GRID_SIZE - 2 * LINE_THICK - 8 * LINE_THIN) / 9;
         const int w = 2 * LINE_THICK + 9 * cs + 8 * LINE_THIN;
-        lv_obj_set_pos(grid, GRID_X + (GRID_SIZE - w) / 2, GRID_Y + (GRID_SIZE - w) / 2);
+        lv_obj_set_pos(grid, x0 + (GRID_SIZE - w) / 2, GRID_Y + (GRID_SIZE - w) / 2);
         lv_obj_set_size(grid, w, w);
         lv_obj_set_style_bg_color(grid, C_GRID_THIN, 0);
         lv_obj_set_style_border_color(grid, C_GRID_THICK, 0);
@@ -2213,7 +2224,7 @@ static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *con
     int cs = cw < ch ? cw : ch;
     int box_w = bw * cs + (bw - 1) * LINE_THIN, box_h = bh * cs + (bh - 1) * LINE_THIN;
     int w = (across + 1) * LINE_THICK + across * box_w, h = (down + 1) * LINE_THICK + down * box_h;
-    const int gx = GRID_X + band + (size - w) / 2, gy = GRID_Y + band + (size - h) / 2;
+    const int gx = x0 + band + (size - w) / 2, gy = GRID_Y + band + (size - h) / 2;
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
     for (int i = 0; geo->sandwich && clues && i < 18; i++) {   /* the sums: left of the rows, above the columns */
@@ -2246,21 +2257,25 @@ static void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *con
 static void game_layout(void)
 {
     if (!g_geo) g_geo = sudoku_geom(g_var);
-    if (g_layout_var == g_var && g_var != VAR_JIGSAW && g_var != VAR_KILLER && g_var != VAR_EVENODD &&
-        g_var != VAR_CONSEC && g_var != VAR_THERMO && g_var != VAR_SANDWICH) {
+    const bool left = store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
+    if (g_layout_var == g_var && g_layout_left == left && g_var != VAR_JIGSAW && g_var != VAR_KILLER &&
+        g_var != VAR_EVENODD && g_var != VAR_CONSEC && g_var != VAR_THERMO && g_var != VAR_SANDWICH) {
         lv_obj_invalidate(g_grid);
         return;
     }
     lv_obj_invalidate(g_grid);                      /* every Jigsaw / Killer has its own regions / cages */
     g_layout_var = g_var;
-    board_layout(g_geo, g_grid, g_boxes, g_cells, g_clues);
+    g_layout_left = left;
+    const int board_x = left ? SCR_W - 8 - GRID_SIZE : GRID_X, pad_x = left ? 8 : PAD_X;
+    board_layout(g_geo, g_grid, g_boxes, g_cells, g_clues, board_x);
+    lv_obj_set_x(g_pause_ovl, board_x);
     const int n = g_geo->n, span = GRID_SIZE - 6;              /* 598: the 9 x 62 px pad, as before */
     const int h = (span - (n - 1) * PAD_GAP) / n;
     for (int d = 1; d <= 9; d++) {
         lv_obj_t *b = g_pad[d - 1];
         lv_obj_set_hidden(b, d > n);
         if (d > n) continue;
-        lv_obj_set_pos(b, PAD_X, GRID_Y + 1 + (d - 1) * (h + PAD_GAP) + (span - n * h - (n - 1) * PAD_GAP) / 2);
+        lv_obj_set_pos(b, pad_x, GRID_Y + 1 + (d - 1) * (h + PAD_GAP) + (span - n * h - (n - 1) * PAD_GAP) / 2);
         lv_obj_set_size(b, PAD_W, h);
     }
 }
@@ -2903,6 +2918,9 @@ static void build_game(void)
     lv_label_set_text(g_win_badge, LV_SYMBOL_EDIT "  No-notes challenge: done without notes");
     lv_obj_align(g_win_badge, LV_ALIGN_TOP_MID, 0, 250);
     lv_obj_set_hidden(g_win_badge, true);
+    lv_obj_t *shot = make_btn(card, 0, 0, 56, 48, LV_SYMBOL_IMAGE, &lv_font_montserrat_22, screenshot_cb, NULL);
+    lv_obj_set_style_bg_color(shot, C_CARD2, 0);    /* a screenshot of the solved board */
+    lv_obj_align(shot, LV_ALIGN_TOP_LEFT, 0, 0);
     g_win_share = make_btn(card, 0, 0, 56, 48, SYMBOL_QR, &font_icons_20, win_share_cb, NULL);   /* daily: share */
     lv_obj_set_style_bg_color(g_win_share, C_CARD2, 0);
     lv_obj_align(g_win_share, LV_ALIGN_TOP_RIGHT, 0, 0);
@@ -3065,6 +3083,268 @@ static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
 }
 
 /* Builds the Replay screen (on the default display) for the prepared log. */
+/* ------------------------------------------------------------- screenshot */
+/*
+ * The camera buttons (Solved dialog, Replay): the screen as a PNG in screenshots/ on
+ * the card. The frame is copied at once (the screen keeps going); a worker task on
+ * core 0 turns it into a PNG and writes it. The PNG is uncompressed ("stored" deflate
+ * blocks: there's no zlib here), 1.5 MB, readable everywhere.
+ */
+#define SS_ROW (1 + SCR_W * 3)                       /* filter byte + RGB */
+static uint16_t *ss_frame;
+static volatile int ss_state;                       /* 0 idle, 1 writing, 2 done, 3 failed */
+static char ss_path[64];
+static lv_timer_t *ss_timer;
+static uint32_t ss_crc_tab[256];
+
+static uint32_t ss_crc(uint32_t c, const uint8_t *p, size_t n)
+{
+    if (!ss_crc_tab[1]) {
+        for (uint32_t i = 0; i < 256; i++) {
+            uint32_t k = i;
+            for (int j = 0; j < 8; j++) k = k & 1 ? 0xEDB88320u ^ (k >> 1) : k >> 1;
+            ss_crc_tab[i] = k;
+        }
+    }
+    c = ~c;
+    while (n--) c = ss_crc_tab[(c ^ *p++) & 0xFF] ^ (c >> 8);
+    return ~c;
+}
+
+static bool ss_put32(FILE *f, uint32_t v)
+{
+    const uint8_t b[4] = {(uint8_t)(v >> 24), (uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v};
+    return fwrite(b, 1, 4, f) == 4;
+}
+
+static void ss_task(void *arg)
+{
+    const size_t raw_n = (size_t)SCR_W * SS_ROW;
+    uint8_t *raw = heap_caps_malloc(raw_n, MALLOC_CAP_SPIRAM);
+    FILE *f = raw ? fopen(ss_path, "wb") : NULL;
+    bool ok = f != NULL;
+    if (ok) {
+        uint32_t a = 1, b = 0;                      /* Adler-32 of the image data, for zlib */
+        for (int y = 0; y < SCR_W; y++) {
+            uint8_t *row = raw + (size_t)y * SS_ROW;
+            row[0] = 0;                             /* filter: none */
+            for (int x = 0; x < SCR_W; x++) {
+                uint16_t px = ss_frame[y * SCR_W + x];
+                int r = px >> 11, g = (px >> 5) & 0x3F, bl = px & 0x1F;
+                row[1 + x * 3] = (uint8_t)(r << 3 | r >> 2);
+                row[2 + x * 3] = (uint8_t)(g << 2 | g >> 4);
+                row[3 + x * 3] = (uint8_t)(bl << 3 | bl >> 2);
+            }
+            for (int i = 0; i < SS_ROW; i++) {
+                a = (a + row[i]) % 65521;
+                b = (b + a) % 65521;
+            }
+        }
+        const size_t blocks = (raw_n + 65534) / 65535;
+        const uint32_t idat_n = (uint32_t)(2 + blocks * 5 + raw_n + 4);
+        static const uint8_t sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+        uint8_t ihdr[17] = {'I', 'H', 'D', 'R', 0, 0, SCR_W >> 8, SCR_W & 0xFF, 0, 0, SCR_W >> 8, SCR_W & 0xFF,
+                            8, 2, 0, 0, 0};          /* 8-bit RGB */
+        ok = fwrite(sig, 1, 8, f) == 8 && ss_put32(f, 13) && fwrite(ihdr, 1, 17, f) == 17 &&
+             ss_put32(f, ss_crc(0, ihdr, 17)) && ss_put32(f, idat_n);
+        uint32_t crc = ss_crc(0, (const uint8_t *)"IDAT", 4);
+        const uint8_t zh[2] = {0x78, 0x01};
+        ok = ok && fwrite("IDAT", 1, 4, f) == 4 && fwrite(zh, 1, 2, f) == 2;
+        crc = ss_crc(crc, zh, 2);
+        for (size_t off = 0; ok && off < raw_n; off += 65535) {
+            size_t len = raw_n - off < 65535 ? raw_n - off : 65535;
+            const uint8_t bh[5] = {(uint8_t)(off + len >= raw_n), (uint8_t)len, (uint8_t)(len >> 8),
+                                   (uint8_t)~len, (uint8_t)(~len >> 8)};
+            ok = fwrite(bh, 1, 5, f) == 5 && fwrite(raw + off, 1, len, f) == len;
+            crc = ss_crc(ss_crc(crc, bh, 5), raw + off, len);
+        }
+        const uint8_t ad[4] = {(uint8_t)(b >> 8), (uint8_t)b, (uint8_t)(a >> 8), (uint8_t)a};
+        crc = ss_crc(crc, ad, 4);
+        ok = ok && fwrite(ad, 1, 4, f) == 4 && ss_put32(f, crc) && ss_put32(f, 0) && fwrite("IEND", 1, 4, f) == 4 &&
+             ss_put32(f, ss_crc(0, (const uint8_t *)"IEND", 4));
+        ok = fclose(f) == 0 && ok;
+        if (!ok) unlink(ss_path);
+    }
+    heap_caps_free(raw);
+    ss_state = ok ? 2 : 3;
+    vTaskDelete(NULL);
+}
+
+static void ss_poll_cb(lv_timer_t *t)
+{
+    if (ss_state < 2) return;
+    lv_timer_delete(ss_timer);
+    ss_timer = NULL;
+    char msg[120];
+    if (ss_state == 2) snprintf(msg, sizeof(msg), "Saved %s. Copy it off with Settings > USB drive.",
+                                ss_path + strlen(BSP_SD_MOUNT_POINT) + 1);
+    else snprintf(msg, sizeof(msg), "Couldn't save the screenshot.");
+    printf("screenshot: %s\n", msg);
+    ss_state = 0;
+    sudoku_ui_notice(msg, 4000);
+}
+
+static void screenshot_cb(lv_event_t *e)
+{
+    if (ss_state) return;                           /* (one at a time) */
+    if (!stats_db_ready()) {
+        sudoku_ui_notice("Screenshots go on the microSD card: there's none to write to.", 3000);
+        return;
+    }
+    if (!ss_frame) ss_frame = heap_caps_malloc((size_t)SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
+    lv_refr_now(NULL);
+    const uint16_t *fb = bsp_display_frame();
+    if (!ss_frame || !fb) return;
+    memcpy(ss_frame, fb, (size_t)SCR_W * SCR_W * 2);
+    time_t now = time(NULL);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    mkdir(BSP_SD_MOUNT_POINT "/screenshots", 0775);
+    if (now > 1700000000) strftime(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/%Y%m%d-%H%M%S.png", &tm);
+    else snprintf(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/shot-%lu.png",
+                  (unsigned long)(esp_timer_get_time() / 1000000));
+    ss_state = 1;
+    if (xTaskCreatePinnedToCore(ss_task, "screenshot", 4096, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
+        ss_state = 0;
+        return;
+    }
+    ss_timer = lv_timer_create(ss_poll_cb, 200, NULL);
+}
+
+/* ------------------------------------------------------------- mistake insights */
+static lv_obj_t *ins_box, *ins_body;
+static lv_timer_t *ins_timer;
+
+static void ins_close_cb(lv_event_t *e)
+{
+    if (ins_timer) lv_timer_delete(ins_timer);
+    ins_timer = NULL;
+    if (ins_box) lv_msgbox_close_async(ins_box);
+    ins_box = ins_body = NULL;
+}
+
+static lv_obj_t *ins_heading(const char *text)
+{
+    lv_obj_t *l = make_label(ins_body, &lv_font_montserrat_18, C_TEXT);
+    lv_label_set_text(l, text);
+    lv_obj_set_style_margin_top(l, 14, 0);
+    return l;
+}
+
+static void ins_show(const stats_insights_t *in)
+{
+    lv_obj_clean(ins_body);
+    char buf[160];
+    if (in->solves == 0 || in->placed == 0) {
+        make_wrap_text(ins_body, &lv_font_montserrat_18, C_MUTED,
+                       "Nothing to look at yet: insights come from the move logs of solved 9x9 puzzles.");
+        return;
+    }
+    snprintf(buf, sizeof(buf), "From your last %d solve%s: %lu of the %lu digits you placed by hand were wrong "
+             "(%lu.%lu %%).", in->solves, in->solves == 1 ? "" : "s", (unsigned long)in->wrong,
+             (unsigned long)in->placed, (unsigned long)(in->wrong * 100 / in->placed),
+             (unsigned long)(in->wrong * 1000 / in->placed % 10));
+    make_wrap_text(ins_body, &lv_font_montserrat_18, C_TEXT, buf);
+    if (!in->wrong) {
+        make_wrap_text(ins_body, &lv_font_montserrat_18, C_GREEN, "Not one wrong digit. Nothing to work on here!");
+        return;
+    }
+
+    /* which digits: a bar each */
+    ins_heading("Digits you put in the wrong place");
+    int maxd = 1;
+    for (int d = 1; d <= 9; d++) if (in->by_digit[d] > maxd) maxd = in->by_digit[d];
+    for (int d = 1; d <= 9; d++) {
+        lv_obj_t *row = lv_obj_create(ins_body);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_size(row, LV_PCT(100), 26);
+        lv_obj_t *n = make_label(row, &lv_font_montserrat_18, C_TEXT);
+        lv_label_set_text_fmt(n, "%d", d);
+        lv_obj_align(n, LV_ALIGN_LEFT_MID, 4, 0);
+        lv_obj_t *bar = lv_obj_create(row);
+        lv_obj_remove_style_all(bar);
+        lv_obj_set_size(bar, in->by_digit[d] ? 4 + 420 * in->by_digit[d] / maxd : 2, 16);
+        lv_obj_set_style_bg_color(bar, in->by_digit[d] == maxd ? C_RED : C_ORANGE, 0);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(bar, 4, 0);
+        lv_obj_align(bar, LV_ALIGN_LEFT_MID, 30, 0);
+        lv_obj_t *c = make_label(row, &lv_font_montserrat_16, C_MUTED);
+        lv_label_set_text_fmt(c, "%u", (unsigned)in->by_digit[d]);
+        lv_obj_align(c, LV_ALIGN_RIGHT_MID, -4, 0);
+    }
+
+    /* where: the nine boxes, the busier the redder */
+    ins_heading("Where on the board");
+    int maxb = 1;
+    for (int b = 0; b < 9; b++) if (in->by_box[b] > maxb) maxb = in->by_box[b];
+    lv_obj_t *g = lv_obj_create(ins_body);
+    lv_obj_remove_style_all(g);
+    lv_obj_set_size(g, 3 * 76 + 2 * 6, 3 * 56 + 2 * 6);
+    for (int b = 0; b < 9; b++) {
+        lv_obj_t *c = lv_obj_create(g);
+        lv_obj_remove_style_all(c);
+        lv_obj_set_size(c, 76, 56);
+        lv_obj_set_pos(c, (b % 3) * 82, (b / 3) * 62);
+        lv_obj_set_style_radius(c, 6, 0);
+        lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
+        int pct = in->by_box[b] * 100 / maxb;
+        lv_obj_set_style_bg_color(c, lv_color_hex(mix_hex(ui_pal->red, ui_pal->card2, pct * 85 / 100)), 0);
+        lv_obj_t *l = make_label(c, &lv_font_montserrat_18, pct > 55 ? lv_color_white() : C_TEXT);
+        lv_label_set_text_fmt(l, "%u", (unsigned)in->by_box[b]);
+        lv_obj_center(l);
+    }
+
+    /* mix-ups: the most frequent digit-for-digit swaps */
+    ins_heading("Mix-ups");
+    uint16_t done[10][10] = {{0}};
+    for (int k = 0; k < 3; k++) {
+        int bp = 0, bb = 0, bn = 0;
+        for (int p2 = 1; p2 <= 9; p2++) {
+            for (int q = 1; q <= 9; q++) {
+                if (!done[p2][q] && in->pair[p2][q] > bn) { bn = in->pair[p2][q]; bp = p2; bb = q; }
+            }
+        }
+        if (!bn) break;
+        done[bp][bb] = 1;
+        snprintf(buf, sizeof(buf), "A %d where a %d belongs: %d time%s", bp, bb, bn, bn == 1 ? "" : "s");
+        make_wrap_text(ins_body, &lv_font_montserrat_18, C_MUTED, buf);
+    }
+}
+
+static void ins_poll_cb(lv_timer_t *t)
+{
+    static stats_insights_t in;                     /* (~250 bytes: off the LVGL stack) */
+    if (!stats_db_take_insights(&in)) return;
+    lv_timer_delete(ins_timer);
+    ins_timer = NULL;
+    if (ins_body) ins_show(&in);
+}
+
+static void insights_cb(lv_event_t *e)
+{
+    if (ins_box) return;
+    lv_obj_t *m = make_msgbox(SYMBOL_BULB "  Mistake insights", NULL);
+    ins_box = m;
+    lv_obj_set_width(m, 640);
+    lv_obj_set_style_text_font(lv_msgbox_get_header(m), &font_icons_20, 0);
+    ins_body = lv_msgbox_get_content(m);
+    lv_obj_set_height(ins_body, 520);
+    lv_obj_set_flex_flow(ins_body, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(ins_body, 4, 0);
+    lv_obj_set_scroll_dir(ins_body, LV_DIR_VER);
+    make_wrap_text(ins_body, &lv_font_montserrat_18, C_MUTED, "Reading your move logs...");
+    msgbox_button(m, "Close", ins_close_cb, false);
+    if (!stats_db_ready()) {
+        lv_obj_clean(ins_body);
+        make_wrap_text(ins_body, &lv_font_montserrat_18, C_MUTED, "This needs sudoku.db on a microSD card.");
+        return;
+    }
+    stats_db_query_insights();
+    ins_timer = lv_timer_create(ins_poll_cb, 100, NULL);
+}
+
+static lv_obj_t *rp_shot;                           /* the Replay screen's camera (hidden in exported videos) */
+
 static lv_obj_t *rp_build(uint16_t id, const char *sub)
 {
     lv_obj_t *scr = make_screen();
@@ -3107,11 +3387,13 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
         clues[i] = make_label(scr, &lv_font_montserrat_20, C_ACCENT);
         lv_obj_set_style_text_align(clues[i], LV_TEXT_ALIGN_CENTER, 0);
     }
-    board_layout(rp_geo, grid, boxes, rp_cells, clues);
+    board_layout(rp_geo, grid, boxes, rp_cells, clues, GRID_X);
 
     /* second row (as the game's): where the replay is on the left, the speed on the right */
     rp_pos = make_label(scr, &lv_font_montserrat_20, C_TEXT);
-    lv_obj_set_width(rp_pos, SCR_W - 8 - 200 - 8 - 16);
+    lv_obj_set_width(rp_pos, SCR_W - 8 - 200 - 8 - 16 - 64);
+    rp_shot = make_btn(scr, SCR_W - 8 - 200 - 8 - 56, TOOL_Y, 56, 48, LV_SYMBOL_IMAGE, &lv_font_montserrat_22,
+                       screenshot_cb, NULL);       /* a screenshot of this moment */
     lv_label_set_long_mode(rp_pos, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_pos(rp_pos, 16, TOOL_Y + (48 - 24) / 2);
     lv_obj_t *sp = make_btn(scr, SCR_W - 8 - 200, TOOL_Y, 200, 48, NULL, &lv_font_montserrat_20, rp_btn_cb,
@@ -3395,6 +3677,7 @@ static void export_start(const stats_replay_t *r)
     snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
              r->player, t, (unsigned)r->hints, r->hints == 1 ? "" : "s");
     lv_obj_t *scr = rp_build(r->puzzle, sub);
+    lv_obj_set_hidden(rp_shot, true);               /* (not in the video) */
     lv_screen_load(scr);
     lv_display_set_default(main_disp);
 
@@ -4169,7 +4452,7 @@ static void enter_cb(lv_event_t *e)
         ed_lbl[i] = make_label(ed_cells[i], &font_digits_44, C_TEXT);
         lv_obj_center(ed_lbl[i]);
     }
-    board_layout(sudoku_geom(VAR_CLASSIC), grid, boxes, ed_cells, NULL);
+    board_layout(sudoku_geom(VAR_CLASSIC), grid, boxes, ed_cells, NULL, GRID_X);
     const int span = GRID_SIZE - 6, h = (span - 8 * PAD_GAP) / 9;
     for (int d = 1; d <= 9; d++) {
         make_btn(scr_edit, PAD_X, GRID_Y + 1 + (d - 1) * (h + PAD_GAP), PAD_W, h, DIGITS[d], &lv_font_montserrat_28,
@@ -7678,6 +7961,9 @@ static void build_stats(void)
     lv_obj_set_pos(x_empty, px + 4, X_BODY_Y + 104);
 
     /* Chart / Table switch (top right of the pane) and the chart card in the table's place */
+    lv_obj_t *ib = make_btn(scr_stats, SCR_W - 12 - 160 - 10 - 170, X_ROW_Y, 170, 52, SYMBOL_BULB "  Insights",
+                            &font_icons_20, insights_cb, NULL);   /* mistake insights, from the move logs */
+    lv_obj_set_style_text_color(lv_obj_get_child(ib, 0), C_ACCENT, 0);
     x_chart_btn = make_btn(scr_stats, SCR_W - 12 - 160, X_ROW_Y, 160, 52, SYMBOL_CHART "  Chart", &font_icons_20,
                            chart_btn_cb, NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(x_chart_btn, 0), C_ACCENT, 0);
@@ -7923,6 +8209,9 @@ static void build_settings(void)
 
     r = settings_row(col, "No-notes challenge", "New games: Notes and Auto off; solves get a badge");
     settings_switch(r, store_no_notes(), no_notes_sw_cb);
+
+    r = settings_row(col, "Left-handed", "The number pad on the left of the board");
+    settings_switch(r, store_left_hand(), left_hand_sw_cb);
 
     /* Wi-Fi: the whole card opens the Wi-Fi screen */
     col = st_pane[ST_NETWORK];

@@ -33,6 +33,10 @@
 | Accent colour                   | **Settings → Accent colour**                     |
 | A player's colour               | Tap the dot by their name on **Players**         |
 | Practise a technique            | **Puzzles → Learn**                              |
+| Number pad on the left          | **Settings → Game → Left-handed**                |
+| Save a screenshot               | The picture button in the Solved dialog or on Replay |
+| See where your mistakes are     | **Statistics → Insights**                        |
+| Undo a delete on the card       | **Files → Recycle bin**, then the restore button |
 | Play without notes             | **Settings → Game → No-notes challenge**, then a new puzzle |
 | Share today's daily result       | Solve the daily puzzle, then the QR button in the Solved dialog |
 | Add puzzle files                | Copy them to `puzzles/` on the card, then **Settings → Data → Import puzzles** |

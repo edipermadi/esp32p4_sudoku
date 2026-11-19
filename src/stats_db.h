@@ -149,6 +149,20 @@ bool stats_db_load_game(uint16_t puzzle, saved_game_t *out);
  * started_at: Unix time it was opened, 0 = unknown. */
 void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,
                            int64_t started_at, const game_move_t *moves, int nmoves, uint32_t flags);
+/* Mistake insights (Statistics): from the move logs of the current player's last
+ * STATS_INSIGHT_SOLVES solves (9x9 ones). A solved game's last board is its solution,
+ * so a digit placed by hand that isn't the cell's last one was a mistake. */
+#define STATS_INSIGHT_SOLVES 300
+typedef struct {
+    int solves;                          /* solves looked at (with a move log) */
+    uint32_t placed, wrong;              /* digits placed by hand; of them, wrong */
+    uint16_t by_digit[10];               /* wrong placements of each digit (1..9) */
+    uint16_t by_box[9];                  /* in each 3x3 box (0 top left .. 8 bottom right) */
+    uint16_t pair[10][10];               /* [placed][belonged]: which digit went where another belongs */
+} stats_insights_t;
+void stats_db_query_insights(void);
+bool stats_db_take_insights(stats_insights_t *out);
+
 /* The current player finished a Learn practice (placed the digit its technique leads
  * to): technique = Learn's list index 0..9. May unlock achievements (as a solve does). */
 void stats_db_learned(int technique);

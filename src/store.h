@@ -94,6 +94,7 @@ typedef struct {
     bool saver_clock;                         /* a dim drifting clock before the screen goes dark */
     bool cvd;                                 /* colour-blind friendly colours (Okabe-Ito) */
     bool no_notes;                            /* new games start in the no-notes challenge */
+    bool left_hand;                           /* the game's number pad on the left of the board */
     bool night_mode;                          /* dark and dimmer between night_start and night_end */
     uint8_t night_start, night_end;           /* hours 0..23, local time */
     uint8_t night_brightness;                 /* backlight at night, 10..100 % (at most the day's) */
@@ -175,6 +176,8 @@ bool store_cvd(void);
 void store_set_cvd(bool on);
 bool store_no_notes(void);
 void store_set_no_notes(bool on);
+bool store_left_hand(void);
+void store_set_left_hand(bool on);
 bool store_night_mode(void);
 void store_set_night_mode(bool on);
 uint8_t store_night_start(void);
