@@ -53,6 +53,7 @@ A release tag without a `-` also publishes a web flasher on GitHub Pages: **http
 
 - **What it flashes:** the separate parts at their `flash_args` offsets. This keeps the Wi-Fi setting unless *Erase device* is ticked in the installer. Data on the card is never touched.
 - **The page:** `web/index.html`. `tools/make_flasher_site.sh BUILD_DIR OUT_DIR VERSION` adds the firmware and `manifest.json`.
+- **The documentation:** the same site has `README.md` and `docs/*.md` as web pages under `/docs/` (**https://edipermadi.github.io/esp32p4_sudoku/docs/**), made by `tools/make_docs_site.py OUT_DIR [VERSION]` (needs `pip install markdown-it-py`). Links between the Markdown files become links between the pages, and links to other files go to GitHub. A new page in `docs/` needs a line in its `PAGES` list. The pages match the release they were published with.
 - **Trying it locally:** `python3 -m http.server -d OUT_DIR 8000`, then open `http://localhost:8000`. Web Serial needs HTTPS or localhost.
 
 One-time setup on GitHub:

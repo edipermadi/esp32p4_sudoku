@@ -53,6 +53,8 @@ src/fonts/              Montserrat 44 px digits / 36 px timer, FontAwesome perso
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/devctl.py         screenshots (PNG) and touches over the serial port
+tools/make_flasher_site.sh  the GitHub Pages site: web flasher + docs
+tools/make_docs_site.py README.md and docs/*.md as HTML pages (for the site)
 docs/screenshots.txt    the script that makes docs/screenshots/*.png
 tools/opensudoku/       the downloaded .opensudoku collections
 ```

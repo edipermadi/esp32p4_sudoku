@@ -5,6 +5,7 @@
 #   OUT_DIR/manifest.json       what to flash where, from the build's flash_args
 #   OUT_DIR/firmware/*.bin      bootloader, partition table, boot_app0, app
 #   OUT_DIR/home.png            a screenshot for the page
+#   OUT_DIR/docs/               README.md and docs/*.md as HTML (tools/make_docs_site.py)
 #
 # The parts go separately (not the merged image from 0x0), so flashing leaves
 # NVS, and with it the board's Wi-Fi setting, alone unless the user asks the
@@ -23,6 +24,7 @@ mkdir -p "$out/firmware"
 cp "$here/web/index.html" "$out/index.html"
 cp "$here/docs/screenshots/home.png" "$out/home.png"
 touch "$out/.nojekyll"
+python3 "$here/tools/make_docs_site.py" "$out/docs" "$ver"
 
 python3 - "$build" "$out" "$ver" <<'PY'
 import json, os, shutil, sys

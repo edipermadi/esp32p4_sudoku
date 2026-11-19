@@ -2,7 +2,8 @@
 # run's artifact for 30 days). A pushed tag v* also makes a GitHub release with
 # them: git tag v1.0.0 && git push origin v1.0.0
 # A release tag (no '-', so not v1.1.0-rc1) also publishes the web flasher
-# (web/index.html + the firmware) on GitHub Pages. To publish it for an existing
+# (web/index.html + the firmware) and the documentation (README.md and docs/*.md
+# as HTML, under /docs/) on GitHub Pages. To publish it for an existing
 # tag: Actions > Firmware > Run workflow, and pick the tag.
 # Needs, once: Settings > Pages > Build and deployment > Source: GitHub Actions.
 name: Firmware
@@ -69,8 +70,14 @@ jobs:
           tools/package_release.sh build dist "${{ steps.version.outputs.version }}"
           { echo; echo '```'; cat dist/SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Web flasher site
-        run: tools/make_flasher_site.sh build site "${{ steps.version.outputs.version }}"
+        run: |
+          pip install markdown-it-py==3.0.0     # docs: Markdown to HTML (tools/make_docs_site.py)
+          tools/make_flasher_site.sh build site "${{ steps.version.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:

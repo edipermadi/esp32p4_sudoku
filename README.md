@@ -28,6 +28,8 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 
 ## Documentation
 
+Also online, as web pages: **https://edipermadi.github.io/esp32p4_sudoku/docs/** (updated with each release).
+
 | Page | What's in it |
 |------|--------------|
 | [Features](docs/features.md) | Everything the game does, screen by screen |
