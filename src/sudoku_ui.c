@@ -50,6 +50,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include <time.h>
 #include <lvgl.h>
 #include "freertos/FreeRTOS.h"
@@ -1134,6 +1135,139 @@ static void solve_commit_cb(lv_timer_t *t)
     }
 }
 
+/* ------------------------------------------------------------- confetti */
+/*
+ * A burst of paper confetti over the solved board before the Solved! dialog: CF_N
+ * pieces explode out of the middle of the screen (mostly upwards), air drag slows
+ * them, then gravity has them flutter down and away, spinning (drawn as a width
+ * that pulses) and fading out at the end. One overlay on the top
+ * layer draws them all (its DRAW_MAIN event), redrawn by a timer; it also holds
+ * touches back until the dialog is up.
+ */
+#define CF_N        90
+#define CF_MS       2200                /* then the dialog */
+#define CF_FADE_MS  400
+
+typedef struct {
+    float x, y, vx, vy, spin, spin_v, sway, sway_v;
+    uint8_t w, h, color;
+} cf_piece_t;
+
+static const uint32_t CF_COLORS[] = {0xE53935, 0xFB8C00, 0xFDD835, 0x43A047, 0x1E88E5, 0x8E24AA, 0xEC407A, 0x00ACC1};
+static cf_piece_t *cf_p;
+static lv_obj_t *cf_ovl;
+static lv_timer_t *cf_timer;
+static uint32_t cf_t0, cf_last;
+static void (*cf_done)(void);
+
+static float cf_rand(float lo, float hi)
+{
+    return lo + (hi - lo) * (float)(esp_random() & 0xFFFF) / 65535.0f;
+}
+
+static void cf_draw_cb(lv_event_t *e)
+{
+    lv_layer_t *layer = lv_event_get_layer(e);
+    uint32_t age = lv_tick_elaps(cf_t0);
+    lv_opa_t opa = age + CF_FADE_MS < CF_MS ? LV_OPA_COVER
+                                            : (lv_opa_t)(LV_OPA_COVER * (CF_MS - LV_MIN(age, CF_MS)) / CF_FADE_MS);
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.radius = 2;
+    d.bg_opa = opa;
+    for (int i = 0; i < CF_N; i++) {
+        const cf_piece_t *p = &cf_p[i];
+        if (p->y > SCR_W + 30 || p->x < -30 || p->x > SCR_W + 30) continue;
+        int32_t w = (int32_t)(p->w * fabsf(cosf(p->spin))) + 2;   /* turning over */
+        int32_t x = (int32_t)(p->x + 10.0f * sinf(p->sway)), y = (int32_t)p->y;
+        lv_area_t a = {x - w / 2, y - p->h / 2, x + (w - 1) / 2, y + (p->h - 1) / 2};
+        d.bg_color = lv_color_hex(CF_COLORS[p->color]);
+        lv_draw_rect(layer, &d, &a);
+    }
+}
+
+static void cf_stop(void)
+{
+    if (cf_timer) lv_timer_delete(cf_timer);
+    cf_timer = NULL;
+    if (cf_ovl) lv_obj_delete(cf_ovl);
+    cf_ovl = NULL;
+    free(cf_p);
+    cf_p = NULL;
+}
+
+static void cf_tick(lv_timer_t *t)
+{
+    uint32_t now = lv_tick_get();
+    float dt = (float)lv_tick_diff(now, cf_last) / 1000.0f;
+    cf_last = now;
+    if (dt > 0.1f) dt = 0.1f;                       /* (a slow frame doesn't throw them) */
+    for (int i = 0; i < CF_N; i++) {
+        cf_piece_t *p = &cf_p[i];
+        p->vy += 1300.0f * dt;                      /* gravity, px/s^2 */
+        float drag = 1.0f - 2.5f * dt;              /* air: the burst slows fast, then it's a fall */
+        p->vx *= drag;
+        p->vy *= drag;
+        p->x += p->vx * dt;
+        p->y += p->vy * dt;
+        p->spin += p->spin_v * dt;
+        p->sway += p->sway_v * dt;
+    }
+    lv_obj_invalidate(cf_ovl);
+    if (lv_tick_elaps(cf_t0) >= CF_MS) {
+        void (*done)(void) = cf_done;
+        cf_stop();
+        if (done) done();
+    }
+}
+
+/* starts the confetti; done runs when it's over (at once if it can't start) */
+static void confetti(void (*done)(void))
+{
+    cf_stop();
+    cf_p = malloc(sizeof(cf_piece_t) * CF_N);
+    if (!cf_p) {
+        if (done) done();
+        return;
+    }
+    for (int i = 0; i < CF_N; i++) {
+        cf_piece_t *p = &cf_p[i];
+        /* the burst, from the middle (tuned so the highest just reach the top edge and
+         * nearly all have fallen off the bottom by the end) */
+        float ang = cf_rand(0, 6.2832f), speed = cf_rand(400, 1300);
+        p->x = SCR_W / 2 + cf_rand(-12, 12);
+        p->y = SCR_W / 2 + cf_rand(-12, 12);
+        p->vx = speed * cosf(ang);
+        p->vy = speed * sinf(ang) - cf_rand(250, 600);   /* mostly upwards */
+        p->spin = cf_rand(0, 6.28f);
+        p->spin_v = cf_rand(6, 14);
+        p->sway = cf_rand(0, 6.28f);
+        p->sway_v = cf_rand(3, 6);
+        p->w = (uint8_t)cf_rand(9, 15);
+        p->h = (uint8_t)cf_rand(12, 20);
+        p->color = (uint8_t)(esp_random() % (sizeof(CF_COLORS) / sizeof(CF_COLORS[0])));
+    }
+    cf_ovl = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(cf_ovl);
+    lv_obj_set_size(cf_ovl, SCR_W, SCR_W);
+    lv_obj_set_clickable(cf_ovl, true);             /* no taps until the dialog is up */
+    lv_obj_add_event_cb(cf_ovl, cf_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+    cf_done = done;
+    cf_t0 = cf_last = lv_tick_get();
+    cf_timer = lv_timer_create(cf_tick, 16, NULL);
+}
+
+/* the Solved! dialog, after the confetti; the solve is saved once it's up */
+static void win_show(void)
+{
+    if (lv_screen_active() == scr_game && g_solved) {   /* (the dialog only where it belongs) */
+        lv_obj_set_hidden(g_pause_ovl, true);
+        lv_obj_set_hidden(g_win_ovl, false);
+    }
+    lv_timer_t *ct = lv_timer_create(solve_commit_cb, SAVE_DELAY_MS, NULL);
+    lv_timer_set_repeat_count(ct, 1);
+}
+
 static void on_solved(void)
 {
     g_solved = true;
@@ -1172,8 +1306,6 @@ static void on_solved(void)
     s_solve_hints = g_hints;
     s_solve_flags = g_flags;
     s_solve_started = game_started_at();
-    lv_timer_t *ct = lv_timer_create(solve_commit_cb, SAVE_DELAY_MS, NULL);   /* after the dialog is up */
-    lv_timer_set_repeat_count(ct, 1);
 
     char t[16], b[16];
     fmt_time(t, sizeof(t), secs);
@@ -1214,8 +1346,8 @@ static void on_solved(void)
                          "switched off.", 6000);
     }
     lv_obj_set_hidden(g_pause_ovl, true);
-    lv_obj_set_hidden(g_win_ovl, false);
     update_header();
+    confetti(win_show);                             /* then the dialog (win_show) */
 }
 
 static void after_move(void)
