@@ -52,7 +52,7 @@ shot docs/screenshots/game.png
 tap 261 86                  # Share: the puzzle as a QR code
 wait 800
 shot docs/screenshots/share.png
-tap 360 606                 # Close
+tap 224 614                 # Close (left of Send by sound)
 wait 300
 tap 34 86                   # the light bulb: the variant's rules
 wait 600
