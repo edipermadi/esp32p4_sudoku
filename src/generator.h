@@ -62,7 +62,7 @@ extern "C" {
 
 typedef enum { GEN_EASY = 0, GEN_MEDIUM, GEN_HARD, GEN_EXPERT, GEN_LEVELS } gen_level_t;
 
-extern const char *const GEN_LEVEL_NAMES[GEN_LEVELS];   /* "Easy", "Medium", "Hard", "Expert" */
+const char *gen_level_name(int level);   /* 0..GEN_LEVELS-1: "Easy", "Medium", "Hard", "Expert" */
 
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
@@ -70,9 +70,7 @@ typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILL
 
 /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
  * "Thermo", "Sandwich", "Kids 4x4" */
-extern const char *const VARIANT_NAMES[VAR_COUNT];
-
-/* ---------------------------------------------------------------- geometry */
+const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku", ... */
 #define UNIT_DIAG_MAIN 27
 #define UNIT_DIAG_ANTI 28
 #define UNIT_WINDOW    29               /* 29..32 */

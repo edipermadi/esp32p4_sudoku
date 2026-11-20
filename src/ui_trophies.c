@@ -19,6 +19,7 @@ static void tr_tab_cb(lv_event_t *e);
 static void tr_day_cb(lv_event_t *e);
 static void trophy_toast_cb(lv_timer_t *t);
 
+static lv_obj_t *scr_trophy;              /* Trophies: achievements, daily leaderboard */
 static lv_obj_t *tr_tab[TR_TABS], *tr_view[TR_TABS];
 static lv_obj_t *tr_ach_count, *tr_ach_list, *tr_rec_list;
 static lv_obj_t *tr_week_lbl, *tr_week_prev, *tr_week_next, *tr_week_list;
@@ -26,7 +27,7 @@ static char tr_monday[12];                /* week on the Weekly tab, "" = this w
 static lv_obj_t *tr_day_lbl, *tr_day_prev, *tr_day_next, *tr_board_list, *tr_play_btn;
 static int tr_tab_sel;
 static char tr_day[12];                   /* day on the leaderboard, "" = today */
-lv_obj_t *h_trophy_sub;            /* home button line: "7 of 22 achievements" */
+static lv_obj_t *h_trophy_sub;            /* home button line: "7 of 22 achievements" */
 
 static void tr_hint(lv_obj_t *list, const char *text)
 {
@@ -625,3 +626,8 @@ void trophy_toast_poll(void)
     lv_timer_set_repeat_count(t, 1);
     if (h_trophy_sub && stats_db_ready()) stats_db_query_achievements();   /* the home line */
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+lv_obj_t *screen_trophy(void) { return scr_trophy; }
+lv_obj_t *home_trophy_sub(void) { return h_trophy_sub; }
+void home_set_trophy_sub(lv_obj_t *v) { h_trophy_sub = v; }

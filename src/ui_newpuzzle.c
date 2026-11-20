@@ -37,6 +37,11 @@ static void ed_check_done(lv_timer_t *t);
 static void ed_play_cb(lv_event_t *e);
 static void enter_cb(lv_event_t *e);
 
+static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
+                                                     "Naked pair", "Hidden pair", "Naked triple", "X-Wing",
+                                                     "Swordfish", "XY-Wing", "Killer cage", "Thermometer",
+                                                     "Sandwich clue", "Consecutive bars"};
+
 /* ------------------------------------------------------------- new puzzle (generator) */
 /*
  * New puzzle: pick a level, a worker task runs the generator (generator.c)
@@ -71,8 +76,8 @@ static void gen_task(void *arg)
     if (gen_var_req == VAR_THERMO) sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);
     int clues = 0;
     for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
-    printf("generator: %s %s asked, %s made, %d clues, %u ms\n", VARIANT_NAMES[gen_var_req],
-           GEN_LEVEL_NAMES[gen_level_req], GEN_LEVEL_NAMES[got], clues,
+    printf("generator: %s %s asked, %s made, %d clues, %u ms\n", variant_name(gen_var_req),
+           gen_level_name(gen_level_req), gen_level_name(got), clues,
            (unsigned)(esp_timer_get_time() / 1000 - t0));
     gen_level_got = got;
     gen_done = true;
@@ -97,14 +102,13 @@ static void gen_poll_cb(lv_timer_t *t)
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
     } else {
-        id = s_gen_ram_next++;                       /* no card: until power-off */
-        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+        id = gen_ram_take();                       /* no card: until power-off */
     }
     gen_cache_put(id, gen_var_req, gen_level_got, gen_givens, regions, cages, marks, thermos, gen_day);
     if (gen_level_got != gen_level_req && !gen_day[0]) {
         char msg[96];
-        snprintf(msg, sizeof(msg), "Couldn't make a %s %s quickly; this one is %s.", GEN_LEVEL_NAMES[gen_level_req],
-                 gen_var_req == VAR_CLASSIC ? "one" : VARIANT_NAMES[gen_var_req], GEN_LEVEL_NAMES[gen_level_got]);
+        snprintf(msg, sizeof(msg), "Couldn't make a %s %s quickly; this one is %s.", gen_level_name(gen_level_req),
+                 gen_var_req == VAR_CLASSIC ? "one" : variant_name(gen_var_req), gen_level_name(gen_level_got));
         sudoku_ui_notice(msg, 4000);
     }
     open_puzzle(id);
@@ -130,8 +134,8 @@ static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
         daily_kind_text(gen_var_req, level, kind, sizeof(kind));
         snprintf(text, sizeof(text), "Making today's %s puzzle...", kind);
     }
-    else if (gen_var_req == VAR_CLASSIC) snprintf(text, sizeof(text), "Making a new %s puzzle...", GEN_LEVEL_NAMES[level]);
-    else snprintf(text, sizeof(text), "Making a new %s %s puzzle...", GEN_LEVEL_NAMES[level], VARIANT_NAMES[gen_var_req]);
+    else if (gen_var_req == VAR_CLASSIC) snprintf(text, sizeof(text), "Making a new %s puzzle...", gen_level_name(level));
+    else snprintf(text, sizeof(text), "Making a new %s %s puzzle...", gen_level_name(level), variant_name(gen_var_req));
     gen_box = make_msgbox(LV_SYMBOL_REFRESH "  New puzzle", text);
     if (xTaskCreatePinnedToCore(gen_task, "gen", 16384, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
         lv_msgbox_close(gen_box);
@@ -181,8 +185,8 @@ bool daily_today(char day[12], int *level, int *wday)
 /* "Hard", "X-Sudoku Medium": a daily puzzle's level, with its variant unless Classic */
 void daily_kind_text(int variant, int level, char *buf, size_t n)
 {
-    const char *lv = level >= 0 && level < GEN_LEVELS ? GEN_LEVEL_NAMES[level] : "";
-    if (variant > VAR_CLASSIC && variant < VAR_COUNT) snprintf(buf, n, "%s %s", VARIANT_NAMES[variant], lv);
+    const char *lv = level >= 0 && level < GEN_LEVELS ? gen_level_name(level) : "";
+    if (variant > VAR_CLASSIC && variant < VAR_COUNT) snprintf(buf, n, "%s %s", variant_name(variant), lv);
     else snprintf(buf, n, "%s", lv);
 }
 
@@ -227,7 +231,7 @@ void daily_cb(lv_event_t *e)
     stats_db_daily_status(day, &id, &solved, &streak);
     if (!id) {                                        /* RAM-only (no card): look in the cache */
         for (int i = 0; i < GEN_CACHE; i++) {
-            if (s_gen_cache[i].id && !strcmp(s_gen_cache[i].day, day)) id = s_gen_cache[i].id - PUZZLE_GEN_BASE;
+            if (ui_gen_cache()[i].id && !strcmp(ui_gen_cache()[i].day, day)) id = ui_gen_cache()[i].id - PUZZLE_GEN_BASE;
         }
     }
     if (id) {
@@ -353,7 +357,7 @@ static void new_puzzle_cb(lv_event_t *e)
         char label[48] = "";
         for (int k = 0; k <= lv; k++) strcat(label, SYMBOL_STAR);
         strcat(label, "  ");
-        strcat(label, GEN_LEVEL_NAMES[lv]);
+        strcat(label, gen_level_name(lv));
         lv_obj_t *b = make_btn(grid, 0, 0, 0, 60, label, &font_icons_24, gen_level_cb, (void *)(intptr_t)lv);
         lv_obj_set_width(b, LV_PCT(48));
         lv_obj_set_style_bg_color(b, C_ACCENT, 0);
@@ -520,8 +524,8 @@ static void learn_task(void *arg)
     int found = 0;
     for (int tries = 0; tries < 2000 && !found; tries++) {     /* (pairs are the rarest: ~200 puzzles) */
         int c = (int)((r + (uint32_t)tries * 7) % PUZZLE_COLLECTION_COUNT);
-        if (target >= LEARN_POINTING && strstr(puzzle_collections[c].name, "Easy")) continue;
-        uint16_t id = (uint16_t)(puzzle_collections[c].first + (esp_random() % puzzle_collections[c].count));
+        if (target >= LEARN_POINTING && strstr(puzzle_collection(c)->name, "Easy")) continue;
+        uint16_t id = (uint16_t)(puzzle_collection(c)->first + (esp_random() % puzzle_collection(c)->count));
         puzzle_load(id, vals);
         if (!sudoku_solve(G, vals, sol)) continue;
         sudoku_step_t st, w;
@@ -560,26 +564,26 @@ static void learn_poll_cb(lv_timer_t *t)
     /* the puzzle, at that point, as a practice game */
     int var = learn_variant(learn_target);
     if (var >= 0) {                                 /* made just now: kept in RAM only, as without a card */
-        learn_id = s_gen_ram_next++;
-        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+        learn_id = gen_ram_take();
         gen_cache_put(learn_id, var, GEN_MEDIUM, learn_givens, NULL, var == VAR_KILLER ? learn_cages : NULL,
                       learn_marks[0] ? learn_marks : NULL, learn_thermos[0] ? learn_thermos : NULL, NULL);
     }
     start_game(learn_id, false);
-    g_practice = learn_target;
-    g_flags = 0;                                    /* (practice: never the no-notes challenge) */
+    game_set_practice(learn_target);
+    game_set_flags(0);                                    /* (practice: never the no-notes challenge) */
     challenge_ui();
     uint8_t given[81];
     puzzle_get(learn_id, given);
     for (int i = 0; i < 81; i++) {
-        if (!given[i]) g_b.val[i] = learn_vals[i];
+        if (!given[i]) game_put_value(i, learn_vals[i]);
     }
-    g_undo_len = g_undo_head = 0;
-    g_nmoves = 0;
+    game_set_undo_len(0);
+    game_set_undo_head(0);
+    game_set_nmoves(0);
     compute_conflicts();
     update_header();
-    h_info = learn_step;                            /* the hint card on the technique */
-    h_step = 1;
+    hint_set_info(&(learn_step));                            /* the hint card on the technique */
+    hint_set_step(1);
     hint_render();
 }
 
@@ -596,7 +600,7 @@ static void learn_pick_cb(lv_event_t *e)
         if (!learn_cages && !(learn_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return;
         if (!learn_thermos && !(learn_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) return;
         snprintf(text, sizeof(text), "Making a %s puzzle where the next step uses its rule...",
-                 VARIANT_NAMES[learn_variant(target)]);
+                 variant_name(learn_variant(target)));
     } else {
         snprintf(text, sizeof(text), "Finding a puzzle where the next step is a %s...", LEARN_NAMES[target]);
     }
@@ -659,7 +663,7 @@ static void learn_cb(lv_event_t *e)
  * puzzles #n" (sudoku.db, like an imported one; RAM only without a card)
  * and opened like any other.
  */
-lv_obj_t *scr_edit, *ed_cells[81], *ed_lbl[81], *ed_status;
+static lv_obj_t *scr_edit, *ed_cells[81], *ed_lbl[81], *ed_status;
 static uint8_t ed_val[81];
 static int ed_sel = -1;
 static uint16_t s_own_ram_next = 1;                 /* RAM-only numbering without a card */
@@ -677,7 +681,7 @@ static void ed_refresh(void)
         if (clash) bg = C_CELL_BAD;
         lv_obj_set_style_bg_color(ed_cells[i], bg, 0);
         lv_obj_set_style_text_color(ed_lbl[i], clash ? C_RED : C_TEXT, 0);
-        lv_label_set_text_static(ed_lbl[i], DIGITS[ed_val[i]]);
+        lv_label_set_text_static(ed_lbl[i], ui_digits()[ed_val[i]]);
     }
     if (bad) {
         lv_label_set_text_fmt(ed_status, LV_SYMBOL_WARNING "  %d digits break a rule", bad);
@@ -705,7 +709,7 @@ static void ed_digit_cb(lv_event_t *e)
 
 static void ed_close(void)
 {
-    lv_screen_load(scr_list);
+    lv_screen_load(screen_list());
     if (scr_edit) lv_obj_delete_async(scr_edit);
     scr_edit = NULL;
 }
@@ -771,15 +775,14 @@ static void ed_check_done(lv_timer_t *t)
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
     } else {
-        id = s_gen_ram_next++;                       /* no card: until power-off */
-        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+        id = gen_ram_take();                       /* no card: until power-off */
         number = s_own_ram_next++;
     }
     gen_cache_put(id, VAR_CLASSIC, level, ed_check_cells, NULL, NULL, NULL, NULL, NULL);
     gen_cache_source(id, STATS_OWN_SOURCE, number);
     char msg[96];
     snprintf(msg, sizeof(msg), "Saved as %s #%d: one solution, rated %s.", STATS_OWN_SOURCE, number,
-             GEN_LEVEL_NAMES[level]);
+             gen_level_name(level));
     sudoku_ui_notice(msg, 3500);
     if (scr_edit) lv_obj_delete_async(scr_edit);
     scr_edit = NULL;
@@ -857,7 +860,7 @@ static void enter_cb(lv_event_t *e)
     board_layout(sudoku_geom(VAR_CLASSIC), grid, boxes, ed_cells, NULL, GRID_X);
     const int span = GRID_SIZE - 6, h = (span - 8 * PAD_GAP) / 9;
     for (int d = 1; d <= 9; d++) {
-        make_btn(scr_edit, PAD_X, GRID_Y + 1 + (d - 1) * (h + PAD_GAP), PAD_W, h, DIGITS[d], &lv_font_montserrat_28,
+        make_btn(scr_edit, PAD_X, GRID_Y + 1 + (d - 1) * (h + PAD_GAP), PAD_W, h, ui_digits()[d], &lv_font_montserrat_28,
                  ed_digit_cb, (void *)(intptr_t)d);
     }
     lv_obj_t *hint = make_label(scr_edit, &lv_font_montserrat_14, C_MUTED);
@@ -876,5 +879,9 @@ void new_menu_cb(lv_event_t *e)
         {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
         {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
     };
-    ctx_menu_toggle(l_new_btn, ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));
+    ctx_menu_toggle(list_new_btn(), ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+const char *const *learn_names(void) { return LEARN_NAMES; }
+lv_obj_t *screen_edit(void) { return scr_edit; }

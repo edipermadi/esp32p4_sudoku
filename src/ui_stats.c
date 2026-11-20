@@ -13,6 +13,7 @@ static void stats_player_list_draw_cb(lv_event_t *e);
 static void stats_player_dd_cb(lv_event_t *e);
 static void stats_select_rows(void);
 static void kind_total(const stats_view_t *v, int k, stats_level_t *t);
+static void render_stats(const stats_view_t *v, bool from_db);
 static uint32_t chart_step(uint32_t max);
 static uint32_t chart_avg(const stats_view_t *v, int i);
 static void plot_text(lv_layer_t *layer, const char *text, lv_color_t color, int x1, int y1, int x2, lv_text_align_t align);
@@ -32,6 +33,7 @@ static bool      x_chart_mode;            /* chart shown (kept until power-off) 
 static bool      x_from_db;               /* what the info popup says the numbers come from */
 static char      x_player_txt[STORE_NAME_LEN + 8];    /* closed dropdown: icon + name */
 static lv_obj_t *x_player_av;                         /* ... or the avatar left of the name */
+static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, then the kinds (STATS_LEVEL_KIND) */
 
 static void add_puzzle_stat(level_stat_t *st, uint16_t id)
 {
@@ -55,7 +57,7 @@ static void view_from_ram(int level, stats_view_t *v)
     memset(v, 0, sizeof(*v));
     v->level = level;
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        const puzzle_collection_t *pc = &puzzle_collections[c];
+        const puzzle_collection_t *pc = puzzle_collection(c);
         for (uint16_t i = 0; i < pc->count; i++) {
             add_puzzle_stat(&v->levels[c], pc->first + i);
             add_puzzle_stat(&v->total, pc->first + i);
@@ -117,7 +119,7 @@ static lv_obj_t *player_avatar_obj(lv_obj_t *parent, const stats_player_t *pl)
     lv_obj_t *o;
     if (pl && pl->avatar && pl->avatar <= AVATAR_COUNT) {
         o = lv_image_create(parent);
-        lv_image_set_src(o, &avatar_images[pl->avatar - 1]);
+        lv_image_set_src(o, avatar_image(pl->avatar - 1));
     } else {
         o = lv_obj_create(parent);                  /* the dot, centred in the avatar's place */
         lv_obj_remove_style_all(o);
@@ -131,14 +133,14 @@ void stats_player_dd_update(void)
 {
     if (!x_player_dd) return;
     static char opts[STATS_MAX_PLAYERS * STORE_NAME_LEN];
-    bool db = stats_db_ready() && p_count > 0;
+    bool db = stats_db_ready() && players_count() > 0;
     int sel = 0;
     opts[0] = 0;
     if (db) {
         size_t len = 0;
-        for (int i = 0; i < p_count; i++) {
-            len += snprintf(opts + len, sizeof(opts) - len, "%s%s", i ? "\n" : "", p_players[i].name);
-            if (p_players[i].id == store_player_id()) sel = i;
+        for (int i = 0; i < players_count(); i++) {
+            len += snprintf(opts + len, sizeof(opts) - len, "%s%s", i ? "\n" : "", players_all()[i].name);
+            if (players_all()[i].id == store_player_id()) sel = i;
         }
     } else {
         snprintf(opts, sizeof(opts), "%s", store_player_name());
@@ -147,7 +149,7 @@ void stats_player_dd_update(void)
     lv_dropdown_set_selected(x_player_dd, sel);
 
     /* the closed box: the avatar of who plays now left of the name, or the person icon */
-    const stats_player_t *cur = db ? &p_players[sel] : NULL;
+    const stats_player_t *cur = db ? &players_all()[sel] : NULL;
     bool av = cur && cur->avatar && cur->avatar <= AVATAR_COUNT;
     if (x_player_av) lv_obj_delete(x_player_av);
     x_player_av = NULL;
@@ -161,27 +163,27 @@ void stats_player_dd_update(void)
 
     /* the open list: room for the avatars left of the names (stats_player_list_draw_cb) */
     lv_obj_set_style_pad_left(lv_dropdown_get_list(x_player_dd), db ? 12 + AVATAR_SIZE + 12 : 12, 0);
-    lv_obj_set_state(x_player_dd, LV_STATE_DISABLED, !db || p_count < 2);
+    lv_obj_set_state(x_player_dd, LV_STATE_DISABLED, !db || players_count() < 2);
 }
 
 /* the open list's avatars (or dots), each left of its name. Drawn after the list (DRAW_POST, after the
  * dropdown's own: the selected line's highlight is drawn then too, and would cover children). */
 static void stats_player_list_draw_cb(lv_event_t *e)
 {
-    if (!(stats_db_ready() && p_count > 0)) return;
+    if (!(stats_db_ready() && players_count() > 0)) return;
     lv_obj_t *pdl = lv_event_get_current_target_obj(e);
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t a;
     lv_obj_get_coords(pdl, &a);
     int fh = lv_font_get_line_height(&lv_font_montserrat_20);
     int x = a.x1 + 12, y0 = a.y1 + lv_obj_get_style_pad_top(pdl, 0) - lv_obj_get_scroll_y(pdl);
-    for (int i = 0; i < p_count; i++) {
-        const stats_player_t *pl = &p_players[i];
+    for (int i = 0; i < players_count(); i++) {
+        const stats_player_t *pl = &players_all()[i];
         int y = y0 + i * (fh + X_DD_LS) + (fh - AVATAR_SIZE) / 2;
         if (pl->avatar && pl->avatar <= AVATAR_COUNT) {
             lv_draw_image_dsc_t d;
             lv_draw_image_dsc_init(&d);
-            d.src = &avatar_images[pl->avatar - 1];
+            d.src = avatar_image(pl->avatar - 1);
             lv_area_t im = {x, y, x + AVATAR_SIZE - 1, y + AVATAR_SIZE - 1};
             lv_draw_image(layer, &d, &im);
         } else {                                    /* their colour's dot */
@@ -199,13 +201,12 @@ static void stats_player_list_draw_cb(lv_event_t *e)
 static void stats_player_dd_cb(lv_event_t *e)
 {
     uint32_t i = lv_dropdown_get_selected(x_player_dd);
-    if ((int)i < p_count && p_players[i].id != store_player_id()) {
-        stats_db_switch_player(p_players[i].id);   /* statistics reload when the switch is done */
+    if ((int)i < players_count() && players_all()[i].id != store_player_id()) {
+        stats_db_switch_player(players_all()[i].id);   /* statistics reload when the switch is done */
     }
 }
 
-stats_view_t *x_view_p;           /* PSRAM (internal RAM is tight): the view shown */
-
+static stats_view_t *x_view_p;           /* PSRAM (internal RAM is tight): the view shown */
 static void stats_select_rows(void)
 {
     for (int r = 0; r < X_ROWS; r++) {
@@ -232,12 +233,12 @@ static void kind_total(const stats_view_t *v, int k, stats_level_t *t)
     }
 }
 
-void render_stats(const stats_view_t *v, bool from_db)
+static void render_stats(const stats_view_t *v, bool from_db)
 {
     chart_render(v, from_db);
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
         lv_label_set_text_fmt(x_cnt_lbl[c + 1], "%u/%u", (unsigned)v->levels[c].solved,
-                              (unsigned)puzzle_collections[c].count);
+                              (unsigned)puzzle_collection(c)->count);
     }
     lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)v->total.solved, (unsigned)PUZZLE_COUNT);
     stats_level_t kt[KIND_COUNT];
@@ -264,8 +265,8 @@ void render_stats(const stats_view_t *v, bool from_db)
             const level_stat_t *st = coll ? &v->levels[c] : &kt[c - PUZZLE_COLLECTION_COUNT];
             fmt_stat_times(f, a, sizeof(f), st);
             fmt_avg_mistakes(m, sizeof(m), st);
-            lv_table_set_cell_value(x_table, c + 1, 0, coll ? puzzle_collections[c].name
-                                                            : STATS_KIND_NAMES[c - PUZZLE_COLLECTION_COUNT]);
+            lv_table_set_cell_value(x_table, c + 1, 0, coll ? puzzle_collection(c)->name
+                                                            : stats_kind_name(c - PUZZLE_COLLECTION_COUNT));
             lv_table_set_cell_value_fmt(x_table, c + 1, 1, "%u", (unsigned)st->solved);
             lv_table_set_cell_value(x_table, c + 1, 2, f);
             lv_table_set_cell_value(x_table, c + 1, 3, a);
@@ -278,7 +279,7 @@ void render_stats(const stats_view_t *v, bool from_db)
 
     if (v->level >= PUZZLE_COLLECTION_COUNT) {     /* a kind made on the board: one row per level */
         int k = v->level - PUZZLE_COLLECTION_COUNT;
-        lv_label_set_text(x_title, STATS_KIND_NAMES[k]);
+        lv_label_set_text(x_title, stats_kind_name(k));
         const level_stat_t *t = &kt[k];
         fmt_stat_times(f, a, sizeof(f), t);
         fmt_avg_mistakes(m, sizeof(m), t);
@@ -294,14 +295,14 @@ void render_stats(const stats_view_t *v, bool from_db)
             const level_stat_t *st = &v->kinds[k][l];
             fmt_stat_times(f, a, sizeof(f), st);
             fmt_avg_mistakes(m, sizeof(m), st);
-            lv_table_set_cell_value(x_table, l + 1, 0, GEN_LEVEL_NAMES[l]);
+            lv_table_set_cell_value(x_table, l + 1, 0, gen_level_name(l));
             lv_table_set_cell_value_fmt(x_table, l + 1, 1, "%u", (unsigned)st->solved);
             lv_table_set_cell_value(x_table, l + 1, 2, f);
             lv_table_set_cell_value(x_table, l + 1, 3, a);
             lv_table_set_cell_value(x_table, l + 1, 4, m);
         }
         lv_label_set_text_fmt(x_empty, from_db ? "No %s solved yet." : "%s needs sudoku.db on a microSD card.",
-                              STATS_KIND_NAMES[k]);
+                              stats_kind_name(k));
         lv_obj_set_hidden(x_table, x_chart_mode || t->solves == 0);
         lv_obj_set_hidden(x_empty, x_chart_mode || t->solves != 0);
         return;
@@ -309,7 +310,7 @@ void render_stats(const stats_view_t *v, bool from_db)
 
     /* one row per solved puzzle of the level */
     lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
-    const puzzle_collection_t *pc = &puzzle_collections[v->level];
+    const puzzle_collection_t *pc = puzzle_collection(v->level);
     lv_label_set_text(x_title, pc->name);
     stats_summary(&v->levels[v->level], pc->count);
     static const int32_t w[] = {90, 130, 110, 102};     /* sums to PANE_W */
@@ -390,7 +391,7 @@ static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color)
 
 static void plot_draw_cb(lv_event_t *e)
 {
-    const stats_view_t *v = &x_view;
+    const stats_view_t *v = &(*x_view_p);
     if (v->n_recent < 2) return;
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t co;
@@ -496,7 +497,7 @@ static void chart_render(const stats_view_t *v, bool from_db)
 static void chart_btn_cb(lv_event_t *e)
 {
     x_chart_mode = !x_chart_mode;
-    render_stats(&x_view, x_from_db);
+    render_stats(&(*x_view_p), x_from_db);
 }
 
 /* the (i) button next to the title: what the numbers mean */
@@ -527,8 +528,8 @@ void refresh_stats(void)
     if (stats_db_ready()) {
         stats_db_query(x_sel - 1);
     } else {
-        view_from_ram(x_sel - 1, &x_view);
-        render_stats(&x_view, false);
+        view_from_ram(x_sel - 1, &(*x_view_p));
+        render_stats(&(*x_view_p), false);
     }
 }
 
@@ -557,34 +558,34 @@ static void stats_table_draw_cb(lv_event_t *e)
 
 void build_stats(void)
 {
-    scr_stats = make_screen();
+    screen_set_stats(make_screen());
 
-    make_btn(scr_stats, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
-    lv_obj_t *t = make_label(scr_stats, &lv_font_montserrat_28, C_TEXT);
+    make_btn(screen_stats(), 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
+    lv_obj_t *t = make_label(screen_stats(), &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Statistics");
     lv_obj_set_pos(t, 150, 20);
-    lv_obj_t *info = make_btn(scr_stats, SCR_W - 12 - 52, 10, 52, 52, SYMBOL_INFO, &font_icons_24, stats_info_cb,
+    lv_obj_t *info = make_btn(screen_stats(), SCR_W - 12 - 52, 10, 52, 52, SYMBOL_INFO, &font_icons_24, stats_info_cb,
                               NULL);                 /* top right, on the title's line */
     lv_obj_set_style_bg_opa(info, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(info, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_set_style_text_color(lv_obj_get_child(info, 0), C_ACCENT, 0);
 
-    lv_obj_t *list = make_coll_column(scr_stats);
+    lv_obj_t *list = make_coll_column(screen_stats());
     lv_obj_set_pos(list, 12, X_BODY_Y);
     lv_obj_set_size(list, COLL_W, SCR_W - X_BODY_Y - 12);
     x_btn[0] = make_coll_btn(list, "All levels", &x_name_lbl[0], &x_cnt_lbl[0], stats_row_cb, 0);
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        x_btn[c + 1] = make_coll_btn(list, puzzle_collections[c].name, &x_name_lbl[c + 1], &x_cnt_lbl[c + 1],
+        x_btn[c + 1] = make_coll_btn(list, puzzle_collection(c)->name, &x_name_lbl[c + 1], &x_cnt_lbl[c + 1],
                                      stats_row_cb, c + 1);
     }
     for (int k = 0; k < KIND_COUNT; k++) {          /* made on the board (the list scrolls) */
         int r = 1 + PUZZLE_COLLECTION_COUNT + k;
-        x_btn[r] = make_coll_btn(list, STATS_KIND_NAMES[k], &x_name_lbl[r], &x_cnt_lbl[r], stats_row_cb, r);
+        x_btn[r] = make_coll_btn(list, stats_kind_name(k), &x_name_lbl[r], &x_cnt_lbl[r], stats_row_cb, r);
     }
 
     int px = PANE_X, pw = PANE_W;
     /* top bar, right: whose statistics, as a dropdown */
-    x_player_dd = lv_dropdown_create(scr_stats);
+    x_player_dd = lv_dropdown_create(screen_stats());
     x_player_av = NULL;                                /* (a rebuild: the old one went with the old screen) */
     lv_obj_set_pos(x_player_dd, 12, X_ROW_Y);          /* whose statistics: first in the row */
     lv_obj_set_size(x_player_dd, 320, 52);
@@ -610,14 +611,14 @@ void build_stats(void)
     lv_obj_set_style_text_color(pdl, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
     lv_obj_add_event_cb(x_player_dd, stats_player_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
     stats_player_dd_update();
-    x_title = make_label(scr_stats, &lv_font_montserrat_22, C_TEXT);
+    x_title = make_label(screen_stats(), &lv_font_montserrat_22, C_TEXT);
     lv_obj_set_pos(x_title, px + 4, X_BODY_Y + 4);
-    x_sum1 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
+    x_sum1 = make_label(screen_stats(), &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(x_sum1, px + 4, X_BODY_Y + 34);
-    x_sum2 = make_label(scr_stats, &lv_font_montserrat_14, C_MUTED);
+    x_sum2 = make_label(screen_stats(), &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(x_sum2, px + 4, X_BODY_Y + 54);
 
-    x_table = lv_table_create(scr_stats);
+    x_table = lv_table_create(screen_stats());
     lv_obj_set_pos(x_table, px, X_BODY_Y + 82);
     lv_obj_set_size(x_table, pw, SCR_W - X_BODY_Y - 82 - 12);
     lv_obj_set_style_bg_color(x_table, C_CARD, 0);
@@ -637,18 +638,18 @@ void build_stats(void)
     lv_obj_set_send_draw_task_events(x_table, true);
     lv_obj_add_event_cb(x_table, stats_table_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
 
-    x_empty = make_label(scr_stats, &lv_font_montserrat_18, C_MUTED);
+    x_empty = make_label(screen_stats(), &lv_font_montserrat_18, C_MUTED);
     lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
     lv_obj_set_pos(x_empty, px + 4, X_BODY_Y + 104);
 
     /* Chart / Table switch (top right of the pane) and the chart card in the table's place */
-    lv_obj_t *ib = make_btn(scr_stats, SCR_W - 12 - 160 - 10 - 170, X_ROW_Y, 170, 52, SYMBOL_BULB "  Insights",
+    lv_obj_t *ib = make_btn(screen_stats(), SCR_W - 12 - 160 - 10 - 170, X_ROW_Y, 170, 52, SYMBOL_BULB "  Insights",
                             &font_icons_20, insights_cb, NULL);   /* mistake insights, from the move logs */
     lv_obj_set_style_text_color(lv_obj_get_child(ib, 0), C_ACCENT, 0);
-    x_chart_btn = make_btn(scr_stats, SCR_W - 12 - 160, X_ROW_Y, 160, 52, SYMBOL_CHART "  Chart", &font_icons_20,
+    x_chart_btn = make_btn(screen_stats(), SCR_W - 12 - 160, X_ROW_Y, 160, 52, SYMBOL_CHART "  Chart", &font_icons_20,
                            chart_btn_cb, NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(x_chart_btn, 0), C_ACCENT, 0);
-    x_chart = lv_obj_create(scr_stats);
+    x_chart = lv_obj_create(screen_stats());
     lv_obj_set_pos(x_chart, px, X_BODY_Y + 82);
     lv_obj_set_size(x_chart, pw, SCR_W - X_BODY_Y - 82 - 12);
     lv_obj_set_style_bg_color(x_chart, C_CARD, 0);
@@ -668,3 +669,15 @@ void build_stats(void)
     lv_obj_set_hidden(x_chart, true);
 
 }
+
+/* sudoku.db's results (Settings' card poll hands them over) */
+void stats_take_view(const stats_view_t *v)
+{
+    *x_view_p = *v;
+    render_stats(x_view_p, true);
+}
+
+/* ---- accessors: the other UI files reach this file's state through these */
+int stats_sel(void) { return x_sel; }
+const stats_view_t *stats_view_p(void) { return x_view_p; }
+void stats_set_view_p(stats_view_t *v) { x_view_p = v; }

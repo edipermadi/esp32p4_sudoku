@@ -72,8 +72,7 @@ static void saver_sleep(bool lock_now);
 static void saver_cb(lv_timer_t *t);
 static void touch_sound_cb(lv_event_t *e);
 
-/* "Screen off" dropdown choices, in minutes (0 = never) */
-const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
+static lv_obj_t *s_saver;   /* black cover on the system layer while the screen is off */
 
 /* ============================================================= start */
 
@@ -308,8 +307,8 @@ static void pin_setup_close(bool done)
 {
     if (ps_ovl) lv_obj_delete_async(ps_ovl);
     ps_ovl = NULL;
-    if (!done && ps_from_dd && st_lock_dd) lv_dropdown_set_selected(st_lock_dd, store_lock_mode());
-    if (st_pin_btn) lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
+    if (!done && ps_from_dd && settings_lock_dd()) lv_dropdown_set_selected(settings_lock_dd(), store_lock_mode());
+    if (settings_pin_btn()) lv_obj_set_state(settings_pin_btn(), LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
 }
 
 static void pin_setup_key_cb(lv_event_t *e)
@@ -378,13 +377,13 @@ static void pin_setup_open(bool from_dd)
 
 void lock_dd_cb(lv_event_t *e)
 {
-    uint32_t sel = lv_dropdown_get_selected(st_lock_dd);
+    uint32_t sel = lv_dropdown_get_selected(settings_lock_dd());
     if (sel == LOCK_PIN) {                          /* a PIN first */
         pin_setup_open(true);
         return;
     }
     store_set_lock_mode((uint8_t)sel);
-    lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, true);
+    lv_obj_set_state(settings_pin_btn(), LV_STATE_DISABLED, true);
 }
 
 void pin_change_cb(lv_event_t *e)
@@ -448,7 +447,7 @@ static void saver_wake_cb(lv_event_t *e)
 
 static void saver_sleep(bool lock_now)
 {
-    if (lv_screen_active() == scr_game && g_id != STORE_NO_GAME && !g_solved && !g_paused) {
+    if (lv_screen_active() == screen_game() && game_id() != STORE_NO_GAME && !game_solved() && !game_paused()) {
         set_paused(true);   /* stops the clock, hides the board, saves the game */
     }
     lock_show(lock_now);                /* (if on) under the black cover: what the waking tap shows */
@@ -483,41 +482,41 @@ static void saver_sleep(bool lock_now)
 
 int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why, size_t why_n)
 {
-    if (lv_screen_active() != scr_game || !g_geo) {
+    if (lv_screen_active() != screen_game() || !game_geo()) {
         snprintf(why, why_n, "no game on screen");
         return -1;
     }
-    if (g_solved || g_paused) {
-        snprintf(why, why_n, g_solved ? "already solved" : "paused");
+    if (game_solved() || game_paused()) {
+        snprintf(why, why_n, game_solved() ? "already solved" : "paused");
         return -1;
     }
     for (int k = 0; k < n; k++) {                   /* all of them first */
         int i = cells[k], d = digits[k];
-        if (i > 80 || !g_geo->used[i]) {
+        if (i > 80 || !game_geo()->used[i]) {
             snprintf(why, why_n, "cell %d isn't on the board", i);
             return -1;
         }
-        if (g_given[i]) {
+        if (game_given()[i]) {
             snprintf(why, why_n, "cell %d is a given", i);
             return -1;
         }
-        if (d < 1 || d > g_geo->n) {
-            snprintf(why, why_n, "digit %d for cell %d: 1..%d", d, i, g_geo->n);
+        if (d < 1 || d > game_geo()->n) {
+            snprintf(why, why_n, "digit %d for cell %d: 1..%d", d, i, game_geo()->n);
             return -1;
         }
     }
-    bool notes = g_notes_mode;
-    g_notes_mode = false;                           /* digits, not notes */
+    bool notes = game_notes_mode();
+    game_set_notes_mode(false);                           /* digits, not notes */
     int placed = 0;
-    for (int k = 0; k < n && !g_solved; k++) {
-        if (g_b.val[cells[k]] == digits[k]) continue;   /* (a second tap would clear it) */
-        g_sel = cells[k];
+    for (int k = 0; k < n && !game_solved(); k++) {
+        if (game_b()->val[cells[k]] == digits[k]) continue;   /* (a second tap would clear it) */
+        game_set_sel(cells[k]);
         enter_digit(digits[k]);                     /* as from the pad */
         placed++;
     }
-    g_notes_mode = notes;
-    if (!g_solved) {
-        g_sel = -1;
+    game_set_notes_mode(notes);
+    if (!game_solved()) {
+        game_set_sel(-1);
         refresh_board();
     }
     why[0] = 0;
@@ -526,20 +525,20 @@ int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why
 
 void sudoku_ui_screen_name(char *buf, size_t n)
 {
-    static const struct { lv_obj_t **scr; const char *name; } S[] = {
-        {&scr_home, "home"}, {&scr_list, "list"}, {&scr_game, "game"}, {&scr_stats, "stats"},
-        {&scr_settings, "settings"}, {&scr_wifi, "wifi"}, {&scr_profile, "players"}, {&scr_history, "history"},
-        {&scr_sysmon, "sysmon"}, {&scr_files, "files"}, {&scr_plays, "gameplays"}, {&scr_trophy, "trophies"},
-        {&scr_replay, "replay"}, {&scr_edit, "edit"},
+    static const struct { lv_obj_t *(*scr)(void); const char *name; } S[] = {
+        {screen_home, "home"}, {screen_list, "list"}, {screen_game, "game"}, {screen_stats, "stats"},
+        {screen_settings, "settings"}, {screen_wifi, "wifi"}, {screen_profile, "players"}, {screen_history, "history"},
+        {screen_sysmon, "sysmon"}, {screen_files, "files"}, {screen_plays, "gameplays"}, {screen_trophy, "trophies"},
+        {screen_replay, "replay"}, {screen_edit, "edit"},
     };
     lv_obj_t *act = lv_screen_active();
     const char *name = "other";
     for (size_t i = 0; i < sizeof(S) / sizeof(S[0]); i++) {
-        if (*S[i].scr && *S[i].scr == act) name = S[i].name;
+        if (S[i].scr() && S[i].scr() == act) name = S[i].name;
     }
     int len = snprintf(buf, n, "%s", name);
-    if (act == scr_home && h_menu) {                /* which page of the menu: home1, home2 */
-        int page = (int)((lv_obj_get_scroll_x(h_menu) + HOME_GRID_W / 2) / HOME_GRID_W) + 1;
+    if (act == screen_home() && home_menu()) {                /* which page of the menu: home1, home2 */
+        int page = (int)((lv_obj_get_scroll_x(home_menu()) + HOME_GRID_W / 2) / HOME_GRID_W) + 1;
         len += snprintf(buf + len, n - (size_t)len, "%d", page);
     }
     /* a dialog or overlay: anything screen-sized on the top layer (not the Gibberlink icon, a notice) */
@@ -555,28 +554,28 @@ void sudoku_ui_screen_name(char *buf, size_t n)
 
 bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82])
 {
-    if (lv_screen_active() != scr_game || !g_geo) return false;
+    if (lv_screen_active() != screen_game() || !game_geo()) return false;
     memset(st, 0, sizeof(*st));
-    if (g_practice >= 0) snprintf(st->name, sizeof(st->name), "Learn practice");
-    else if (g_id != STORE_NO_GAME) puzzle_name(g_id, st->name, sizeof(st->name));
-    st->variant = g_var >= 0 && g_var < VAR_COUNT ? VARIANT_NAMES[g_var] : "?";
-    st->size = g_geo->n;
-    st->cells = g_geo->ncells;
+    if (game_practice() >= 0) snprintf(st->name, sizeof(st->name), "Learn practice");
+    else if (game_id() != STORE_NO_GAME) puzzle_name(game_id(), st->name, sizeof(st->name));
+    st->variant = game_var() >= 0 && game_var() < VAR_COUNT ? variant_name(game_var()) : "?";
+    st->size = game_geo()->n;
+    st->cells = game_geo()->ncells;
     for (int i = 0; i < 81; i++) {
-        int v = g_b.val[i];
-        if (!g_geo->used[i]) board[i] = '#';
+        int v = game_b()->val[i];
+        if (!game_geo()->used[i]) board[i] = '#';
         else if (!v) board[i] = '.';
-        else board[i] = g_given[i] ? (char)('0' + v) : (char)('a' + v - 1);
-        if (g_geo->used[i] && v) st->filled++;
+        else board[i] = game_given()[i] ? (char)('0' + v) : (char)('a' + v - 1);
+        if (game_geo()->used[i] && v) st->filled++;
     }
     board[81] = 0;
-    st->solved = g_solved;
-    st->paused = g_paused;
-    st->practice = g_practice >= 0;
-    st->attack = g_attack;
-    st->seconds = (g_elapsed_ms + 500) / 1000;
-    st->mistakes = g_mistakes;
-    st->hints = g_hints;
+    st->solved = game_solved();
+    st->paused = game_paused();
+    st->practice = game_practice() >= 0;
+    st->attack = game_attack();
+    st->seconds = (game_elapsed_ms() + 500) / 1000;
+    st->mistakes = game_mistakes();
+    st->hints = game_hints();
     return true;
 }
 
@@ -593,8 +592,8 @@ void lock_now_cb(lv_event_t *e)
 
 static void saver_cb(lv_timer_t *t)
 {
-    if (!s_saver && s_sleep_min &&
-        lv_display_get_inactive_time(NULL) >= (uint32_t)s_sleep_min * 60 * 1000) saver_sleep(false);
+    if (!s_saver && ui_sleep_min() &&
+        lv_display_get_inactive_time(NULL) >= (uint32_t)ui_sleep_min() * 60 * 1000) saver_sleep(false);
 }
 
 static void touch_sound_cb(lv_event_t *e)
@@ -605,39 +604,39 @@ static void touch_sound_cb(lv_event_t *e)
 
 esp_err_t sudoku_ui_start(void)
 {
-    g_undo = heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM);
-    g_redo = heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM);
-    if (!g_undo || !g_redo) return ESP_ERR_NO_MEM;
+    game_set_undo(heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM));
+    game_set_redo(heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM));
+    if (!game_undo() || !game_redo()) return ESP_ERR_NO_MEM;
     sudoku_geom_init();                             /* before the generator task can use the tables */
-    g_geo = sudoku_geom(VAR_CLASSIC);
-    g_geo_buf = heap_caps_malloc(sizeof(*g_geo_buf), MALLOC_CAP_SPIRAM);
-    s_gen_cache = heap_caps_calloc(GEN_CACHE, sizeof(gen_cache_t), MALLOC_CAP_SPIRAM);
-    x_view_p = heap_caps_calloc(1, sizeof(stats_view_t), MALLOC_CAP_SPIRAM);
-    if (!g_geo_buf || !s_gen_cache || !x_view_p) return ESP_ERR_NO_MEM;
+    game_set_geo(sudoku_geom(VAR_CLASSIC));
+    game_set_geo_buf(heap_caps_malloc(sizeof(*game_geo_buf()), MALLOC_CAP_SPIRAM));
+    ui_set_gen_cache(heap_caps_calloc(GEN_CACHE, sizeof(gen_cache_t), MALLOC_CAP_SPIRAM));
+    stats_set_view_p(heap_caps_calloc(1, sizeof(stats_view_t), MALLOC_CAP_SPIRAM));
+    if (!game_geo_buf() || !ui_gen_cache() || !stats_view_p()) return ESP_ERR_NO_MEM;
 #if LV_USE_PERF_MONITOR
     lv_sysmon_hide_performance(NULL);
 #endif
 
     /* splash while the card and sudoku.db are read (a second or two) */
     lv_obj_t *boot = lv_screen_active();
-    lv_obj_set_style_bg_color(boot, lv_color_hex(PAL_DARK.bg), 0);
+    lv_obj_set_style_bg_color(boot, lv_color_hex(ui_palette_dark()->bg), 0);
     lv_obj_set_style_bg_opa(boot, LV_OPA_COVER, 0);
     lv_obj_t *splash = lv_label_create(boot);
     lv_label_set_text(splash, "Sudoku\n\nStarting...");
     lv_obj_set_style_text_align(splash, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(splash, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(splash, lv_color_hex(PAL_DARK.text), 0);
+    lv_obj_set_style_text_color(splash, lv_color_hex(ui_palette_dark()->text), 0);
     lv_obj_center(splash);
     lv_refr_now(NULL);
 
     /* The settings and the game in progress live in sudoku.db, so the card
      * comes first. Card setup also has to happen before Wi-Fi starts (they
      * share the SDMMC host, see the microSD section). */
-    s_sd_present = bsp_sdcard_probe(&s_sd_bytes, s_sd_name) == ESP_OK;
-    if (s_sd_present) {
+    sd_probe_card();
+    if (ui_sd_present()) {
         char sz[24];
-        fmt_gb(sz, sizeof(sz), s_sd_bytes);
-        printf("microSD: \"%s\", %s\n", s_sd_name, sz);
+        fmt_gb(sz, sizeof(sz), ui_sd_bytes());
+        printf("microSD: \"%s\", %s\n", ui_sd_name(), sz);
         stats_db_start();
         if (stats_db_wait_open(4000)) {
             store_prefs_t prefs;
@@ -652,7 +651,7 @@ esp_err_t sudoku_ui_start(void)
     } else {
         printf("microSD: no card\n");
     }
-    if (s_sd_present && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
+    if (ui_sd_present() && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
         printf("usb_msc: USB didn't start\n");
     }
     wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
@@ -665,13 +664,13 @@ esp_err_t sudoku_ui_start(void)
         lv_indev_add_event_cb(in, touch_sound_cb, LV_EVENT_PRESSED, NULL);
     }
     tz_apply(store_timezone());
-    l_coll = store_last_collection();
-    l_tab = coll_tab(l_coll);
-    s_sleep_min = store_screen_timeout_min();
+    list_set_coll(store_last_collection());
+    list_set_tab(coll_tab(list_coll()));
+    ui_set_sleep_min(store_screen_timeout_min());
     apply_theme(store_dark_mode());
     lv_obj_delete(splash);
 
-    g_last_tick = lv_tick_get();
+    game_set_last_tick(lv_tick_get());
     lv_timer_create(tick_cb, 200, NULL);
     lv_timer_create(saver_cb, 1000, NULL);
     lv_timer_create(clock_cb, 1000, NULL);
@@ -680,3 +679,6 @@ esp_err_t sudoku_ui_start(void)
     clock_cb(NULL);
     return ESP_OK;
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+lv_obj_t *ui_saver(void) { return s_saver; }

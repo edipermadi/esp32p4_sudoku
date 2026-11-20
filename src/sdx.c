@@ -6,10 +6,10 @@
 #include <strings.h>
 
 /* a name (any case) or its number; -1: neither */
-static int name_index(const char *s, const char *const *names, int n)
+static int name_index(const char *s, const char *(*name)(int), int n)
 {
     for (int i = 0; i < n; i++) {
-        if (!strcasecmp(s, names[i])) return i;
+        if (!strcasecmp(s, name(i))) return i;
     }
     char *end;
     long v = strtol(s, &end, 10);
@@ -45,11 +45,11 @@ bool sdx_parse(char *line, sdx_puzzle_t *p)
         }
     }
     for (int i = nf; i < 7; i++) fld[i] = "";
-    p->variant = name_index(fld[0], VARIANT_NAMES, VAR_COUNT);
+    p->variant = name_index(fld[0], variant_name, VAR_COUNT);
     if (p->variant < 0) return false;
     if (!fld[1][0] || !strcmp(fld[1], "-")) {
         p->level = -1;
-    } else if ((p->level = name_index(fld[1], GEN_LEVEL_NAMES, GEN_LEVELS)) < 0) {
+    } else if ((p->level = name_index(fld[1], gen_level_name, GEN_LEVELS)) < 0) {
         return false;
     }
     int c = 0;                                      /* digits, 0 or . = one empty cell, a-z = 1-26 of them */

@@ -28,6 +28,8 @@ static void player_color_cb(lv_event_t *e);
 
 /* players screen */
 static lv_obj_t *p_list, *p_menu_btn, *p_note;
+static stats_player_t p_players[STATS_MAX_PLAYERS];
+static int p_count = -1;                 /* last list from sudoku.db, -1 = none yet */
 
 /* ------------------------------------------------------------- players */
 
@@ -210,13 +212,13 @@ static lv_obj_t *av_scroll, *av_grid, *av_group_btn[AVATAR_GROUPS];
 static int av_cur;                                  /* the player's, 0 = none */
 static int av_row0[AVATAR_GROUPS + 1];              /* each group starts a row: its first; [n] = all rows */
 
-static int av_group_end(int g) { return g + 1 < AVATAR_GROUPS ? avatar_group_first[g + 1] : AVATAR_COUNT; }
+static int av_group_end(int g) { return g + 1 < AVATAR_GROUPS ? avatar_group_first(g + 1) : AVATAR_COUNT; }
 
 static void av_rows_init(void)
 {
     for (int g = 0, r = 0; g <= AVATAR_GROUPS; g++) {
         av_row0[g] = r;
-        if (g < AVATAR_GROUPS) r += (av_group_end(g) - avatar_group_first[g] + AV_COLS - 1) / AV_COLS;
+        if (g < AVATAR_GROUPS) r += (av_group_end(g) - avatar_group_first(g) + AV_COLS - 1) / AV_COLS;
     }
 }
 
@@ -252,7 +254,7 @@ static void av_grid_click_cb(lv_event_t *e)
     lv_obj_get_coords(av_grid, &a);
     int col = (p.x - a.x1) / AV_CELL, row = (p.y - a.y1) / AV_CELL;
     if (col < 0 || col >= AV_COLS || row < 0 || row >= av_row0[AVATAR_GROUPS]) return;
-    int g = av_row_group(row), k = avatar_group_first[g] + (row - av_row0[g]) * AV_COLS + col;
+    int g = av_row_group(row), k = avatar_group_first(g) + (row - av_row0[g]) * AV_COLS + col;
     if (k < av_group_end(g)) player_avatar_set(k + 1);   /* (not the empty end of a group's last row) */
 }
 
@@ -269,7 +271,7 @@ static void av_grid_draw_cb(lv_event_t *e)
     for (int r = r0; r <= r1 && r < av_row0[AVATAR_GROUPS]; r++) {
         int g = av_row_group(r);
         for (int c = 0; c < AV_COLS; c++) {
-            int k = avatar_group_first[g] + (r - av_row0[g]) * AV_COLS + c;
+            int k = avatar_group_first(g) + (r - av_row0[g]) * AV_COLS + c;
             if (k >= av_group_end(g)) break;
             lv_area_t cell = {a.x1 + c * AV_CELL, a.y1 + r * AV_CELL, a.x1 + (c + 1) * AV_CELL - 1,
                               a.y1 + (r + 1) * AV_CELL - 1};
@@ -284,7 +286,7 @@ static void av_grid_draw_cb(lv_event_t *e)
             }
             int o = (AV_CELL - AVATAR_SIZE) / 2;
             lv_area_t im = {cell.x1 + o, cell.y1 + o, cell.x1 + o + AVATAR_SIZE - 1, cell.y1 + o + AVATAR_SIZE - 1};
-            d.src = &avatar_images[k];
+            d.src = avatar_image(k);
             lv_draw_image(layer, &d, &im);
         }
     }
@@ -345,7 +347,7 @@ static void player_avatar_cb(lv_event_t *e)
         lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_PRESSED);
         lv_obj_set_style_bg_color(b, C_CARD2, LV_STATE_PRESSED);
         lv_obj_t *im = lv_image_create(b);
-        lv_image_set_src(im, &avatar_images[avatar_group_first[g]]);
+        lv_image_set_src(im, avatar_image(avatar_group_first(g)));
         lv_obj_center(im);
         av_group_btn[g] = b;
     }
@@ -373,8 +375,8 @@ static void player_avatar_cb(lv_event_t *e)
     lv_obj_update_layout(card);
     if (av_cur) {                                    /* to theirs */
         int g = 0;
-        while (g + 1 < AVATAR_GROUPS && avatar_group_first[g + 1] <= av_cur - 1) g++;
-        lv_obj_scroll_to_y(av_scroll, (av_row0[g] + (av_cur - 1 - avatar_group_first[g]) / AV_COLS) * AV_CELL,
+        while (g + 1 < AVATAR_GROUPS &avatar_group_first(g + 1) <= av_cur - 1) g++;
+        lv_obj_scroll_to_y(av_scroll, (av_row0[g] + (av_cur - 1 - avatar_group_first(g)) / AV_COLS) * AV_CELL,
                            LV_ANIM_OFF);
     }
     av_scroll_cb(NULL);
@@ -404,6 +406,13 @@ static void player_color_cb(lv_event_t *e)
             p_players[i].color = (uint8_t)((p_players[i].color + 1) % STATS_PLAYER_COLORS);
         }
     }
+    render_players();
+}
+
+void players_take(const stats_player_t *list, int n)
+{
+    memcpy(p_players, list, sizeof(stats_player_t) * n);
+    p_count = n;
     render_players();
 }
 
@@ -443,7 +452,7 @@ void render_players(void)
         lv_obj_align(cb, LV_ALIGN_LEFT_MID, -10, 0);
         if (av) {
             lv_obj_t *im = lv_image_create(cb);
-            lv_image_set_src(im, &avatar_images[av - 1]);
+            lv_image_set_src(im, avatar_image(av - 1));
             lv_obj_center(im);
         } else {
             lv_obj_center(player_dot(cb, db ? pl->color : 0, 22));
@@ -466,15 +475,15 @@ void render_players(void)
 
 void build_profile(void)
 {
-    scr_profile = make_screen();
-    make_btn(scr_profile, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
-    lv_obj_t *t = make_label(scr_profile, &lv_font_montserrat_28, C_TEXT);
+    screen_set_profile(make_screen());
+    make_btn(screen_profile(), 12, 10, 120, 52, LV_SYMBOL_LEFT "  Home", &lv_font_montserrat_18, home_cb, NULL);
+    lv_obj_t *t = make_label(screen_profile(), &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Players");
     lv_obj_set_pos(t, 150, 20);
-    p_menu_btn = make_btn(scr_profile, SCR_W - 12 - 52, 10, 52, 52, SYMBOL_MORE, &font_icons_24, player_menu_cb,
+    p_menu_btn = make_btn(screen_profile(), SCR_W - 12 - 52, 10, 52, 52, SYMBOL_MORE, &font_icons_24, player_menu_cb,
                           NULL);                    /* Add, Rename, Delete */
 
-    p_list = lv_obj_create(scr_profile);
+    p_list = lv_obj_create(screen_profile());
     lv_obj_remove_style_all(p_list);
     lv_obj_set_pos(p_list, 40, 84);
     lv_obj_set_size(p_list, SCR_W - 80, SCR_W - 84 - 56);
@@ -482,9 +491,14 @@ void build_profile(void)
     lv_obj_set_style_pad_row(p_list, 12, 0);
     lv_obj_set_scroll_dir(p_list, LV_DIR_VER);
 
-    p_note = make_label(scr_profile, &lv_font_montserrat_14, C_MUTED);
+    p_note = make_label(screen_profile(), &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_width(p_note, SCR_W - 80);
     lv_label_set_long_mode(p_note, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_pos(p_note, 44, SCR_W - 44);
     render_players();
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+const stats_player_t *players_all(void) { return p_players; }
+int players_count(void) { return p_count; }
+void players_set_count(int v) { p_count = v; }

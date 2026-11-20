@@ -121,10 +121,10 @@ static void test_geometry(void)
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
-        CHECKF(g->n == G[i].n, "%s n %d", VARIANT_NAMES[G[i].variant], g->n);
-        CHECKF(g->ncells == G[i].ncells, "%s ncells %d", VARIANT_NAMES[G[i].variant], g->ncells);
-        CHECKF(g->nunits == G[i].nunits, "%s nunits %d", VARIANT_NAMES[G[i].variant], g->nunits);
-        CHECKF(g->npeers[0] == G[i].peers0, "%s peers of cell 0: %d", VARIANT_NAMES[G[i].variant], g->npeers[0]);
+        CHECKF(g->n == G[i].n, "%s n %d", variant_name(G[i].variant), g->n);
+        CHECKF(g->ncells == G[i].ncells, "%s ncells %d", variant_name(G[i].variant), g->ncells);
+        CHECKF(g->nunits == G[i].nunits, "%s nunits %d", variant_name(G[i].variant), g->nunits);
+        CHECKF(g->npeers[0] == G[i].peers0, "%s peers of cell 0: %d", variant_name(G[i].variant), g->npeers[0]);
         for (int k = 0; k < g->ncells; k++) {       /* boxes / regions: n cells each */
             int c = g->cells[k], cnt = 0;
             for (int j = 0; j < g->ncells; j++) cnt += g->region[g->cells[j]] == g->region[c];
@@ -134,7 +134,7 @@ static void test_geometry(void)
     /* X: the corner sees its diagonal too (6 beyond its box); Hyper: cell (1,1) its window (3 more) */
     CHECKF(sudoku_geom(VAR_HYPER)->npeers[10] == 23, "Hyper peers of cell 10: %d", sudoku_geom(VAR_HYPER)->npeers[10]);
     CHECK(sudoku_geom_on_diag(sudoku_geom(VAR_X), 80) && !sudoku_geom_on_diag(sudoku_geom(VAR_X), 1));
-    CHECK(strcmp(VARIANT_NAMES[VAR_KIDS], "Kids 4x4") == 0);
+    CHECK(strcmp(variant_name(VAR_KIDS), "Kids 4x4") == 0);
     CHECK(sudoku_geom(VAR_KIDS)->box_w == 2 && sudoku_geom(VAR_KIDS)->box_h == 2);
 }
 
@@ -168,21 +168,21 @@ static void test_generate(void)
             gen_level_t got;
             uint32_t seed = 1000u + (uint32_t)v * 17u + (uint32_t)lv;
             bool ok = sudoku_generate(v, (gen_level_t)lv, seed, g, &board, &got);
-            CHECKF(ok, "%s %s: generated", VARIANT_NAMES[v], GEN_LEVEL_NAMES[lv]);
+            CHECKF(ok, "%s %s: generated", variant_name(v), gen_level_name(lv));
             if (!ok) continue;
-            CHECKF(board.variant == v, "%s: board variant %d", VARIANT_NAMES[v], board.variant);
-            CHECKF(givens_ok(&board, g), "%s %s: givens on the board", VARIANT_NAMES[v], GEN_LEVEL_NAMES[lv]);
-            CHECKF(sudoku_count_solutions(&board, g, 2) == 1, "%s %s: one solution", VARIANT_NAMES[v],
-                   GEN_LEVEL_NAMES[lv]);
+            CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
+            CHECKF(givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));
+            CHECKF(sudoku_count_solutions(&board, g, 2) == 1, "%s %s: one solution", variant_name(v),
+                   gen_level_name(lv));
             CHECKF(sudoku_solve(&board, g, sol) && solved_ok(&board, g, sol), "%s %s: solution valid",
-                   VARIANT_NAMES[v], GEN_LEVEL_NAMES[lv]);
+                   variant_name(v), gen_level_name(lv));
             int graded = sudoku_grade(&board, g);
-            CHECKF(graded == (int)got, "%s %s: graded %d, generator said %d", VARIANT_NAMES[v],
-                   GEN_LEVEL_NAMES[lv], graded, (int)got);
-            if (v == VAR_KIDS) CHECKF(got <= GEN_MEDIUM, "Kids 4x4 %s came out %s", GEN_LEVEL_NAMES[lv],
-                                      GEN_LEVEL_NAMES[got]);
-            if (v != VAR_KIDS && lv < GEN_HARD) CHECKF((int)got == lv, "%s %s came out %s", VARIANT_NAMES[v],
-                                                       GEN_LEVEL_NAMES[lv], GEN_LEVEL_NAMES[got]);
+            CHECKF(graded == (int)got, "%s %s: graded %d, generator said %d", variant_name(v),
+                   gen_level_name(lv), graded, (int)got);
+            if (v == VAR_KIDS) CHECKF(got <= GEN_MEDIUM, "Kids 4x4 %s came out %s", gen_level_name(lv),
+                                      gen_level_name(got));
+            if (v != VAR_KIDS && lv < GEN_HARD) CHECKF((int)got == lv, "%s %s came out %s", variant_name(v),
+                                                       gen_level_name(lv), gen_level_name(got));
         }
     }
 }
@@ -205,16 +205,16 @@ static void test_determinism(void)
         sudoku_generate(GOLD[i].variant, (gen_level_t)GOLD[i].level, GOLD[i].seed, g1, &b1, &l1);
         sudoku_generate(GOLD[i].variant, (gen_level_t)GOLD[i].level, GOLD[i].seed, g2, &b2, &l2);
         CHECKF(!memcmp(g1, g2, 81) && l1 == l2 && same_layout(&b1, &b2), "%s seed %u: not the same twice",
-               VARIANT_NAMES[GOLD[i].variant], GOLD[i].seed);
+               variant_name(GOLD[i].variant), GOLD[i].seed);
         uint8_t key[81 + 81 + 81];                  /* givens, regions, cages: the whole puzzle */
         memcpy(key, g1, 81);
         memcpy(key + 81, b1.region, 81);
         memcpy(key + 162, b1.cage_of, 81);
         uint32_t h = fnv1a(key, sizeof(key));
-        if (getenv("PRINT_GOLDEN")) printf("    golden %s %s seed %u: 0x%08x\n", VARIANT_NAMES[GOLD[i].variant],
-                                           GEN_LEVEL_NAMES[GOLD[i].level], GOLD[i].seed, h);
-        else CHECKF(h == GOLD[i].hash, "%s %s seed %u: 0x%08x, pinned 0x%08x", VARIANT_NAMES[GOLD[i].variant],
-                    GEN_LEVEL_NAMES[GOLD[i].level], GOLD[i].seed, h, GOLD[i].hash);
+        if (getenv("PRINT_GOLDEN")) printf("    golden %s %s seed %u: 0x%08x\n", variant_name(GOLD[i].variant),
+                                           gen_level_name(GOLD[i].level), GOLD[i].seed, h);
+        else CHECKF(h == GOLD[i].hash, "%s %s seed %u: 0x%08x, pinned 0x%08x", variant_name(GOLD[i].variant),
+                    gen_level_name(GOLD[i].level), GOLD[i].seed, h, GOLD[i].hash);
     }
 }
 
@@ -232,15 +232,15 @@ static void test_texts_and_sdx(void)
         layout_texts(&board, regions, cages, marks, thermos, (int)sizeof(cages));
         for (int pack = 0; pack <= 1; pack++) {
             int len = sdx_format(v, got, g, regions, cages, marks, thermos, pack, line, sizeof(line));
-            CHECKF(len > 0, "%s: sdx_format", VARIANT_NAMES[v]);
+            CHECKF(len > 0, "%s: sdx_format", variant_name(v));
             if (len <= 0) continue;
             sdx_puzzle_t p;
-            CHECKF(sdx_parse(line, &p), "%s: sdx_parse (packed %d)", VARIANT_NAMES[v], pack);
+            CHECKF(sdx_parse(line, &p), "%s: sdx_parse (packed %d)", variant_name(v), pack);
             CHECKF(p.variant == v && p.level == (int)got && !memcmp(p.givens, g, 81), "%s: fields back (packed %d)",
-                   VARIANT_NAMES[v], pack);
+                   variant_name(v), pack);
             CHECKF(sdx_geom(&p, &back) && same_layout(&board, &back), "%s: layout back (packed %d)",
-                   VARIANT_NAMES[v], pack);
-            CHECKF(sudoku_count_solutions(&back, p.givens, 2) == 1, "%s: still one solution", VARIANT_NAMES[v]);
+                   variant_name(v), pack);
+            CHECKF(sudoku_count_solutions(&back, p.givens, 2) == 1, "%s: still one solution", variant_name(v));
         }
     }
 }
@@ -344,7 +344,7 @@ static void test_hints(void)
             steps++;
         }
         CHECKF(right && !memcmp(vals, sol, 81), "%s: hints reach the solution (%d steps)",
-               VARIANT_NAMES[CASES[i].variant], steps);
+               variant_name(CASES[i].variant), steps);
     }
 }
 

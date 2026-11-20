@@ -24,14 +24,17 @@ static void sv_new_done(const char *text);
 static void sv_new_cb(lv_event_t *e);
 static void sv_open(void);
 
+static uint32_t atk_used_ms;      /* the run's earlier puzzles */
+static int      atk_solved, atk_mistakes;
 static uint16_t atk_last;
+static int s_nsaved;
 
 /* ------------------------------------------------------------- time attack */
 
 void atk_open_next(void)
 {
-    if (!g_attack) return;                          /* stopped meanwhile */
-    const puzzle_collection_t *pc = &puzzle_collections[0];   /* Easy */
+    if (!game_attack()) return;                          /* stopped meanwhile */
+    const puzzle_collection_t *pc = puzzle_collection(0);   /* Easy */
     uint16_t id;
     int tries = 0;
     do {
@@ -40,9 +43,9 @@ void atk_open_next(void)
     atk_last = id;
     uint32_t used = atk_used_ms;
     start_game(id, false);
-    g_attack = true;
+    game_set_attack(true);
     atk_used_ms = used;
-    g_flags = 0;                                    /* (no challenges in a run) */
+    game_set_flags(0);                                    /* (no challenges in a run) */
     challenge_ui();
     update_header();
 }
@@ -52,7 +55,7 @@ static void atk_start(void)
     atk_used_ms = 0;
     atk_solved = atk_mistakes = 0;
     atk_last = STORE_NO_GAME;
-    g_attack = true;
+    game_set_attack(true);
     atk_open_next();
 }
 
@@ -117,7 +120,7 @@ void attack_cb(lv_event_t *e)
 /* the 10 minutes are up: the run's result, recorded, and the leaderboard */
 void atk_finish(void)
 {
-    g_solved = true;                                /* (g_attack stays: the header and 0:00 stay too) */                                /* (the board can't be changed now) */
+    game_set_solved(true);                                /* (g_attack stays: the header and 0:00 stay too) */                                /* (the board can't be changed now) */
     hint_drop();
     stats_db_record_attack(atk_solved, atk_mistakes);
     sfx_play(SFX_SOLVED);
@@ -343,7 +346,7 @@ static void rules_show(int variant)
 {
     if (variant < 0 || variant >= VAR_COUNT) variant = VAR_CLASSIC;
     char title[40];
-    snprintf(title, sizeof(title), "%s rules", VARIANT_NAMES[variant]);
+    snprintf(title, sizeof(title), "%s rules", variant_name(variant));
     lv_obj_t *m = make_msgbox(title, NULL);
     lv_obj_set_width(m, 600);
     lv_obj_t *pic = lv_obj_create(lv_msgbox_get_content(m));
@@ -359,16 +362,16 @@ static void rules_show(int variant)
 
 void rules_cb(lv_event_t *e)
 {
-    rules_show(g_var);
+    rules_show(game_var());
 }
 
 /* the first time a variant is played: its rules */
 void rules_first_time(void)
 {
     uint32_t seen = store_rules_seen();
-    if (g_var == VAR_CLASSIC || (seen >> g_var & 1)) return;
-    store_set_rules_seen(seen | (1u << g_var));
-    rules_show(g_var);
+    if (game_var() == VAR_CLASSIC || (seen >> game_var() & 1)) return;
+    store_set_rules_seen(seen | (1u << game_var()));
+    rules_show(game_var());
 }
 
 /* ------------------------------------------------------------- share (QR code) */
@@ -384,18 +387,18 @@ static uint8_t *qr_temp;
 /* the text in the code; false if it doesn't fit buf */
 static bool share_text(char *buf, size_t n)
 {
-    const sudoku_geom_t *G = g_geo;
+    const sudoku_geom_t *G = game_geo();
     char giv[82];
     int k = 0;
-    for (int i = 0; i < G->ncells; i++) giv[k++] = (char)('0' + g_given[G->cells[i]]);   /* (6x6: its 36 cells) */
+    for (int i = 0; i < G->ncells; i++) giv[k++] = (char)('0' + game_given()[G->cells[i]]);   /* (6x6: its 36 cells) */
     giv[k] = 0;
-    if (g_var == VAR_CLASSIC) return (size_t)snprintf(buf, n, "%s", giv) < n;
-    int len = snprintf(buf, n, "%s %s", VARIANT_NAMES[g_var], giv);
+    if (game_var() == VAR_CLASSIC) return (size_t)snprintf(buf, n, "%s", giv) < n;
+    int len = snprintf(buf, n, "%s %s", variant_name(game_var()), giv);
     if (len < 0 || (size_t)len >= n) return false;
     static char extra[STATS_CAGES_LEN];
     extra[0] = 0;
     const char *key = NULL;
-    switch (g_var) {
+    switch (game_var()) {
     case VAR_JIGSAW:
         for (int i = 0; i < 81; i++) extra[i] = (char)('0' + G->region[i]);
         extra[81] = 0;
@@ -481,14 +484,14 @@ static uint16_t pz_crc16(const char *p, size_t n)
 /* the puzzle on screen as that line (sdx_format, the givens packed); its length, 0 if it doesn't fit */
 static int pz_line(char *buf, size_t n)
 {
-    const sudoku_geom_t *G = g_geo;
+    const sudoku_geom_t *G = game_geo();
     int v = VAR_CLASSIC, lv = -1;
-    if (puzzle_is_generated(g_id)) gen_lookup(g_id, NULL, &v, &lv);
+    if (puzzle_is_generated(game_id())) gen_lookup(game_id(), NULL, &v, &lv);
     static char extra[STATS_CAGES_LEN];
     char regions[82] = "";
     const char *cages = "", *marks = "", *thermos = "";
     extra[0] = 0;
-    switch (g_var) {
+    switch (game_var()) {
     case VAR_JIGSAW:
         for (int i = 0; i < 81; i++) regions[i] = (char)('0' + G->region[i]);
         regions[81] = 0;
@@ -500,7 +503,7 @@ static int pz_line(char *buf, size_t n)
     case VAR_THERMO:   if (sudoku_thermos_text(G, extra, sizeof(extra))) thermos = extra; break;
     default: break;
     }
-    int len = sdx_format(g_var, lv >= 0 && lv < GEN_LEVELS ? lv : -1, g_given, regions, cages, marks, thermos, true,
+    int len = sdx_format(game_var(), lv >= 0 && lv < GEN_LEVELS ? lv : -1, game_given(), regions, cages, marks, thermos, true,
                          buf, n);
     return len < 0 ? 0 : len;
 }
@@ -541,7 +544,7 @@ static void pz_send_cb(lv_event_t *e)
         }
     }
     char name[48], msg[200];
-    puzzle_name(g_id, name, sizeof(name));
+    puzzle_name(game_id(), name, sizeof(name));
     snprintf(msg, sizeof(msg), "Sending %s by sound: %d part%s, about %d s. On the other board, Gibberlink must be "
              "on (Settings > Sound).", name, parts, parts == 1 ? "" : "s", (len + 20 * parts) / 16 + parts + 1);
     sudoku_ui_notice(msg, 5000);
@@ -598,8 +601,7 @@ static void pz_check_poll(lv_timer_t *t)
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
     } else {
-        id = s_gen_ram_next++;                    /* no card: until power-off */
-        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+        id = gen_ram_take();                    /* no card: until power-off */
         static int ram_number;
         number = ++ram_number;
     }
@@ -608,8 +610,8 @@ static void pz_check_poll(lv_timer_t *t)
     char why[96] = "", text[200];
     bool kept = gid > 0 && stats_db_saved_add(PZ_SOURCE, id, why, sizeof(why));
     if (kept) sv_changed();                       /* (Puzzles' column: "Received" may be new) */
-    snprintf(text, sizeof(text), "%s #%d, %s %s, came by sound%s.", PZ_SOURCE, number, VARIANT_NAMES[p->variant],
-             GEN_LEVEL_NAMES[level],
+    snprintf(text, sizeof(text), "%s #%d, %s %s, came by sound%s.", PZ_SOURCE, number, variant_name(p->variant),
+             gen_level_name(level),
              kept ? ": it's in Puzzles > Saved > Received" : gid > 0 ? "" : " (kept until power-off: no card)");
     pz_play_id = id;
     lv_obj_t *m = make_msgbox(LV_SYMBOL_AUDIO "  Puzzle received", text);
@@ -696,13 +698,13 @@ bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n)
 
 void share_cb(lv_event_t *e)
 {
-    if (g_id == STORE_NO_GAME) return;
+    if (game_id() == STORE_NO_GAME) return;
     static char text[STATS_CAGES_LEN + 128];
     char name[48], title[64];
-    puzzle_name(g_id, name, sizeof(name));
+    puzzle_name(game_id(), name, sizeof(name));
     snprintf(title, sizeof(title), SYMBOL_QR "  %s", name);
     lv_obj_t *m = share_text(text, sizeof(text))
-        ? qr_dialog(title, text, g_var == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most "
+        ? qr_dialog(title, text, game_var() == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most "
                                                         "Sudoku apps can import this. Or send it by sound to another "
                                                         "board (Gibberlink on there)."
                                                       : "Scan it with a phone: the variant, the givens row by row "
@@ -748,13 +750,13 @@ static void sv_toggle_cb(lv_event_t *e)
     int k = (int)(intptr_t)lv_event_get_user_data(e);
     if (k < 0 || k >= s_nsaved) return;
     char name[STATS_IMPORT_NAME], msg[96], why[96];
-    snprintf(name, sizeof(name), "%s", s_saved[k].name);
-    if (coll_find(PUZZLE_COLLECTION_COUNT + s_nimports + k, g_id) >= 0) {
-        bool last = s_saved[k].count == 1;
-        stats_db_saved_remove(s_saved[k].id, g_id);
+    snprintf(name, sizeof(name), "%s", ui_saved()[k].name);
+    if (coll_find(PUZZLE_COLLECTION_COUNT + ui_nimports() + k, game_id()) >= 0) {
+        bool last = ui_saved()[k].count == 1;
+        stats_db_saved_remove(ui_saved()[k].id, game_id());
         snprintf(msg, sizeof(msg), last ? "Taken out of %s (it was the last: the collection is gone)."
                                         : "Taken out of %s.", name);
-    } else if (stats_db_saved_add(name, g_id, why, sizeof(why))) {
+    } else if (stats_db_saved_add(name, game_id(), why, sizeof(why))) {
         snprintf(msg, sizeof(msg), "Saved to %s (Puzzles > Saved).", name);
     } else {
         snprintf(msg, sizeof(msg), "%s", why);
@@ -775,14 +777,14 @@ static void sv_new_done(const char *text)
         sudoku_ui_notice("A collection needs a name.", 2500);
         return;
     }
-    for (int c = 0; c < PUZZLE_COLLECTION_COUNT + s_nimports; c++) {
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT + ui_nimports(); c++) {
         if (!strcasecmp(coll_name(c), name)) {
             sudoku_ui_notice("That name is taken by a built-in or imported collection.", 3000);
             return;
         }
     }
     char msg[96], why[96];
-    if (stats_db_saved_add(name, g_id, why, sizeof(why))) snprintf(msg, sizeof(msg), "Saved to %s (Puzzles > Saved).", name);
+    if (stats_db_saved_add(name, game_id(), why, sizeof(why))) snprintf(msg, sizeof(msg), "Saved to %s (Puzzles > Saved).", name);
     else snprintf(msg, sizeof(msg), "%s", why);
     sv_changed();
     sudoku_ui_notice(msg, 2500);
@@ -805,15 +807,15 @@ static void sv_open(void)
     lv_obj_set_scroll_dir(c, LV_DIR_VER);
     if (!s_nsaved) make_wrap_text(c, NULL, C_MUTED, "No collections yet: make one.");
     for (int k = 0; k < s_nsaved; k++) {
-        bool in = coll_find(PUZZLE_COLLECTION_COUNT + s_nimports + k, g_id) >= 0;
+        bool in = coll_find(PUZZLE_COLLECTION_COUNT + ui_nimports() + k, game_id()) >= 0;
         lv_obj_t *b = make_btn(c, 0, 0, 0, 56, NULL, NULL, sv_toggle_cb, (void *)(intptr_t)k);
         lv_obj_set_width(b, LV_PCT(100));
         lv_obj_set_style_bg_color(b, in ? C_ACCENT : C_CARD2, 0);
         lv_obj_t *l = make_label(b, &lv_font_montserrat_20, in ? lv_color_white() : C_TEXT);
-        lv_label_set_text_fmt(l, "%s%s", in ? LV_SYMBOL_OK "  " : "", s_saved[k].name);
+        lv_label_set_text_fmt(l, "%s%s", in ? LV_SYMBOL_OK "  " : "", ui_saved()[k].name);
         lv_obj_align(l, LV_ALIGN_LEFT_MID, 8, 0);
         lv_obj_t *n = make_label(b, &lv_font_montserrat_16, in ? lv_color_white() : C_MUTED);
-        lv_label_set_text_fmt(n, "%d", s_saved[k].count);
+        lv_label_set_text_fmt(n, "%d", ui_saved()[k].count);
         lv_obj_align(n, LV_ALIGN_RIGHT_MID, -8, 0);
     }
     if (s_nsaved < STATS_MAX_SAVED) {
@@ -828,7 +830,7 @@ static void sv_open(void)
 
 void save_cb(lv_event_t *e)
 {
-    if (g_practice >= 0 || !puzzle_is_generated(g_id) || g_id >= PUZZLE_GEN_RAM_BASE) return;
+    if (game_practice() >= 0 || !puzzle_is_generated(game_id()) || game_id() >= PUZZLE_GEN_RAM_BASE) return;
     if (!stats_db_ready()) {
         sudoku_ui_notice("Collections are kept in sudoku.db on a microSD card: there's none.", 3000);
         return;
@@ -836,3 +838,13 @@ void save_cb(lv_event_t *e)
     imports_reload();                               /* (current: another player may have changed them) */
     sv_open();
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+uint32_t attack_used_ms(void) { return atk_used_ms; }
+void attack_set_used_ms(uint32_t v) { atk_used_ms = v; }
+int attack_solved(void) { return atk_solved; }
+void attack_set_solved(int v) { atk_solved = v; }
+int attack_mistakes(void) { return atk_mistakes; }
+void attack_set_mistakes(int v) { atk_mistakes = v; }
+int ui_nsaved(void) { return s_nsaved; }
+void ui_set_nsaved(int v) { s_nsaved = v; }

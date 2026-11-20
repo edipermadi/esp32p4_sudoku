@@ -4,10 +4,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
-const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
+static const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
+static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
                                               "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich",
                                               "Kids 4x4"};
+
+const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
+const char *variant_name(int variant) { return VARIANT_NAMES[variant]; }
 
 /* sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
 static uint8_t s_mask_sum[1024];

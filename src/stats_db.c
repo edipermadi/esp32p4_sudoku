@@ -351,12 +351,14 @@ static const char SQL_SOLVE_INSERT[] =
     "INSERT INTO solves(player_id, puzzle, level, number, seconds, mistakes, finished_at, started_at, hints, moves,"
     " flags) VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10, ?11)";
 
-const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
+static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
                                                   "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo",
                                                   "Sandwich", "Mini 6x6", "Kids 4x4"};
-const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
+static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
                                                    "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini",
                                                    "Kids"};
+const char *stats_kind_name(int kind) { return STATS_KIND_NAMES[kind]; }
+const char *stats_kind_prefix(int kind) { return STATS_KIND_PREFIX[kind]; }
 
 int stats_kind_of(int variant, bool daily)
 {
@@ -384,7 +386,7 @@ static bool kind_level_of(const char *name, int *kind, int *level)
         size_t n = strlen(STATS_KIND_PREFIX[k]);
         if (strncmp(name, STATS_KIND_PREFIX[k], n) != 0 || name[n] != ' ') continue;
         for (int l = 0; l < GEN_LEVELS; l++) {
-            if (strcmp(name + n + 1, GEN_LEVEL_NAMES[l]) == 0) {
+            if (strcmp(name + n + 1, gen_level_name(l)) == 0) {
                 *kind = k;
                 *level = l;
                 return true;
@@ -416,14 +418,14 @@ static void bind_puzzle(sqlite3_stmt *st, uint16_t id)
         int variant = VAR_CLASSIC;
         int g = gen_level_of(id - PUZZLE_GEN_BASE, &daily, &variant);
         snprintf(lv, sizeof(lv), "%s %s", STATS_KIND_PREFIX[stats_kind_of(variant, daily)],
-                 g >= 0 && g < GEN_LEVELS ? GEN_LEVEL_NAMES[g] : "");
+                 g >= 0 && g < GEN_LEVELS ? gen_level_name(g) : "");
         sqlite3_bind_text(st, 2, lv, -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(st, 3, id - PUZZLE_GEN_BASE);
         return;
     }
     int c = puzzle_collection_of(id);
-    sqlite3_bind_text(st, 2, puzzle_collections[c].name, -1, SQLITE_STATIC);
-    sqlite3_bind_int(st, 3, id - puzzle_collections[c].first + 1);
+    sqlite3_bind_text(st, 2, puzzle_collection(c)->name, -1, SQLITE_STATIC);
+    sqlite3_bind_int(st, 3, id - puzzle_collection(c)->first + 1);
 }
 
 static bool step_done(sqlite3_stmt *st, const char *what)
@@ -636,7 +638,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "time_zone") && t) snprintf(p->timezone, sizeof(p->timezone), "%s", t);
             else if (!strcmp(k, "last_level") && t) {
                 for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-                    if (!strcmp(puzzle_collections[c].name, t)) p->last_collection = c;
+                    if (!strcmp(puzzle_collection(c)->name, t)) p->last_collection = c;
                 }
             }
         }
@@ -808,8 +810,8 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("night_end", false, p->night_end, NULL);
     set_setting("night_brightness", false, p->night_brightness, NULL);
     set_setting("time_zone", true, 0, p->timezone);
-    set_setting("last_level", true, 0, puzzle_collections[p->last_collection < PUZZLE_COLLECTION_COUNT
-                                                          ? p->last_collection : 0].name);
+    set_setting("last_level", true, 0, puzzle_collection(p->last_collection < PUZZLE_COLLECTION_COUNT
+                                                          ? p->last_collection : 0)->name);
     if (puzzle_id_valid(p->game.id)) save_game(&p->game, NULL, 0);   /* (none after a factory reset) */
     set_setting("migrated_from_nvs", false, 1, NULL);
     exec("COMMIT");
@@ -1189,7 +1191,7 @@ static void do_query(int level)
         while (sqlite3_step(st) == SQLITE_ROW) {
             const char *name = (const char *)sqlite3_column_text(st, 0);
             int c = 0, kind, klevel;
-            while (c < PUZZLE_COLLECTION_COUNT && strcmp(puzzle_collections[c].name, name ? name : "") != 0) c++;
+            while (c < PUZZLE_COLLECTION_COUNT && strcmp(puzzle_collection(c)->name, name ? name : "") != 0) c++;
             stats_level_t *l;
             if (c < PUZZLE_COLLECTION_COUNT) l = &v->levels[c];
             else if (kind_level_of(name, &kind, &klevel)) l = &v->kinds[kind][klevel];   /* made on the board */
@@ -1221,7 +1223,7 @@ static void do_query(int level)
             "SELECT number, best_seconds, fewest_mistakes, solves FROM puzzle_stats"
             " WHERE player_id = ?1 AND level = ?2 ORDER BY number", -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_player);
-        sqlite3_bind_text(st, 2, puzzle_collections[level].name, -1, SQLITE_STATIC);
+        sqlite3_bind_text(st, 2, puzzle_collection(level)->name, -1, SQLITE_STATIC);
         while (v->n_puzzles < STATS_MAX_PUZZLES && sqlite3_step(st) == SQLITE_ROW) {
             stats_puzzle_t *p = &v->puzzles[v->n_puzzles++];
             p->number = sqlite3_column_int(st, 0);
@@ -1251,7 +1253,7 @@ static void do_query(int level)
                 -1, &st, NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, s_player);
         sqlite3_bind_int(st, 2, STATS_RECENT);
-        if (coll) sqlite3_bind_text(st, 3, puzzle_collections[level].name, -1, SQLITE_STATIC);
+        if (coll) sqlite3_bind_text(st, 3, puzzle_collection(level)->name, -1, SQLITE_STATIC);
         if (kind) sqlite3_bind_text(st, 3, like, -1, SQLITE_TRANSIENT);
         uint16_t newest_first[STATS_RECENT];
         int n = 0;
@@ -2105,7 +2107,7 @@ static bool ends_with(const char *s, const char *suffix)
  *
  *   variant|level|givens|regions|cages|marks|thermos
  *
- * variant: its name ("Classic", "X-Sudoku", "Killer", ...: VARIANT_NAMES) or number;
+ * variant: its name ("Classic", "X-Sudoku", "Killer", ...: variant_name()) or number;
  * level: "Easy", "Medium", "Hard", "Expert" or 0-3; givens: 81 digits row by row, 0
  * or '.' empty (Mini 6x6: the top-left 6 x 6; Kids 4x4: the top-left 4 x 4); regions: Jigsaw's 81 digits 0-8; cages,
  * marks, thermos: as in the generated table (sudoku_cages_text(), sudoku_marks_text()
@@ -2546,8 +2548,8 @@ static void do_saved_export(void)
                 t[i] = (const char *)sqlite3_column_text(st, 2 + i);
                 if (!t[i]) t[i] = "";
             }
-            ok = fprintf(f, "%s|%s|%s|%s|%s|%s|%s\n", v >= 0 && v < VAR_COUNT ? VARIANT_NAMES[v] : "Classic",
-                         lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "Easy", t[0],
+            ok = fprintf(f, "%s|%s|%s|%s|%s|%s|%s\n", v >= 0 && v < VAR_COUNT ? variant_name(v) : "Classic",
+                         lv >= 0 && lv < GEN_LEVELS ? gen_level_name(lv) : "Easy", t[0],
                          v == VAR_JIGSAW ? t[1] : "", t[2], t[3], t[4]) > 0;
             n++;
         }

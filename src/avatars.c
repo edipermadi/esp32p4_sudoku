@@ -226847,7 +226847,7 @@ static const uint8_t av_pixels[7258896] = {
 };
 
 #define AV(i) {.header = {.magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565A8, .w = AVATAR_SIZE, .h = AVATAR_SIZE, .stride = AVATAR_SIZE * 2}, .data_size = 3888, .data = av_pixels + (i) * 3888}
-const lv_image_dsc_t avatar_images[AVATAR_COUNT] = {
+static const lv_image_dsc_t images[AVATAR_COUNT] = {
     AV(0), AV(1), AV(2), AV(3), AV(4), AV(5), AV(6), AV(7),
     AV(8), AV(9), AV(10), AV(11), AV(12), AV(13), AV(14), AV(15),
     AV(16), AV(17), AV(18), AV(19), AV(20), AV(21), AV(22), AV(23),
@@ -227084,7 +227084,7 @@ const lv_image_dsc_t avatar_images[AVATAR_COUNT] = {
     AV(1864), AV(1865), AV(1866),
 };
 
-const char *const avatar_group_names[AVATAR_GROUPS] = {
+static const char *const group_names[AVATAR_GROUPS] = {
     "Smileys & Emotion",
     "People & Body",
     "Animals & Nature",
@@ -227095,7 +227095,7 @@ const char *const avatar_group_names[AVATAR_GROUPS] = {
     "Symbols",
     "Flags",
 };
-const uint16_t avatar_group_first[AVATAR_GROUPS] = {
+static const uint16_t group_first[AVATAR_GROUPS] = {
     0,     /* grinning face */
     167,   /* waving hand */
     548,   /* monkey face */
@@ -227106,3 +227106,7 @@ const uint16_t avatar_group_first[AVATAR_GROUPS] = {
     1380,  /* ATM sign */
     1599,  /* chequered flag */
 };
+
+const lv_image_dsc_t *avatar_image(int i) { return &images[i]; }
+const char *avatar_group_name(int g) { return group_names[g]; }
+int avatar_group_first(int g) { return group_first[g]; }

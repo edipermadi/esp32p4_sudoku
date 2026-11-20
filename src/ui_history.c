@@ -18,6 +18,8 @@ static void plays_pager_update(void);
 static void render_plays(const stats_plays_t *p);
 static void plays_page_cb(lv_event_t *e);
 
+static lv_obj_t *scr_plays;               /* Gameplays: recorded solves to replay */
+
 /* history screen */
 static lv_obj_t *hz_cal, *hz_title, *hz_list;
 static lv_calendar_date_t hz_marked[31];  /* highlighted days (the calendar keeps the pointer) */
@@ -239,7 +241,7 @@ void history_cb(lv_event_t *e)
             history_ask_month(0, 0);
         }
     }
-    lv_screen_load(scr_history);
+    lv_screen_load(screen_history());
 }
 
 static void history_back_cb(lv_event_t *e)
@@ -262,7 +264,7 @@ void history_poll(void)
     }
     static stats_day_t d;
     if (stats_db_take_day(&d)) render_day(&d);
-    if (lv_screen_active() == scr_history && stats_db_ready() && !hz_latest_pending) {
+    if (lv_screen_active() == screen_history() && stats_db_ready() && !hz_latest_pending) {
         const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
         if (sh->year != hz_year || sh->month != hz_month) history_ask_month(sh->year, sh->month);
     }
@@ -270,14 +272,14 @@ void history_poll(void)
 
 void build_history(void)
 {
-    scr_history = make_screen();
-    make_btn(scr_history, 12, 10, 120, 52, LV_SYMBOL_LEFT "  Back", &lv_font_montserrat_18,
+    screen_set_history(make_screen());
+    make_btn(screen_history(), 12, 10, 120, 52, LV_SYMBOL_LEFT "  Back", &lv_font_montserrat_18,
              history_back_cb, NULL);
-    lv_obj_t *t = make_label(scr_history, &lv_font_montserrat_28, C_TEXT);
+    lv_obj_t *t = make_label(screen_history(), &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "History");
     lv_obj_set_pos(t, 150, 20);
 
-    hz_cal = lv_calendar_create(scr_history);
+    hz_cal = lv_calendar_create(screen_history());
     lv_obj_set_pos(hz_cal, 12, 72);
     lv_obj_set_size(hz_cal, SCR_W - 24, 380);
     lv_calendar_add_header_arrow(hz_cal);
@@ -292,11 +294,11 @@ void build_history(void)
     lv_obj_add_event_cb(hz_cal, history_day_cb, LV_EVENT_VALUE_CHANGED, NULL);
     if (hz_year) lv_calendar_set_month_shown(hz_cal, hz_year, hz_month);   /* theme rebuild */
 
-    hz_title = make_label(scr_history, &lv_font_montserrat_20, C_TEXT);
+    hz_title = make_label(screen_history(), &lv_font_montserrat_20, C_TEXT);
     lv_obj_set_pos(hz_title, 16, 462);
     lv_label_set_text(hz_title, "Tap a day to see who played what");
 
-    hz_list = lv_obj_create(scr_history);
+    hz_list = lv_obj_create(screen_history());
     lv_obj_remove_style_all(hz_list);
     lv_obj_set_pos(hz_list, 12, 494);
     lv_obj_set_size(hz_list, SCR_W - 24, SCR_W - 494 - 10);
@@ -312,7 +314,7 @@ void build_history(void)
  * here).
  */
 static lv_obj_t *pl_list, *pl_count, *pl_newer, *pl_older;
-int pl_offset, pl_total;
+static int pl_offset, pl_total;
 static int64_t pl_row_solve[STATS_MAX_DAY_ROWS];
 
 static void plays_hint(const char *text)
@@ -327,16 +329,16 @@ static void plays_hint(const char *text)
 static void plays_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || rx_busy) return;
-    rp_want_export = false;
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) return;
+    replay_set_want_export(false);
     stats_db_query_replay(pl_row_solve[i]);
 }
 
 static void plays_export_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || rx_busy) return;
-    rp_want_export = true;
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) return;
+    replay_set_want_export(true);
     stats_db_query_replay(pl_row_solve[i]);
 }
 
@@ -473,6 +475,10 @@ static void history_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) return;
-    rp_want_export = false;
+    replay_set_want_export(false);
     stats_db_query_replay(hz_row_solve[i]);
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+lv_obj_t *screen_plays(void) { return scr_plays; }
+int plays_offset(void) { return pl_offset; }

@@ -754,8 +754,8 @@ static void pv_show(int at)
     lv_obj_set_x(s_pv_board, (720 - side) / 2);
     lv_obj_invalidate(s_pv_board);
     char t[96];
-    snprintf(t, sizeof(t), "%d / %d  -  %s%s%s", s_pv_at + 1, s_pv_n, VARIANT_NAMES[s_pv_var],
-             s_pv_lv >= 0 ? " " : "", s_pv_lv >= 0 ? GEN_LEVEL_NAMES[s_pv_lv] : "");
+    snprintf(t, sizeof(t), "%d / %d  -  %s%s%s", s_pv_at + 1, s_pv_n, variant_name(s_pv_var),
+             s_pv_lv >= 0 ? " " : "", s_pv_lv >= 0 ? gen_level_name(s_pv_lv) : "");
     lv_label_set_text(s_pv_pos, t);
     lv_obj_set_state(s_pv_prev, LV_STATE_DISABLED, s_pv_n < 2);
     lv_obj_set_state(s_pv_next, LV_STATE_DISABLED, s_pv_n < 2);
@@ -840,7 +840,7 @@ static int pv_load(const char *path, char *summary, size_t n)
     int o = snprintf(summary, n, "%d puzzle%s%s", s_pv_n, s_pv_n == 1 ? "" : "s", s_pv_n ? ": " : "");
     for (int v = 0, first = 1; v < VAR_COUNT && o < (int)n; v++) {
         if (!kinds[v]) continue;
-        o += snprintf(summary + o, n - o, "%s%d %s", first ? "" : ", ", kinds[v], VARIANT_NAMES[v]);
+        o += snprintf(summary + o, n - o, "%s%d %s", first ? "" : ", ", kinds[v], variant_name(v));
         first = 0;
     }
     if (bad && o < (int)n) o += snprintf(summary + o, n - o, "  -  %d %s that %s", bad,

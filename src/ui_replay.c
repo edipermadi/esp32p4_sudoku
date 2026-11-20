@@ -27,7 +27,7 @@ static void export_start(const stats_replay_t *r);
 
 static const uint8_t RP_SPEEDS[] = {1, 2, 4, 8};
 
-lv_obj_t *scr_replay, *rp_return;            /* the screen, and where Back goes */
+static lv_obj_t *scr_replay, *rp_return;            /* the screen, and where Back goes */
 static lv_obj_t *rp_cells[81], *rp_lbl[81];
 static const sudoku_geom_t *rp_geo;                 /* the replayed puzzle's variant */
 static sudoku_geom_t *rp_geo_buf;                   /* PSRAM: a replayed Jigsaw's regions */
@@ -63,7 +63,7 @@ static void rp_render(void)
         lv_color_t fg = rp_given[i] ? C_TEXT : (kind[i] == MOVE_FILL ? C_ORANGE : C_DIGIT_USER);
         if (bad && !rp_given[i]) fg = C_RED;
         lv_obj_set_style_text_color(rp_lbl[i], fg, 0);
-        lv_label_set_text_static(rp_lbl[i], DIGITS[val[i] <= 9 ? val[i] : 0]);
+        lv_label_set_text_static(rp_lbl[i], ui_digits()[val[i] <= 9 ? val[i] : 0]);
     }
     char now[16], total[16];
     fmt_time(now, sizeof(now), (rp_k ? rp_moves[rp_k - 1].t_ms : 0) / 1000);
@@ -125,7 +125,7 @@ static void rp_close(void)
 {
     if (rp_timer) lv_timer_delete(rp_timer);
     rp_timer = NULL;
-    lv_screen_load(rp_return ? rp_return : scr_home);
+    lv_screen_load(rp_return ? rp_return : screen_home());
     lv_obj_delete_async(scr_replay);
     scr_replay = NULL;
 }
@@ -323,7 +323,7 @@ static void ins_show(const stats_insights_t *in)
         lv_obj_set_style_radius(c, 6, 0);
         lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
         int pct = in->by_box[b] * 100 / maxb;
-        lv_obj_set_style_bg_color(c, lv_color_hex(mix_hex(ui_pal->red, ui_pal->card2, pct * 85 / 100)), 0);
+        lv_obj_set_style_bg_color(c, lv_color_hex(mix_hex(ui_palette()->red, ui_palette()->card2, pct * 85 / 100)), 0);
         lv_obj_t *l = make_label(c, &lv_font_montserrat_18, pct > 55 ? lv_color_white() : C_TEXT);
         lv_label_set_text_fmt(l, "%u", (unsigned)in->by_box[b]);
         lv_obj_center(l);
@@ -486,15 +486,15 @@ void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, 
     if (n == 0) sudoku_ui_notice("No moves were recorded for this game.", 3000);
 }
 
-bool rp_want_export;                 /* the replay asked for is to be exported, not shown */
-bool rx_busy;                        /* an export is running */
+static bool rp_want_export;                 /* the replay asked for is to be exported, not shown */
+static bool rx_busy;                        /* an export is running */
 
 void history_replay_poll(void)
 {
     if (!rp_loaded) rp_loaded = heap_caps_malloc(sizeof(*rp_loaded), MALLOC_CAP_SPIRAM);
     if (!rp_loaded || !stats_db_take_replay(rp_loaded)) return;
     lv_obj_t *act = lv_screen_active();
-    if (act != scr_history && act != scr_plays) return;      /* left meanwhile */
+    if (act != screen_history() && act != screen_plays()) return;      /* left meanwhile */
     if (rx_busy) return;
     if (!rp_loaded->found) {
         sudoku_ui_notice("This solve has no recorded moves.", 3000);
@@ -728,3 +728,9 @@ static void export_start(const stats_replay_t *r)
     rx_timer = lv_timer_create(rx_timer_cb, 1, NULL);
     printf("export: %s, %d frames\n", rx_path, rx_frames);
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+lv_obj_t *screen_replay(void) { return scr_replay; }
+bool replay_want_export(void) { return rp_want_export; }
+void replay_set_want_export(bool v) { rp_want_export = v; }
+bool replay_busy(void) { return rx_busy; }

@@ -22,10 +22,15 @@ static void discard_confirm_cb(lv_event_t *e);
 static void resume_other_cb(lv_event_t *e);
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub);
 
+static lv_obj_t *h_menu;                  /* the pages, side by side: swipe between them */
+static lv_obj_t *h_page[HOME_PAGES_MAX], *h_dots;
 static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player, *h_daily_sub, *h_daily;
 static lv_obj_t *h_player_title, *h_player_avatar;   /* the Players button's title: the avatar, or the icon */
 static bool      st_wifi_reveal;            /* name shown; hidden again each time Settings opens */
 static uint16_t  l_pending_id;
+/* the current player's unfinished games in sudoku.db (most recent first), refreshed with the list and home */
+static stats_game_row_t s_games[STATS_MAX_GAMES];
+static int s_ngames;
 
 /* ------------------------------------------------------------- the week (Home) */
 /* The "puzzles solved" line also says how this week is going; a tap compares it
@@ -122,15 +127,15 @@ void home_player_update(void)
     if (!h_player_title) return;
     static bool asked;
     int av = 0;
-    for (int i = 0; i < p_count; i++) {
-        if (p_players[i].id == store_player_id() && p_players[i].avatar <= AVATAR_COUNT) av = p_players[i].avatar;
+    for (int i = 0; i < players_count(); i++) {
+        if (players_all()[i].id == store_player_id() && players_all()[i].avatar <= AVATAR_COUNT) av = players_all()[i].avatar;
     }
-    if (p_count < 0 && !asked && stats_db_ready()) {
+    if (players_count() < 0 && !asked && stats_db_ready()) {
         asked = true;
         stats_db_list_players();                    /* (render_players calls back here when it comes) */
     }
     lv_obj_set_hidden(h_player_avatar, !av);
-    if (av) lv_image_set_src(h_player_avatar, &avatar_images[av - 1]);
+    if (av) lv_image_set_src(h_player_avatar, avatar_image(av - 1));
     lv_label_set_text(h_player_title, av ? "Players" : SYMBOL_USER "  Players");
 }
 
@@ -138,7 +143,7 @@ void refresh_home(void)
 {
     uint16_t total = 0;
     for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        total += store_solved_count(puzzle_collections[c].first, puzzle_collections[c].count);
+        total += store_solved_count(puzzle_collection(c)->first, puzzle_collection(c)->count);
     }
     h_total_n = total;
     home_total_text();
@@ -177,7 +182,7 @@ void refresh_home(void)
 void show_home(void)
 {
     refresh_home();
-    lv_screen_load(scr_home);
+    lv_screen_load(screen_home());
 }
 
 void home_cb(lv_event_t *e)
@@ -189,7 +194,7 @@ static void puzzles_cb(lv_event_t *e)
 {
     refresh_list();
     list_reveal_coll(LV_ANIM_OFF);
-    lv_screen_load(scr_list);
+    lv_screen_load(screen_list());
 }
 
 /* The Wi-Fi row's text: the state, or once connected the network's name,
@@ -201,9 +206,9 @@ void st_wifi_update(void)
     wifi_mgr_get_status(&ws);
     bool connected = ws.state == WIFI_ST_CONNECTED;
     const char *w = connected && !st_wifi_reveal ? "Connected  ******" : wifi_ui_summary();
-    if (strcmp(lv_label_get_text(st_wifi_lbl), w) != 0) lv_label_set_text(st_wifi_lbl, w);
-    lv_obj_set_hidden(st_wifi_eye, !connected);
-    lv_label_set_text(lv_obj_get_child(st_wifi_eye, 0), st_wifi_reveal ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
+    if (strcmp(lv_label_get_text(settings_wifi_lbl()), w) != 0) lv_label_set_text(settings_wifi_lbl(), w);
+    lv_obj_set_hidden(settings_wifi_eye(), !connected);
+    lv_label_set_text(lv_obj_get_child(settings_wifi_eye(), 0), st_wifi_reveal ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
 }
 
 void st_wifi_eye_cb(lv_event_t *e)
@@ -217,7 +222,7 @@ static void settings_cb(lv_event_t *e)
     st_wifi_reveal = false;                         /* the network's name hidden again */
     st_wifi_update();
     st_select_tab(0);                               /* Network */
-    lv_screen_load(scr_settings);
+    lv_screen_load(screen_settings());
 }
 
 void wifi_back_cb(lv_event_t *e)
@@ -231,15 +236,15 @@ void clock_cb(lv_timer_t *t)
 {
     static char last_clock[8], last_date[64];
     lv_obj_t *act = lv_screen_active();
-    if (act == scr_settings) {
+    if (act == screen_settings()) {
         st_wifi_update();
         char sd[64];
         stats_db_status(sd, sizeof(sd));
-        if (strcmp(lv_label_get_text(st_sd_hint), sd) != 0) lv_label_set_text(st_sd_hint, sd);
+        if (strcmp(lv_label_get_text(settings_sd_hint()), sd) != 0) lv_label_set_text(settings_sd_hint(), sd);
         usb_btn_update();
         return;
     }
-    if (act != scr_home) return;
+    if (act != screen_home()) return;
 
     char c[8], d[64];
     time_t now = time(NULL);
@@ -325,7 +330,7 @@ static void ug_discard_cb(lv_event_t *e)
     uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
     if (store_saved_game()->id == id) store_clear_game();
     else stats_db_clear_game(id);
-    if (g_id == id && !g_solved) g_id = STORE_NO_GAME;   /* the game screen held it */
+    if (game_id() == id && !game_solved()) game_set_id(STORE_NO_GAME);   /* the game screen held it */
     char name[40], msg[80];
     puzzle_name(id, name, sizeof(name));
     snprintf(msg, sizeof(msg), "Discarded %s.", name);
@@ -432,7 +437,10 @@ void open_puzzle(uint16_t id)
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub)
 {
     lv_obj_t *b = make_btn(parent, 0, 0, HOME_COL_W, HOME_BTN_H, NULL, NULL, cb, NULL);
-    if (h_nitems < (int)(sizeof(h_items) / sizeof(h_items[0]))) h_items[h_nitems++] = b;   /* (the menu's order) */
+    if (home_nitems() < (int)(sizeof(lv_obj_t *[16]) / sizeof(home_items()[0]))) {   /* (the menu's order) */
+        home_set_items_at(home_nitems(), b);
+        home_set_nitems(home_nitems() + 1);
+    }
     lv_obj_t *l = make_label(b, &lv_font_montserrat_24, C_TEXT);
     lv_label_set_text(l, text);
     if (sub) {
@@ -450,21 +458,21 @@ static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, 
 
 void build_home(void)
 {
-    scr_home = make_screen();
+    screen_set_home(make_screen());
 
-    h_clock = make_label(scr_home, &font_timer_36, C_TEXT);
+    h_clock = make_label(screen_home(), &font_timer_36, C_TEXT);
     lv_obj_align(h_clock, LV_ALIGN_TOP_MID, 0, 30);
     lv_obj_set_hidden(h_clock, true);
-    h_date = make_label(scr_home, &lv_font_montserrat_16, C_MUTED);
+    h_date = make_label(screen_home(), &lv_font_montserrat_16, C_MUTED);
     lv_obj_align(h_date, LV_ALIGN_TOP_MID, 0, 80);
 
-    lv_obj_t *pw = make_btn(scr_home, 0, 0, 64, 52, LV_SYMBOL_POWER, &lv_font_montserrat_24,
+    lv_obj_t *pw = make_btn(screen_home(), 0, 0, 64, 52, LV_SYMBOL_POWER, &lv_font_montserrat_24,
                             power_off_cb, NULL);
     lv_obj_align(pw, LV_ALIGN_TOP_RIGHT, -12, 10);
-    lv_obj_t *lk = make_btn(scr_home, 0, 0, 64, 52, SYMBOL_LOCK, &font_icons_24, lock_now_cb, NULL);
+    lv_obj_t *lk = make_btn(screen_home(), 0, 0, 64, 52, SYMBOL_LOCK, &font_icons_24, lock_now_cb, NULL);
     lv_obj_align(lk, LV_ALIGN_TOP_RIGHT, -12 - 64 - 10, 10);   /* left of the power button: lock now */
 
-    lv_obj_t *col = lv_obj_create(scr_home);
+    lv_obj_t *col = lv_obj_create(screen_home());
     lv_obj_remove_style_all(col);
     lv_obj_set_size(col, HOME_GRID_W, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
@@ -498,8 +506,8 @@ void build_home(void)
         lv_obj_set_style_pad_column(h_page[p], HOME_GAP, 0);
         lv_obj_set_scrollable(h_page[p], false);
     }
-    h_menu_grid = -1;                                   /* not laid out yet */
-    h_nitems = 0;
+    home_set_menu_grid(-1);                                   /* not laid out yet */
+    home_set_nitems(0);
     lv_obj_t *const menu = h_page[0];                   /* (home_layout sorts them onto the pages) */
 
     /* who is playing, first */
@@ -537,16 +545,18 @@ void build_home(void)
     lv_obj_t *hb = home_btn(menu, SYMBOL_CALENDAR "  History", history_cb, NULL);   /* the calendar of games */
     lv_obj_set_style_text_font(lv_obj_get_child(hb, 0), &font_icons_24, 0);
     home_btn(menu, LV_SYMBOL_VIDEO "  Gameplays", plays_cb, NULL);
-    lv_obj_t *tb = home_btn(menu, SYMBOL_TROPHY "  Trophies", trophy_cb, &h_trophy_sub);   /* achievements, leaderboard */
+    lv_obj_t *trophy_sub = NULL;
+    lv_obj_t *tb = home_btn(menu, SYMBOL_TROPHY "  Trophies", trophy_cb, &trophy_sub);   /* achievements, leaderboard */
+    home_set_trophy_sub(trophy_sub);
     lv_obj_set_style_text_font(lv_obj_get_child(tb, 0), &font_icons_24, 0);
-    lv_label_set_text(h_trophy_sub, stats_db_ready() ? "Achievements and daily leaderboard" : "Needs a microSD card");
+    lv_label_set_text(home_trophy_sub(), stats_db_ready() ? "Achievements and daily leaderboard" : "Needs a microSD card");
     home_btn(menu, LV_SYMBOL_CHARGE "  Time attack", attack_cb, NULL);              /* 10 minutes of Easy puzzles */
     home_btn(menu, LV_SYMBOL_DIRECTORY "  Files", files_open_cb, NULL);              /* the microSD card */
     home_btn(menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);              /* (the second page) */
     lv_obj_t *sb = home_btn(menu, SYMBOL_CHART "  System", sysmon_open_cb, NULL);    /* system monitor */
     lv_obj_set_style_text_font(lv_obj_get_child(sb, 0), &font_icons_24, 0);
 
-    h_dots = lv_obj_create(scr_home);                    /* page dots (home_dots) */
+    h_dots = lv_obj_create(screen_home());                    /* page dots (home_dots) */
     lv_obj_remove_style_all(h_dots);
     lv_obj_set_size(h_dots, LV_SIZE_CONTENT, 12);
     lv_obj_set_flex_flow(h_dots, LV_FLEX_FLOW_ROW);
@@ -561,7 +571,7 @@ void build_home(void)
     lv_obj_align(h_dots, LV_ALIGN_BOTTOM_MID, 0, -26);
     lv_obj_set_hidden(h_dots, true);
 
-    lv_obj_t *src = make_label(scr_home, &lv_font_montserrat_12, C_MUTED);
+    lv_obj_t *src = make_label(screen_home(), &lv_font_montserrat_12, C_MUTED);
     lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
     lv_obj_align(src, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
@@ -577,34 +587,49 @@ static void daily_btn_update(void)
     lv_obj_set_state(h_daily, LV_STATE_DISABLED, !CLOCK_VALID(now));
 }
 
+
+/* the unfinished games, from sudoku.db (without it: just the one in RAM) */
+void games_refresh(void)
+{
+    int n = stats_db_ready() ? stats_db_list_games(s_games) : -1;
+    s_ngames = n < 0 ? 0 : n;
+}
+
 static void stats_cb(lv_event_t *e)
 {
     if (stats_db_ready()) stats_db_list_players();   /* fresh list for the player dropdown */
     refresh_stats();
-    lv_screen_load(scr_stats);
+    lv_screen_load(screen_stats());
 }
 
 static void plays_cb(lv_event_t *e)
 {
     plays_ask(0);
-    lv_screen_load(scr_plays);
+    lv_screen_load(screen_plays());
 }
 
 static void profile_cb(lv_event_t *e)
 {
     render_players();
     if (stats_db_ready()) stats_db_list_players();      /* fresh counts; drawn when they arrive */
-    lv_screen_load(scr_profile);
+    lv_screen_load(screen_profile());
 }
 
 void sysmon_open_cb(lv_event_t *e)
 {
-    lv_screen_load(scr_sysmon);
+    lv_screen_load(screen_sysmon());
     sysmon_ui_set_shown(true);
 }
 
 void files_open_cb(lv_event_t *e)
 {
-    lv_screen_load(scr_files);
+    lv_screen_load(screen_files());
     file_ui_set_shown(true);
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+lv_obj_t *home_menu(void) { return h_menu; }
+lv_obj_t *const *home_page(void) { return h_page; }
+lv_obj_t *home_dots_obj(void) { return h_dots; }
+const stats_game_row_t *ui_games(void) { return s_games; }
+int ui_ngames(void) { return s_ngames; }

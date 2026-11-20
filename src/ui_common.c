@@ -10,7 +10,7 @@ static void ctx_item_cb(lv_event_t *e);
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
-const palette_t PAL_DARK = {
+static const palette_t PAL_DARK = {
     .bg = 0x101218, .card = 0x1B1E27, .card2 = 0x2A2F3D, .text = 0xEDEFF4, .muted = 0x8B92A5,
     .accent = 0x4F8CFF, .green = 0x3DD68C, .orange = 0xFFA94D, .red = 0xFF6B6B,
     .grid_thick = 0x8B92A5, .grid_thin = 0x3A3F4E,
@@ -28,7 +28,7 @@ static const palette_t PAL_LIGHT = {
     .list_solved = 0x2FA36B, .list_active = 0xD98A2B, .notice = 0xFFE8D6, .scrim_opa = LV_OPA_40,
 };
 
-const palette_t *ui_pal = &PAL_DARK;
+static const palette_t *ui_pal = &PAL_DARK;
 static palette_t s_pal;                   /* the active scheme with the chosen accent (palette_build) */
 
 /* accent colours (Settings): dark-mode and light-mode shades; 0 = the schemes' own blue */
@@ -36,18 +36,11 @@ static const uint32_t ACCENTS[ACCENT_COUNT][2] = {
     {0x4F8CFF, 0x2F6FE0}, {0x2DD4BF, 0x0D9488}, {0x4ADE80, 0x16A34A}, {0xA78BFA, 0x7C3AED}, {0xF472B6, 0xDB2777},
 };
 
-/* Night mode (Settings > Display): between the night hours, dark mode and the backlight
- * at most the night brightness. Only the switch-over changes things (night_check), so
- * dark mode or brightness changed by hand during the night stay as they are until morning.
- * s_night: the night look is on now. */
-bool s_night;
-lv_obj_t *s_saver;   /* black cover on the system layer while the screen is off */
-
 /* the backlight for "on": the day's setting, or less at night */
 int effective_brightness(void)
 {
     int b = store_brightness();
-    if (s_night && store_night_brightness() < b) b = store_night_brightness();
+    if (ui_night() && store_night_brightness() < b) b = store_night_brightness();
     return b;
 }
 
@@ -111,67 +104,15 @@ lv_obj_t *player_dot(lv_obj_t *parent, int color, int size)
     lv_obj_set_clickable(d, false);
     return d;
 }
-uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
-
-const char *const DIGITS[10] = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-
-uint16_t g_id = STORE_NO_GAME;
-int      g_var = VAR_CLASSIC;     /* the puzzle's variant (generator.h) */
-const sudoku_geom_t *g_geo;       /* and its geometry: units, peers, size */
-sudoku_geom_t *g_geo_buf;         /* PSRAM: a Jigsaw puzzle's geometry (its regions) */
-uint8_t  g_given[81];
-board_t  g_b;
-int      g_sel = -1;
-bool     g_notes_mode;
-bool     g_solved;
-bool     g_paused;
-uint32_t g_elapsed_ms;
-uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
-uint16_t g_hints;         /* cells filled with Fill (undo doesn't remove them either) */
-uint32_t g_flags;         /* GAME_FLAG_* (store.h): the no-notes challenge, techniques the hints showed */
-uint8_t  g_sol[81];       /* the solution, for Fill */
-game_move_t *g_moves;     /* move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
-uint8_t  h_mark[81];      /* hint highlight: 0, 1 = where to look, 2 = the cell */
-int      h_step;          /* 0 = no hint open, 1 = nudge shown, 2 = reason shown */
-sudoku_step_t h_info;
-int      g_practice = -1;  /* Learn: the technique being practised (LEARN_*), -1 = a real game */
-bool     g_attack;         /* this game is part of a run */
-uint32_t atk_used_ms;      /* the run's earlier puzzles */
-int      atk_solved, atk_mistakes;
-bool     g_starred;        /* the puzzle is bookmarked (the star in the top bar) */
-lv_obj_t *g_star_btn;
-lv_obj_t *h_card, *h_text, *h_act;
-int      g_nmoves;
-bool     g_sol_ok;
-int64_t  g_started_at;    /* Unix time the puzzle was opened/restarted, 0 = not known yet */
-uint32_t g_started_tick;  /* lv_tick_get() then, to work it out once NTP sets the clock;
-                                    0 = not this session (resumed with no known start) */
-uint32_t g_last_tick;
-
-board_t *g_undo;          /* UNDO_MAX boards, PSRAM (31 KB) */
-int      g_undo_head, g_undo_len;
-board_t *g_redo;          /* undone boards, newest last, PSRAM; any new edit empties it */
-int      g_redo_len;
-int      g_lock;          /* digit-first: the digit locked on the pad (long press), 0 = none */
 
 /* ------------------------------------------------------------- widgets */
-lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_history, *scr_game;
-lv_obj_t *scr_sysmon, *scr_files;
-lv_obj_t *scr_plays;               /* Gameplays: recorded solves to replay */
-lv_obj_t *scr_trophy;              /* Trophies: achievements, daily leaderboard */
-lv_obj_t *h_menu;                  /* the pages, side by side: swipe between them */
-int h_menu_grid;                   /* layout signature (home_layout), -1 = not laid out */
-lv_obj_t *h_page[HOME_PAGES_MAX], *h_dots;
-lv_obj_t *h_items[16];             /* the menu buttons, in order */
-stats_player_t p_players[STATS_MAX_PLAYERS];
-int p_count = -1;                 /* last list from sudoku.db, -1 = none yet */
 
 /* a player in that list, by id (non-zero) or else by name (names are unique, ignoring case);
  * NULL: not there (yet) */
 const stats_player_t *player_find(int32_t id, const char *name)
 {
-    for (int i = 0; i < p_count; i++) {
-        if (id ? p_players[i].id == id : (name && !strcasecmp(p_players[i].name, name))) return &p_players[i];
+    for (int i = 0; i < players_count(); i++) {
+        if (id ? players_all()[i].id == id : (name && !strcasecmp(players_all()[i].name, name))) return &players_all()[i];
     }
     return NULL;
 }
@@ -188,7 +129,7 @@ lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, in
     if (color < 0) color = pl ? pl->color : 0;
     if (pl && pl->avatar && pl->avatar <= AVATAR_COUNT) {
         lv_obj_t *im = lv_image_create(box);
-        lv_image_set_src(im, &avatar_images[pl->avatar - 1]);
+        lv_image_set_src(im, avatar_image(pl->avatar - 1));
         if (size < AVATAR_SIZE) lv_image_set_scale(im, (uint32_t)(256 * size / AVATAR_SIZE));
         lv_obj_center(im);
     } else {
@@ -196,32 +137,11 @@ lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, in
     }
     return box;
 }
-int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, then the kinds (STATS_LEVEL_KIND) */
-lv_obj_t *st_wifi_eye;               /* shows the network's name (hidden until tapped) */
-lv_obj_t *st_lock_dd, *st_pin_btn;   /* the lock screen: Off / Swipe / PIN, and Change PIN */
 /* collections imported from puzzles/ on the card (stats_db_import_puzzles) */
 static stats_import_t s_imports[STATS_MAX_IMPORTS];
-int s_nimports;
+static int s_nimports;
 /* collections made on the board (the game screen's Save), after the imported ones */
-stats_saved_t *s_saved;            /* STATS_MAX_SAVED of them, PSRAM */
-int s_nsaved;
-int g_from_coll = -1;              /* the collection the game was opened from (Next, back to the list) */
-/* Puzzles' tabs: 0 the built-in collections, 1 the player's (imported and saved) */
-int l_tab;
-int       l_coll;
-
-/* game screen */
-lv_obj_t *g_grid, *g_boxes[9], *g_cells[81], *g_cell_lbl[81];
-lv_obj_t *g_clues[18];                       /* Sandwich: the sums by the rows and columns */
-int       g_layout_var = -1;     /* variant the board and pad are laid out for */
-lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the tour points at them) */
-const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
-                                                     "Naked pair", "Hidden pair", "Naked triple", "X-Wing",
-                                                     "Swordfish", "XY-Wing", "Killer cage", "Thermometer",
-                                                     "Sandwich clue", "Consecutive bars"};
-/* the current player's unfinished games in sudoku.db (most recent first), refreshed with the list and home */
-stats_game_row_t s_games[STATS_MAX_GAMES];
-int s_ngames;
+static stats_saved_t *s_saved;            /* STATS_MAX_SAVED of them, PSRAM */
 
 /* ============================================================= helpers */
 
@@ -241,9 +161,17 @@ const char *ordinal(int n)
     if (t >= 11 && t <= 13) return "th";
     return n % 10 == 1 ? "st" : n % 10 == 2 ? "nd" : n % 10 == 3 ? "rd" : "th";
 }
-gen_cache_t *s_gen_cache;          /* GEN_CACHE entries, PSRAM */
+static gen_cache_t *s_gen_cache;          /* GEN_CACHE entries, PSRAM */
 static int s_gen_cache_next;
-uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+
+/* the next RAM-only puzzle id (no card: they last until power-off) */
+uint16_t gen_ram_take(void)
+{
+    uint16_t id = s_gen_ram_next++;
+    if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+    return id;
+}
 
 void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions,
                           const char *cages, const char *marks, const char *thermos, const char *day)
@@ -397,25 +325,25 @@ int import_of(uint16_t id, int *number)
 }
 
 /* the list's collections: the built-in ones, then the imported ones, then the saved ones */
-int coll_total(void) { return PUZZLE_COLLECTION_COUNT + s_nimports + s_nsaved; }
+int coll_total(void) { return PUZZLE_COLLECTION_COUNT + s_nimports + ui_nsaved(); }
 int coll_saved_index(int c) { return c - PUZZLE_COLLECTION_COUNT - s_nimports; }   /* >= 0: a saved one */
 int coll_tab(int c) { return c < PUZZLE_COLLECTION_COUNT ? 0 : 1; }
 const char *coll_name(int c)
 {
-    if (c < PUZZLE_COLLECTION_COUNT) return puzzle_collections[c].name;
+    if (c < PUZZLE_COLLECTION_COUNT) return puzzle_collection(c)->name;
     if (coll_saved_index(c) < 0) return s_imports[c - PUZZLE_COLLECTION_COUNT].name;
     return s_saved[coll_saved_index(c)].name;
 }
 /* built-in and imported collections are runs of ids */
 uint16_t coll_first(int c)
 {
-    if (c < PUZZLE_COLLECTION_COUNT) return puzzle_collections[c].first;
+    if (c < PUZZLE_COLLECTION_COUNT) return puzzle_collection(c)->first;
     if (coll_saved_index(c) < 0) return (uint16_t)(PUZZLE_GEN_BASE + s_imports[c - PUZZLE_COLLECTION_COUNT].first_gid);
     return s_saved[coll_saved_index(c)].count ? s_saved[coll_saved_index(c)].puzzles[0] : 0;
 }
 int coll_size(int c)
 {
-    if (c < PUZZLE_COLLECTION_COUNT) return puzzle_collections[c].count;
+    if (c < PUZZLE_COLLECTION_COUNT) return puzzle_collection(c)->count;
     if (coll_saved_index(c) < 0) return s_imports[c - PUZZLE_COLLECTION_COUNT].count;
     return s_saved[coll_saved_index(c)].count;
 }
@@ -448,7 +376,7 @@ void imports_reload(void)
     s_nimports = n < 0 ? 0 : n;
     if (!s_saved) s_saved = heap_caps_calloc(STATS_MAX_SAVED, sizeof(stats_saved_t), MALLOC_CAP_SPIRAM);
     int m = s_saved && stats_db_ready() ? stats_db_list_saved(s_saved) : -1;
-    s_nsaved = m < 0 ? 0 : m;
+    ui_set_nsaved(m < 0 ? 0 : m);
 }
 
 void puzzle_name(uint16_t id, char *buf, size_t n)
@@ -481,12 +409,12 @@ void puzzle_name(uint16_t id, char *buf, size_t n)
         }
         unsigned num = id >= PUZZLE_GEN_RAM_BASE ? (unsigned)(id - PUZZLE_GEN_RAM_BASE + 1)
                                                  : (unsigned)(id - PUZZLE_GEN_BASE);
-        snprintf(buf, n, "%s %s #%u", STATS_KIND_PREFIX[stats_kind_of(var, false)],
-                 lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "", num);
+        snprintf(buf, n, "%s %s #%u", stats_kind_prefix(stats_kind_of(var, false)),
+                 lv >= 0 && lv < GEN_LEVELS ? gen_level_name(lv) : "", num);
         return;
     }
     int c = puzzle_collection_of(id);
-    snprintf(buf, n, "%s #%u", puzzle_collections[c].name, (unsigned)(id - puzzle_collections[c].first + 1));
+    snprintf(buf, n, "%s #%u", puzzle_collection(c)->name, (unsigned)(id - puzzle_collection(c)->first + 1));
 }
 
 lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *text,
@@ -630,3 +558,11 @@ lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t col
     lv_label_set_text(l, text ? text : "");
     return l;
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+const palette_t *ui_palette_dark(void) { return &PAL_DARK; }
+const palette_t *ui_palette(void) { return ui_pal; }
+int ui_nimports(void) { return s_nimports; }
+const stats_saved_t *ui_saved(void) { return s_saved; }
+const gen_cache_t *ui_gen_cache(void) { return s_gen_cache; }
+void ui_set_gen_cache(gen_cache_t *v) { s_gen_cache = v; }

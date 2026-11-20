@@ -2,12 +2,10 @@
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
-static void mark_started(void);
 static void unit_name(int u, char *buf, size_t n);
 static const char *units_word(void);
 static void digit_list(int mask, const char *last_word, char *buf, size_t n);
 static void mark_unit(int u, uint8_t v);
-static void reset_game(void);
 static void restart_confirm_cb(lv_event_t *e);
 static void atk_stop_cb(lv_event_t *e);
 static void atk_keep_cb(lv_event_t *e);
@@ -22,6 +20,7 @@ static void tour_dim(int x1, int y1, int x2, int y2);
 static void tour_show(int step);
 static void tour_check_cb(lv_timer_t *t);
 
+static uint8_t  h_mark[81];      /* hint highlight: 0, 1 = where to look, 2 = the cell */
 static lv_obj_t *tour_ovl;        /* the game screen's tour, while it's up */
 static bool      g_layout_left;         /* ... and on which side the pad is (Left-handed) */
 
@@ -35,7 +34,7 @@ static void unit_name(int u, char *buf, size_t n)
 {
     if (u < 9) snprintf(buf, n, "row %d", u + 1);
     else if (u < 18) snprintf(buf, n, "column %d", u - 9 + 1);
-    else if (u < 27) snprintf(buf, n, "%s %d", g_geo->variant == VAR_JIGSAW ? "region" : "box", u - 18 + 1);
+    else if (u < 27) snprintf(buf, n, "%s %d", game_geo()->variant == VAR_JIGSAW ? "region" : "box", u - 18 + 1);
     else if (u < UNIT_WINDOW) snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");
     else {                                          /* Hyper windows */
         static const char *const W[4] = {"top-left", "top-right", "bottom-left", "bottom-right"};
@@ -46,12 +45,12 @@ static void unit_name(int u, char *buf, size_t n)
 /* "row, column or box" (and diagonal, window, or region for a Jigsaw) */
 static const char *units_word(void)
 {
-    if (g_geo->diag) return "row, column, box or diagonal";
-    if (g_geo->windows) return "row, column, box or window";
-    if (g_geo->variant == VAR_JIGSAW) return "row, column or region";
-    if (g_geo->ncages) return "row, column, box or cage";
-    if (g_geo->variant == VAR_KNIGHT) return "row, column, box or a knight's move away";
-    if (g_geo->nthermos) return "row, column or box (or the thermometer)";
+    if (game_geo()->diag) return "row, column, box or diagonal";
+    if (game_geo()->windows) return "row, column, box or window";
+    if (game_geo()->variant == VAR_JIGSAW) return "row, column or region";
+    if (game_geo()->ncages) return "row, column, box or cage";
+    if (game_geo()->variant == VAR_KNIGHT) return "row, column, box or a knight's move away";
+    if (game_geo()->nthermos) return "row, column or box (or the thermometer)";
     return "row, column or box";
 }
 
@@ -70,8 +69,8 @@ static void digit_list(int mask, const char *last_word, char *buf, size_t n)
 
 static void mark_unit(int u, uint8_t v)
 {
-    for (int k = 0; k < g_geo->n; k++) {
-        int c = sudoku_unit_cell(g_geo, u, k);
+    for (int k = 0; k < game_geo()->n; k++) {
+        int c = sudoku_unit_cell(game_geo(), u, k);
         if (c >= 0 && h_mark[c] < v) h_mark[c] = v;
     }
 }
@@ -80,20 +79,20 @@ static void mark_unit(int u, uint8_t v)
 /* Settings > Game > Hints: Nudge only: where to look, nothing more (Learn keeps the full hint) */
 bool hint_nudge(void)
 {
-    return store_hint_nudge() && g_practice < 0;
+    return store_hint_nudge() && game_practice() < 0;
 }
 
 void hint_drop(void)
 {
-    if (!h_step) return;
-    h_step = 0;
+    if (!hint_step()) return;
+    hint_set_step(0);
     memset(h_mark, 0, sizeof(h_mark));
-    lv_obj_set_hidden(h_card, true);
+    lv_obj_set_hidden(hint_card(), true);
 }
 
 void hint_render(void)
 {
-    const sudoku_step_t *h = &h_info;
+    const sudoku_step_t *h = hint_info();
     const sudoku_tech_t *t = &h->tech;
     char text[360], u1[48], u2[24], tech[260] = "";
     int r = h->cell / 9 + 1, c = h->cell % 9 + 1;
@@ -106,10 +105,10 @@ void hint_render(void)
         mark_unit(t->unit, 1);
         unit_name(t->unit, u1, sizeof(u1));
         snprintf(tech, sizeof(tech), "In %s the digits between the 1 and the 9 add up to %d: that leaves the 1 and "
-                 "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? g_geo->sandwich_sum[t->unit] : 0);
+                 "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? game_geo()->sandwich_sum[t->unit] : 0);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
         int k = t->unit;
-        for (int i = 0; k >= 0 && k < g_geo->nthermos && i < g_geo->thermo_n[k]; i++) h_mark[g_geo->thermo_cell[k][i]] = 1;
+        for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) h_mark[game_geo()->thermo_cell[k][i]] = 1;
         int c = t->cell1 >= 0 ? t->cell1 : 0;
         snprintf(u1, sizeof(u1), "this thermometer");
         char digs[24] = "";
@@ -138,9 +137,9 @@ void hint_render(void)
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_CAGE) {              /* Killer: the cage's cells */
         int k = t->unit;
-        for (int i = 0; k >= 0 && k < g_geo->ncages && i < g_geo->cage_n[k]; i++) h_mark[g_geo->cage_cell[k][i]] = 1;
-        int c0 = k >= 0 && k < g_geo->ncages ? g_geo->cage_cell[k][0] : 0;
-        snprintf(u1, sizeof(u1), "the %d cage", k >= 0 && k < g_geo->ncages ? g_geo->cage_sum[k] : 0);
+        for (int i = 0; k >= 0 && k < game_geo()->ncages && i < game_geo()->cage_n[k]; i++) h_mark[game_geo()->cage_cell[k][i]] = 1;
+        int c0 = k >= 0 && k < game_geo()->ncages ? game_geo()->cage_cell[k][0] : 0;
+        snprintf(u1, sizeof(u1), "the %d cage", k >= 0 && k < game_geo()->ncages ? game_geo()->cage_sum[k] : 0);
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
@@ -148,7 +147,7 @@ void hint_render(void)
         }
         snprintf(tech, sizeof(tech), "The cage at row %d, column %d adds up to %d: with what's in it and around "
                  "it, its empty cells can only be %s. ", c0 / 9 + 1, c0 % 9 + 1,
-                 k >= 0 && k < g_geo->ncages ? g_geo->cage_sum[k] : 0, digs);
+                 k >= 0 && k < game_geo()->ncages ? game_geo()->cage_sum[k] : 0, digs);
     } else if (t->kind == TECH_NAKED_TRIPLE || t->kind == TECH_X_WING || t->kind == TECH_SWORDFISH ||
                t->kind == TECH_XY_WING) {
         for (int i = 0; i < t->ncells; i++) h_mark[t->cells[i]] = 1;   /* the cells that make the pattern */
@@ -210,7 +209,7 @@ void hint_render(void)
         }
     }
 
-    if (h_step == 1) {
+    if (hint_step() == 1) {
         char un[24];
         switch (h->kind) {
         case STEP_WRONG:
@@ -232,7 +231,7 @@ void hint_render(void)
                                                        : "No simple step here: this needs advanced techniques. More shows one cell.");
             break;
         }
-        lv_label_set_text(lv_obj_get_child(h_act, 0), "More");
+        lv_label_set_text(lv_obj_get_child(hint_act(), 0), "More");
     } else {
         h_mark[h->cell] = 2;
         char un[24];
@@ -255,58 +254,35 @@ void hint_render(void)
             snprintf(text, sizeof(text), "The highlighted cell (row %d, column %d) is %d.", r, c, h->digit);
             break;
         }
-        lv_label_set_text(lv_obj_get_child(h_act, 0), h->kind == STEP_WRONG ? "Erase it" : "Place it");
+        lv_label_set_text(lv_obj_get_child(hint_act(), 0), h->kind == STEP_WRONG ? "Erase it" : "Place it");
     }
-    lv_label_set_text(h_text, text);
-    lv_obj_set_hidden(h_act, h_step == 1 && hint_nudge());   /* Settings > Game > Hints: Nudge only */
+    lv_label_set_text(hint_text(), text);
+    lv_obj_set_hidden(hint_act(), hint_step() == 1 && hint_nudge());   /* Settings > Game > Hints: Nudge only */
 
     /* the card at the bottom, or at the top when the bottom row matters */
     /* as tall as its text needs (a technique and its single take 4-6 lines), at least the
      * buttons' height; at the bottom (growing upwards) unless it would cover a highlighted
      * cell there, then at the top (growing downwards) */
-    lv_obj_update_layout(h_text);
-    int32_t ch = lv_obj_get_height(h_text) + 28;
+    lv_obj_update_layout(hint_text());
+    int32_t ch = lv_obj_get_height(hint_text()) + 28;
     if (ch < 92) ch = 92;
-    lv_obj_set_height(h_card, ch);
+    lv_obj_set_height(hint_card(), ch);
     bool covered = false;
     for (int i = 0; i < 81 && !covered; i++) {
-        if (!h_mark[i] || !g_cells[i]) continue;
+        if (!h_mark[i] || !game_cells()[i]) continue;
         lv_area_t co;
-        lv_obj_get_coords(g_cells[i], &co);
+        lv_obj_get_coords(game_cells()[i], &co);
         covered = co.y2 > SCR_W - 4 - ch;
     }
-    lv_obj_set_y(h_card, covered ? 4 : SCR_W - 4 - ch);
-    lv_obj_set_hidden(h_card, false);
-    refresh_board();
-}
-
-static void reset_game(void)
-{
-    memcpy(g_b.val, g_given, sizeof(g_b.val));
-    memset(g_b.notes, 0, sizeof(g_b.notes));
-    memset(g_b.colors, 0, sizeof(g_b.colors));
-    g_elapsed_ms = 0;
-    g_mistakes = 0;
-    g_hints = 0;
-    g_flags = store_no_notes() ? GAME_FLAG_NO_NOTES : 0;   /* (Settings > Game: the no-notes challenge) */
-    g_nmoves = 0;                                   /* a new attempt, a new log */
-    hint_drop();
-    mark_started();                                 /* opened or restarted: a new attempt */
-    g_undo_len = g_undo_head = 0;
-    g_redo_len = 0;
-    g_lock = 0;
-    g_sel = -1;
-    g_solved = false;
-    lv_obj_set_hidden(g_win_ovl, true);
-    set_paused(false);
-    compute_conflicts();
+    lv_obj_set_y(hint_card(), covered ? 4 : SCR_W - 4 - ch);
+    lv_obj_set_hidden(hint_card(), false);
     refresh_board();
 }
 
 static void restart_confirm_cb(lv_event_t *e)
 {
     lv_obj_t *mbox = (lv_obj_t *)lv_event_get_user_data(e);
-    if (store_saved_game()->id == g_id) store_clear_game();
+    if (store_saved_game()->id == game_id()) store_clear_game();
     reset_game();
     lv_msgbox_close_async(mbox);
 }
@@ -347,7 +323,7 @@ void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary
 
 void restart_cb(lv_event_t *e)
 {
-    if (!g_solved && !has_progress()) {
+    if (!game_solved() && !has_progress()) {
         reset_game();
         return;
     }
@@ -359,8 +335,8 @@ void restart_cb(lv_event_t *e)
 static void atk_stop_cb(lv_event_t *e)
 {
     lv_msgbox_close(lv_event_get_user_data(e));
-    g_attack = false;                               /* (not recorded: the run wasn't finished) */
-    g_solved = true;
+    game_set_attack(false);                               /* (not recorded: the run wasn't finished) */
+    game_set_solved(true);
     show_home();
 }
 
@@ -372,7 +348,7 @@ static void atk_keep_cb(lv_event_t *e)
 
 void back_cb(lv_event_t *e)
 {
-    if (g_attack && !g_solved) {
+    if (game_attack() && !game_solved()) {
         set_paused(true);
         lv_obj_t *m = make_msgbox(LV_SYMBOL_CHARGE "  Stop the run?", "A time attack only counts when its 10 "
                                   "minutes are up. Puzzles solved so far still count as solves.");
@@ -387,13 +363,13 @@ void back_cb(lv_event_t *e)
 void tick_cb(lv_timer_t *t)
 {
     uint32_t now = lv_tick_get();
-    bool running = g_id != STORE_NO_GAME && lv_screen_active() == scr_game && !g_solved && !g_paused && !tour_ovl;
+    bool running = game_id() != STORE_NO_GAME && lv_screen_active() == screen_game() && !game_solved() && !game_paused() && !tour_ovl;
     if (running) {
-        g_elapsed_ms += now - g_last_tick;
+        game_set_elapsed_ms(game_elapsed_ms() + (now - game_last_tick()));
         update_timer_label();
-        if (g_attack && atk_used_ms + g_elapsed_ms >= ATK_MS) atk_finish();
+        if (game_attack() && attack_used_ms() + game_elapsed_ms() >= ATK_MS) atk_finish();
     }
-    g_last_tick = now;
+    game_set_last_tick(now);
 }
 
 /* Killer: each cage outlined with a dashed line just inside its cells, and
@@ -637,87 +613,31 @@ void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *box
 /* the game screen's board and number pad (1..n, as tall as the board) for g_var */
 void game_layout(void)
 {
-    if (!g_geo) g_geo = sudoku_geom(g_var);
+    if (!game_geo()) game_set_geo(sudoku_geom(game_var()));
     const bool left = store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
-    if (g_layout_var == g_var && g_layout_left == left && g_var != VAR_JIGSAW && g_var != VAR_KILLER &&
-        g_var != VAR_EVENODD && g_var != VAR_CONSEC && g_var != VAR_THERMO && g_var != VAR_SANDWICH) {
-        lv_obj_invalidate(g_grid);
+    if (game_layout_var() == game_var() && g_layout_left == left && game_var() != VAR_JIGSAW && game_var() != VAR_KILLER &&
+        game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH) {
+        lv_obj_invalidate(game_grid());
         return;
     }
-    lv_obj_invalidate(g_grid);                      /* every Jigsaw / Killer has its own regions / cages */
-    g_layout_var = g_var;
+    lv_obj_invalidate(game_grid());                      /* every Jigsaw / Killer has its own regions / cages */
+    game_set_layout_var(game_var());
     g_layout_left = left;
     const int board_x = left ? SCR_W - 8 - GRID_SIZE : GRID_X, pad_x = left ? 8 : PAD_X;
-    board_layout(g_geo, g_grid, g_boxes, g_cells, g_clues, board_x);
+    board_layout(game_geo(), game_grid(), game_boxes(), game_cells(), game_clues(), board_x);
     for (int i = 0; i < 81; i++) {                  /* (4x4: big digits) */
-        if (g_cell_lbl[i]) lv_obj_set_style_text_font(g_cell_lbl[i], DIGIT_FONT_N(g_geo->n), 0);
+        if (game_cell_lbl()[i]) lv_obj_set_style_text_font(game_cell_lbl()[i], DIGIT_FONT_N(game_geo()->n), 0);
     }
-    lv_obj_set_x(g_pause_ovl, board_x);
-    const int n = g_geo->n, span = GRID_SIZE - 6;              /* 598: the 9 x 62 px pad, as before */
+    lv_obj_set_x(game_pause_ovl(), board_x);
+    const int n = game_geo()->n, span = GRID_SIZE - 6;              /* 598: the 9 x 62 px pad, as before */
     const int h = (span - (n - 1) * PAD_GAP) / n;
     for (int d = 1; d <= 9; d++) {
-        lv_obj_t *b = g_pad[d - 1];
+        lv_obj_t *b = game_pad()[d - 1];
         lv_obj_set_hidden(b, d > n);
         if (d > n) continue;
         lv_obj_set_pos(b, pad_x, GRID_Y + 1 + (d - 1) * (h + PAD_GAP) + (span - n * h - (n - 1) * PAD_GAP) / 2);
         lv_obj_set_size(b, PAD_W, h);
     }
-}
-
-void start_game(uint16_t id, bool resume)
-{
-    g_practice = -1;                                /* (learn_open sets it after) */
-    g_attack = false;                               /* (atk_open_next sets it after) */
-    uint8_t given[81];
-    if (!puzzle_get(id, given)) {
-        sudoku_ui_notice("This puzzle isn't available (it was made on the board, and sudoku.db is missing).", 4000);
-        return;
-    }
-    g_id = id;
-    g_geo = puzzle_geom(id, g_geo_buf, &g_var);
-    game_layout();
-    for (int i = 0; i < 81; i++) {                  /* only the board's cells, digits 1..n */
-        if (!g_geo->used[i] || given[i] > g_geo->n) given[i] = 0;
-    }
-    memcpy(g_given, given, sizeof(g_given));
-    g_sol_ok = sudoku_solve(g_geo, g_given, g_sol);
-    reset_game();
-    const saved_game_t *s = store_saved_game();
-    if (resume && s->id == id) {
-        memcpy(g_b.val, s->val, sizeof(g_b.val));
-        memcpy(g_b.notes, s->notes, sizeof(g_b.notes));
-        for (int i = 0; i < 81; i++) g_b.colors[i] = s->colors[i] <= CELL_COLORS ? s->colors[i] : 0;
-        for (int i = 0; i < 81; i++) {
-            if (g_given[i]) g_b.val[i] = g_given[i];   /* givens are never editable */
-            if (g_b.val[i] > g_geo->n || !g_geo->used[i]) g_b.val[i] = 0;
-            if (!g_geo->used[i]) g_b.notes[i] = 0;
-            g_b.notes[i] &= g_geo->all;
-        }
-        g_elapsed_ms = s->elapsed_ms;
-        g_mistakes = s->mistakes;
-        g_hints = s->hints;
-        g_flags = s->flags;                         /* (a game keeps the challenge it started with) */
-        const game_move_t *sm;
-        int sn = store_game_moves(&sm);
-        if (sn > 0 && (g_moves || (g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX,
-                                                              MALLOC_CAP_SPIRAM)))) {
-            memcpy(g_moves, sm, sizeof(game_move_t) * sn);
-            g_nmoves = sn;
-        }
-        g_started_at = s->started_at;               /* from when it was first opened */
-        if (!g_started_at) g_started_tick = 0;      /* unknown, and not worked out from this session */
-    }
-    g_notes_mode = false;
-    lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
-    challenge_ui();
-    g_last_tick = lv_tick_get();
-    compute_conflicts();
-    refresh_board();
-    g_starred = id < PUZZLE_GEN_RAM_BASE && stats_db_bookmarked(id);
-    update_header();
-    lv_screen_load(scr_game);
-    rules_first_time();
-    tour_maybe();
 }
 static int tour_step;
 
@@ -725,12 +645,12 @@ static void tour_area(int step, lv_area_t *a)
 {
     lv_obj_t *o[4] = {NULL};
     switch (step) {
-    case 0: o[0] = g_grid; break;
-    case 1: o[0] = g_pad[0]; o[1] = g_pad[8]; break;
-    case 2: o[0] = g_undo_btn; o[1] = g_fill_btn; break;
-    case 3: o[0] = g_hint_btn; break;
-    case 4: o[0] = g_bulb_btn; o[1] = lv_obj_is_hidden(g_star_btn) ? g_hint_btn : g_star_btn; break;
-    default: o[0] = g_timer_btn; break;
+    case 0: o[0] = game_grid(); break;
+    case 1: o[0] = game_pad()[0]; o[1] = game_pad()[8]; break;
+    case 2: o[0] = game_undo_btn(); o[1] = game_fill_btn(); break;
+    case 3: o[0] = game_hint_btn(); break;
+    case 4: o[0] = game_bulb_btn(); o[1] = lv_obj_is_hidden(game_star_btn()) ? game_hint_btn() : game_star_btn(); break;
+    default: o[0] = game_timer_btn(); break;
     }
     lv_obj_get_coords(o[0], a);
     for (int i = 1; i < 4 && o[i]; i++) {
@@ -750,7 +670,7 @@ static void tour_end(void)
     lv_obj_delete(tour_ovl);
     tour_ovl = NULL;
     stats_db_set_seen("tour", true);
-    g_last_tick = lv_tick_get();                    /* (the clock goes on from now) */
+    game_set_last_tick(lv_tick_get());                    /* (the clock goes on from now) */
 }
 
 static void tour_next_cb(lv_event_t *e)
@@ -859,7 +779,7 @@ static void tour_show(int step)
 
 static void tour_check_cb(lv_timer_t *t)
 {
-    if (tour_ovl || lv_screen_active() != scr_game || g_practice >= 0 || g_attack || g_solved || !stats_db_ready())
+    if (tour_ovl || lv_screen_active() != screen_game() || game_practice() >= 0 || game_attack() || game_solved() || !stats_db_ready())
         return;
     lv_obj_t *top = lv_layer_top();                 /* the rules card, a notice: another time */
     for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
@@ -876,10 +796,13 @@ void tour_maybe(void)
     lv_timer_set_repeat_count(t, 1);
 }
 
-static void mark_started(void)
+void mark_started(void)
 {
     time_t now = time(NULL);
-    g_started_at = CLOCK_VALID(now) ? (int64_t)now : 0;
-    g_started_tick = lv_tick_get();
-    if (!g_started_tick) g_started_tick = 1;
+    game_set_start_stamp(CLOCK_VALID(now) ? (int64_t)now : 0);
+    game_set_started_tick(lv_tick_get());
+    if (!game_started_tick()) game_set_started_tick(1);
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+const uint8_t *hint_mark(void) { return h_mark; }

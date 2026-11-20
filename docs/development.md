@@ -49,7 +49,11 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 ## The UI files
 
-The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `sudoku_ui.c` for start-up and the public functions. A function or variable stays `static` in its file unless another file uses it; then it is declared once in `src/ui_internal.h` (a prototype or an `extern`) and defined, without `static`, in the file that owns it. Macros and types are all in `ui_internal.h`. When a new screen needs something from another file, move its declaration there rather than copying it.
+The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `sudoku_ui.c` for start-up and the public functions. A function stays `static` in its file unless another file calls it; then it is declared once in `src/ui_internal.h` and defined, without `static`, in its file. Macros and types are all in `ui_internal.h`. When a new screen needs a function from another file, move its declaration there rather than copying it.
+
+Variables are always `static`: only the file that owns one touches it, and the other files call that file's accessors, declared in `ui_internal.h` under each owner. The game's state (`g_*`) belongs to `ui_game.c`, so `ui_hints.c` reads `game_sel()` and writes `game_set_sel(i)`; a screen's widget is `screen_home()`. An accessor of an array or a struct gives a `const` pointer (`game_given()[i]`, `game_b()->val[i]`), so the compiler rejects a write from another file. A change another file needs to make is a function in the owner (`game_put_value`, `players_take`, `stats_take_view`). Add an accessor only when another file needs it.
+
+The other modules work the same way: no `extern` variables in `src/`. Their tables are reached through functions: `variant_name(v)`, `gen_level_name(l)` (generator.c), `stats_kind_name(k)` (stats_db.c), `puzzle_collection(c)`, `puzzle_load(id, cells)` (puzzles_data.c), `avatar_image(k)` (avatars.c), and the active colours through `ui_palette()` (the `C_*` macros). Constant tables follow the rule too: `static` in their owner, read through a function (`ui_digits()`, `learn_names()`, `sleep_minutes()` in the UI), never an `extern`. `tools/gen_puzzles.py` and `tools/gen_avatars.py` write those accessors with the data.
 
 ## Internal RAM
 

@@ -53,17 +53,31 @@ static void files_back_cb(lv_event_t *e);
 static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint);
 static lv_obj_t *settings_switch(lv_obj_t *row, bool on, lv_event_cb_t cb);
 
+/* "Screen off" dropdown choices, in minutes (0 = never) */
+static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
 static const char *const ACCENT_NAMES = "Blue\nTeal\nGreen\nPurple\nPink";
+
+/* Night mode (Settings > Display): between the night hours, dark mode and the backlight
+ * at most the night brightness. Only the switch-over changes things (night_check), so
+ * dark mode or brightness changed by hand during the night stay as they are until morning.
+ * s_night: the night look is on now. */
+static bool s_night;
 static bool s_dark = true;
+static uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
+
+static lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_history, *scr_game;
+static lv_obj_t *scr_sysmon, *scr_files;
 
 /* settings screen */
-lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
+static lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
+static lv_obj_t *st_wifi_eye;               /* shows the network's name (hidden until tapped) */
+static lv_obj_t *st_lock_dd, *st_pin_btn;   /* the lock screen: Off / Swipe / PIN, and Change PIN */
 static lv_obj_t *st_night_bright_lbl;
 
 static lv_obj_t *st_night_from, *st_night_to;
 static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;
 static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
-lv_obj_t *st_sd_btn, *st_sd_hint;
+static lv_obj_t *st_sd_btn, *st_sd_hint;
 static lv_obj_t *u_ovl;                   /* "USB drive" panel while the computer has the card */
 static lv_obj_t *st_usb_btn, *st_usb_hint;
 static bool u_reloading;                  /* card back / reset: waiting for sudoku.db to (re)open */
@@ -328,10 +342,16 @@ static void sleep_dd_cb(lv_event_t *e)
     store_set_screen_timeout_min(s_sleep_min);
 }
 static volatile sd_state_t s_sd_state = SD_IDLE;
-volatile bool s_sd_present;
+static volatile bool s_sd_present;
 static sd_state_t s_sd_seen = SD_IDLE;
-uint64_t   s_sd_bytes;
-char       s_sd_name[8];
+static uint64_t   s_sd_bytes;
+static char       s_sd_name[8];
+
+/* is a card there: its size and name (at start-up, before Wi-Fi) */
+void sd_probe_card(void)
+{
+    s_sd_present = bsp_sdcard_probe(&s_sd_bytes, s_sd_name) == ESP_OK;
+}
 static esp_err_t  s_sd_err;
 static lv_obj_t  *s_sd_busy;          /* "Formatting..." box */
 
@@ -414,9 +434,8 @@ void sd_poll_cb(lv_timer_t *t)
     /* sudoku.db results */
     static stats_view_t *view;                             /* PSRAM */
     if (!view) view = heap_caps_malloc(sizeof(*view), MALLOC_CAP_SPIRAM);
-    if (view && stats_db_take_view(view) && view->level == x_sel - 1) {
-        x_view = *view;
-        render_stats(&x_view, true);
+    if (view && stats_db_take_view(view) && view->level == stats_sel() - 1) {
+        stats_take_view(view);
     }
     static uint16_t c_best[PUZZLE_COUNT];
     static uint8_t c_fewest[PUZZLE_COUNT], c_solves[PUZZLE_COUNT];
@@ -438,7 +457,7 @@ void sd_poll_cb(lv_timer_t *t)
         apply_loaded_prefs();
     }
     if (scr_history) history_poll();
-    if (scr_plays) plays_poll();
+    if (screen_plays()) plays_poll();
     if (stats_db_take_imports_changed()) {                 /* new collections: Puzzles' column and pane again */
         list_fill_colls();                                 /* (reloads them; not a rebuild of every screen:
                                                               two copies of them all left internal RAM to the
@@ -456,23 +475,21 @@ void sd_poll_cb(lv_timer_t *t)
         if (ch.switched) {
             store_set_game(&ch.game);                      /* their game in progress (RAM only) */
             store_load_game_moves();                       /* and its move log */
-            g_id = STORE_NO_GAME;                          /* the game screen held someone else's */
+            game_set_id(STORE_NO_GAME);                          /* the game screen held someone else's */
             char msg[64];
             snprintf(msg, sizeof(msg), "Now playing: %s", ch.name);
             sudoku_ui_notice(msg, 2500);
         }
         refresh_home();
         render_players();
-        if (lv_screen_active() == scr_trophy) tr_ask();          /* now this player's */
+        if (lv_screen_active() == screen_trophy()) tr_ask();          /* now this player's */
         if (lv_screen_active() == scr_stats) refresh_stats();   /* now this player's */
         else stats_player_dd_update();
     }
     static stats_player_t list[STATS_MAX_PLAYERS];
     int n = stats_db_take_players(list);
     if (n >= 0) {
-        memcpy(p_players, list, sizeof(stats_player_t) * n);
-        p_count = n;
-        render_players();
+        players_take(list, n);
         stats_player_dd_update();
     }
     char msg[96];
@@ -543,16 +560,16 @@ void sd_poll_cb(lv_timer_t *t)
  * reset): sound, clock, timeout, level, and all screens redrawn. */
 void apply_loaded_prefs(void)
 {
-    g_id = STORE_NO_GAME;
-    p_count = -1;
+    game_set_id(STORE_NO_GAME);
+    players_set_count(-1);
     sfx_set_enabled(store_sound_enabled());
     gibberlink_set_enabled(store_gibberlink());
     bsp_audio_set_volume(store_volume());
     bsp_display_brightness_set(effective_brightness());
     tz_apply(store_timezone());
     s_sleep_min = store_screen_timeout_min();
-    l_coll = store_last_collection();
-    l_tab = coll_tab(l_coll);
+    list_set_coll(store_last_collection());
+    list_set_tab(coll_tab(list_coll()));
     s_night = false;                                   /* (re-checked just below, from these settings) */
     apply_theme(store_dark_mode());                    /* redraws every screen with it */
     night_check(NULL);
@@ -746,7 +763,7 @@ void night_check(lv_timer_t *t)
     s_night = want;
     bool dark = want || store_dark_mode();
     if (dark != s_dark) apply_theme(dark);
-    if (!s_saver) bsp_display_brightness_set(effective_brightness());   /* (off stays off) */
+    if (!ui_saver()) bsp_display_brightness_set(effective_brightness());   /* (off stays off) */
     printf("night mode: %s\n", want ? "on" : "off");
 }
 
@@ -775,8 +792,8 @@ void big_digits_dd_cb(lv_event_t *e)
 {
     store_set_big_digits(lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1);
     for (int i = 0; i < 81; i++) {                  /* the game's board now (Replay: when it opens) */
-        if (g_cell_lbl[i]) lv_obj_set_style_text_font(g_cell_lbl[i], DIGIT_FONT_N(g_geo ? g_geo->n : 9), 0);
-        if (g_cells[i]) lv_obj_invalidate(g_cells[i]);   /* (the pencil marks too) */
+        if (game_cell_lbl()[i]) lv_obj_set_style_text_font(game_cell_lbl()[i], DIGIT_FONT_N(game_geo() ? game_geo()->n : 9), 0);
+        if (game_cells()[i]) lv_obj_invalidate(game_cells()[i]);   /* (the pencil marks too) */
     }
 }
 
@@ -1215,7 +1232,7 @@ void apply_theme(bool dark)
 
     lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
     lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi, *old_profile = scr_profile, *old_history = scr_history;
-    lv_obj_t *old_plays = scr_plays, *old_trophy = scr_trophy, *old_sysmon = scr_sysmon, *old_files = scr_files;
+    lv_obj_t *old_plays = screen_plays(), *old_trophy = screen_trophy(), *old_sysmon = scr_sysmon, *old_files = scr_files;
     lv_obj_t *act = lv_screen_active();
 
     build_game();
@@ -1230,9 +1247,9 @@ void apply_theme(bool dark)
     build_history();
     build_plays();
     build_trophies();
-    if (g_id != STORE_NO_GAME) {
-        lv_obj_set_state(g_notes_btn, LV_STATE_CHECKED, g_notes_mode);
-        lv_obj_set_hidden(g_pause_ovl, !g_paused);
+    if (game_id() != STORE_NO_GAME) {
+        lv_obj_set_state(game_notes_btn(), LV_STATE_CHECKED, game_notes_mode());
+        lv_obj_set_hidden(game_pause_ovl(), !game_paused());
         compute_conflicts();
         refresh_board();
         update_header();
@@ -1247,14 +1264,14 @@ void apply_theme(bool dark)
                  : act && act == old_files    ? scr_files
                  : act && act == old_profile  ? scr_profile
                  : act && act == old_history  ? scr_history
-                 : act && act == old_plays    ? scr_plays
-                 : act && act == old_trophy   ? scr_trophy
+                 : act && act == old_plays    ? screen_plays()
+                 : act && act == old_trophy   ? screen_trophy()
                  : act && act == old_list     ? scr_list
                  : act && act == old_settings ? scr_settings
                  : scr_home;
     lv_screen_load(to);
-    if (to == scr_plays) plays_ask(pl_offset);         /* fill the rebuilt list */
-    if (to == scr_trophy) tr_ask();
+    if (to == screen_plays()) plays_ask(plays_offset());         /* fill the rebuilt list */
+    if (to == screen_trophy()) tr_ask();
 
     /* the old screens may be running this very event: delete them later */
     if (old_home) lv_obj_delete_async(old_home);
@@ -1277,3 +1294,33 @@ static void theme_sw_cb(lv_event_t *e)
     store_set_dark_mode(dark);
     apply_theme(dark);
 }
+
+/* ---- accessors: the other UI files reach this file's state through these */
+const uint8_t *sleep_minutes(void) { return SLEEP_MIN; }
+bool ui_night(void) { return s_night; }
+uint8_t ui_sleep_min(void) { return s_sleep_min; }
+void ui_set_sleep_min(uint8_t v) { s_sleep_min = v; }
+lv_obj_t *screen_home(void) { return scr_home; }
+void screen_set_home(lv_obj_t *v) { scr_home = v; }
+lv_obj_t *screen_list(void) { return scr_list; }
+void screen_set_list(lv_obj_t *v) { scr_list = v; }
+lv_obj_t *screen_stats(void) { return scr_stats; }
+void screen_set_stats(lv_obj_t *v) { scr_stats = v; }
+lv_obj_t *screen_settings(void) { return scr_settings; }
+lv_obj_t *screen_wifi(void) { return scr_wifi; }
+lv_obj_t *screen_profile(void) { return scr_profile; }
+void screen_set_profile(lv_obj_t *v) { scr_profile = v; }
+lv_obj_t *screen_history(void) { return scr_history; }
+void screen_set_history(lv_obj_t *v) { scr_history = v; }
+lv_obj_t *screen_game(void) { return scr_game; }
+void screen_set_game(lv_obj_t *v) { scr_game = v; }
+lv_obj_t *screen_sysmon(void) { return scr_sysmon; }
+lv_obj_t *screen_files(void) { return scr_files; }
+lv_obj_t *settings_wifi_lbl(void) { return st_wifi_lbl; }
+lv_obj_t *settings_wifi_eye(void) { return st_wifi_eye; }
+lv_obj_t *settings_lock_dd(void) { return st_lock_dd; }
+lv_obj_t *settings_pin_btn(void) { return st_pin_btn; }
+lv_obj_t *settings_sd_hint(void) { return st_sd_hint; }
+bool ui_sd_present(void) { return s_sd_present; }
+uint64_t ui_sd_bytes(void) { return s_sd_bytes; }
+const char *ui_sd_name(void) { return s_sd_name; }

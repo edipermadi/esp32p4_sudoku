@@ -257,7 +257,7 @@ void store_set_last_collection(uint8_t c)
 {
     if (c >= PUZZLE_COLLECTION_COUNT || c == s_p.last_collection) return;
     s_p.last_collection = c;
-    stats_db_set_text("last_level", puzzle_collections[c].name);
+    stats_db_set_text("last_level", puzzle_collection(c)->name);
 }
 
 bool store_dark_mode(void)

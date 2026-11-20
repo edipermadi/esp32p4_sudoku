@@ -6,7 +6,7 @@
  *
  *   variant|level|givens|regions|cages|marks|thermos
  *
- * variant: a name (VARIANT_NAMES: "Classic", "Killer", ...) or its number; level:
+ * variant: a name (variant_name(): "Classic", "Killer", ...) or its number; level:
  * "Easy" .. "Expert" or 0-3, empty or "-" for none (the receiver rates it); givens: 81
  * cells row by row, a digit, '0' or '.' for an empty one, or a letter a-z for a run
  * of 1-26 empty cells (sdx_pack_givens; Mini 6x6 and Kids 4x4 use the top-left 6x6 /

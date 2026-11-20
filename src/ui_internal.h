@@ -50,7 +50,7 @@
  * ESP32-P4 a task is pinned to the core it is on when it first uses the FPU. */
 #define WORKER_CORE 0
 #define SLEEP_OPTIONS "1 min\n2 min\n5 min\n10 min\n15 min\n30 min\nNever"
-#define SLEEP_COUNT   (sizeof(SLEEP_MIN) / sizeof(SLEEP_MIN[0]))
+#define SLEEP_COUNT   (sizeof(const uint8_t[7]) / sizeof(sleep_minutes()[0]))
 
 LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
 LV_FONT_DECLARE(font_digits_52)   /* the same, larger (Settings > Display > Digit size) */
@@ -71,7 +71,7 @@ LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
 #define SYMBOL_QR       "\xEF\x80\xA9"   /* FontAwesome U+F029 (qrcode) */
 #define SYMBOL_CAMERA   "\xEF\x80\xB0"   /* FontAwesome U+F030 (camera): screenshots */
 #define SYMBOL_MORE     "\xEF\x85\x82"   /* FontAwesome U+F142 (ellipsis-v): a context menu (font_icons_24 only) */
-#define P ui_pal
+#define P ui_palette()
 
 /* ------------------------------------------------------------- geometry */
 #define SCR_W       720
@@ -296,7 +296,6 @@ typedef stats_level_t level_stat_t;
  * screen's list), with their avatars; the closed box shows who is playing */
 #define X_DD_PAD   14                                 /* the dropdown's left padding, without an avatar */
 #define X_DD_LS    22                                 /* the list's line space */
-#define x_view (*x_view_p)
 
 /* ------------------------------------------------------------- progress chart */
 /*
@@ -404,96 +403,167 @@ enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
 #define SAVER_CLOCK_MIN     10
 #define SAVER_CLOCK_LIGHT   12              /* % backlight while it shows */
 
-/* ---- variables shared between the UI files */
-extern const uint8_t SLEEP_MIN[7];   /* sudoku_ui.c */
-extern const palette_t PAL_DARK;   /* ui_common.c */
-extern const palette_t *ui_pal;   /* ui_common.c */
-extern bool s_night;   /* ui_common.c */
-extern lv_obj_t *s_saver;   /* ui_common.c */
-extern uint8_t s_sleep_min;   /* ui_common.c */
-extern const char *const DIGITS[10];   /* ui_common.c */
-extern uint16_t g_id;   /* ui_common.c */
-extern int      g_var;   /* ui_common.c */
-extern const sudoku_geom_t *g_geo;   /* ui_common.c */
-extern sudoku_geom_t *g_geo_buf;   /* ui_common.c */
-extern uint8_t  g_given[81];   /* ui_common.c */
-extern board_t  g_b;   /* ui_common.c */
-extern int      g_sel;   /* ui_common.c */
-extern bool     g_notes_mode;   /* ui_common.c */
-extern bool     g_solved;   /* ui_common.c */
-extern bool     g_paused;   /* ui_common.c */
-extern uint32_t g_elapsed_ms;   /* ui_common.c */
-extern uint16_t g_mistakes;   /* ui_common.c */
-extern uint16_t g_hints;   /* ui_common.c */
-extern uint32_t g_flags;   /* ui_common.c */
-extern uint8_t  g_sol[81];   /* ui_common.c */
-extern game_move_t *g_moves;   /* ui_common.c */
-extern uint8_t  h_mark[81];   /* ui_common.c */
-extern int      h_step;   /* ui_common.c */
-extern sudoku_step_t h_info;   /* ui_common.c */
-extern int      g_practice;   /* ui_common.c */
-extern bool     g_attack;   /* ui_common.c */
-extern uint32_t atk_used_ms;   /* ui_common.c */
-extern int      atk_solved, atk_mistakes;   /* ui_common.c */
-extern bool     g_starred;   /* ui_common.c */
-extern lv_obj_t *g_star_btn;   /* ui_common.c */
-extern lv_obj_t *h_card, *h_text, *h_act;   /* ui_common.c */
-extern int      g_nmoves;   /* ui_common.c */
-extern bool     g_sol_ok;   /* ui_common.c */
-extern int64_t  g_started_at;   /* ui_common.c */
-extern uint32_t g_started_tick;   /* ui_common.c */
-extern uint32_t g_last_tick;   /* ui_common.c */
-extern board_t *g_undo;   /* ui_common.c */
-extern int      g_undo_head, g_undo_len;   /* ui_common.c */
-extern board_t *g_redo;   /* ui_common.c */
-extern int      g_redo_len;   /* ui_common.c */
-extern int      g_lock;   /* ui_common.c */
-extern lv_obj_t *scr_home, *scr_list, *scr_stats, *scr_settings, *scr_wifi, *scr_profile, *scr_history, *scr_game;   /* ui_common.c */
-extern lv_obj_t *scr_sysmon, *scr_files;   /* ui_common.c */
-extern lv_obj_t *scr_plays;   /* ui_common.c */
-extern lv_obj_t *scr_trophy;   /* ui_common.c */
-extern lv_obj_t *h_menu;   /* ui_common.c */
-extern int h_menu_grid;   /* ui_common.c */
-extern lv_obj_t *h_page[HOME_PAGES_MAX], *h_dots;   /* ui_common.c */
-extern lv_obj_t *h_items[16];   /* ui_common.c */
-extern int h_nitems, h_npages;   /* ui_list.c */
-extern stats_player_t p_players[STATS_MAX_PLAYERS];   /* ui_common.c */
-extern int p_count;   /* ui_common.c */
-extern int       x_sel;   /* ui_common.c */
-extern lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;   /* ui_settings.c */
-extern lv_obj_t *st_wifi_eye;   /* ui_common.c */
-extern lv_obj_t *st_lock_dd, *st_pin_btn;   /* ui_common.c */
-extern lv_obj_t *st_sd_btn, *st_sd_hint;   /* ui_settings.c */
-extern int s_nimports;   /* ui_common.c */
-extern stats_saved_t *s_saved;   /* ui_common.c */
-extern int s_nsaved;   /* ui_common.c */
-extern int g_from_coll;   /* ui_common.c */
-extern int l_tab;   /* ui_common.c */
-extern int       l_coll;   /* ui_common.c */
-extern lv_obj_t *g_grid, *g_boxes[9], *g_cells[81], *g_cell_lbl[81];   /* ui_common.c */
-extern lv_obj_t *g_clues[18];   /* ui_common.c */
-extern lv_obj_t *g_pad[9], *g_pad_cnt[9];   /* ui_game.c */
-extern int       g_layout_var;   /* ui_common.c */
-extern lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;   /* ui_game.c */
-extern lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;   /* ui_game.c */
-extern lv_obj_t *g_undo_btn, *g_redo_btn;   /* ui_game.c */
-extern lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* ui_common.c */
-extern const char *const LEARN_NAMES[LEARN_COUNT];   /* ui_common.c */
-extern stats_game_row_t s_games[STATS_MAX_GAMES];   /* ui_common.c */
-extern int s_ngames;   /* ui_common.c */
-extern gen_cache_t *s_gen_cache;   /* ui_common.c */
-extern uint16_t s_gen_ram_next;   /* ui_common.c */
-extern lv_obj_t *scr_replay, *rp_return;   /* ui_replay.c */
-extern bool rp_want_export;   /* ui_replay.c */
-extern bool rx_busy;   /* ui_replay.c */
-extern lv_obj_t *scr_edit, *ed_cells[81], *ed_lbl[81], *ed_status;   /* ui_newpuzzle.c */
-extern lv_obj_t *l_star_btn, *l_new_btn;   /* ui_list.c */
-extern stats_view_t *x_view_p;   /* ui_stats.c */
-extern volatile bool s_sd_present;   /* ui_settings.c */
-extern uint64_t   s_sd_bytes;   /* ui_settings.c */
-extern char       s_sd_name[8];   /* ui_settings.c */
-extern int pl_offset, pl_total;   /* ui_history.c */
-extern lv_obj_t *h_trophy_sub;   /* ui_trophies.c */
+/* ---- state: each file's own variables are static; the other files use these */
+/* ui_common.c */
+const gen_cache_t *ui_gen_cache(void);
+void ui_set_gen_cache(gen_cache_t *v);
+int ui_nimports(void);
+const palette_t *ui_palette_dark(void);
+const stats_saved_t *ui_saved(void);
+/* ui_game.c */
+bool game_attack(void);
+void game_set_attack(bool v);
+const board_t *game_b(void);
+lv_obj_t *const *game_boxes(void);
+lv_obj_t *game_bulb_btn(void);
+lv_obj_t *const *game_cell_lbl(void);
+lv_obj_t *const *game_cells(void);
+lv_obj_t *const *game_clues(void);
+uint32_t game_elapsed_ms(void);
+void game_set_elapsed_ms(uint32_t v);
+lv_obj_t *game_fill_btn(void);
+uint32_t game_flags(void);
+void game_set_flags(uint32_t v);
+int game_from_coll(void);
+void game_set_from_coll(int v);
+const sudoku_geom_t *game_geo(void);
+void game_set_geo(const sudoku_geom_t *v);
+const sudoku_geom_t *game_geo_buf(void);
+void game_set_geo_buf(sudoku_geom_t *v);
+const uint8_t *game_given(void);
+lv_obj_t *game_grid(void);
+lv_obj_t *game_hint_btn(void);
+uint16_t game_hints(void);
+uint16_t game_id(void);
+void game_set_id(uint16_t v);
+uint32_t game_last_tick(void);
+void game_set_last_tick(uint32_t v);
+int game_layout_var(void);
+void game_set_layout_var(int v);
+uint16_t game_mistakes(void);
+int game_nmoves(void);
+void game_set_nmoves(int v);
+lv_obj_t *game_notes_btn(void);
+bool game_notes_mode(void);
+void game_set_notes_mode(bool v);
+lv_obj_t *const *game_pad(void);
+lv_obj_t *game_pause_ovl(void);
+bool game_paused(void);
+int game_practice(void);
+void game_set_practice(int v);
+const board_t *game_redo(void);
+void game_set_redo(board_t *v);
+int game_sel(void);
+void game_set_sel(int v);
+bool game_solved(void);
+void game_set_solved(bool v);
+lv_obj_t *game_star_btn(void);
+bool game_starred(void);
+void game_set_starred(bool v);
+int64_t game_start_stamp(void);
+void game_set_start_stamp(int64_t v);
+uint32_t game_started_tick(void);
+void game_set_started_tick(uint32_t v);
+lv_obj_t *game_timer_btn(void);
+const board_t *game_undo(void);
+void game_set_undo(board_t *v);
+lv_obj_t *game_undo_btn(void);
+int game_undo_head(void);
+void game_set_undo_head(int v);
+int game_undo_len(void);
+void game_set_undo_len(int v);
+int game_var(void);
+lv_obj_t *hint_act(void);
+lv_obj_t *hint_card(void);
+const sudoku_step_t *hint_info(void);
+void hint_set_info(const sudoku_step_t *v);
+int hint_step(void);
+void hint_set_step(int v);
+lv_obj_t *hint_text(void);
+const char *const *ui_digits(void);
+/* ui_game_tools.c */
+int attack_mistakes(void);
+void attack_set_mistakes(int v);
+int attack_solved(void);
+void attack_set_solved(int v);
+uint32_t attack_used_ms(void);
+void attack_set_used_ms(uint32_t v);
+int ui_nsaved(void);
+void ui_set_nsaved(int v);
+/* ui_hints.c */
+const uint8_t *hint_mark(void);
+/* ui_history.c */
+int plays_offset(void);
+lv_obj_t *screen_plays(void);
+/* ui_home.c */
+lv_obj_t *home_dots_obj(void);
+lv_obj_t *home_menu(void);
+lv_obj_t *const *home_page(void);
+const stats_game_row_t *ui_games(void);
+int ui_ngames(void);
+/* ui_list.c */
+lv_obj_t *const *home_items(void);
+void home_set_items_at(int i, lv_obj_t *v);
+int home_menu_grid(void);
+void home_set_menu_grid(int v);
+int home_nitems(void);
+void home_set_nitems(int v);
+int list_coll(void);
+void list_set_coll(int v);
+lv_obj_t *list_new_btn(void);
+int list_tab(void);
+void list_set_tab(int v);
+/* sudoku_ui.c */
+lv_obj_t *ui_saver(void);
+/* ui_newpuzzle.c */
+const char *const *learn_names(void);
+lv_obj_t *screen_edit(void);
+/* ui_players.c */
+const stats_player_t *players_all(void);
+int players_count(void);
+void players_set_count(int v);
+/* ui_replay.c */
+bool replay_busy(void);
+bool replay_want_export(void);
+void replay_set_want_export(bool v);
+lv_obj_t *screen_replay(void);
+/* ui_settings.c */
+lv_obj_t *screen_files(void);
+lv_obj_t *screen_game(void);
+void screen_set_game(lv_obj_t *v);
+lv_obj_t *screen_history(void);
+void screen_set_history(lv_obj_t *v);
+lv_obj_t *screen_home(void);
+void screen_set_home(lv_obj_t *v);
+lv_obj_t *screen_list(void);
+void screen_set_list(lv_obj_t *v);
+lv_obj_t *screen_profile(void);
+void screen_set_profile(lv_obj_t *v);
+lv_obj_t *screen_settings(void);
+lv_obj_t *screen_stats(void);
+void screen_set_stats(lv_obj_t *v);
+lv_obj_t *screen_sysmon(void);
+lv_obj_t *screen_wifi(void);
+lv_obj_t *settings_lock_dd(void);
+lv_obj_t *settings_pin_btn(void);
+lv_obj_t *settings_sd_hint(void);
+lv_obj_t *settings_wifi_eye(void);
+lv_obj_t *settings_wifi_lbl(void);
+const uint8_t *sleep_minutes(void);
+bool ui_night(void);
+uint64_t ui_sd_bytes(void);
+const char *ui_sd_name(void);
+bool ui_sd_present(void);
+uint8_t ui_sleep_min(void);
+void ui_set_sleep_min(uint8_t v);
+/* ui_stats.c */
+int stats_sel(void);
+const stats_view_t *stats_view_p(void);
+void stats_set_view_p(stats_view_t *v);
+/* ui_trophies.c */
+lv_obj_t *home_trophy_sub(void);
+void home_set_trophy_sub(lv_obj_t *v);
+lv_obj_t *screen_trophy(void);
 
 /* ---- functions shared between the UI files */
 int effective_brightness(void);
@@ -505,6 +575,7 @@ const stats_player_t *player_find(int32_t id, const char *name);
 lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, int size, int dot);
 void fmt_time(char *buf, size_t n, uint32_t s);
 const char *ordinal(int n);
+uint16_t gen_ram_take(void);
 void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages, const char *marks, const char *thermos, const char *day);
 void gen_cache_source(uint16_t id, const char *source, int number);
 bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12]);
@@ -534,6 +605,7 @@ lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t col
 int compute_conflicts(void);
 lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given);
 bool has_progress(void);
+void mark_started(void);
 void save_current(void);
 void update_timer_label(void);
 void update_header(void);
@@ -544,6 +616,8 @@ void set_paused(bool p);
 bool hint_nudge(void);
 void hint_drop(void);
 void hint_render(void);
+void game_put_value(int i, uint8_t v);
+void reset_game(void);
 void mbox_close_cb(lv_event_t *e);
 lv_obj_t *make_msgbox(const char *title, const char *text);
 void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary);
@@ -592,8 +666,8 @@ void st_wifi_eye_cb(lv_event_t *e);
 void wifi_back_cb(lv_event_t *e);
 void clock_cb(lv_timer_t *t);
 void stats_player_dd_update(void);
-void render_stats(const stats_view_t *v, bool from_db);
 void refresh_stats(void);
+void sd_probe_card(void);
 void fmt_gb(char *buf, size_t n, uint64_t bytes);
 void sd_poll_cb(lv_timer_t *t);
 void apply_loaded_prefs(void);
@@ -612,6 +686,8 @@ void trophy_poll(void);
 void build_trophies(void);
 void trophy_toast_poll(void);
 void nd_open_ex(const char *title, const char *current, int max_len, const char *ok_text, void (*done)(const char *name));
+void stats_take_view(const stats_view_t *v);
+void players_take(const stats_player_t *list, int n);
 void render_players(void);
 void build_profile(void);
 void apply_theme(bool dark);
