@@ -36,6 +36,9 @@
 
 static GGWave *s_gg;
 static volatile bool s_on, s_task_up;
+/* s_on and s_task_up change together under it: a worker that is ending (off) and
+ * gibberlink_set_enabled(true) at that moment never both think the other one runs */
+static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 static QueueHandle_t s_cmdq;            /* messages heard: char[MSG_MAX] */
 static char s_reply[MSG_MAX];
 static volatile bool s_reply_ready;
@@ -118,15 +121,26 @@ static void worker(void *arg)
                 mic = false;
                 printf("gibberlink: off\n");
             }
-            if (s_gg && !sfx_pcm_busy()) {              /* its ~9 MB of buffers back */
-                delete s_gg;
-                s_gg = nullptr;
-                heap_caps_free(s_tx);
-                s_tx = nullptr;
-                s_tx_cap = 0;
-                s_reply_ready = false;
+            if (sfx_pcm_busy()) {                       /* a reply still playing from s_tx: let it end */
+                vTaskDelay(pdMS_TO_TICKS(100));
+                continue;
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
+            delete s_gg;                                /* its ~9 MB of buffers back */
+            s_gg = nullptr;
+            heap_caps_free(s_tx);
+            s_tx = nullptr;
+            s_tx_cap = 0;
+            s_reply_ready = false;
+            /* not used: the task ends (gibberlink_set_enabled starts another), unless it was
+             * just turned on again */
+            portENTER_CRITICAL(&s_mux);
+            bool end = !s_on;
+            if (end) s_task_up = false;
+            portEXIT_CRITICAL(&s_mux);
+            if (end) {
+                printf("gibberlink: worker ended\n");
+                vTaskDelete(NULL);
+            }
             continue;
         }
         if (!s_gg && !make_ggwave()) {
@@ -197,17 +211,26 @@ static void icon_update(void)
     }
 }
 
+/* on: starts the worker (unless one runs); off: the worker stops listening, frees ggwave and ends */
 void gibberlink_set_enabled(bool on)
 {
-    if (on && !s_task_up) {
-        if (!s_cmdq) s_cmdq = xQueueCreate(4, MSG_MAX);
-        if (!s_cmdq || xTaskCreatePinnedToCore(worker, "gibberlink", 8192, NULL, 3, NULL, 0) != pdPASS) {
-            printf("gibberlink: no memory for the worker\n");
-            return;
-        }
-        s_task_up = true;
+    if (on && !s_cmdq) s_cmdq = xQueueCreate(4, MSG_MAX);   /* (kept: the UI reads it) */
+    if (on && !s_cmdq) {
+        printf("gibberlink: no memory for the queue\n");
+        return;
     }
+    portENTER_CRITICAL(&s_mux);
     s_on = on;
+    bool start = on && !s_task_up;
+    if (start) s_task_up = true;
+    portEXIT_CRITICAL(&s_mux);
+    if (start && xTaskCreatePinnedToCore(worker, "gibberlink", 8192, NULL, 3, NULL, 0) != pdPASS) {
+        printf("gibberlink: no memory for the worker\n");
+        portENTER_CRITICAL(&s_mux);
+        s_task_up = false;
+        s_on = false;
+        portEXIT_CRITICAL(&s_mux);
+    }
 }
 
 bool gibberlink_enabled(void)
