@@ -26,6 +26,7 @@
 #include "src/sudoku_ui.h"
 #include "src/sfx.h"
 #include "src/devctl.h"
+#include "src/gibberlink.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 
@@ -103,6 +104,7 @@ void loop()
     sudoku_ui_mark_ok();
   }
   devctl_poll();                     /* commands from tools/devctl.py, if any */
+  gibberlink_poll();                 /* commands heard as sound (Settings > Sound > Gibberlink) */
   uint32_t wait_ms = lv_timer_handler();
   delay(wait_ms < 5 ? 1 : (wait_ms > 20 ? 20 : wait_ms));
 }

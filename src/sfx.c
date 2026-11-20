@@ -66,7 +66,14 @@ typedef struct {
     float    phase;                 /* 0..1 */
 } voice_t;
 
+#define SFX_PCM_ID    0xFE          /* queued: the PCM in s_pcm starts */
+
 static QueueHandle_t s_queue;
+/* one mono PCM clip at a time (sfx_play_pcm): the caller keeps it until done */
+static const int16_t *volatile s_pcm;
+static volatile size_t s_pcm_len;
+static size_t s_pcm_pos;
+static volatile bool s_pcm_busy;
 static volatile bool s_enabled = true;
 static voice_t s_voices[SFX_VOICES];
 
@@ -129,6 +136,14 @@ static bool render(int16_t *out, int frames)
                 else voice_start_note(v);
             }
         }
+        if (s_pcm && s_pcm_pos < s_pcm_len) {   /* a clip (gibberlink's replies) */
+            acc += s_pcm[s_pcm_pos++] / 32768.0f;
+            any = true;
+            if (s_pcm_pos >= s_pcm_len) {
+                s_pcm = NULL;
+                s_pcm_busy = false;
+            }
+        }
         if (acc > 1.0f) acc = 1.0f;
         if (acc < -1.0f) acc = -1.0f;
         int16_t s = (int16_t)(acc * 30000.0f);
@@ -147,6 +162,7 @@ static void sfx_task(void *arg)
         /* idle: sleep until something is queued; playing: just drain the queue */
         while (xQueueReceive(s_queue, &id, active ? 0 : portMAX_DELAY) == pdTRUE) {
             if (id < SFX_COUNT) voice_start((sfx_id_t)id);
+            else if (id == SFX_PCM_ID) s_pcm_pos = 0;
             active = true;
         }
         /* the chunk after the last note is all zeros: written too, so the tail plays out */
@@ -186,4 +202,29 @@ void sfx_set_enabled(bool on)
 bool sfx_enabled(void)
 {
     return s_enabled;
+}
+
+bool sfx_play_pcm(const int16_t *mono, size_t frames)
+{
+    if (!s_queue || s_pcm_busy || !frames) return false;
+    s_pcm_len = frames;
+    s_pcm = mono;
+    s_pcm_busy = true;
+    uint8_t b = SFX_PCM_ID;
+    if (xQueueSend(s_queue, &b, pdMS_TO_TICKS(50)) != pdTRUE) {
+        s_pcm = NULL;
+        s_pcm_busy = false;
+        return false;
+    }
+    return true;
+}
+
+bool sfx_pcm_busy(void)
+{
+    return s_pcm_busy;
+}
+
+uint32_t sfx_rate(void)
+{
+    return SFX_RATE;
 }

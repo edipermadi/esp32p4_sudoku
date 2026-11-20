@@ -70,6 +70,7 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "video_enc.h"
+#include "gibberlink.h"
 #include "driver/jpeg_encode.h"
 #include <sys/stat.h>
 #include <unistd.h>
@@ -5904,6 +5905,13 @@ static void stats_table_draw_cb(lv_event_t *e)
     }
 }
 
+static void gibberlink_sw_cb(lv_event_t *e)
+{
+    bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
+    store_set_gibberlink(on);
+    gibberlink_set_enabled(on);
+}
+
 static void sound_sw_cb(lv_event_t *e)
 {
     bool on = lv_obj_has_state(st_sound_sw, LV_STATE_CHECKED);
@@ -6453,6 +6461,7 @@ static void apply_loaded_prefs(void)
     g_id = STORE_NO_GAME;
     p_count = -1;
     sfx_set_enabled(store_sound_enabled());
+    gibberlink_set_enabled(store_gibberlink());
     bsp_audio_set_volume(store_volume());
     bsp_display_brightness_set(effective_brightness());
     tz_apply(store_timezone());
@@ -8840,6 +8849,9 @@ static void build_settings(void)
     r = settings_row(col, "Volume", "Speaker loudness");
     st_vol_sl = settings_slider(r, 0, 100, store_volume(), vol_sl_cb, &st_vol_lbl);
 
+    r = settings_row(col, "Gibberlink", "Remote control by sound (ggwave): the mics listen");
+    settings_switch(r, store_gibberlink(), gibberlink_sw_cb);
+
     col = st_pane[ST_GAME];
     r = settings_row(col, "Show timer", "Off: hidden while you play (times are still kept)");
     settings_switch(r, store_show_timer(), timer_sw_cb);
@@ -9490,6 +9502,7 @@ esp_err_t sudoku_ui_start(void)
     wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
 
     sfx_set_enabled(store_sound_enabled());
+    gibberlink_set_enabled(store_gibberlink());
     bsp_audio_set_volume(store_volume());
     bsp_display_brightness_set(effective_brightness());
     for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in)) {

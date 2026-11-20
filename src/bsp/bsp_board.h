@@ -40,7 +40,7 @@ extern "C" {
 #define BSP_I2S_BCLK_GPIO        12
 #define BSP_I2S_WS_GPIO          10
 #define BSP_I2S_DOUT_GPIO        9       /* SoC -> ES8311 DSDIN */
-#define BSP_I2S_DIN_GPIO         11      /* ES7210 mic ADC -> SoC (unused here) */
+#define BSP_I2S_DIN_GPIO         11      /* ES7210 mic ADC -> SoC */
 #define BSP_AUDIO_PA_GPIO        53      /* NS4150 amp enable, active high */
 
 /* ------------------------------------------------------------- Wi-Fi (C6) */
@@ -127,6 +127,14 @@ void bsp_audio_release(void);
 esp_err_t bsp_audio_write(const int16_t *stereo_frames, size_t frames, uint32_t timeout_ms);
 /* 0..100 % (0 = mute, 100 = 0 dB codec gain). */
 void bsp_audio_set_volume(int percent);
+uint32_t bsp_audio_sample_rate(void);
+
+/* Microphones (ES7210, MIC1 + MIC2) on the same I2S port, at the speaker's
+ * sample rate: 16-bit stereo frames (L = MIC1, R = MIC2). Call after
+ * bsp_audio_init. */
+esp_err_t bsp_mic_start(void);
+void bsp_mic_stop(void);
+esp_err_t bsp_mic_read(int16_t *stereo_frames, size_t frames, size_t *got_frames, uint32_t timeout_ms);
 
 /* ---------------------------------------------------------------- power */
 /* Backlight, speaker amp, panel and Wi-Fi chip off (held through sleep), then

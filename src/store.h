@@ -95,6 +95,7 @@ typedef struct {
     bool cvd;                                 /* colour-blind friendly colours (Okabe-Ito) */
     bool no_notes;                            /* new games start in the no-notes challenge */
     bool left_hand;                           /* the game's number pad on the left of the board */
+    bool gibberlink;                          /* listen for sound commands (gibberlink.h) */
     bool big_digits;                          /* larger digits on the board (and pencil marks) */
     bool hint_nudge;                          /* Hints: only where to look (no More / Place it) */
     bool night_mode;                          /* dark and dimmer between night_start and night_end */
@@ -180,6 +181,10 @@ bool store_no_notes(void);
 void store_set_no_notes(bool on);
 bool store_left_hand(void);
 void store_set_left_hand(bool on);
+
+/* Gibberlink: the microphones listen for remote-control commands as sound. */
+bool store_gibberlink(void);
+void store_set_gibberlink(bool on);
 bool store_big_digits(void);
 bool store_hint_nudge(void);
 void store_set_hint_nudge(bool on);

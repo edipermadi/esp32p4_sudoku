@@ -35,12 +35,21 @@
  *   S <n> <base64 of up to 96 bytes>      n = 0, 1, 2, ...
  *   SHOT END <bytes> <crc32 of all bytes, hex>
  */
+#include <stdbool.h>
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Call from loop() (the LVGL task): reads and runs any commands waiting. */
 void devctl_poll(void);
+
+/* Runs one command line from elsewhere (gibberlink.h: commands as sound), in the
+ * LVGL task: touches, wait (at most 10 s), ping, heap (short), screenoff; not
+ * shot, files, baud or bench. The answer ("OK ..." / "ERR ...", one line) goes
+ * into out, not to Serial. true: OK. */
+bool devctl_run_line(const char *line, char *out, size_t n);
 
 #ifdef __cplusplus
 }

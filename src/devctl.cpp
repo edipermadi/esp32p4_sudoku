@@ -6,6 +6,7 @@
 #include "sudoku_ui.h"
 #include "stats_db.h"
 #include <stdio.h>
+#include <stdarg.h>
 #include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -19,6 +20,26 @@
 
 static char s_line[LINE_MAX];
 static int s_len;
+
+/* the answer to a command: to Serial, or (devctl_run_line) into s_cap */
+static char *s_cap;
+static size_t s_cap_n;
+
+static void reply(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    if (s_cap) {
+        vsnprintf(s_cap, s_cap_n, fmt, ap);
+        size_t l = strlen(s_cap);
+        while (l && (s_cap[l - 1] == '\n' || s_cap[l - 1] == '\r')) s_cap[--l] = 0;
+    } else {
+        char buf[200];
+        vsnprintf(buf, sizeof(buf), fmt, ap);
+        Serial.print(buf);
+    }
+    va_end(ap);
+}
 
 /* lets LVGL run (timers, input, drawing) for ms */
 static void pump(uint32_t ms)
@@ -435,14 +456,30 @@ static bool run_file(char *line)
 
 static void run(char *line)
 {
-    if (run_file(line)) return;
+    if (!s_cap && run_file(line)) return;           /* (files: serial only) */
     char cmd[16] = "";
     int a[5] = {0, 0, 0, 0, 0};
     int n = sscanf(line, "%15s %d %d %d %d %d", cmd, &a[0], &a[1], &a[2], &a[3], &a[4]) - 1;
     if (n < 0) return;
     if (!strcmp(cmd, "ping")) {
-        Serial.println("OK pong");
+        reply("OK pong\n");
         return;
+    }
+    if (s_cap) {                                    /* over sound: touches, wait, heap, screenoff only */
+        static const char *const ok[] = {"tap", "long", "swipe", "press", "move", "release", "wait", "heap", "screenoff"};
+        bool allowed = false;
+        for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) allowed |= !strcmp(cmd, ok[i]);
+        if (!allowed) {
+            reply("ERR not over sound: %s\n", cmd);
+            return;
+        }
+        if (!strcmp(cmd, "wait") && a[0] > 10000) a[0] = 10000;
+        if (!strcmp(cmd, "heap")) {                 /* short: a reply is ~16 bytes a second */
+            reply("OK heap i=%u d=%u p=%u\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+            return;
+        }
     }
     if (!strcmp(cmd, "baud") && n >= 1 && a[0] >= 9600) {
         Serial.printf("OK baud %d\n", a[0]);
@@ -504,10 +541,23 @@ static void run(char *line)
         sudoku_ui_screen_off();                     /* as the timeout: black, then the lock screen if on */
         pump(200);
     } else {
-        Serial.printf("ERR unknown: %s\n", line);
+        reply("ERR unknown: %s\n", line);
         return;
     }
-    Serial.printf("OK %s\n", cmd);
+    reply("OK %s\n", cmd);
+}
+
+bool devctl_run_line(const char *line, char *out, size_t n)
+{
+    char buf[LINE_MAX];
+    strlcpy(buf, line, sizeof(buf));
+    out[0] = 0;
+    s_cap = out;
+    s_cap_n = n;
+    run(buf);
+    s_cap = NULL;
+    if (!out[0]) strlcpy(out, "ERR empty", n);
+    return !strncmp(out, "OK", 2);
 }
 
 void devctl_poll(void)

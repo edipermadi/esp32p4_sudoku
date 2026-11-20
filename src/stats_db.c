@@ -605,6 +605,7 @@ static void load_prefs(store_prefs_t *p)
             else if (!strcmp(k, "cvd")) p->cvd = v != 0;
             else if (!strcmp(k, "no_notes")) p->no_notes = v != 0;
             else if (!strcmp(k, "left_hand")) p->left_hand = v != 0;
+            else if (!strcmp(k, "gibberlink")) p->gibberlink = v != 0;
             else if (!strcmp(k, "big_digits")) p->big_digits = v != 0;
             else if (!strcmp(k, "hint_nudge")) p->hint_nudge = v != 0;
             else if (!strcmp(k, "night_mode")) p->night_mode = v != 0;
@@ -777,6 +778,7 @@ static void migrate_prefs(const store_prefs_t *p)
     set_setting("cvd", false, p->cvd, NULL);
     set_setting("no_notes", false, p->no_notes, NULL);
     set_setting("left_hand", false, p->left_hand, NULL);
+    set_setting("gibberlink", false, p->gibberlink, NULL);
     set_setting("big_digits", false, p->big_digits, NULL);
     set_setting("hint_nudge", false, p->hint_nudge, NULL);
     set_setting("night_mode", false, p->night_mode, NULL);

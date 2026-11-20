@@ -45,6 +45,8 @@ src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
 src/wifi_ui.c           Wi-Fi screen: networks, password keyboard
 src/file_ui.c           Files screen: browse, rename and delete on the card; sudoku.db protected
+src/gibberlink.cpp      remote control by sound: ES7210 mics -> ggwave -> devctl commands, replies by sound
+src/ggwave/             ggwave 060aec7 (MIT), data over sound, vendored unchanged
 src/media_view.c        the Files viewer: JPEG (hardware decoder), MP4 (tinyh264), full screen
 src/mp4_reader.c        MP4 index reader for the viewer: frame offsets, times, key frames, SPS/PPS
 src/sysmon_ui.c         system monitor screen: heap, flash, microSD, temperature, tasks, LVGL

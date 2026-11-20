@@ -42,6 +42,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .cvd = false,
     .no_notes = false,
     .left_hand = false,
+    .gibberlink = false,
     .big_digits = false,
     .hint_nudge = false,
     .night_mode = false,
@@ -412,6 +413,17 @@ void store_set_left_hand(bool on)
 {
     s_p.left_hand = on;
     stats_db_set_int("left_hand", on);
+}
+
+bool store_gibberlink(void)
+{
+    return s_p.gibberlink;
+}
+
+void store_set_gibberlink(bool on)
+{
+    s_p.gibberlink = on;
+    stats_db_set_int("gibberlink", on);
 }
 
 bool store_hint_nudge(void)
