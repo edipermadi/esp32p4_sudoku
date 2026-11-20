@@ -30,6 +30,10 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGES = [
     ("README.md", "index.html", "Overview"),
     ("docs/features.md", "features.html", "Features"),
+    ("docs/features-puzzles.md", "features-puzzles.html", "Puzzles"),
+    ("docs/features-game.md", "features-game.html", "Playing a game"),
+    ("docs/features-progress.md", "features-progress.html", "Players & progress"),
+    ("docs/features-settings.md", "features-settings.html", "Home, settings & system"),
     ("docs/how-to-play.md", "how-to-play.html", "How to play"),
     ("docs/data.md", "data.html", "Data & storage"),
     ("docs/building.md", "building.html", "Building"),

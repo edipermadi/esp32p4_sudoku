@@ -16,7 +16,7 @@ A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720Ã
 | **New puzzle** | **History** | **System monitor** |
 | ![New puzzle](docs/screenshots/new-puzzle.png) | ![History](docs/screenshots/history.png) | ![System monitor](docs/screenshots/sysmon-tasks.png) |
 
-Captured from the board over its serial port (see [Screenshots and remote control](docs/devctl.md)). More, screen by screen, in [Features](docs/features.md#screens).
+Captured from the board over its serial port (see [Screenshots and remote control](docs/devctl.md)). More, by topic, in [Features](docs/features.md).
 
 ## Highlights
 
@@ -34,7 +34,7 @@ Also online, as web pages: **https://edipermadi.github.io/esp32p4_sudoku/docs/**
 
 | Page | What's in it |
 |------|--------------|
-| [Features](docs/features.md) | Everything the game does, screen by screen |
+| [Features](docs/features.md) | Everything the game does, by topic: puzzles, playing, players & progress, settings & system |
 | [How to play](docs/how-to-play.md) | Which button does what, as a table |
 | [Data & storage](docs/data.md) | `sudoku.db` and its tables, firmware update, USB drive, format, factory reset, saving |
 | [Building and releases](docs/building.md) | Arduino settings, `arduino-cli`, GitHub Actions releases, the web flasher |
