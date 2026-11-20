@@ -53,3 +53,6 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# PC-side test binary (make -C tests)
+tests/sudoku_tests

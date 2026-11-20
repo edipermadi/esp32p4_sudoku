@@ -12,6 +12,7 @@
 #include "ui_palette.h"
 #include "stats_db.h"
 #include "generator.h"
+#include "sdx.h"
 #include "bsp/bsp_board.h"
 #include <stdio.h>
 #include <string.h>
@@ -624,75 +625,19 @@ static bool is_puzzle_file(const char *name)
     return ends_with_ci(name, ".sdm") || ends_with_ci(name, ".sdx") || ends_with_ci(name, ".opensudoku");
 }
 
-static int pv_name_index(const char *s, const char *const *names, int n)
-{
-    for (int i = 0; i < n; i++) {
-        if (!strcasecmp(s, names[i])) return i;
-    }
-    char *end;
-    long v = strtol(s, &end, 10);
-    return *s && !*end && v >= 0 && v < n ? (int)v : -1;
-}
-
-/* one line (.sdx: variant|level|givens|regions|cages|marks|thermos; or just 81 digits, as
- * in .sdm) into variant, level, givens and its board; false if it isn't a puzzle. The
- * same reading as the import's (stats_db.c), without the one-solution check. */
+/* one line (sdx.h: an .sdx line, or just 81 digits as in .sdm) into variant, level, givens and
+ * its board; false if it isn't a puzzle. The same reading as the import's, without the
+ * one-solution check. */
 static bool pv_parse(const char *src, int *var, int *lv, uint8_t g[81], sudoku_geom_t *geom)
 {
     static char line[2048];
     snprintf(line, sizeof(line), "%s", src);
-    char *fld[7] = {0};
-    int nf = 0;
-    if (!strchr(line, '|')) {                       /* just the givens: Classic, no level */
-        char *p = line;
-        while (*p == ' ' || *p == '\t') p++;
-        if (strlen(p) > 81 && ((p[81] >= '0' && p[81] <= '9') || p[81] == '.')) return false;
-        if (strlen(p) > 81) p[81] = 0;
-        fld[0] = "Classic"; fld[1] = ""; fld[2] = p; nf = 3;
-    } else {
-        for (char *p = line; nf < 7;) {
-            fld[nf++] = p;
-            char *bar = strchr(p, '|');
-            if (!bar) break;
-            *bar = 0;
-            p = bar + 1;
-        }
-    }
-    for (int i = nf; i < 7; i++) fld[i] = "";
-    int v = pv_name_index(fld[0], VARIANT_NAMES, VAR_COUNT);
-    int l = fld[1][0] ? pv_name_index(fld[1], GEN_LEVEL_NAMES, GEN_LEVELS) : -1;
-    if (v < 0 || (fld[1][0] && l < 0) || strlen(fld[2]) != 81) return false;
-    for (int i = 0; i < 81; i++) {
-        char c = fld[2][i] == '.' ? '0' : fld[2][i];
-        if (c < '0' || c > '9') return false;
-        g[i] = (uint8_t)(c - '0');
-    }
-    bool ok;
-    switch (v) {
-    case VAR_JIGSAW: {
-        uint8_t reg[81];
-        ok = strlen(fld[3]) == 81;
-        for (int i = 0; ok && i < 81; i++) {
-            ok = fld[3][i] >= '0' && fld[3][i] <= '8';
-            reg[i] = (uint8_t)(fld[3][i] - '0');
-        }
-        ok = ok && sudoku_geom_jigsaw(reg, geom);
-        break;
-    }
-    case VAR_KILLER:   ok = sudoku_geom_killer_text(fld[4], geom); break;
-    case VAR_EVENODD:
-    case VAR_CONSEC:   ok = strlen(fld[5]) == 81 && sudoku_geom_marks(v, fld[5], geom); break;
-    case VAR_THERMO:   ok = sudoku_geom_thermo_text(fld[6], geom); break;
-    case VAR_SANDWICH: ok = sudoku_geom_sandwich_text(fld[5], geom); break;
-    default: {
-        const sudoku_geom_t *G = sudoku_geom(v);
-        ok = G != NULL;
-        if (ok) memcpy(geom, G, sizeof(*geom));
-    }
-    }
-    *var = v;
-    *lv = l;
-    return ok;
+    sdx_puzzle_t p;
+    if (!sdx_parse(line, &p) || !sdx_geom(&p, geom)) return false;
+    *var = p.variant;
+    *lv = p.level;
+    memcpy(g, p.givens, 81);
+    return true;
 }
 
 static void pv_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, int w, lv_color_t c)

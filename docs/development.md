@@ -31,6 +31,22 @@ Both colour schemes are tables at the top of `src/sudoku_ui.c`: `PAL_DARK` and `
 
 The effects are note tables at the top of `src/sfx.c`. Each note has a frequency, a length in ms, a waveform (sine, triangle or square) and a level. `SFX_VOLUME` sets the codec volume, 70 % by default.
 
+## Tests
+
+The parts of the firmware that are plain C run on a PC too: `make -C tests` builds them with the host's compiler (AddressSanitizer and UBSan on) and runs `tests/test_main.c` in a few seconds, no board needed:
+
+| Test | What it checks |
+|---|---|
+| geometry | each fixed variant's board: cells, units, peers, boxes of n cells (Classic, X-Sudoku, Hyper, Mini 6x6, Kids 4x4) |
+| built-in puzzles | all 1600 have exactly one solution, and the solver's is a valid grid |
+| generator | every variant at Easy and Medium (Hard for some): one solution, givens on the board, the grader agrees with the level, Kids 4x4 never above Medium |
+| determinism (golden) | the same seed makes the same puzzle, and five pinned hashes: daily puzzles are made from the date, so a generator change that alters them fails here |
+| layout texts and .sdx | each variant's layout to text and back, and whole puzzles through an `.sdx` line both ways (plain and packed givens) |
+| .sdx edge cases | `.sdm` lines, names and numbers, bad lines rejected, packed runs of empty cells, a Classic puzzle in one Send-by-sound part |
+| hints | the hint engine walks puzzles of several variants to their solution, a right digit at every step |
+
+`make -C tests golden` prints the golden hashes: after a deliberate change to the generator, pin the new ones in `test_determinism` (and know that every board's daily puzzles change with the firmware). `./tests/sudoku_tests hints` runs only the tests whose name contains "hints". Code that touches LVGL or ESP-IDF (the screens, `sudoku.db`) isn't covered: that is still checked on the board, with devctl.
+
 ## Internal RAM
 
 The P4's internal RAM (768 KB) is the tight resource; PSRAM (32 MB) is plenty. Some things must have one contiguous block of internal RAM: the hardware H.264 encoder for MP4 export (~52 KB), the microSD card's and the Wi-Fi link's DMA buffers. `setup()` calls `heap_caps_malloc_extmem_enable(4)`, so every `malloc()` of 4 bytes or more goes to PSRAM; code that needs internal RAM asks for it with `heap_caps_malloc(..., MALLOC_CAP_INTERNAL / MALLOC_CAP_DMA)`. With a higher limit (16 before 2026-11-20), LVGL's thousands of tiny allocations stayed internal and cut it into pieces: 99 KB free but no block over 35 KB, and MP4 export failed with "No memory for reference frame". Check with `heap 1` over [devctl](devctl.md) (the main region's `alloc_blocks` and `largest_free_block`): about 225 KB free and a 143 KB largest block at the Home screen is normal. Big buffers of your own go to PSRAM (`MALLOC_CAP_SPIRAM`), and avoid rebuilding every screen at once (`apply_theme`) as a reaction to data changes: two copies of all screens exist for a moment.
@@ -57,6 +73,7 @@ src/sysmon_ui.c         system monitor screen: heap, flash, microSD, temperature
 src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
+src/sdx.c               the puzzle line format (.sdx files, Send by sound): parse, pack, format; plain C, tested on a PC
 src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Kids 4x4, Anti-Knight, Even-Odd, Consecutive, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
@@ -70,6 +87,7 @@ tools/devctl.py         screenshots (PNG) and touches over the serial port
 tools/make_flasher_site.sh  the GitHub Pages site: web flasher + docs
 tools/make_docs_site.py README.md and docs/*.md as HTML pages (for the site)
 docs/screenshots.txt    the script that makes docs/screenshots/*.png
+tests/                  PC-side tests: make -C tests (see Tests)
 tools/opensudoku/       the downloaded .opensudoku collections
 ```
 

@@ -81,6 +81,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "moves.h"
+#include "sdx.h"
 #include "avatars.h"
 #include "qrcode/qrcodegen.h"
 #include "esp_ota_ops.h"
@@ -3469,24 +3470,12 @@ static uint16_t pz_crc16(const char *p, size_t n)
     return c;
 }
 
-/* the puzzle on screen as that line; its length, 0 if it doesn't fit */
+/* the puzzle on screen as that line (sdx_format, the givens packed); its length, 0 if it doesn't fit */
 static int pz_line(char *buf, size_t n)
 {
     const sudoku_geom_t *G = g_geo;
     int v = VAR_CLASSIC, lv = -1;
     if (puzzle_is_generated(g_id)) gen_lookup(g_id, NULL, &v, &lv);
-    char giv[90];
-    int k = 0;
-    for (int i = 0; i < 81;) {
-        if (g_given[i]) {
-            giv[k++] = (char)('0' + g_given[i++]);
-            continue;
-        }
-        int run = 0;
-        while (i < 81 && !g_given[i] && run < 26) { run++; i++; }
-        giv[k++] = (char)('a' + run - 1);
-    }
-    giv[k] = 0;
     static char extra[STATS_CAGES_LEN];
     char regions[82] = "";
     const char *cages = "", *marks = "", *thermos = "";
@@ -3503,12 +3492,9 @@ static int pz_line(char *buf, size_t n)
     case VAR_THERMO:   if (sudoku_thermos_text(G, extra, sizeof(extra))) thermos = extra; break;
     default: break;
     }
-    char lvs[4] = "-";
-    if (lv >= 0 && lv < GEN_LEVELS) snprintf(lvs, sizeof(lvs), "%d", lv);
-    int len = snprintf(buf, n, "%d|%s|%s|%s|%s|%s|%s", g_var, lvs, giv, regions, cages, marks, thermos);
-    if (len < 0 || (size_t)len >= n) return 0;
-    while (len && buf[len - 1] == '|') buf[--len] = 0;     /* the empty fields at the end */
-    return len;
+    int len = sdx_format(g_var, lv >= 0 && lv < GEN_LEVELS ? lv : -1, g_given, regions, cages, marks, thermos, true,
+                         buf, n);
+    return len < 0 ? 0 : len;
 }
 
 static lv_timer_t *pz_send_timer;
@@ -3626,17 +3612,7 @@ static void pz_check_poll(lv_timer_t *t)
     msgbox_button(m, LV_SYMBOL_PLAY "  Play", pz_play_cb, true);
 }
 
-static int pz_name_index(const char *s, const char *const *names, int n)
-{
-    for (int i = 0; i < n; i++) {
-        if (!strcasecmp(s, names[i])) return i;
-    }
-    char *end;
-    long v = strtol(s, &end, 10);
-    return *s && !*end && v >= 0 && v < n ? (int)v : -1;
-}
-
-/* the whole line: its fields read, the board made, the check started; why on failure */
+/* the whole line: its fields read (sdx_parse), the board made, the check started; why on failure */
 static bool pz_take(char *line, char *why, size_t n)
 {
     if (pz_check_timer) { snprintf(why, n, "busy with the last one"); return false; }
@@ -3645,58 +3621,16 @@ static bool pz_take(char *line, char *why, size_t n)
         return false;
     }
     pz_got_t *p = pz_got;
-    char *fld[7] = {0};
-    int nf = 0;
-    for (char *q = line; nf < 7;) {
-        fld[nf++] = q;
-        char *bar = strchr(q, '|');
-        if (!bar) break;
-        *bar = 0;
-        q = bar + 1;
-    }
-    for (int i = nf; i < 7; i++) fld[i] = "";
-    p->variant = pz_name_index(fld[0], VARIANT_NAMES, VAR_COUNT);
-    p->level = !fld[1][0] || !strcmp(fld[1], "-") ? -1 : pz_name_index(fld[1], GEN_LEVEL_NAMES, GEN_LEVELS);
-    if (p->variant < 0 || (fld[1][0] && strcmp(fld[1], "-") && p->level < 0)) {
-        snprintf(why, n, "unknown variant or level");
-        return false;
-    }
-    int c = 0;                                    /* the givens: digits, a-z = 1-26 empty cells, 0 or . = one */
-    for (const char *q = fld[2]; *q && c <= 81; q++) {
-        if (*q >= '1' && *q <= '9') p->givens[c++] = (uint8_t)(*q - '0');
-        else if (*q == '0' || *q == '.') p->givens[c++] = 0;
-        else if (*q >= 'a' && *q <= 'z') for (int r = 0; r <= *q - 'a' && c < 81; r++) p->givens[c++] = 0;
-        else { c = -1; break; }
-    }
-    if (c != 81) { snprintf(why, n, "the givens aren't 81 cells"); return false; }
-    snprintf(p->regions, sizeof(p->regions), "%s", fld[3]);
-    snprintf(p->cages, sizeof(p->cages), "%s", fld[4]);
-    snprintf(p->marks, sizeof(p->marks), "%s", fld[5]);
-    snprintf(p->thermos, sizeof(p->thermos), "%s", fld[6]);
-    bool ok;
-    switch (p->variant) {
-    case VAR_JIGSAW: {
-        uint8_t reg[81];
-        ok = strlen(p->regions) == 81;
-        for (int i = 0; ok && i < 81; i++) {
-            ok = p->regions[i] >= '0' && p->regions[i] <= '8';
-            reg[i] = (uint8_t)(p->regions[i] - '0');
-        }
-        ok = ok && sudoku_geom_jigsaw(reg, &p->geom);
-        break;
-    }
-    case VAR_KILLER:   ok = sudoku_geom_killer_text(p->cages, &p->geom); break;
-    case VAR_EVENODD:
-    case VAR_CONSEC:   ok = strlen(p->marks) == 81 && sudoku_geom_marks(p->variant, p->marks, &p->geom); break;
-    case VAR_THERMO:   ok = sudoku_geom_thermo_text(p->thermos, &p->geom); break;
-    case VAR_SANDWICH: ok = sudoku_geom_sandwich_text(p->marks, &p->geom); break;
-    default: {
-        const sudoku_geom_t *G = sudoku_geom(p->variant);
-        ok = G != NULL;
-        if (ok) memcpy(&p->geom, G, sizeof(p->geom));
-    }
-    }
-    if (!ok) { snprintf(why, n, "its layout doesn't read"); return false; }
+    sdx_puzzle_t sp;
+    if (!sdx_parse(line, &sp)) { snprintf(why, n, "it doesn't read as a puzzle"); return false; }
+    p->variant = sp.variant;
+    p->level = sp.level;
+    memcpy(p->givens, sp.givens, 81);
+    snprintf(p->regions, sizeof(p->regions), "%s", sp.regions);
+    snprintf(p->cages, sizeof(p->cages), "%s", sp.cages);
+    snprintf(p->marks, sizeof(p->marks), "%s", sp.marks);
+    snprintf(p->thermos, sizeof(p->thermos), "%s", sp.thermos);
+    if (!sdx_geom(&sp, &p->geom)) { snprintf(why, n, "its layout doesn't read"); return false; }
     p->graded = -2;
     if (xTaskCreatePinnedToCoreWithCaps(pz_check_fn, "pzcheck", 16384, NULL, 2, &pz_check_task, WORKER_CORE,
                                         MALLOC_CAP_SPIRAM) != pdPASS) {
