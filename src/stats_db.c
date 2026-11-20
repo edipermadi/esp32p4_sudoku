@@ -21,6 +21,7 @@
 #include "bsp/bsp_board.h"
 #include "store.h"
 #include "generator.h"
+#include "sdx.h"
 
 static const char *TAG = "stats_db";
 
@@ -123,7 +124,7 @@ typedef struct {
     char cages[STATS_CAGES_LEN]; /* a Killer puzzle's cages, "" = none */
     char marks[82];              /* an Even-Odd / Consecutive puzzle's marks, "" = none */
     char thermos[STATS_THERMOS_LEN];   /* a Thermo puzzle's thermometers, "" = none */
-    bool own;                    /* CMD_GEN_ADD: typed in on the board (source STATS_OWN_SOURCE) */
+    char own[STATS_IMPORT_NAME]; /* CMD_GEN_ADD: its source ("My puzzles", "Received"), numbered within it; "" none */
     char day[12];                /* daily: 'YYYY-MM-DD', "" otherwise */
     bool ok;
     bool solved_today;           /* CMD_DAILY results */
@@ -1517,7 +1518,7 @@ static void do_gen_add(void)
                                          " marks, thermos, source, number) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,"
                                          " ?10, (SELECT COALESCE(MAX(number), 0) + 1 FROM generated WHERE source = ?10))",
                                    -1, &st, NULL) == SQLITE_OK) {
-        if (s_gen.own) sqlite3_bind_text(st, 10, STATS_OWN_SOURCE, -1, SQLITE_STATIC);
+        if (s_gen.own[0]) sqlite3_bind_text(st, 10, s_gen.own, -1, SQLITE_STATIC);
         else sqlite3_bind_null(st, 10);               /* (number: NULL as well then) */
         if (s_gen.thermos[0]) sqlite3_bind_text(st, 9, s_gen.thermos, -1, SQLITE_STATIC);
         else sqlite3_bind_null(st, 9);
@@ -1537,7 +1538,7 @@ static void do_gen_add(void)
         if (sqlite3_step(st) == SQLITE_DONE) {
             s_gen.id = (int)sqlite3_last_insert_rowid(s_db);
             s_gen.ok = true;
-            if (s_gen.own) gen_source_of(s_gen.id, s_gen.source, &s_gen.number);
+            if (s_gen.own[0]) gen_source_of(s_gen.id, s_gen.source, &s_gen.number);
         }
         sqlite3_finalize(st);
     }
@@ -2114,39 +2115,6 @@ static bool ends_with(const char *s, const char *suffix)
  */
 #define SDX_HEADER "# esp32p4_sudoku collection: variant|level|givens|regions|cages|marks|thermos"
 
-static int name_index(const char *s, const char *const *names, int n)
-{
-    for (int i = 0; i < n; i++) {
-        if (!strcasecmp(s, names[i])) return i;
-    }
-    char *end;
-    long v = strtol(s, &end, 10);
-    return *s && !*end && v >= 0 && v < n ? (int)v : -1;
-}
-
-/* the board of a puzzle from its variant and texts; NULL: they don't make one */
-static const sudoku_geom_t *sdx_geom(int v, const char *regions, const char *cages, const char *marks,
-                                     const char *thermos, sudoku_geom_t *buf)
-{
-    switch (v) {
-    case VAR_JIGSAW: {
-        uint8_t reg[81];
-        if (strlen(regions) != 81) return NULL;
-        for (int i = 0; i < 81; i++) {
-            if (regions[i] < '0' || regions[i] > '8') return NULL;
-            reg[i] = (uint8_t)(regions[i] - '0');
-        }
-        return sudoku_geom_jigsaw(reg, buf) ? buf : NULL;
-    }
-    case VAR_KILLER:   return sudoku_geom_killer_text(cages, buf) ? buf : NULL;
-    case VAR_EVENODD:
-    case VAR_CONSEC:   return strlen(marks) == 81 && sudoku_geom_marks(v, marks, buf) ? buf : NULL;
-    case VAR_THERMO:   return sudoku_geom_thermo_text(thermos, buf) ? buf : NULL;
-    case VAR_SANDWICH: return sudoku_geom_sandwich_text(marks, buf) ? buf : NULL;
-    default:           return sudoku_geom(v);
-    }
-}
-
 /* one collection row in imported for generated ids first .. first + count - 1 */
 static bool import_collection(const char *name, const char *file, int first, int count)
 {
@@ -2187,35 +2155,22 @@ static int import_sdx(const char *path, const char *file, const char *base, int 
         size_t l = strlen(line);
         while (l && (line[l - 1] == '\n' || line[l - 1] == '\r' || line[l - 1] == ' ')) line[--l] = 0;
         if (!l || line[0] == '#') continue;
-        char *fld[7] = {0};
-        int nf = 0;
-        if (!strchr(line, '|')) {                   /* just the givens: Classic */
-            fld[0] = "Classic"; fld[1] = ""; fld[2] = line; nf = 3;
-        } else {
-            for (char *p = line; nf < 7;) {
-                fld[nf++] = p;
-                char *bar = strchr(p, '|');
-                if (!bar) break;
-                *bar = 0;
-                p = bar + 1;
-            }
-        }
-        for (int i = nf; i < 7; i++) fld[i] = "";
-        int v = name_index(fld[0], VARIANT_NAMES, VAR_COUNT);
-        int lv = fld[1][0] ? name_index(fld[1], GEN_LEVEL_NAMES, GEN_LEVELS) : 0;
-        uint8_t g[81];
-        bool good = v >= 0 && lv >= 0 && strlen(fld[2]) == 81;
-        for (int i = 0; good && i < 81; i++) {
-            char c = fld[2][i];
-            if (c == '.') c = '0';
-            good = c >= '0' && c <= '9';
-            g[i] = (uint8_t)(c - '0');
-        }
-        const sudoku_geom_t *G = good ? sdx_geom(v, fld[3], fld[4], fld[5], fld[6], geom) : NULL;
-        if (!G || !sudoku_unique(G, g)) {          /* broken, or not exactly one solution */
+        sdx_puzzle_t p;                             /* (sdx.c: the same reading as the preview's and the sound's) */
+        if (!sdx_parse(line, &p) || !sdx_geom(&p, geom)) {
             (*bad)++;
             continue;
         }
+        const sudoku_geom_t *G = geom;
+        uint8_t g[81];
+        memcpy(g, p.givens, 81);
+        int v = p.variant;
+        int lv = p.level >= 0 ? (sudoku_unique(G, g) ? p.level : -1)
+                              : sudoku_grade(G, g);   /* no level: rated (-1: not one solution) */
+        if (lv < 0) {                               /* not exactly one solution */
+            (*bad)++;
+            continue;
+        }
+        const char *fld[7] = {"", "", "", p.regions, p.cages, p.marks, p.thermos};
         if (in_chunk == 100) {                      /* the next hundred: another collection */
             if (!import_collection(name, file, first, in_chunk)) { fclose(f); return -1; }
             in_chunk = 0;
@@ -2272,10 +2227,18 @@ static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], in
         return got < 0 ? -1 : 0;
     }
     int n = parse_file(path, ends_with(fn, ".opensudoku"), cells, max);
+    static uint8_t *levels;                         /* each one rated by the grader (generator.h) */
+    if (!levels && !(levels = heap_caps_malloc(IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM))) return -1;
     int good = 0;
-    for (int i = 0; i < n; i++) {                   /* keep the ones with exactly one solution */
-        if (sudoku_classic_unique(cells[i])) memmove(cells[good++], cells[i], 81);
-        else (*bad)++;
+    const sudoku_geom_t *classic = sudoku_geom(VAR_CLASSIC);
+    for (int i = 0; i < n; i++) {                   /* keep the ones with exactly one solution, rated */
+        int lv = sudoku_grade(classic, cells[i]);   /* (-1: not exactly one solution) */
+        if (lv < 0) {
+            (*bad)++;
+            continue;
+        }
+        levels[good] = (uint8_t)lv;
+        memmove(cells[good++], cells[i], 81);
     }
     if (!good) return 0;
     bool ok = exec("BEGIN");
@@ -2291,8 +2254,9 @@ static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], in
             for (int c = 0; c < 81; c++) g[c] = (char)('0' + cells[from + i][c]);
             g[81] = 0;
             ok = sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, variant, source, number)"
-                                          " VALUES(0, ?1, ?2, 0, ?3, ?4)", -1, &st, NULL) == SQLITE_OK;
+                                          " VALUES(?5, ?1, ?2, 0, ?3, ?4)", -1, &st, NULL) == SQLITE_OK;
             if (!ok) break;
+            sqlite3_bind_int(st, 5, levels[from + i]);
             sqlite3_bind_text(st, 1, g, 81, SQLITE_STATIC);
             time_t now = time(NULL);
             if (now > 1700000000) sqlite3_bind_int64(st, 2, now);
@@ -3847,14 +3811,20 @@ int stats_db_solved_list(const uint16_t *ids, int n, uint8_t *solved)
     return s_gen.nsolved;
 }
 
-int stats_db_gen_add_own(const uint8_t givens[81], int level, int *number)
+int stats_db_gen_add_from(const char *source, int variant, int level, const uint8_t givens[81],
+                          const uint8_t *regions, const char *cages, const char *marks, const char *thermos, int *number)
 {
     if (!s_genp) return -1;
-    s_gen.own = true;
-    int id = stats_db_gen_add(VAR_CLASSIC, level, givens, NULL, NULL, NULL, NULL, NULL);
-    s_gen.own = false;
+    snprintf(s_gen.own, sizeof(s_gen.own), "%s", source);
+    int id = stats_db_gen_add(variant, level, givens, regions, cages, marks, thermos, NULL);
+    s_gen.own[0] = 0;
     if (id > 0 && number) *number = s_gen.number;
     return id;
+}
+
+int stats_db_gen_add_own(const uint8_t givens[81], int level, int *number)
+{
+    return stats_db_gen_add_from(STATS_OWN_SOURCE, VAR_CLASSIC, level, givens, NULL, NULL, NULL, NULL, number);
 }
 
 bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number)

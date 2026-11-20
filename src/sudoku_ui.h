@@ -43,6 +43,11 @@ typedef struct {
 } sudoku_ui_state_t;
 bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82]);
 
+/* Where the board is, for scripts (devctl "screen"): "home1" / "home2" (the menu's page),
+ * "list", "game", "stats", "settings", "sysmon", "players", "trophies", ... ("other" for
+ * the rest), with "+dialog" when a dialog or overlay covers it. */
+void sudoku_ui_screen_name(char *buf, size_t n);
+
 /* A part of a puzzle sent by sound (devctl / Gibberlink "pz <id> <i>/<n> <part>",
  * another board's Share > Send by sound; the format is in sudoku_ui.c). When the
  * last part is in, the puzzle is checked (one solution), kept in Puzzles > Saved >

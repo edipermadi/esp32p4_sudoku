@@ -24,6 +24,9 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     shot FILE.png [--blur X1,Y1,X2,Y2 ...]
                             save the screen as a PNG; --blur pixelates those
                             rectangles first (e.g. a network name)
+    screen                  where the board is: home1, home2, list, game, stats, settings, sysmon,
+                            players, trophies, ... with +dialog when a dialog is open
+    expect NAME ...         (scripts) stop unless the board is on one of those screens
     ping
 
 Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
@@ -358,6 +361,17 @@ def run(board, words):
                 break
             if line.startswith("BENCH"):
                 print(line)
+    elif cmd in ("screen", "expect"):
+        # expect NAME ...: stop the run unless the board is on one of those screens (devctl "screen":
+        # home1, home2, list, game, stats, settings, sysmon, players, trophies, ... "+dialog" when a
+        # dialog is open), so a missed tap or swipe never sends the taps after it somewhere else
+        board.ser.write(b"screen\n")
+        line = board.wait_for("OK screen", 10, fail="ERR")
+        where = line.split()[2] if len(line.split()) > 2 else "?"
+        if cmd == "screen":
+            print(where)
+        elif where not in words[1:]:
+            sys.exit("expected %s, but the board is on %s: stopping before any more taps" % (" or ".join(words[1:]), where))
     elif cmd == "state":
         board.ser.write(b"state\n")
         end = time.time() + 10

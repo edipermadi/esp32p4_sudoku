@@ -1,12 +1,15 @@
 # Screenshots for the docs: python3 tools/devctl.py --port /dev/ttyACM0 --script docs/screenshots.txt
 # Opening the port restarts the board, so this starts on a fresh Home screen.
-# Coordinates are screen pixels (720 x 720). Nothing here changes the game data
+# Coordinates are screen pixels (720 x 720). Each "expect" checks where the board is
+# (devctl "screen") and stops the run if a tap or swipe didn't land: the taps after
+# it would otherwise hit another screen (a game, once). Nothing here changes the game data
 # (no puzzle is played or made, no setting is changed). The game screen tour must
 # have been seen (tour.png is taken by hand). It expects one recorded
 # solve (for Gameplays and the replay) and a puzzle file (.sdx, .sdm or .opensudoku)
 # first in puzzles/ (for the preview); the Home menu always has its two pages.
 
 wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
+expect home1
 shot docs/screenshots/home.png
 
 # ---- Puzzles
@@ -16,106 +19,140 @@ swipe 137 220 137 680 300   # the collection column to its top (it opens on the 
 wait 600
 tap 137 159                 # the Easy collection
 wait 400
+expect list
 shot docs/screenshots/puzzles.png
 tap 202 96                  # the Saved tab: saved and imported collections
 wait 800
+expect list
 shot docs/screenshots/puzzles-saved.png
 tap 73 96                   # back to Built-in (Easy)
 wait 600
 tap 682 36                  # the menu (vertical dots): New puzzle, Enter puzzle, Learn
 wait 500
+expect list+dialog
 shot docs/screenshots/puzzles-menu.png
 tap 600 103                 # New puzzle: the variant and level dialog
 wait 800
+expect list+dialog
 shot docs/screenshots/new-puzzle.png
 tap 360 656                 # Cancel
 wait 400
+expect list
 tap 682 36                  # the menu
 wait 500
 tap 600 223                 # Learn: the techniques
 wait 800
+expect list+dialog
 shot docs/screenshots/learn.png
 tap 360 628                 # Close (the list scrolls above it)
 wait 400
+expect list
 tap 622 36                  # Starred (the star toggle): the bookmarked puzzles in the right pane
 wait 900
+expect list
 shot docs/screenshots/starred.png
 tap 622 36                  # Starred off: Easy again
 wait 400
+expect list
 tap 682 36                  # the menu
 wait 500
 tap 600 163                 # Enter puzzle: a blank board to type a puzzle in
 wait 800
+expect edit
 shot docs/screenshots/enter.png
 tap 66 30                   # Cancel
 wait 500
 
 # ---- a game (Easy #1, only looked at)
+expect list
 tap 294 159                 # puzzle 1 (Easy is still selected)
 wait 900
+expect game
 shot docs/screenshots/game.png
 tap 261 86                  # Share: the puzzle as a QR code
 wait 800
+expect game+dialog
 shot docs/screenshots/share.png
 tap 224 614                 # Close (left of Send by sound)
 wait 300
+expect game
 tap 34 86                   # the light bulb: the variant's rules
 wait 600
+expect game+dialog
 shot docs/screenshots/rules.png
 tap 360 500                 # OK
 wait 300
+expect game
 tap 60 30                   # List
 wait 400
+expect list
 tap 72 36                   # Home
 wait 500
 
 # ---- Statistics, Players, History, Gameplays, Trophies
+expect home1
 tap 206 449                 # Statistics
 wait 1500
+expect stats
 shot docs/screenshots/statistics.png
 tap 628 98                  # Chart: the progress chart instead of the table
 wait 1500
+expect stats
 shot docs/screenshots/statistics-chart.png
 tap 628 98                  # back to the table
 wait 800
 tap 453 98                  # Insights: mistakes, from the move logs
 wait 2000
+expect stats+dialog
 shot docs/screenshots/insights.png
 tap 360 650                 # Close
 wait 500
+expect stats
 tap 72 36                   # Home
 wait 500
+expect home1
 tap 206 260                 # Players
 wait 1000
+expect players
 shot docs/screenshots/players.png
 tap 682 36                  # the menu: Add player, Rename player, Avatar, Delete player
 wait 600
 tap 600 223                 # Avatar: the emoji picker (only looked at)
 wait 1200
+expect players+dialog
 shot docs/screenshots/players-avatar.png
 tap 100 600                 # outside it: closed, nothing picked
 wait 400
+expect players
 tap 72 36                   # Home
 wait 500
+expect home1
 tap 513 449                 # History
 wait 1500
+expect history
 shot docs/screenshots/history.png
 tap 72 36                   # Home
 wait 500
+expect home1
 tap 206 543                 # Gameplays (needs a recorded solve)
 wait 1200
+expect gameplays
 shot docs/screenshots/gameplays.png
 tap 200 112                 # the newest game
 wait 1500
 tap 360 695                 # halfway along the slider
 wait 500
+expect replay
 shot docs/screenshots/replay.png
 tap 60 30                   # Back
 wait 400
+expect gameplays
 tap 72 36                   # Home
 wait 500
+expect home1
 tap 513 543                 # Trophies
 wait 1200
+expect trophies
 shot docs/screenshots/trophies.png
 tap 320 98                  # the Daily tab
 wait 1200
@@ -125,36 +162,45 @@ wait 1200
 shot docs/screenshots/trophies-weekly.png
 tap 633 98                  # the Records tab
 wait 1200
+expect trophies
 shot docs/screenshots/trophies-records.png
 tap 72 36                   # Home
 wait 500
 
 # ---- Time attack, Files, Settings and the System monitor
+expect home1
 tap 206 637                 # Time attack (Home, page 1): the rules and the leaderboard
 wait 1200
+expect home1+dialog
 shot docs/screenshots/time-attack.png
 tap 214 448                 # Close (with no runs yet; the leaderboard's rows move it down)
 wait 500
+expect home1
 tap 513 637                 # Files (Home, page 1): the card's root
 wait 1500
+expect files
 shot docs/screenshots/files.png
 tap 250 217                 # the puzzles folder
 wait 1200
 tap 250 148                 # its first file (an .sdx): the puzzle file preview (only looked at)
 wait 1500
+expect files+dialog
 shot docs/screenshots/file-preview.png
 tap 200 676                 # Close
 wait 500
 tap 581 36                  # Up, back to the card's root (Files opens where it was left)
 wait 1200
+expect files
 tap 80 36                   # Home
 wait 500
 swipe 600 450 120 450 300   # the menu's second page
 wait 800
+expect home2
 shot docs/screenshots/home-page2.png
 tap 206 260                 # Settings (opens on Network; the network's name is hidden there)
 wait 800
 # the time zone is blurred: it says where the board is
+expect settings
 shot docs/screenshots/settings.png --blur 330,236,616,286
 tap 218 98                  # the Display tab
 wait 300
@@ -170,11 +216,13 @@ wait 400
 shot docs/screenshots/settings-data.png
 tap 72 36                   # Home (the menu stays on its second page)
 wait 500
+expect home2
 tap 513 260                 # System (the system monitor)
 wait 2500
 tap 78 98                   # its System tab (it opens on the one used last)
 wait 1200
 # the IP address and the MAC addresses are blurred: they identify the board and the network
+expect sysmon
 shot docs/screenshots/sysmon.png --blur 300,388,668,486
 tap 218 98                  # Memory
 wait 1200
@@ -187,10 +235,12 @@ wait 1500
 shot docs/screenshots/sysmon-graphics.png
 tap 638 98                  # Tasks
 wait 2200
+expect sysmon
 shot docs/screenshots/sysmon-tasks.png
 tap 78 98                   # back to System, so the next visit opens there
 wait 300
 tap 80 36                   # Home
 wait 500
+expect home2
 swipe 120 450 600 450 300   # back to the menu's first page
 wait 500

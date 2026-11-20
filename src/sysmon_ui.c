@@ -40,7 +40,8 @@
  * PSRAM block (heap_caps_get_largest_free_block walks the 28 MB heap under its lock)
  * 4 ms, uxTaskGetSystemState 1.5 ms; once a second, either made the screen blink
  * (2026-11-20). So: no PSRAM largest block at all, CPU load from the idle tasks'
- * counters, and the full task list only while the Tasks tab is open.
+ * counters, and the full task list only while the Tasks tab is open, read by a task on
+ * core 0 (task_reader), whose interrupts the display doesn't use.
  */
 #define SD_EVERY     10               /* ticks between microSD free-space counts */
 #define MAX_TASKS    48
@@ -87,6 +88,13 @@ static uint32_t s_frames, s_draw_us_sum, s_draw_us_max;
 
 /* FreeRTOS run-time samples: the previous one, to turn counters into a share */
 static TaskStatus_t *s_ts;
+/* the task list is read on core 0 (task_reader): uxTaskGetSystemState holds the kernel lock
+ * with interrupts off for ~1.5 ms, and on core 1 that makes the screen blink */
+static TaskStatus_t *s_ts_w;              /* the reader's copy (MAX_TASKS) */
+static TaskHandle_t s_reader;
+static volatile bool s_reader_busy, s_reader_done;
+static volatile UBaseType_t s_reader_n;
+static volatile uint32_t s_reader_total;
 typedef struct { UBaseType_t num; uint32_t rt; } prev_t;
 static prev_t s_prev[MAX_TASKS];
 static int s_prev_n;
@@ -363,13 +371,40 @@ static void show_cpu(void)
     set_text(s_ntasks, buf);
 }
 
-/* Tasks tab only: uxTaskGetSystemState holds the kernel lock, interrupts off, ~1.5 ms */
+static void task_reader(void *arg)
+{
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        uint32_t total = 0;
+        s_reader_n = uxTaskGetSystemState(s_ts_w, MAX_TASKS, &total);
+        s_reader_total = total;
+        s_reader_done = true;
+        s_reader_busy = false;
+    }
+}
+
+/* Tasks tab only: the list the core-0 reader made last (a second old), and a fresh one asked for */
 static void show_tasks(void)
 {
     if (!s_ts) return;
-    uint32_t total = 0;
-    UBaseType_t n = uxTaskGetSystemState(s_ts, MAX_TASKS, &total);
-    if (n == 0) return;                             /* more than MAX_TASKS: keep the last view */
+    if (!s_ts_w) s_ts_w = heap_caps_calloc(MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM);
+    if (!s_ts_w) return;
+    if (!s_reader && xTaskCreatePinnedToCore(task_reader, "sysmon_tasks", 3072, NULL, 2, &s_reader, 0) != pdPASS) {
+        s_reader = NULL;
+        return;
+    }
+    bool have = s_reader_done;
+    UBaseType_t n = s_reader_n;
+    uint32_t total = s_reader_total;
+    if (have) {
+        memcpy(s_ts, s_ts_w, sizeof(TaskStatus_t) * (n <= MAX_TASKS ? n : MAX_TASKS));
+        s_reader_done = false;
+    }
+    if (!s_reader_busy) {                           /* the next one, for the next tick */
+        s_reader_busy = true;
+        xTaskNotifyGive(s_reader);
+    }
+    if (!have || n == 0) return;                    /* (none yet, or more than MAX_TASKS: keep the last view) */
 
     uint32_t dt = total - s_prev_total;
     uint32_t idle[2] = {0, 0};

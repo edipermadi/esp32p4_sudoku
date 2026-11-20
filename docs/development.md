@@ -73,7 +73,7 @@ src/sysmon_ui.c         system monitor screen: heap, flash, microSD, temperature
 src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
-src/sdx.c               the puzzle line format (.sdx files, Send by sound): parse, pack, format; plain C, tested on a PC
+src/sdx.c               the puzzle line format (Import puzzles, the Files preview, Send by sound): parse, pack, format; plain C, tested on a PC
 src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Kids 4x4, Anti-Knight, Even-Odd, Consecutive, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data

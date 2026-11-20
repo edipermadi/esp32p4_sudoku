@@ -3459,6 +3459,7 @@ static void sv_changed(void);
 #define PZ_PART      110                          /* characters of the line per message */
 #define PZ_MAX_PARTS 16
 #define PZ_TIMEOUT_MS 90000                       /* a puzzle's parts must all come within this */
+#define PZ_SOURCE    "Received"                   /* where they're kept: "Received #1", "#2" ... */
 
 static uint16_t pz_crc16(const char *p, size_t n)
 {
@@ -3591,7 +3592,9 @@ static void pz_check_poll(lv_timer_t *t)
     const uint8_t *regions = p->variant == VAR_JIGSAW ? p->geom.region : NULL;
     const char *cages = p->cages[0] ? p->cages : NULL, *marks = p->marks[0] ? p->marks : NULL;
     const char *thermos = p->thermos[0] ? p->thermos : NULL;
-    int gid = stats_db_ready() ? stats_db_gen_add(p->variant, level, p->givens, regions, cages, marks, thermos, NULL)
+    int number = 0;                               /* "Received #3": numbered like My puzzles */
+    int gid = stats_db_ready() ? stats_db_gen_add_from(PZ_SOURCE, p->variant, level, p->givens, regions, cages, marks,
+                                                       thermos, &number)
                                : -1;
     uint16_t id;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
@@ -3599,12 +3602,16 @@ static void pz_check_poll(lv_timer_t *t)
     } else {
         id = s_gen_ram_next++;                    /* no card: until power-off */
         if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+        static int ram_number;
+        number = ++ram_number;
     }
     gen_cache_put(id, p->variant, level, p->givens, regions, cages, marks, thermos, NULL);
+    gen_cache_source(id, PZ_SOURCE, number);
     char why[96] = "", text[200];
-    bool kept = gid > 0 && stats_db_saved_add("Received", id, why, sizeof(why));
+    bool kept = gid > 0 && stats_db_saved_add(PZ_SOURCE, id, why, sizeof(why));
     if (kept) sv_changed();                       /* (Puzzles' column: "Received" may be new) */
-    snprintf(text, sizeof(text), "%s %s came by sound%s.", VARIANT_NAMES[p->variant], GEN_LEVEL_NAMES[level],
+    snprintf(text, sizeof(text), "%s #%d, %s %s, came by sound%s.", PZ_SOURCE, number, VARIANT_NAMES[p->variant],
+             GEN_LEVEL_NAMES[level],
              kept ? ": it's in Puzzles > Saved > Received" : gid > 0 ? "" : " (kept until power-off: no card)");
     pz_play_id = id;
     lv_obj_t *m = make_msgbox(LV_SYMBOL_AUDIO "  Puzzle received", text);
@@ -10794,6 +10801,35 @@ int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why
     }
     why[0] = 0;
     return placed;
+}
+
+void sudoku_ui_screen_name(char *buf, size_t n)
+{
+    static const struct { lv_obj_t **scr; const char *name; } S[] = {
+        {&scr_home, "home"}, {&scr_list, "list"}, {&scr_game, "game"}, {&scr_stats, "stats"},
+        {&scr_settings, "settings"}, {&scr_wifi, "wifi"}, {&scr_profile, "players"}, {&scr_history, "history"},
+        {&scr_sysmon, "sysmon"}, {&scr_files, "files"}, {&scr_plays, "gameplays"}, {&scr_trophy, "trophies"},
+        {&scr_replay, "replay"}, {&scr_edit, "edit"},
+    };
+    lv_obj_t *act = lv_screen_active();
+    const char *name = "other";
+    for (size_t i = 0; i < sizeof(S) / sizeof(S[0]); i++) {
+        if (*S[i].scr && *S[i].scr == act) name = S[i].name;
+    }
+    int len = snprintf(buf, n, "%s", name);
+    if (act == scr_home && h_menu) {                /* which page of the menu: home1, home2 */
+        int page = (int)((lv_obj_get_scroll_x(h_menu) + HOME_GRID_W / 2) / HOME_GRID_W) + 1;
+        len += snprintf(buf + len, n - (size_t)len, "%d", page);
+    }
+    /* a dialog or overlay: anything screen-sized on the top layer (not the Gibberlink icon, a notice) */
+    lv_obj_t *top = lv_layer_top();
+    for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
+        lv_obj_t *c = lv_obj_get_child(top, (int32_t)i);
+        if (!lv_obj_is_hidden(c) && lv_obj_get_width(c) >= SCR_W - 20 && lv_obj_get_height(c) >= SCR_W - 20) {
+            snprintf(buf + len, n - (size_t)len, "+dialog");
+            break;
+        }
+    }
 }
 
 bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82])

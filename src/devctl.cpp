@@ -544,6 +544,12 @@ static void run(char *line)
             return;
         }
     }
+    if (!strcmp(cmd, "screen")) {                  /* where the board is: home1, game+dialog, ... */
+        char name[48];
+        sudoku_ui_screen_name(name, sizeof(name));
+        reply("OK screen %s\n", name);
+        return;
+    }
     if (!strcmp(cmd, "state")) {                   /* the game on screen, as text */
         cmd_state();
         return;

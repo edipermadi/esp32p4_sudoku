@@ -382,7 +382,8 @@ bool stats_db_take_board(stats_board_t *out);
  * .txt (a puzzle per line, 81 digits, 0 or . = empty) and .sdx (this board's
  * export of a saved collection: any variant; see stats_db.c). Each becomes a
  * collection (up to 100 puzzles; more: "name 2", "name 3" ...), checked for
- * exactly one solution. A file already imported is skipped. The result comes
+ * exactly one solution and rated by the grader (generator.h) where the file
+ * gives no level (.sdm, .txt, .opensudoku: always). A file already imported is skipped. The result comes
  * back as a message; stats_db_take_imports_changed() says to reload the list. */
 #define STATS_MAX_IMPORTS 24
 #define STATS_IMPORT_NAME 28
@@ -405,6 +406,9 @@ int stats_db_solved_in(uint16_t first, int count, uint8_t *solved);
  * the collection STATS_OWN_SOURCE, numbered from 1. Its generated.id, or -1. */
 #define STATS_OWN_SOURCE "My puzzles"
 int stats_db_gen_add_own(const uint8_t givens[81], int level, int *number);
+/* The same for any variant, kept under source (numbered within it: "Received #3"). */
+int stats_db_gen_add_from(const char *source, int variant, int level, const uint8_t givens[81],
+                          const uint8_t *regions, const char *cages, const char *marks, const char *thermos, int *number);
 /* An imported puzzle's collection and number; false if it isn't one. */
 bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number);
 
