@@ -69,7 +69,7 @@ void setup()
    * filled internal RAM: at 16, 4700 blocks of 4-15 bytes, the largest free
    * block 35 KB, and MP4 export failed. At 4: 225 KB free, largest 143 KB, and
    * screen redraws just as fast (devctl bench).) */
-  heap_caps_malloc_extmem_enable(4);
+  heap_caps_malloc_extmem_enable(4);   /* (more in SRAM, e.g. 256: the SD card and Wi-Fi starve of DMA RAM) */
   Serial.setRxBufferSize(2048);      /* devctl uploads: 12 data lines between ACKs */
   Serial.begin(115200);
   delay(500);

@@ -34,6 +34,14 @@
 #include "wifi_mgr.h"
 
 #define REFRESH_MS   1000
+/*
+ * Nothing here may switch interrupts off on the LVGL core (core 1, which also serves
+ * the display) for long: the whole screen blinks cyan. Measured: the largest free
+ * PSRAM block (heap_caps_get_largest_free_block walks the 28 MB heap under its lock)
+ * 4 ms, uxTaskGetSystemState 1.5 ms; once a second, either made the screen blink
+ * (2026-11-20). So: no PSRAM largest block at all, CPU load from the idle tasks'
+ * counters, and the full task list only while the Tasks tab is open.
+ */
 #define SD_EVERY     10               /* ticks between microSD free-space counts */
 #define MAX_TASKS    48
 
@@ -84,6 +92,7 @@ static prev_t s_prev[MAX_TASKS];
 static int s_prev_n;
 static uint32_t s_prev_total;
 static bool s_have_prev;
+static bool s_have_cpu;               /* show_cpu has a sample before this one */
 typedef struct { int idx; uint32_t permille; } row_t;   /* permille of one core */
 static row_t rows[MAX_TASKS];        /* the latest sample, in the chosen order (indexes into s_ts) */
 static int s_rows_n;
@@ -329,6 +338,32 @@ static int row_cmp(const void *a, const void *b)
 }
 
 /* ------------------------------------------------------------- views */
+/* System tab: CPU load per core from the idle tasks' run time (no locks), the number of tasks */
+static void show_cpu(void)
+{
+    static uint32_t idle_prev[2];
+    static int64_t t_prev;
+    int64_t now = esp_timer_get_time();
+    char buf[24];
+    for (int c = 0; c < 2; c++) {
+        uint32_t idle = ulTaskGetIdleRunTimeCounterForCore(c);   /* microseconds (esp_timer) */
+        uint32_t dt = (uint32_t)(now - t_prev), di = idle - idle_prev[c];
+        if (t_prev && dt && s_have_cpu) {
+            int pm = 1000 - (int)((uint64_t)di * 1000 / dt);    /* per mille */
+            if (pm < 0) pm = 0;
+            if (pm > 1000) pm = 1000;
+            snprintf(buf, sizeof(buf), "%d.%d %%", pm / 10, pm % 10);
+            set_text(c ? s_load1 : s_load0, buf);
+        }
+        idle_prev[c] = idle;
+    }
+    t_prev = now;
+    s_have_cpu = true;
+    snprintf(buf, sizeof(buf), "%u", (unsigned)uxTaskGetNumberOfTasks());
+    set_text(s_ntasks, buf);
+}
+
+/* Tasks tab only: uxTaskGetSystemState holds the kernel lock, interrupts off, ~1.5 ms */
 static void show_tasks(void)
 {
     if (!s_ts) return;
@@ -354,15 +389,7 @@ static void show_tasks(void)
         if (!strcmp(s_ts[i].pcTaskName, "IDLE1")) idle[1] = rows[i].permille;
     }
 
-    char buf[48];
-    if (s_have_prev && dt) {
-        snprintf(buf, sizeof(buf), "%u.%u %%", (unsigned)((1000 - idle[0]) / 10), (unsigned)((1000 - idle[0]) % 10));
-        set_text(s_load0, buf);
-        snprintf(buf, sizeof(buf), "%u.%u %%", (unsigned)((1000 - idle[1]) / 10), (unsigned)((1000 - idle[1]) % 10));
-        set_text(s_load1, buf);
-    }
-    snprintf(buf, sizeof(buf), "%u", (unsigned)n);
-    set_text(s_ntasks, buf);
+    (void)idle;                                     /* (the System tab's load: show_cpu, from cheaper counters) */
 
     /* remember this sample for the next tick */
     for (UBaseType_t i = 0; i < n; i++) {
@@ -375,7 +402,7 @@ static void show_tasks(void)
     s_have_prev = true;
     qsort(rows, n, sizeof(row_t), row_cmp);
     s_rows_n = (int)n;
-    if (s_tab == SM_TASKS) show_task_table();      /* (only on its tab: it's the costly part) */
+    show_task_table();
 }
 
 /* the table from the latest sample (show_tasks) */
@@ -414,14 +441,15 @@ static void show_task_table(void)
     }
 }
 
-/* with_min: the low-water mark. Not for PSRAM: its heap reads 0 from boot on
- * (the core registers it that way), which says nothing about real use. */
+/* with_min: the low-water mark and the largest free block (internal RAM). Not for PSRAM:
+ * its low-water mark reads 0 from boot on (the core registers it that way), and its
+ * largest block walks the whole 28 MB heap with interrupts off (4 ms: the screen blinks). */
 static void show_mem_one(uint32_t caps, bool with_min, lv_obj_t *bar, lv_obj_t *val, lv_obj_t *sub)
 {
     size_t total = heap_caps_get_total_size(caps);
     size_t free_b = heap_caps_get_free_size(caps);
-    size_t min_b = heap_caps_get_minimum_free_size(caps);
-    size_t big = heap_caps_get_largest_free_block(caps);
+    size_t min_b = with_min ? heap_caps_get_minimum_free_size(caps) : 0;
+    size_t big = with_min ? heap_caps_get_largest_free_block(caps) : 0;   /* (internal: ~0.1 ms) */
     char a[16], b[16], c[16], d[16], buf[96];
     if (total == 0) {
         set_text(val, "None");
@@ -440,7 +468,7 @@ static void show_mem_one(uint32_t caps, bool with_min, lv_obj_t *bar, lv_obj_t *
         snprintf(buf, sizeof(buf), "Lowest free %s  |  largest block %s", c, d);
     } else {
         fmt_bytes(c, sizeof(c), total - free_b);
-        snprintf(buf, sizeof(buf), "Used %s  |  largest block %s", c, d);
+        snprintf(buf, sizeof(buf), "Used %s", c);
     }
     set_text(sub, buf);
 }
@@ -562,6 +590,7 @@ static void tick(lv_timer_t *t)
 {
     if ((s_ticks++ % SD_EVERY) == 0) sd_query();
     show_overview();
+    show_cpu();
     show_mem_one(MALLOC_CAP_INTERNAL, true, s_int_bar, s_int_val, s_int_sub);
     show_mem_one(MALLOC_CAP_SPIRAM, false, s_ps_bar, s_ps_val, s_ps_sub);
     char a[16], b[16], buf[48];
@@ -571,7 +600,7 @@ static void tick(lv_timer_t *t)
     set_text(s_dma_val, buf);
     show_storage();
     show_lvgl();
-    show_tasks();
+    if (s_tab == SM_TASKS) show_tasks();            /* (only on its tab: see the top of the file) */
 }
 
 /* ------------------------------------------------------------- history */
@@ -790,7 +819,10 @@ static void select_tab(int tab)
         lv_obj_set_hidden(s_pane[i], i != tab);
     }
     lv_obj_scroll_to_y(s_pane[tab], 0, LV_ANIM_OFF);
-    if (s_shown && tab == SM_TASKS) show_task_table();   /* at once, not at the next tick */
+    if (s_shown && tab == SM_TASKS) {               /* at once, not at the next tick */
+        s_have_prev = false;                        /* (CPU shares from the next sample on) */
+        show_tasks();
+    }
 }
 
 static void on_tab(lv_event_t *e)
@@ -990,6 +1022,7 @@ void sysmon_ui_set_shown(bool shown)
         }
         if (s_tsens) temperature_sensor_enable(s_tsens);
         s_have_prev = false;
+        s_have_cpu = false;
         s_ticks = 0;
         s_window_t0 = 0;                            /* frame counts from the next tick */
         tick(NULL);                                 /* fill at once (task CPU from the next tick) */
