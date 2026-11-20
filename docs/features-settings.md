@@ -7,8 +7,10 @@ The home screen, Settings and its tabs, how the board looks and sounds, Gibberli
 | **Home** | **Settings → Network** | **Settings → Display** |
 |---|---|---|
 | ![Home](screenshots/home.png) | ![Settings, Network tab](screenshots/settings.png) | ![Settings, Display tab](screenshots/settings-display.png) |
-| **Settings → Game** | **Files** | **Puzzle file preview** |
-| ![Settings, Game tab](screenshots/settings-game.png) | ![Files](screenshots/files.png) | ![A puzzle file's preview, with Import](screenshots/file-preview.png) |
+| **Settings → Sound** | **Settings → Game** | **Files** |
+| ![Settings, Sound tab](screenshots/settings-sound.png) | ![Settings, Game tab](screenshots/settings-game.png) | ![Files](screenshots/files.png) |
+| **Puzzle file preview** | | |
+| ![A puzzle file's preview, with Import](screenshots/file-preview.png) | | |
 
 ## Features
 
@@ -51,5 +53,7 @@ There are twelve buttons: the menu turns into pages. Swipe left for **Settings**
 | **System** | **Memory** |
 |---|---|
 | ![System tab](screenshots/sysmon.png) | ![Memory tab](screenshots/sysmon-memory.png) |
-| **Storage** | **Tasks** (sorted by CPU) |
-| ![Storage tab](screenshots/sysmon-storage.png) | ![Tasks tab](screenshots/sysmon-tasks.png) |
+| **Storage** | **Graphics** |
+| ![Storage tab](screenshots/sysmon-storage.png) | ![Graphics tab](screenshots/sysmon-graphics.png) |
+| **Tasks** (sorted by CPU) | |
+| ![Tasks tab](screenshots/sysmon-tasks.png) | |

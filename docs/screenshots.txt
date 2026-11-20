@@ -17,6 +17,11 @@ wait 600
 tap 137 159                 # the Easy collection
 wait 400
 shot docs/screenshots/puzzles.png
+tap 202 96                  # the Saved tab: saved and imported collections
+wait 800
+shot docs/screenshots/puzzles-saved.png
+tap 73 96                   # back to Built-in (Easy)
+wait 600
 tap 682 36                  # the menu (vertical dots): New puzzle, Enter puzzle, Learn
 wait 500
 shot docs/screenshots/puzzles-menu.png
@@ -68,6 +73,11 @@ wait 500
 tap 206 449                 # Statistics
 wait 1500
 shot docs/screenshots/statistics.png
+tap 628 98                  # Chart: the progress chart instead of the table
+wait 1500
+shot docs/screenshots/statistics-chart.png
+tap 628 98                  # back to the table
+wait 800
 tap 453 98                  # Insights: mistakes, from the move logs
 wait 2000
 shot docs/screenshots/insights.png
@@ -110,6 +120,9 @@ shot docs/screenshots/trophies.png
 tap 320 98                  # the Daily tab
 wait 1200
 shot docs/screenshots/trophies-daily.png
+tap 472 98                  # the Weekly tab
+wait 1200
+shot docs/screenshots/trophies-weekly.png
 tap 633 98                  # the Records tab
 wait 1200
 shot docs/screenshots/trophies-records.png
@@ -146,6 +159,9 @@ shot docs/screenshots/settings.png --blur 330,236,616,286
 tap 218 98                  # the Display tab
 wait 300
 shot docs/screenshots/settings-display.png
+tap 358 98                  # the Sound tab: sound effects, volume, Gibberlink
+wait 300
+shot docs/screenshots/settings-sound.png
 tap 498 98                  # the Game tab
 wait 300
 shot docs/screenshots/settings-game.png
@@ -166,6 +182,9 @@ shot docs/screenshots/sysmon-memory.png
 tap 358 98                  # Storage
 wait 1200
 shot docs/screenshots/sysmon-storage.png
+tap 498 98                  # Graphics
+wait 1500
+shot docs/screenshots/sysmon-graphics.png
 tap 638 98                  # Tasks
 wait 2200
 shot docs/screenshots/sysmon-tasks.png

@@ -11,8 +11,8 @@ Who plays, and how they are doing: players, colours and avatars, statistics, the
 | ![Mistake insights](screenshots/insights.png) | ![History](screenshots/history.png) | ![Trophies](screenshots/trophies.png) |
 | **Records** | **Daily leaderboard** | **Gameplays** |
 | ![Records](screenshots/trophies-records.png) | ![Daily leaderboard](screenshots/trophies-daily.png) | ![Gameplays](screenshots/gameplays.png) |
-| **Replay** |  |  |
-| ![Replay](screenshots/replay.png) |  |  |
+| **Replay** | **Progress chart** | **Weekly leaderboard** |
+| ![Replay](screenshots/replay.png) | ![Progress chart](screenshots/statistics-chart.png) | ![Weekly leaderboard](screenshots/trophies-weekly.png) |
 
 ## Features
 

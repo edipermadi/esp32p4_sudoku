@@ -9,6 +9,8 @@ The puzzles on the board and where they come from: the built-in collections, the
 | ![Puzzles](screenshots/puzzles.png) | ![The Puzzles screen's menu](screenshots/puzzles-menu.png) | ![Starred puzzles](screenshots/starred.png) |
 | **New puzzle** | **Learn** | **Enter a puzzle** |
 | ![New puzzle](screenshots/new-puzzle.png) | ![Learn](screenshots/learn.png) | ![Enter a puzzle](screenshots/enter.png) |
+| **Saved tab** | | |
+| ![The Saved tab: saved and imported collections](screenshots/puzzles-saved.png) | | |
 
 ## Features
 
