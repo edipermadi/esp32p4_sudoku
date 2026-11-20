@@ -56,7 +56,7 @@ src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Anti-Knight, Even-Odd, Consecutive, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
-src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb and QR code icons at 24/20 px (lv_font_conv)
+src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code and camera icons at 24/20 px (lv_font_conv)
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/devctl.py         screenshots (PNG) and touches over the serial port

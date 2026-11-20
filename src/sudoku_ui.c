@@ -108,6 +108,7 @@ LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
 #define SYMBOL_CHART    "\xEF\x88\x81"   /* FontAwesome U+F201 (chart-line) */
 #define SYMBOL_BULB     "\xEF\x83\xAB"   /* FontAwesome U+F0EB (lightbulb) */
 #define SYMBOL_QR       "\xEF\x80\xA9"   /* FontAwesome U+F029 (qrcode) */
+#define SYMBOL_CAMERA   "\xEF\x80\xB0"   /* FontAwesome U+F030 (camera): screenshots */
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
@@ -3450,7 +3451,7 @@ static void build_game(void)
     lv_label_set_text(g_win_badge, LV_SYMBOL_EDIT "  No-notes challenge: done without notes");
     lv_obj_align(g_win_badge, LV_ALIGN_TOP_MID, 0, 250);
     lv_obj_set_hidden(g_win_badge, true);
-    lv_obj_t *shot = make_btn(card, 0, 0, 56, 48, LV_SYMBOL_IMAGE, &lv_font_montserrat_22, screenshot_cb, NULL);
+    lv_obj_t *shot = make_btn(card, 0, 0, 56, 48, SYMBOL_CAMERA, &font_icons_20, screenshot_cb, NULL);
     lv_obj_set_style_bg_color(shot, C_CARD2, 0);    /* a screenshot of the solved board */
     lv_obj_align(shot, LV_ALIGN_TOP_LEFT, 0, 0);
     g_win_share = make_btn(card, 0, 0, 56, 48, SYMBOL_QR, &font_icons_20, win_share_cb, NULL);   /* daily: share */
@@ -3897,7 +3898,7 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
     /* second row (as the game's): where the replay is on the left, the speed on the right */
     rp_pos = make_label(scr, &lv_font_montserrat_20, C_TEXT);
     lv_obj_set_width(rp_pos, SCR_W - 8 - 200 - 8 - 16 - 64);
-    rp_shot = make_btn(scr, SCR_W - 8 - 200 - 8 - 56, TOOL_Y, 56, 48, LV_SYMBOL_IMAGE, &lv_font_montserrat_22,
+    rp_shot = make_btn(scr, SCR_W - 8 - 200 - 8 - 56, TOOL_Y, 56, 48, SYMBOL_CAMERA, &font_icons_20,
                        screenshot_cb, NULL);       /* a screenshot of this moment */
     lv_label_set_long_mode(rp_pos, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_pos(rp_pos, 16, TOOL_Y + (48 - 24) / 2);
