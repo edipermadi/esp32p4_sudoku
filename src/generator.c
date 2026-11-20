@@ -6,7 +6,8 @@
 
 const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
 const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
-                                              "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich"};
+                                              "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich",
+                                              "Kids 4x4"};
 
 /* sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
 static uint8_t s_mask_sum[1024];
@@ -91,6 +92,7 @@ void sudoku_geom_init(void)
     geom_build(&g[VAR_CLASSIC], VAR_CLASSIC, 9, 3, 3, false, false, NULL);
     geom_build(&g[VAR_X], VAR_X, 9, 3, 3, true, false, NULL);
     geom_build(&g[VAR_MINI], VAR_MINI, 6, 2, 3, false, false, NULL);
+    geom_build(&g[VAR_KIDS], VAR_KIDS, 4, 2, 2, false, false, NULL);   /* 4x4 for kids: 2x2 boxes, digits 1-4 */
     geom_build(&g[VAR_HYPER], VAR_HYPER, 9, 3, 3, false, true, NULL);
     geom_build(&g[VAR_KNIGHT], VAR_KNIGHT, 9, 3, 3, false, false, NULL);
     for (int c = 0; c < 81; c++) {                  /* Anti-Knight: a knight's move away is a peer too */
@@ -1205,7 +1207,7 @@ static int easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_KNIGHT) return 32;
     if (G->nthermos) return 28;
     if (G->sandwich) return 24;
-    return G->n == 9 ? 36 : 16;
+    return G->n == 9 ? 36 : G->n == 6 ? 16 : 8;   /* (4x4: half its 16 cells; Medium digs to the minimum, ~5) */
 }
 
 int sudoku_grade(const sudoku_geom_t *G, const uint8_t givens[81])

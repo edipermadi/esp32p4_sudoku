@@ -42,6 +42,6 @@ python3 tools/devctl.py --port /dev/ttyACM1 "mv 'old name.txt' new.txt; rm new.t
   BOARD i147b83......3917.37...6..4..9..2.31.4.....9.83.6..2..7..5...19.9526......39.754.
   ```
 
-  `BOARD` is 81 characters, row by row, numbered as for `fill`: `1`–`9` a given, `a`–`i` a digit entered (`a` = 1 ... `i` = 9), `.` empty, `#` a cell not on the board (Mini 6×6 uses 36 of the 81). `STATE` adds `practice=1` (Learn) or `attack=1` (Time attack) for those games. With no game on screen: `ERR state: no game on screen`.
+  `BOARD` is 81 characters, row by row, numbered as for `fill`: `1`–`9` a given, `a`–`i` a digit entered (`a` = 1 ... `i` = 9), `.` empty, `#` a cell not on the board (Mini 6×6 uses 36 of the 81, Kids 4×4 16). `STATE` adds `practice=1` (Learn) or `attack=1` (Time attack) for those games. With no game on screen: `ERR state: no game on screen`.
 - The touch commands, `wait`, `fill`, `state`, `pz`, `ping`, `heap` and `screenoff` also work as sound, with no cable: see Gibberlink in [Home, settings & system](features-settings.md) (**Settings → Sound → Gibberlink**).
 - On the board, the commands are lines on the serial port (`src/devctl.h` has the protocol): a download comes as base64 lines like a screenshot; an upload sends base64 lines with an `ACK` from the board after every 12, so its 2 KB receive buffer never overflows.

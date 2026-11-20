@@ -352,9 +352,10 @@ static const char SQL_SOLVE_INSERT[] =
 
 const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
                                                   "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo",
-                                                  "Sandwich", "Mini 6x6"};
+                                                  "Sandwich", "Mini 6x6", "Kids 4x4"};
 const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
-                                                   "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini"};
+                                                   "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini",
+                                                   "Kids"};
 
 int stats_kind_of(int variant, bool daily)
 {
@@ -370,6 +371,7 @@ int stats_kind_of(int variant, bool daily)
     case VAR_THERMO: return KIND_THERMO;
     case VAR_SANDWICH: return KIND_SANDWICH;
     case VAR_MINI: return KIND_MINI;
+    case VAR_KIDS: return KIND_KIDS;
     default: return KIND_NEW;
     }
 }
@@ -2104,7 +2106,7 @@ static bool ends_with(const char *s, const char *suffix)
  *
  * variant: its name ("Classic", "X-Sudoku", "Killer", ...: VARIANT_NAMES) or number;
  * level: "Easy", "Medium", "Hard", "Expert" or 0-3; givens: 81 digits row by row, 0
- * or '.' empty (Mini 6x6: the top-left 6 x 6); regions: Jigsaw's 81 digits 0-8; cages,
+ * or '.' empty (Mini 6x6: the top-left 6 x 6; Kids 4x4: the top-left 4 x 4); regions: Jigsaw's 81 digits 0-8; cages,
  * marks, thermos: as in the generated table (sudoku_cages_text(), sudoku_marks_text()
  * (Sandwich: its 18 sums), sudoku_thermos_text()); the fields a variant doesn't use are
  * empty, trailing ones may be left out. '#' starts a comment line. A line of just 81
@@ -2741,6 +2743,7 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Thermo", OF_VARIANT(9)},
     {"Fastest Sandwich", OF_VARIANT(10)},
     {"Fastest Mini 6x6", OF_VARIANT(2)},
+    {"Fastest Kids 4x4", OF_VARIANT(11)},
 };
 
 /* a player's records into R */

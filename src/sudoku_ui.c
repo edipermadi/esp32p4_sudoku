@@ -37,7 +37,8 @@
  *   - game: the 9x9 board, a 1..9 number pad on the right, a timer at the
  *     top, and Undo / Erase / Notes / Restart / Fill at the bottom. Puzzles
  *     made on the board can also be X-Sudoku (the diagonals are tinted and
- *     count as units) or a 6x6 Mini board (2x3 boxes, a 1..6 pad); the board
+ *     count as units), a 6x6 Mini board (2x3 boxes, a 1..6 pad) or a 4x4 Kids
+ *     board (2x2 boxes, a 1..4 pad, big digits); the board
  *     and pad are laid out for the puzzle's variant (generator.h) when it opens. Fill puts
  *     the solution's digit in the selected cell and counts as a hint. Conflicting
  *     digits turn red; a complete board without conflicts is solved (every
@@ -100,7 +101,9 @@ static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0};
 
 LV_FONT_DECLARE(font_digits_44)   /* " 0-9", grid digits */
 LV_FONT_DECLARE(font_digits_52)   /* the same, larger (Settings > Display > Digit size) */
+LV_FONT_DECLARE(font_digits_96)   /* the same, for the Kids 4x4 board's big cells */
 #define DIGIT_FONT (store_big_digits() ? &font_digits_52 : &font_digits_44)
+#define DIGIT_FONT_N(n) ((n) == 4 ? &font_digits_96 : DIGIT_FONT)   /* for a board of side n */
 LV_FONT_DECLARE(font_timer_36)    /* " 0-9:", game timer */
 LV_FONT_DECLARE(font_icons_24)    /* the two icons below + Montserrat 24 as fallback */
 LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
@@ -1823,8 +1826,9 @@ static void cell_draw_cb(lv_event_t *e)
     lv_obj_get_coords(cell, &co);
     int sv = g_lock ? g_lock : (g_sel >= 0 ? g_b.val[g_sel] : 0);
 
-    /* three marks per row: 3 rows on a 9x9 board, 2 (centred) on a 6x6 one */
-    int size = lv_area_get_width(&co), pitch = size / 3, rows = (g_geo->n + 2) / 3;
+    /* three marks per row: 3 rows on a 9x9 board, 2 (centred) on a 6x6 one; 4x4: two by two */
+    const int cols = g_geo->n == 4 ? 2 : 3;
+    int size = lv_area_get_width(&co), pitch = size / cols, rows = (g_geo->n + cols - 1) / cols;
     int x0 = 1, y0 = rows == 3 ? 2 : (size - rows * pitch) / 2;
     int vpitch = pitch;
     lv_draw_label_dsc_t d;
@@ -1840,7 +1844,7 @@ static void cell_draw_cb(lv_event_t *e)
     d.align = LV_TEXT_ALIGN_CENTER;
     for (int n = 1; n <= g_geo->n; n++) {
         if (!(g_b.notes[i] & (1u << n))) continue;
-        int r = (n - 1) / 3, c = (n - 1) % 3;
+        int r = (n - 1) / cols, c = (n - 1) % cols;
         lv_area_t a = {
             .x1 = co.x1 + x0 + c * pitch, .y1 = co.y1 + y0 + r * vpitch,
             .x2 = co.x1 + x0 + c * pitch + pitch - 1, .y2 = co.y1 + y0 + r * vpitch + vpitch - 1,
@@ -2710,6 +2714,9 @@ static void game_layout(void)
     g_layout_left = left;
     const int board_x = left ? SCR_W - 8 - GRID_SIZE : GRID_X, pad_x = left ? 8 : PAD_X;
     board_layout(g_geo, g_grid, g_boxes, g_cells, g_clues, board_x);
+    for (int i = 0; i < 81; i++) {                  /* (4x4: big digits) */
+        if (g_cell_lbl[i]) lv_obj_set_style_text_font(g_cell_lbl[i], DIGIT_FONT_N(g_geo->n), 0);
+    }
     lv_obj_set_x(g_pause_ovl, board_x);
     const int n = g_geo->n, span = GRID_SIZE - 6;              /* 598: the 9 x 62 px pad, as before */
     const int h = (span - (n - 1) * PAD_GAP) / n;
@@ -3097,6 +3104,7 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_CONSEC] = {4, 1, 0, 0, "4537", NULL, NULL, NULL, NULL, PIC_BARS, NULL, NULL, -1},
     [VAR_THERMO] = {4, 1, 0, 0, "2458", NULL, NULL, NULL, NULL, NULL, PIC_THERMO, NULL, -1},
     [VAR_SANDWICH] = {6, 1, 0, 0, "614329", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9},
+    [VAR_KIDS] = {4, 4, 2, 2, "1234" "3412" "2143" "4321", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
 };
 
 static const char *const RULES_TEXT[VAR_COUNT] = {
@@ -3120,6 +3128,8 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
                    "is bigger than the one before it.",
     [VAR_SANDWICH] = "Classic rules, and the number by each row (left) and column (top) is the sum of the digits "
                      "between that line's 1 and 9, wherever they are: here 4 + 3 + 2 = 9.",
+    [VAR_KIDS] = "A small 4x4 grid to start with: every row, every column and every 2x2 box holds 1, 2, 3 and 4, "
+                 "each once.",
 };
 
 static void rules_pic_draw_cb(lv_event_t *e)
@@ -4554,7 +4564,7 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub, const char *player)
         lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
         lv_obj_set_scrollable(cell, false);
         rp_cells[i] = cell;
-        rp_lbl[i] = make_label(cell, DIGIT_FONT, C_TEXT);
+        rp_lbl[i] = make_label(cell, DIGIT_FONT_N(rp_geo->n), C_TEXT);
         lv_obj_center(rp_lbl[i]);
     }
     lv_obj_t *clues[18];
@@ -5121,7 +5131,8 @@ static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kep
 
 /* the variants in the New puzzle dialog, in button order */
 static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_MINI,
-                                                 VAR_KNIGHT, VAR_EVENODD, VAR_CONSEC, VAR_THERMO, VAR_SANDWICH};
+                                                 VAR_KNIGHT, VAR_EVENODD, VAR_CONSEC, VAR_THERMO, VAR_SANDWICH,
+                                                 VAR_KIDS};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -5134,7 +5145,17 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CONSEC] = "9x9: a bar joins every two side-by-side cells whose digits are 1 apart; no bar, they aren't.",
     [VAR_THERMO] = "9x9 with thermometers: along each one, the digits rise from the round bulb.",
     [VAR_SANDWICH] = "9x9: the number by each row and column is the sum of the digits between its 1 and its 9.",
+    [VAR_KIDS] = "4x4 for kids, with big digits: rows, columns and 2x2 boxes hold 1-4 once each. Easy or Medium.",
 };
+static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /* the level buttons (Kids 4x4: Hard and Expert off) */
+
+/* Hard and Expert need techniques a 4x4 board never calls for: off for Kids 4x4 */
+static void gen_levels_update(void)
+{
+    for (int lv = 0; lv < GEN_LEVELS; lv++) {
+        if (gen_lvl_btn[lv]) lv_obj_set_state(gen_lvl_btn[lv], LV_STATE_DISABLED, gen_pick_var == VAR_KIDS && lv >= GEN_HARD);
+    }
+}
 
 static void gen_pick_close(void)
 {
@@ -5156,6 +5177,7 @@ static void gen_var_cb(lv_event_t *e)
     if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= VAR_COUNT) return;
     gen_pick_var = GEN_VAR_ORDER[sel];
     lv_label_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
+    gen_levels_update();
 }
 
 static void gen_cancel_cb(lv_event_t *e)
@@ -5180,7 +5202,7 @@ static void new_puzzle_cb(lv_event_t *e)
 
     /* the variant: Classic, X-Sudoku or Mini 6x6 (one of them checked) */
     static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "\n", "Jigsaw", "Killer", "Mini 6x6", "\n",
-                                          "Anti-Knight", "Even-Odd", "Consecutive", "\n", "Thermo", "Sandwich", ""};
+                                          "Anti-Knight", "Even-Odd", "Consecutive", "\n", "Thermo", "Sandwich", "Kids 4x4", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
@@ -5223,7 +5245,10 @@ static void new_puzzle_cb(lv_event_t *e)
         lv_obj_set_width(b, LV_PCT(48));
         lv_obj_set_style_bg_color(b, C_ACCENT, 0);
         lv_obj_set_style_text_color(lv_obj_get_child(b, 0), lv_color_white(), 0);
+        lv_obj_set_style_bg_opa(b, LV_OPA_30, LV_STATE_DISABLED);
+        gen_lvl_btn[lv] = b;
     }
+    gen_levels_update();
 
     msgbox_button(m, "Cancel", gen_cancel_cb, false);
     lv_obj_t *backdrop = lv_obj_get_parent(m);         /* the modal's dimmed layer */
@@ -9480,8 +9505,8 @@ static void ug_open(void)
             strftime(when, sizeof(when), "   -   %a %d %b, %H:%M", &tm);
         }
         int var = VAR_CLASSIC;
-        int cells = puzzle_is_generated(r->puzzle) && gen_lookup(r->puzzle, NULL, &var, NULL) && var == VAR_MINI ? 36
-                                                                                                                 : 81;
+        int cells = puzzle_is_generated(r->puzzle) && gen_lookup(r->puzzle, NULL, &var, NULL)
+                        ? (var == VAR_MINI ? 36 : var == VAR_KIDS ? 16 : 81) : 81;
         snprintf(line, sizeof(line), "%s   -   %d / %d filled%s", t, r->filled, cells, when);
         lv_obj_t *n = make_label(row, &lv_font_montserrat_18, C_TEXT);
         lv_label_set_text(n, name);
@@ -10067,7 +10092,7 @@ static void big_digits_dd_cb(lv_event_t *e)
 {
     store_set_big_digits(lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1);
     for (int i = 0; i < 81; i++) {                  /* the game's board now (Replay: when it opens) */
-        if (g_cell_lbl[i]) lv_obj_set_style_text_font(g_cell_lbl[i], DIGIT_FONT, 0);
+        if (g_cell_lbl[i]) lv_obj_set_style_text_font(g_cell_lbl[i], DIGIT_FONT_N(g_geo ? g_geo->n : 9), 0);
         if (g_cells[i]) lv_obj_invalidate(g_cells[i]);   /* (the pencil marks too) */
     }
 }

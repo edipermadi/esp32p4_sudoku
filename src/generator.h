@@ -66,10 +66,10 @@ extern const char *const GEN_LEVEL_NAMES[GEN_LEVELS];   /* "Easy", "Medium", "Ha
 
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
-               VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_COUNT } sudoku_variant_t;
+               VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_COUNT } sudoku_variant_t;
 
 /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
- * "Thermo", "Sandwich" */
+ * "Thermo", "Sandwich", "Kids 4x4" */
 extern const char *const VARIANT_NAMES[VAR_COUNT];
 
 /* ---------------------------------------------------------------- geometry */
@@ -84,8 +84,8 @@ extern const char *const VARIANT_NAMES[VAR_COUNT];
 
 typedef struct {
     uint8_t variant;                    /* sudoku_variant_t */
-    uint8_t n;                          /* digits and side: 9 or 6 */
-    uint8_t box_h, box_w;               /* box size: 3x3, or 2 rows x 3 columns */
+    uint8_t n;                          /* digits and side: 9, 6 or 4 */
+    uint8_t box_h, box_w;               /* box size: 3x3, 2 rows x 3 columns (6x6) or 2x2 (4x4) */
     bool diag;                          /* the two diagonals are units too */
     bool windows;                       /* the four Hyper windows are units too */
     uint8_t region[81];                 /* box (Jigsaw: region) of each cell, 0..n-1 */

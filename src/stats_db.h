@@ -86,7 +86,7 @@ typedef struct {
 /* Statistics rows after the 16 collections: puzzles made on the board, by
  * kind. Their solves are logged with level "<prefix> <Easy|Medium|Hard|Expert>". */
 typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_KILLER, KIND_KNIGHT, KIND_EVENODD,
-               KIND_CONSEC, KIND_THERMO, KIND_SANDWICH, KIND_MINI, KIND_COUNT } stats_kind_t;
+               KIND_CONSEC, KIND_THERMO, KIND_SANDWICH, KIND_MINI, KIND_KIDS, KIND_COUNT } stats_kind_t;
 extern const char *const STATS_KIND_NAMES[KIND_COUNT];    /* "New puzzles", "Daily puzzle", "X-Sudoku", ... */
 extern const char *const STATS_KIND_PREFIX[KIND_COUNT];   /* "Generated", "Daily", "X-Sudoku", ... */
 /* the kind of a generated puzzle of a variant (daily ones: KIND_DAILY) */
