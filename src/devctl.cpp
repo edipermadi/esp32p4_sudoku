@@ -13,7 +13,7 @@
 #include <esp_heap_caps.h>
 #include <esp_timer.h>
 
-#define LINE_MAX     256                /* command line, or an upload's data line */
+#define LINE_MAX     512                /* command line (fill: up to 81 pairs), or an upload's data line */
 #define CHUNK        96                 /* coded bytes per S line (128 base64 characters) */
 #define TAP_MS       120
 #define SETTLE_MS    150                /* after a release: let the UI react */
@@ -466,7 +466,8 @@ static void run(char *line)
         return;
     }
     if (s_cap) {                                    /* over sound: touches, wait, heap, screenoff only */
-        static const char *const ok[] = {"tap", "long", "swipe", "press", "move", "release", "wait", "heap", "screenoff"};
+        static const char *const ok[] = {"tap", "long", "swipe", "press", "move", "release", "wait", "heap", "screenoff",
+                                         "fill", "state"};
         bool allowed = false;
         for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) allowed |= !strcmp(cmd, ok[i]);
         if (!allowed) {
@@ -480,6 +481,61 @@ static void run(char *line)
                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
             return;
         }
+    }
+    if (!strcmp(cmd, "state")) {                   /* the game on screen, as text */
+        sudoku_ui_state_t st;
+        char board[82];
+        if (!sudoku_ui_state(&st, board)) {
+            reply("ERR state: no game on screen\n");
+            return;
+        }
+        if (s_cap) {                                /* over sound: what fits a message (140 bytes) */
+            reply("OK state s%d %s\n", st.solved, board);
+            return;
+        }
+        Serial.printf("STATE name=\"%s\" variant=%s size=%d solved=%d paused=%d filled=%d/%d time=%u "
+                      "mistakes=%u hints=%u%s%s\n", st.name, st.variant, st.size, st.solved, st.paused, st.filled,
+                      st.cells, (unsigned)st.seconds, st.mistakes, st.hints, st.practice ? " practice=1" : "",
+                      st.attack ? " attack=1" : "");
+        Serial.printf("BOARD %s\n", board);
+        reply("OK state\n");
+        return;
+    }
+    if (!strcmp(cmd, "fill")) {                    /* fill <cell> <digit> ...: any separators, e.g. (12,5),(13,7) */
+        uint8_t cells[81], digits[81];
+        int nums = 0, np = 0, v = -1;
+        bool bad = false;
+        for (const char *p = line + 4;; p++) {      /* the numbers after "fill", in pairs */
+            if (*p >= '0' && *p <= '9') {
+                v = (v < 0 ? 0 : v * 10) + (*p - '0');
+                if (v > 255) bad = true;
+                continue;
+            }
+            if (v >= 0) {
+                if (nums % 2 == 0) {
+                    if (np >= 81) bad = true;
+                    else cells[np] = (uint8_t)v;
+                } else if (np < 81) {
+                    digits[np++] = (uint8_t)v;
+                }
+                nums++;
+                v = -1;
+            }
+            if (!*p) break;
+        }
+        if (bad || nums == 0 || nums % 2) {
+            reply("ERR fill: pairs of <cell 0-80> <digit>, e.g. fill 12:5 13:7 (at most 81)\n");
+            return;
+        }
+        char why[64];
+        int placed = sudoku_ui_fill(cells, digits, np, why, sizeof(why));
+        if (placed < 0) {
+            reply("ERR fill: %s\n", why);
+            return;
+        }
+        pump(SETTLE_MS);                            /* the board redraws (and the solve begins, if done) */
+        reply("OK fill %d\n", placed);
+        return;
     }
     if (!strcmp(cmd, "baud") && n >= 1 && a[0] >= 9600) {
         Serial.printf("OK baud %d\n", a[0]);

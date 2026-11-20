@@ -52,6 +52,8 @@ Coordinates are screen pixels, 0–719, from the top left. Values outside are cl
 | `move <x> <y>` | Moves it, still pressed. |
 | `release [<x> <y>]` | Lifts it, at that point (default 0 0). |
 | `wait <ms>` | Lets the UI run for `ms`: animations, timers, and database results arriving. |
+| `state` | The game on screen: `STATE name="<name>" variant=<v> size=<9\|6> solved=<0\|1> paused=<0\|1> filled=<n>/<cells> time=<s> mistakes=<n> hints=<n>` (plus ` practice=1` / ` attack=1`), then `BOARD <81 characters>` (row by row: `1`-`9` given, `a`-`i` entered, `.` empty, `#` not on the board), then `OK state`; or `ERR state: no game on screen`. Over Gibberlink the answer is one line: `OK state s<solved> <81 characters>`. |
+| `fill <cell> <digit> ...` | Enters digits in the game on screen as if typed: cells 0–80 row by row, digits 1–9; the numbers after `fill` are taken in pairs, any separators (`fill 12:5 13:7`, `fill (12,5),(13,7)`). All or nothing. Answers `OK fill <entered>` or `ERR fill: <why>`. Up to 81 pairs (lines up to 511 characters). |
 | `screenoff` | Turns the screen off as its timeout does: black, with the lock screen under it if that's on. The next tap wakes it. |
 | `shot` | A screenshot (below). |
 

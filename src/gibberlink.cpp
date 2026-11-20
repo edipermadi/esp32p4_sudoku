@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -214,6 +215,31 @@ bool gibberlink_enabled(void)
     return s_on;
 }
 
+/* CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF): the optional "*XXXX" check */
+static uint16_t crc16(const char *p, size_t n)
+{
+    uint16_t c = 0xFFFF;
+    while (n--) {
+        c ^= (uint16_t)((uint8_t)*p++ << 8);
+        for (int k = 0; k < 8; k++) c = (uint16_t)(c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1);
+    }
+    return c;
+}
+
+/* "tap 1 2*ABCD": true if it ends in a check (removed); *ok: it matched */
+static bool take_check(char *msg, bool *ok)
+{
+    size_t l = strlen(msg);
+    if (l < 6 || msg[l - 5] != '*') return false;
+    for (size_t i = l - 4; i < l; i++) {
+        if (!isxdigit((unsigned char)msg[i])) return false;
+    }
+    unsigned want = (unsigned)strtoul(msg + l - 4, NULL, 16);
+    msg[l - 5] = 0;
+    *ok = crc16(msg, l - 5) == want;
+    return true;
+}
+
 void gibberlink_poll(void)
 {
     icon_update();
@@ -223,9 +249,18 @@ void gibberlink_poll(void)
     s_lit_until = lv_tick_get() + LIT_MS;
     icon_update();
     lv_refr_now(NULL);
-    char out[MSG_MAX - 4];
-    devctl_run_line(msg, out, sizeof(out));
+    char out[MSG_MAX - 9];                              /* (room for "P4$" and a "*XXXX") */
+    bool crc_ok = true, checked = take_check(msg, &crc_ok);
+    if (!crc_ok) {                                      /* garbled on the way: not run */
+        strlcpy(out, "ERR checksum", sizeof(out));
+    } else {
+        devctl_run_line(msg, out, sizeof(out));
+    }
     printf("gibberlink: %s -> %s\n", msg, out);
-    snprintf(s_reply, sizeof(s_reply), REPLY_ID "$%s", out);
+    if (checked) {                                      /* asked with a check: answered with one */
+        snprintf(s_reply, sizeof(s_reply), REPLY_ID "$%s*%04X", out, crc16(out, strlen(out)));
+    } else {
+        snprintf(s_reply, sizeof(s_reply), REPLY_ID "$%s", out);
+    }
     s_reply_ready = true;
 }

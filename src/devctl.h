@@ -13,6 +13,14 @@
  *   press <x> <y> / move <x> <y> / release    by hand
  *   wait <ms>                 let the UI run (animations, the database)
  *   screenoff                 turn the screen off as its timeout does (the next tap wakes it)
+ *   state                     the game on screen: "STATE name=\"...\" variant=... size=9 solved=0
+ *                             paused=0 filled=36/81 time=12 mistakes=0 hints=0", "BOARD <81 chars>"
+ *                             (row by row: 1-9 given, a-i entered, . empty, # off the board);
+ *                             "ERR state: no game on screen"
+ *   fill <cell> <digit> ...   digits into the game on screen, as if typed (cells 0..80 row by
+ *                             row; the numbers after "fill" in pairs, any separators:
+ *                             "fill 12:5 13:7", "fill (12,5),(13,7)"); all or nothing
+ *                             -> "OK fill <entered>" or "ERR fill: <why>"
  *   heap [1]                  -> "HEAP internal <free>, largest <n>, ...; dma ...; psram ..." (1: per region too)
  *   shot                      the screen, as lines (below)
  *
@@ -46,7 +54,8 @@ extern "C" {
 void devctl_poll(void);
 
 /* Runs one command line from elsewhere (gibberlink.h: commands as sound), in the
- * LVGL task: touches, wait (at most 10 s), ping, heap (short), screenoff; not
+ * LVGL task: touches, wait (at most 10 s), fill, state (one line: "OK state s<0|1>
+ * <board>"), ping, heap (short), screenoff; not
  * shot, files, baud or bench. The answer ("OK ..." / "ERR ...", one line) goes
  * into out, not to Serial. true: OK. */
 bool devctl_run_line(const char *line, char *out, size_t n);

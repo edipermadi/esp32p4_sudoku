@@ -9556,6 +9556,76 @@ static void saver_sleep(bool lock_now)
     bsp_display_brightness_set(0);
 }
 
+int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why, size_t why_n)
+{
+    if (lv_screen_active() != scr_game || !g_geo) {
+        snprintf(why, why_n, "no game on screen");
+        return -1;
+    }
+    if (g_solved || g_paused) {
+        snprintf(why, why_n, g_solved ? "already solved" : "paused");
+        return -1;
+    }
+    for (int k = 0; k < n; k++) {                   /* all of them first */
+        int i = cells[k], d = digits[k];
+        if (i > 80 || !g_geo->used[i]) {
+            snprintf(why, why_n, "cell %d isn't on the board", i);
+            return -1;
+        }
+        if (g_given[i]) {
+            snprintf(why, why_n, "cell %d is a given", i);
+            return -1;
+        }
+        if (d < 1 || d > g_geo->n) {
+            snprintf(why, why_n, "digit %d for cell %d: 1..%d", d, i, g_geo->n);
+            return -1;
+        }
+    }
+    bool notes = g_notes_mode;
+    g_notes_mode = false;                           /* digits, not notes */
+    int placed = 0;
+    for (int k = 0; k < n && !g_solved; k++) {
+        if (g_b.val[cells[k]] == digits[k]) continue;   /* (a second tap would clear it) */
+        g_sel = cells[k];
+        enter_digit(digits[k]);                     /* as from the pad */
+        placed++;
+    }
+    g_notes_mode = notes;
+    if (!g_solved) {
+        g_sel = -1;
+        refresh_board();
+    }
+    why[0] = 0;
+    return placed;
+}
+
+bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82])
+{
+    if (lv_screen_active() != scr_game || !g_geo) return false;
+    memset(st, 0, sizeof(*st));
+    if (g_practice >= 0) snprintf(st->name, sizeof(st->name), "Learn practice");
+    else if (g_id != STORE_NO_GAME) puzzle_name(g_id, st->name, sizeof(st->name));
+    st->variant = g_var >= 0 && g_var < VAR_COUNT ? VARIANT_NAMES[g_var] : "?";
+    st->size = g_geo->n;
+    st->cells = g_geo->ncells;
+    for (int i = 0; i < 81; i++) {
+        int v = g_b.val[i];
+        if (!g_geo->used[i]) board[i] = '#';
+        else if (!v) board[i] = '.';
+        else board[i] = g_given[i] ? (char)('0' + v) : (char)('a' + v - 1);
+        if (g_geo->used[i] && v) st->filled++;
+    }
+    board[81] = 0;
+    st->solved = g_solved;
+    st->paused = g_paused;
+    st->practice = g_practice >= 0;
+    st->attack = g_attack;
+    st->seconds = (g_elapsed_ms + 500) / 1000;
+    st->mistakes = g_mistakes;
+    st->hints = g_hints;
+    return true;
+}
+
 void sudoku_ui_screen_off(void)
 {
     if (!s_saver) saver_sleep(false);

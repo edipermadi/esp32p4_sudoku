@@ -13,6 +13,12 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     press X Y | move X Y | release [X Y]
     wait MS                 let the UI run
     screenoff               turn the screen off as its timeout does (the next tap wakes it)
+    state                   the game on screen as text: a STATE line (name, variant,
+                            solved, time, mistakes ...) and a BOARD line, 81 characters
+                            row by row: 1-9 given, a-i entered (a = 1), . empty, # off the board
+    fill CELL:DIGIT ...     enter digits in the game shown, as if typed (cells 0-80, row by
+                            row; any separators: "fill 12:5 13:7" or "fill (12,5), (13,7)");
+                            all or nothing: a given, a cell off the board or no game -> ERR
     heap [1]                free memory (internal, DMA, PSRAM); 1: per heap region too
     bench [N]               redraw the whole screen N times (default 30), print the time per frame
     shot FILE.png [--blur X1,Y1,X2,Y2 ...]
@@ -352,6 +358,23 @@ def run(board, words):
                 break
             if line.startswith("BENCH"):
                 print(line)
+    elif cmd == "state":
+        board.ser.write(b"state\n")
+        end = time.time() + 10
+        while time.time() < end:
+            line = board.readline(5)
+            if line is None:
+                break
+            if line.startswith("ERR"):
+                sys.exit(line)
+            if line.startswith("OK state"):
+                break
+            if line.startswith(("STATE", "BOARD")):
+                print(line)
+    elif cmd == "fill":
+        board.ser.write((" ".join(words) + "\n").encode())
+        line = board.wait_for("OK fill", 30, fail="ERR")
+        print("filled %s cell%s" % (line.split()[2], "" if line.split()[2] == "1" else "s"))
     elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "ping", "screenoff"):
         timeout = 20 + (int(words[1]) / 1000 if cmd == "wait" and len(words) > 1 else 0)
         board.command(" ".join(words), timeout=timeout)
