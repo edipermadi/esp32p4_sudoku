@@ -47,6 +47,10 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 `make -C tests golden` prints the golden hashes: after a deliberate change to the generator, pin the new ones in `test_determinism` (and know that every board's daily puzzles change with the firmware). `./tests/sudoku_tests hints` runs only the tests whose name contains "hints". Code that touches LVGL or ESP-IDF (the screens, `sudoku.db`) isn't covered: that is still checked on the board, with devctl.
 
+## The UI files
+
+The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `sudoku_ui.c` for start-up and the public functions. A function or variable stays `static` in its file unless another file uses it; then it is declared once in `src/ui_internal.h` (a prototype or an `extern`) and defined, without `static`, in the file that owns it. Macros and types are all in `ui_internal.h`. When a new screen needs something from another file, move its declaration there rather than copying it.
+
 ## Internal RAM
 
 The P4's internal RAM (768 KB) is the tight resource; PSRAM (32 MB) is plenty. Some things must have one contiguous block of internal RAM: the hardware H.264 encoder for MP4 export (~52 KB), the microSD card's and the Wi-Fi link's DMA buffers. `setup()` calls `heap_caps_malloc_extmem_enable(4)`, so every `malloc()` of 4 bytes or more goes to PSRAM; code that needs internal RAM asks for it with `heap_caps_malloc(..., MALLOC_CAP_INTERNAL / MALLOC_CAP_DMA)`. With a higher limit (16 before 2026-11-20), LVGL's thousands of tiny allocations stayed internal and cut it into pieces: 99 KB free but no block over 35 KB, and MP4 export failed with "No memory for reference frame". Check with `heap 1` over [devctl](devctl.md) (the main region's `alloc_blocks` and `largest_free_block`): about 225 KB free and a 143 KB largest block at the Home screen is normal. Big buffers of your own go to PSRAM (`MALLOC_CAP_SPIRAM`), and avoid rebuilding every screen at once (`apply_theme`) as a reaction to data changes: two copies of all screens exist for a moment.
@@ -55,7 +59,21 @@ The P4's internal RAM (768 KB) is the tight resource; PSRAM (32 MB) is plenty. S
 
 ```
 esp32p4_sudoku.ino      setup/loop
-src/sudoku_ui.c         home, list, statistics, settings and game screens
+src/sudoku_ui.c         the UI's start-up and public functions (sudoku_ui.h), theme, notices, lock screen, screen saver
+src/ui_internal.h       what the UI files share: includes, macros, types, and the functions and variables used by more than one
+src/ui_common.c         palette, widgets and helpers, the generated-puzzle cache, context menus
+src/ui_game.c           the game: rules check, saving, the board, confetti, input, building its screen
+src/ui_hints.c          hints and the game screen tour
+src/ui_game_tools.c     time attack, the rules card, Share (QR code), Send by sound, save to a collection
+src/ui_replay.c         replay, screenshots, mistake insights, MP4 export
+src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle
+src/ui_list.c           the Puzzles screen
+src/ui_home.c           Home: the week, Continue and unfinished games, the menu
+src/ui_stats.c          Statistics and the progress chart
+src/ui_settings.c       Settings, firmware update from the card, microSD format, factory reset, power off, USB drive
+src/ui_history.c        History and Gameplays
+src/ui_trophies.c       Trophies: achievements, leaderboards, records
+src/ui_players.c        the name dialog, Players, avatars
 src/devctl.cpp          serial control: screenshots and simulated touches (tools/devctl.py)
 src/qrcode/             Project Nayuki's QR Code generator (MIT), for Share
 src/store.cpp           RAM copy of statistics, saved game and settings; reads the old NVS keys once
