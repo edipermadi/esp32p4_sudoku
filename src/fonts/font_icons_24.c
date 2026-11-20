@@ -5,13 +5,13 @@
  * "\xEF\x81\xB3"), info-circle (U+F05A, "\xEF\x81\x9A"), trophy (U+F091,
  * "\xEF\x82\x91"), lock (U+F023, "\xEF\x80\xA3"), star (U+F005,
  * "\xEF\x80\x85"), chart-line (U+F201, "\xEF\x88\x81"), lightbulb (U+F0EB,
- * "\xEF\x83\xAB"), qrcode (U+F029, "\xEF\x80\xA9") and camera (U+F030,
- * "\xEF\x80\xB0"), from the
+ * "\xEF\x83\xAB"), qrcode (U+F029, "\xEF\x80\xA9"), camera (U+F030,
+ * "\xEF\x80\xB0") and ellipsis-v (U+F142, "\xEF\x85\x82"), from the
  * FontAwesome file LVGL's own symbols are built from.
  * Edited after generation: line height and baseline copied from
  * lv_font_montserrat_24, and .fallback set to it, so one label can mix an
  * icon with text laid out like the built-in LV_SYMBOL_* ones.
- * Opts: --no-compress --no-prefilter --bpp 4 --size 24 --font /home/edi/Arduino/libraries/lvgl/scripts/generators/built_in_font/FontAwesome5-Solid+Brands+Regular.woff -r 0xF007,0xF073,0xF05A,0xF091,0xF023,0xF005,0xF201,0xF0EB,0xF029,0xF030 --format lvgl --lv-include lvgl.h -o font_icons_24.c
+ * Opts: --no-compress --no-prefilter --bpp 4 --size 24 --font /home/edi/Arduino/libraries/lvgl/scripts/generators/built_in_font/FontAwesome5-Solid+Brands+Regular.woff -r 0xF007,0xF073,0xF05A,0xF091,0xF023,0xF005,0xF201,0xF0EB,0xF029,0xF030,0xF142 --format lvgl --lv-include lvgl.h -o font_icons_24.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
@@ -354,6 +354,19 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
     0xf8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4e, 0xff,
     0xfb, 0x0, 0x0, 0x0,
 
+    /* U+F142 "" */
+    0x0, 0x69, 0x60, 0x1, 0xdf, 0xff, 0xd1, 0x9f,
+    0xff, 0xff, 0x9d, 0xff, 0xff, 0xfd, 0xbf, 0xff,
+    0xff, 0xb5, 0xff, 0xff, 0xf5, 0x6, 0xef, 0xe6,
+    0x0, 0x0, 0x10, 0x0, 0x0, 0x68, 0x60, 0x1,
+    0xdf, 0xff, 0xd1, 0x9f, 0xff, 0xff, 0x9d, 0xff,
+    0xff, 0xfc, 0xbf, 0xff, 0xff, 0xb5, 0xff, 0xff,
+    0xf5, 0x6, 0xff, 0xf6, 0x0, 0x0, 0x10, 0x0,
+    0x0, 0x1, 0x0, 0x0, 0x6e, 0xfe, 0x60, 0x5f,
+    0xff, 0xff, 0x5b, 0xff, 0xff, 0xfb, 0xdf, 0xff,
+    0xff, 0xd9, 0xff, 0xff, 0xf9, 0x1d, 0xff, 0xfd,
+    0x10, 0x6, 0x96, 0x0,
+
     /* U+F201 "" */
     0xdf, 0xd0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
     0x0, 0x0, 0x0, 0x0, 0xff, 0xf0, 0x0, 0x0,
@@ -400,7 +413,8 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 1625, .adv_w = 336, .box_w = 21, .box_h = 24, .ofs_x = 0, .ofs_y = -3},
     {.bitmap_index = 1877, .adv_w = 432, .box_w = 27, .box_h = 24, .ofs_x = 0, .ofs_y = -3},
     {.bitmap_index = 2201, .adv_w = 264, .box_w = 17, .box_h = 24, .ofs_x = 0, .ofs_y = -3},
-    {.bitmap_index = 2405, .adv_w = 384, .box_w = 24, .box_h = 18, .ofs_x = 0, .ofs_y = 0}
+    {.bitmap_index = 2405, .adv_w = 144, .box_w = 7, .box_h = 24, .ofs_x = 1, .ofs_y = -3},
+    {.bitmap_index = 2489, .adv_w = 384, .box_w = 24, .box_h = 18, .ofs_x = 0, .ofs_y = 0}
 };
 
 /*---------------------
@@ -409,7 +423,7 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
 
 static const uint16_t unicode_list_0[] = {
     0x0, 0x2, 0x1e, 0x24, 0x2b, 0x55, 0x6e, 0x8c,
-    0xe6, 0x1fc
+    0xe6, 0x13d, 0x1fc
 };
 
 /*Collect the unicode lists and glyph_id offsets*/
@@ -417,7 +431,7 @@ static const lv_font_fmt_txt_cmap_t cmaps[] =
 {
     {
         .range_start = 61445, .range_length = 509, .glyph_id_start = 1,
-        .unicode_list = unicode_list_0, .glyph_id_ofs_list = NULL, .list_length = 10, .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
+        .unicode_list = unicode_list_0, .glyph_id_ofs_list = NULL, .list_length = 11, .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
     }
 };
 

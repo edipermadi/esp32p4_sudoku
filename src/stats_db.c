@@ -43,7 +43,7 @@ typedef enum {
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
-    CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
+    CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_PLAYER_AVATAR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
     CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM, CMD_BM_GET, CMD_BM_SET, CMD_BM_LIST, CMD_SEEN_GET, CMD_SEEN_SET,
     CMD_ATTACK, CMD_ATTACK_BOARD, CMD_SAVED_LIST, CMD_SAVED_ADD, CMD_SAVED_REMOVE, CMD_SOLVED_LIST, CMD_SAVED_EXPORT,
     CMD_COLL_DELETE,
@@ -200,13 +200,14 @@ static bool exec(const char *sql)
     return true;
 }
 
-/* table layouts (user_version 10), shared by SCHEMA and the upgrade below */
+/* table layouts (user_version 11), shared by SCHEMA and the upgrade below */
 #define T_PLAYERS \
     "players("                                                                  \
     "  id INTEGER PRIMARY KEY,"                                                 \
     "  name TEXT NOT NULL UNIQUE COLLATE NOCASE,"                               \
     "  created_at INTEGER,"                 /* Unix time UTC; NULL = clock not set */ \
-    "  color INTEGER)"                      /* 0..7; NULL = by id (PLAYER_COLOR) */
+    "  color INTEGER,"                      /* 0..7; NULL = by id (PLAYER_COLOR) */      \
+    "  avatar INTEGER)"                     /* 1..AVATAR_COUNT (avatars.h); NULL = none */
 #define T_SOLVES \
     "solves("                                                                   \
     "  id INTEGER PRIMARY KEY,"                                                 \
@@ -328,7 +329,7 @@ static const char SCHEMA_POST[] =
     "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
     "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
     "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
-    "PRAGMA user_version = 10;";
+    "PRAGMA user_version = 11;";
 
 /* MIN() of SQL is NULL if either side is: keep the known value then */
 #define FEWEST_MERGED "COALESCE(MIN(fewest_mistakes, excluded.fewest_mistakes), fewest_mistakes, excluded.fewest_mistakes)"
@@ -681,6 +682,7 @@ static bool upgrade_schema(void)
     if (!has_column("generated", "source")) ok &= exec("ALTER TABLE generated ADD COLUMN source TEXT");
     if (!has_column("generated", "number")) ok &= exec("ALTER TABLE generated ADD COLUMN number INTEGER");
     if (!has_column("players", "color")) ok &= exec("ALTER TABLE players ADD COLUMN color INTEGER");
+    if (!has_column("players", "avatar")) ok &= exec("ALTER TABLE players ADD COLUMN avatar INTEGER");
     if (has_column("saved_game", "player_id") && !has_column("saved_game", "seq")) {
         /* one game per player -> several: the key becomes (player, puzzle) */
         ok &= exec("BEGIN");
@@ -874,7 +876,8 @@ static void do_list(void)
     if (s_db && sqlite3_prepare_v2(s_db,
             "SELECT p.id, p.name, " PLAYER_COLOR("p") ","
             "  (SELECT COUNT(*) FROM puzzle_stats s WHERE s.player_id = p.id),"
-            "  (SELECT COUNT(*) FROM solves v WHERE v.player_id = p.id)"
+            "  (SELECT COUNT(*) FROM solves v WHERE v.player_id = p.id),"
+            "  COALESCE(p.avatar, 0)"
             " FROM players p ORDER BY p.id", -1, &st, NULL) == SQLITE_OK) {
         while (n < STATS_MAX_PLAYERS && sqlite3_step(st) == SQLITE_ROW) {
             stats_player_t *p = &list[n++];
@@ -883,6 +886,7 @@ static void do_list(void)
             p->color = (uint8_t)sqlite3_column_int(st, 2);
             p->solved = sqlite3_column_int(st, 3);
             p->solves = sqlite3_column_int(st, 4);
+            p->avatar = (uint16_t)sqlite3_column_int(st, 5);
         }
         sqlite3_finalize(st);
     }
@@ -3273,6 +3277,19 @@ static void worker(void *arg)
                 do_list();
             }
             break;
+        case CMD_PLAYER_AVATAR:
+            if (s_db) {
+                sqlite3_stmt *st;
+                if (sqlite3_prepare_v2(s_db, "UPDATE players SET avatar = ?1 WHERE id = ?2", -1, &st, NULL) == SQLITE_OK) {
+                    if (c.level) sqlite3_bind_int(st, 1, c.level);
+                    else sqlite3_bind_null(st, 1);
+                    sqlite3_bind_int(st, 2, c.ival);
+                    step_done(st, "player avatar");
+                    sqlite3_finalize(st);
+                }
+                do_list();
+            }
+            break;
         case CMD_SUSPEND:
             flush_game();
             db_close();
@@ -3840,6 +3857,12 @@ bool stats_db_take_week(stats_week_t *out)
 void stats_db_set_player_color(int32_t id, int color)
 {
     cmd_t c = {.type = CMD_PLAYER_COLOR, .ival = id, .level = color % STATS_PLAYER_COLORS};
+    send(&c);
+}
+
+void stats_db_set_player_avatar(int32_t id, int avatar)
+{
+    cmd_t c = {.type = CMD_PLAYER_AVATAR, .ival = id, .level = avatar};
     send(&c);
 }
 

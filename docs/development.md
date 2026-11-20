@@ -56,9 +56,12 @@ src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Anti-Knight, Even-Odd, Consecutive, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
-src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code and camera icons at 24/20 px (lv_font_conv)
+src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code, camera and vertical-dots (menu) icons at 24/20 px (lv_font_conv)
+src/avatars.c           the players' avatars: Noto Color Emoji as 36 px RGB565A8 images (generated, ~7 MB of flash)
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
+tools/gen_avatars.py    regenerates src/avatars.c / .h from Noto Color Emoji (Pillow with raqm)
+tools/avatars_order.txt the avatars' order (sudoku.db keeps their numbers: only add at the end)
 tools/devctl.py         screenshots (PNG) and touches over the serial port
 tools/make_flasher_site.sh  the GitHub Pages site: web flasher + docs
 tools/make_docs_site.py README.md and docs/*.md as HTML pages (for the site)
@@ -67,3 +70,5 @@ tools/opensudoku/       the downloaded .opensudoku collections
 ```
 
 To change the embedded puzzles, edit `COLLECTIONS` in `tools/gen_puzzles.py` and run `python3 tools/gen_puzzles.py`.
+
+To regenerate the avatars (a newer Noto Color Emoji, or a different size), run `python3 tools/gen_avatars.py --keep tools/avatars_order.txt`: it needs Pillow with raqm, `NotoColorEmoji.ttf` and Unicode's `emoji-test.txt` (Debian: `fonts-noto-color-emoji`, `unicode-data`), and `--keep` keeps the numbers players already have (new emoji go at the end). The first build after that compiles the 23 MB `src/avatars.c` (a few minutes); later builds reuse it.

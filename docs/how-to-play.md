@@ -21,22 +21,22 @@
 | Back to the home screen         | **Home** (top left of the list, statistics, players or settings) |
 | Solve times as a chart          | **Statistics → Chart** (top right); pick a level on the left |
 | Achievements, daily leaderboard | **Trophies** on the home screen                  |
-| Make a new puzzle               | **Puzzles → New puzzle**, pick a variant, then a level |
+| Make a new puzzle               | **Puzzles → ⋮ → New puzzle**, pick a variant, then a level |
 | Paint a cell / Killer cage sums | Press and hold the cell                          |
 | Hide the clock                  | **Settings → Show timer**                        |
 | Lock the screen on its timeout  | **Settings → Display → Lock screen** (Swipe or PIN) |
 | Lock the screen now             | The lock button on the home screen (top right)   |
-| Type in a puzzle from a book    | **Puzzles → Enter**, then **Check & play**        |
+| Type in a puzzle from a book    | **Puzzles → ⋮ → Enter puzzle**, then **Check & play** |
 | A dim clock when the screen is off | **Settings → Display → Screen-saver clock**   |
 | Update the firmware             | `update.bin` on the card, **Settings → Data → Firmware update** |
 | A variant's rules               | The light bulb button in the game (next to Hint) |
 | Accent colour                   | **Settings → Accent colour**                     |
 | A player's colour               | Tap the dot by their name on **Players**         |
-| Practise a technique            | **Puzzles → Learn**                              |
+| Practise a technique            | **Puzzles → ⋮ → Learn**                          |
 | Bigger digits on the board      | **Settings → Display → Digit size** → Large      |
 | This week against last week     | Tap the "puzzles solved" line on the home screen  |
 | Ten minutes of Easy puzzles     | **Time attack** on the home screen, then **Start** |
-| Bookmark a puzzle               | The star next to **Share** in the game; **Puzzles → Starred** lists them |
+| Bookmark a puzzle               | The star next to **Share** in the game; the star in **Puzzles**' title row lists them |
 | Hints that only point the way   | **Settings → Game → Hints** → Nudge only          |
 | See the game screen tour again  | **Settings → Game → Game screen tour → Show again** |
 | Number pad on the left          | **Settings → Game → Left-handed**                |
@@ -47,7 +47,8 @@
 | Share today's daily result       | Solve the daily puzzle, then the QR button in the Solved dialog |
 | Add puzzle files                | Copy them to `puzzles/` on the card, then **Settings → Data → Import puzzles** |
 | Export to a spreadsheet         | **Settings → Export to CSV**, then **USB drive** |
-| Switch or add players          | **Players** on the home screen                   |
+| Switch or add players          | **Players** on the home screen; ⋮ to add, rename or delete |
+| Pick an avatar                 | **Players → ⋮ → Avatar**                         |
 | See who played on a day        | **History** on the home screen, tap the day      |
 | Watch a recorded game again     | **Gameplays** on the home screen, tap a game     |
 | See solve times and mistakes    | **Statistics** on the home screen; pick a level on the left |

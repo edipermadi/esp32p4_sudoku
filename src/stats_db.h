@@ -239,6 +239,7 @@ typedef struct {
     uint8_t color;                       /* the player's colour, 0..STATS_PLAYER_COLORS-1 */
     uint16_t solved;                     /* puzzles solved */
     uint32_t solves;                     /* solves logged */
+    uint16_t avatar;                     /* 1..AVATAR_COUNT (avatars.h); 0 = none */
 } stats_player_t;
 
 typedef struct {
@@ -252,6 +253,8 @@ typedef struct {
  * gets the next one round. */
 #define STATS_PLAYER_COLORS 8
 void stats_db_set_player_color(int32_t id, int color);
+/* ... and an avatar each, 0 = none (1..AVATAR_COUNT, avatars.h) */
+void stats_db_set_player_avatar(int32_t id, int avatar);
 /* Asks for the player list (stats_db_take_players()). */
 void stats_db_list_players(void);
 /* Adds a player and switches to them; renames one; switches to one. Results
