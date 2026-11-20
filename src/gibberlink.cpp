@@ -29,7 +29,7 @@
 #define SPF        512                  /* samples per ggwave frame (21.3 ms at 24 kHz) */
 #define MSG_MAX    (GGWave::kMaxLengthVariable + 1)
 #define REPLY_ID   "P4"                 /* our id in Gibberlink's "ID$message" */
-#define TX_VOLUME  30                   /* ggwave's 0..100 */
+#define TX_VOLUME  80                   /* ggwave's 0..100 (30 was too quiet: a laptop a metre away missed 1 reply in 4) */
 #define ECHO_MS    400                  /* deaf for this long after a reply */
 #define LIT_MS     1500                 /* the icon stays lit after a command */
 
