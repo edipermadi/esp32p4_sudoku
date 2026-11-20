@@ -412,6 +412,10 @@ static bool u_reloading;                  /* card back / reset: waiting for sudo
 static bool u_reload_home;                /* ... then show Home (factory reset) */
 
 /* list screen */
+#define L_BTN_Y   72
+#define L_STRIP_Y (L_BTN_Y + 52 + 10)
+#define L_TAB_W   100                       /* Built-in | Saved, left of the collection row */
+#define L_STRIP_X (12 + 2 * L_TAB_W + 4 + 8)   /* the row's < arrow; the chips right of it */
 static lv_obj_t *l_total, *l_strip, *l_arrow_l, *l_arrow_r;
 #define L_COLLS (PUZZLE_COLLECTION_COUNT + STATS_MAX_IMPORTS + STATS_MAX_SAVED)   /* built-in, imported, saved */
 static lv_obj_t *l_coll_btn[L_COLLS], *l_coll_cnt[L_COLLS];
@@ -427,7 +431,8 @@ static int g_from_coll = -1;              /* the collection the game was opened 
 /* Puzzles' tabs: 0 the built-in collections, 1 the player's (imported and saved) */
 static int l_tab;
 static int l_tab_coll[2] = {0, -1};       /* the collection last shown in each tab */
-static lv_obj_t *l_tab_btn[2], *l_empty;
+static lv_obj_t *l_tab_btn[2], *l_empty, *l_export, *l_del;
+static lv_obj_t *l_list;                  /* the Saved tab: a collection's puzzles as rows */
 static lv_obj_t *l_name, *l_stats, *l_btnm;
 static int       l_coll;
 static char      l_labels[MAX_PER_COLL][4];
@@ -450,6 +455,8 @@ static lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the t
 static void show_list(void);
 static void open_puzzle(uint16_t id);
 static void list_fill_strip(void);
+static void list_fill_rows(int lc);
+static void list_reveal_coll(lv_anim_enable_t anim);
 static void refresh_list(void);
 static void nd_open_ex(const char *title, const char *current, int max_len, const char *ok_text,
                        void (*done)(const char *name));
@@ -5284,6 +5291,124 @@ static void list_btnm_draw_cb(lv_event_t *e)
     }
 }
 
+/* ---- the Saved tab's rows */
+static void list_row_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (i < 0 || i >= coll_size(l_coll)) return;
+    g_from_coll = l_coll;
+    open_puzzle(coll_puzzle(l_coll, i));
+}
+
+/* a saved collection's puzzle, taken out (Save on the game screen puts it back) */
+static void list_row_del_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    int k = l_coll >= PUZZLE_COLLECTION_COUNT ? coll_saved_index(l_coll) : -1;
+    if (k < 0 || i < 0 || i >= coll_size(l_coll)) return;
+    char name[48], msg[128], cname[STATS_IMPORT_NAME];
+    uint16_t id = coll_puzzle(l_coll, i);
+    puzzle_name(id, name, sizeof(name));
+    snprintf(cname, sizeof(cname), "%s", s_saved[k].name);
+    bool last = s_saved[k].count == 1;
+    if (!stats_db_saved_remove(s_saved[k].id, id)) {
+        sudoku_ui_notice("Couldn't change sudoku.db.", 2500);
+        return;
+    }
+    snprintf(msg, sizeof(msg), last ? "%s taken out of %s: it was the last, so the collection is gone."
+                                    : "%s taken out of %s.", name, cname);
+    sv_changed();
+    list_reveal_coll(LV_ANIM_OFF);
+    sudoku_ui_notice(msg, 3000);
+}
+
+static void list_fill_rows(int lc)
+{
+    lv_obj_clean(l_list);
+    lv_obj_scroll_to_y(l_list, 0, LV_ANIM_OFF);
+    bool saved = lc >= PUZZLE_COLLECTION_COUNT && coll_saved_index(lc) >= 0;
+    for (int i = 0; i < coll_size(lc) && i < 128; i++) {
+        uint16_t id = coll_puzzle(lc, i);
+        lv_obj_t *r = lv_obj_create(l_list);
+        lv_obj_set_size(r, LV_PCT(100), 68);
+        lv_obj_set_style_bg_color(r, C_CARD, 0);
+        lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
+        lv_obj_set_style_border_width(r, 0, 0);
+        lv_obj_set_style_radius(r, 10, 0);
+        lv_obj_set_style_pad_hor(r, 14, 0);
+        lv_obj_set_style_pad_ver(r, 0, 0);
+        lv_obj_set_scrollable(r, false);
+        lv_obj_add_event_cb(r, list_row_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_t *num = make_label(r, &lv_font_montserrat_16, C_MUTED);
+        lv_label_set_text_fmt(num, "%d", i + 1);
+        lv_obj_set_width(num, 36);
+        lv_obj_align(num, LV_ALIGN_LEFT_MID, 0, 0);
+        char name[48], sub[96];
+        puzzle_name(id, name, sizeof(name));
+        lv_obj_t *nm = make_label(r, &lv_font_montserrat_20, C_TEXT);
+        lv_label_set_text(nm, name);
+        lv_obj_set_width(nm, saved ? 500 : 560);
+        lv_label_set_long_mode(nm, LV_LABEL_LONG_MODE_DOTS);
+        lv_obj_align(nm, LV_ALIGN_LEFT_MID, 40, -12);
+        int v = VAR_CLASSIC, lv = 0;
+        gen_lookup(id, NULL, &v, &lv);
+        bool solved = l_solved_bits[i >> 3] >> (i & 7) & 1, active = game_in_progress(id);
+        snprintf(sub, sizeof(sub), "%s %s   -   %s", v >= 0 && v < VAR_COUNT ? VARIANT_NAMES[v] : "",
+                 lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "",
+                 solved ? "Solved" : active ? "In progress" : "Not solved yet");
+        lv_obj_t *sl = make_label(r, &lv_font_montserrat_14, solved ? C_GREEN : active ? C_ORANGE : C_MUTED);
+        lv_label_set_text(sl, sub);
+        lv_obj_align(sl, LV_ALIGN_LEFT_MID, 40, 14);
+        if (saved) {
+            lv_obj_t *d = make_btn(r, 0, 0, 52, 44, LV_SYMBOL_TRASH, &lv_font_montserrat_20, list_row_del_cb,
+                                   (void *)(intptr_t)i);   /* take it out of the collection */
+            lv_obj_set_style_bg_color(d, C_CARD2, 0);
+            lv_obj_set_style_text_color(lv_obj_get_child(d, 0), C_RED, 0);
+            lv_obj_align(d, LV_ALIGN_RIGHT_MID, 0, 0);
+        }
+    }
+}
+
+/* ---- deleting the collection shown (Saved tab) */
+static void list_del_confirm_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    if (l_coll < PUZZLE_COLLECTION_COUNT || l_coll >= coll_total()) return;
+    int k = coll_saved_index(l_coll);
+    char name[STATS_IMPORT_NAME], msg[96];
+    snprintf(name, sizeof(name), "%s", coll_name(l_coll));
+    bool ok = k >= 0 ? stats_db_saved_delete(s_saved[k].id) : stats_db_import_delete(name);
+    snprintf(msg, sizeof(msg), ok ? "%s deleted." : "Couldn't delete %s.", name);
+    imports_reload();
+    list_fill_strip();
+    l_coll = PUZZLE_COLLECTION_COUNT;               /* the Saved tab's first, if any */
+    l_tab_coll[1] = -1;
+    refresh_list();
+    list_reveal_coll(LV_ANIM_OFF);
+    update_header();                                /* (the game screen's Save icon) */
+    sudoku_ui_notice(msg, 2500);
+}
+
+static void list_del_cb(lv_event_t *e)
+{
+    if (l_coll < PUZZLE_COLLECTION_COUNT || l_coll >= coll_total()) return;
+    bool imported = coll_saved_index(l_coll) < 0;
+    int n = coll_size(l_coll);
+    char title[64], text[256];
+    snprintf(title, sizeof(title), "Delete %s?", coll_name(l_coll));
+    char what[48];
+    if (n == 1) snprintf(what, sizeof(what), "Its puzzle stays on the board: its");
+    else snprintf(what, sizeof(what), "Its %d puzzles stay on the board: their", n);
+    snprintf(text, sizeof(text), "The collection goes%s. %s solves, History and Gameplays are kept%s.",
+             imported ? " (its file in puzzles/ can be imported again)" : "", what,
+             imported ? "" : n == 1 ? ", and Save can put it in a collection again"
+                                    : ", and Save can put them in a collection again");
+    lv_obj_t *m = make_msgbox(title, text);
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, LV_SYMBOL_TRASH "  Delete", list_del_confirm_cb, true);
+    lv_obj_set_style_bg_color(lv_obj_get_child(lv_msgbox_get_footer(m), -1), C_RED, 0);
+}
+
 static void refresh_list(void)
 {
     games_refresh();
@@ -5303,6 +5428,14 @@ static void refresh_list(void)
     lv_obj_set_hidden(l_name, none);
     lv_obj_set_hidden(l_stats, none);
     if (!none) l_tab_coll[l_tab] = l_coll;
+    bool exportable = !none && coll_saved_index(l_coll) >= 0 && l_coll >= PUZZLE_COLLECTION_COUNT;
+    bool listed = !none && l_tab == 1;              /* the Saved tab: rows, not numbers */
+    lv_obj_set_hidden(l_export, !exportable);       /* a saved collection: to the card, for Import puzzles */
+    lv_obj_set_hidden(l_del, !listed);              /* saved or imported: delete the collection */
+    lv_obj_align(l_export, LV_ALIGN_TOP_RIGHT, -12 - 52 - 8, L_STRIP_Y + 66);
+    lv_obj_align(l_stats, LV_ALIGN_TOP_RIGHT, -16 - (listed ? 52 + 8 : 0) - (exportable ? 130 + 8 : 0), L_STRIP_Y + 78);
+    lv_obj_set_hidden(l_btnm, none || listed);
+    lv_obj_set_hidden(l_list, !listed);
     const int lc = l_coll, lsize = coll_size(lc);
     uint16_t total = 0;
     for (int c = 0; c < coll_total(); c++) {
@@ -5336,6 +5469,7 @@ static void refresh_list(void)
     if (lc >= PUZZLE_COLLECTION_COUNT) {
         for (int i = 0; i < lsize && i < 128; i++) n += l_solved_bits[i >> 3] >> (i & 7) & 1;
     }
+    if (listed) list_fill_rows(lc);                 /* (after the counts: l_solved_bits is lc's) */
     lv_label_set_text_fmt(l_name, "%s%s", coll_name(lc),
                           lc >= PUZZLE_COLLECTION_COUNT && coll_saved_index(lc) < 0 ? "  (imported)" : "");
     if (n && best) {
@@ -5413,6 +5547,16 @@ static void coll_click_cb(lv_event_t *e)
     store_set_last_collection((uint8_t)l_coll);
     refresh_list();
     list_reveal_coll(LV_ANIM_ON);
+}
+
+/* Saved tab: the collection shown, written to the card (puzzles/<name>.sdx) */
+static void list_export_cb(lv_event_t *e)
+{
+    int k = l_coll >= PUZZLE_COLLECTION_COUNT ? coll_saved_index(l_coll) : -1;
+    if (k < 0) return;
+    char msg[96];
+    stats_db_saved_export(s_saved[k].id, msg, sizeof(msg));
+    sudoku_ui_notice(msg, 4000);
 }
 
 static void list_tab_cb(lv_event_t *e)
@@ -8582,10 +8726,6 @@ static lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name
 }
 
 /* the Puzzles screen, top down: title, New puzzle / Learn, collections, puzzles */
-#define L_BTN_Y   72
-#define L_STRIP_Y (L_BTN_Y + 52 + 10)
-#define L_TAB_W   100                       /* Built-in | Saved, left of the collection row */
-#define L_STRIP_X (12 + 2 * L_TAB_W + 4 + 8)   /* the row's < arrow; the chips right of it */
 #define L_GRID_Y  (L_STRIP_Y + 108)
 
 /* Puzzles > Starred: the player's bookmarks, newest first; a tap opens one */
@@ -8734,6 +8874,16 @@ static void build_list(void)
     lv_obj_set_pos(l_name, 16, L_STRIP_Y + 72);
     l_stats = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
     lv_obj_align(l_stats, LV_ALIGN_TOP_RIGHT, -16, L_STRIP_Y + 78);
+    l_export = make_btn(scr_list, 0, 0, 130, 40, LV_SYMBOL_UPLOAD "  Export", &lv_font_montserrat_16, list_export_cb,
+                        NULL);                      /* a saved collection to puzzles/<name>.sdx */
+    lv_obj_align(l_export, LV_ALIGN_TOP_RIGHT, -12 - 52 - 8, L_STRIP_Y + 66);
+    l_del = make_btn(scr_list, 0, 0, 52, 40, LV_SYMBOL_TRASH, &lv_font_montserrat_18, list_del_cb, NULL);
+    lv_obj_set_style_bg_color(l_del, C_CARD, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(l_del, 0), C_RED, 0);
+    lv_obj_align(l_del, LV_ALIGN_TOP_RIGHT, -12, L_STRIP_Y + 66);
+    lv_obj_set_hidden(l_del, true);
+    lv_obj_set_style_text_color(lv_obj_get_child(l_export, 0), C_ACCENT, 0);
+    lv_obj_set_hidden(l_export, true);
 
     l_btnm = lv_buttonmatrix_create(scr_list);
     lv_obj_set_pos(l_btnm, 12, L_GRID_Y);
@@ -8751,6 +8901,16 @@ static void build_list(void)
     lv_obj_set_send_draw_task_events(l_btnm, true);
     lv_obj_add_event_cb(l_btnm, list_btnm_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
     lv_obj_add_event_cb(l_btnm, btnm_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    /* the Saved tab: the collection's puzzles as rows (name, variant, level, solved) */
+    l_list = lv_obj_create(scr_list);
+    lv_obj_remove_style_all(l_list);
+    lv_obj_set_pos(l_list, 12, L_GRID_Y);
+    lv_obj_set_size(l_list, SCR_W - 24, SCR_W - L_GRID_Y - 24);
+    lv_obj_set_flex_flow(l_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(l_list, 6, 0);
+    lv_obj_set_scroll_dir(l_list, LV_DIR_VER);
+    lv_obj_set_hidden(l_list, true);
 
     /* the Saved tab with nothing in it */
     l_empty = make_label(scr_list, &lv_font_montserrat_20, C_MUTED);
@@ -9354,7 +9514,7 @@ static void build_settings(void)
     lv_obj_align(st_fw_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     fw_row_update();
 
-    r = settings_row(col, "Import puzzles", "From puzzles/ on the card: .opensudoku, .sdm");
+    r = settings_row(col, "Import puzzles", "From puzzles/ on the card: .opensudoku, .sdm, .sdx");
     lv_obj_t *im = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_DOWNLOAD "  Import", &lv_font_montserrat_18, import_cb, NULL);
     lv_obj_set_style_bg_color(im, C_CARD2, 0);
     lv_obj_align(im, LV_ALIGN_RIGHT_MID, 0, 0);

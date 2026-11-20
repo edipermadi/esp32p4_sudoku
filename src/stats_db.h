@@ -375,8 +375,9 @@ void stats_db_query_board(const char *day);
 bool stats_db_take_board(stats_board_t *out);
 
 /* ---------------------------------------------------------------- imported puzzles */
-/* Files in puzzles/ on the card: .opensudoku (OpenSudoku's XML) and .sdm /
- * .txt (a puzzle per line, 81 digits, 0 or . = empty). Each becomes a
+/* Files in puzzles/ on the card: .opensudoku (OpenSudoku's XML), .sdm /
+ * .txt (a puzzle per line, 81 digits, 0 or . = empty) and .sdx (this board's
+ * export of a saved collection: any variant; see stats_db.c). Each becomes a
  * collection (up to 100 puzzles; more: "name 2", "name 3" ...), checked for
  * exactly one solution. A file already imported is skipped. The result comes
  * back as a message; stats_db_take_imports_changed() says to reload the list. */
@@ -419,6 +420,15 @@ int stats_db_list_saved(stats_saved_t *out);
 bool stats_db_saved_add(const char *name, uint16_t puzzle, char *why, size_t why_n);
 /* Takes puzzle out of collection id; the collection goes if that was its last (waits). */
 bool stats_db_saved_remove(int collection, uint16_t puzzle);
+/* Deletes a whole collection: a saved one (by id) or an imported one (by name; its
+ * file may be imported again). Its puzzles stay on the board (solves, History,
+ * Gameplays keep them). Waits. */
+bool stats_db_saved_delete(int collection);
+bool stats_db_import_delete(const char *name);
+/* Writes collection id to the card as puzzles/<its name>.sdx (the format Import
+ * puzzles reads back, variants and all: see stats_db.c); msg says what happened.
+ * Waits. */
+bool stats_db_saved_export(int collection, char *msg, size_t msg_n);
 /* The current player's solved puzzles among ids[0..n-1] (n <= 128): bit i of
  * solved. How many. Waits for the database. */
 int stats_db_solved_list(const uint16_t *ids, int n, uint8_t *solved);

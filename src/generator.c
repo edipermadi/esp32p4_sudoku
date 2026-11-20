@@ -653,6 +653,14 @@ bool sudoku_classic_unique(const uint8_t cells[81])
     return search(&g, 2, NULL) == 1 && !g.aborted;
 }
 
+bool sudoku_unique(const sudoku_geom_t *G, const uint8_t cells[81])
+{
+    static grid_t g;                                 /* its own (the import's task) */
+    if (!grid_load(&g, G, cells)) return false;
+    g.node_limit = 400000;
+    return search(&g, 2, NULL) == 1 && !g.aborted;
+}
+
 bool sudoku_solve(const sudoku_geom_t *G, const uint8_t cells[81], uint8_t out[81])
 {
     static grid_t g;                                 /* off the (small) LVGL task stack */

@@ -45,7 +45,8 @@ typedef enum {
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
     CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
     CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM, CMD_BM_GET, CMD_BM_SET, CMD_BM_LIST, CMD_SEEN_GET, CMD_SEEN_SET,
-    CMD_ATTACK, CMD_ATTACK_BOARD, CMD_SAVED_LIST, CMD_SAVED_ADD, CMD_SAVED_REMOVE, CMD_SOLVED_LIST,
+    CMD_ATTACK, CMD_ATTACK_BOARD, CMD_SAVED_LIST, CMD_SAVED_ADD, CMD_SAVED_REMOVE, CMD_SOLVED_LIST, CMD_SAVED_EXPORT,
+    CMD_COLL_DELETE,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -2091,6 +2092,164 @@ static bool ends_with(const char *s, const char *suffix)
     return a >= b && strcasecmp(s + a - b, suffix) == 0;
 }
 
+/*
+ * .sdx: a collection with any variant, one puzzle per line, fields split by '|'
+ * (the variants' own texts use ';', ',' and ':', never '|'):
+ *
+ *   variant|level|givens|regions|cages|marks|thermos
+ *
+ * variant: its name ("Classic", "X-Sudoku", "Killer", ...: VARIANT_NAMES) or number;
+ * level: "Easy", "Medium", "Hard", "Expert" or 0-3; givens: 81 digits row by row, 0
+ * or '.' empty (Mini 6x6: the top-left 6 x 6); regions: Jigsaw's 81 digits 0-8; cages,
+ * marks, thermos: as in the generated table (sudoku_cages_text(), sudoku_marks_text()
+ * (Sandwich: its 18 sums), sudoku_thermos_text()); the fields a variant doesn't use are
+ * empty, trailing ones may be left out. '#' starts a comment line. A line of just 81
+ * digits is a Classic puzzle, so a plain .sdm reads as .sdx too.
+ */
+#define SDX_HEADER "# esp32p4_sudoku collection: variant|level|givens|regions|cages|marks|thermos"
+
+static int name_index(const char *s, const char *const *names, int n)
+{
+    for (int i = 0; i < n; i++) {
+        if (!strcasecmp(s, names[i])) return i;
+    }
+    char *end;
+    long v = strtol(s, &end, 10);
+    return *s && !*end && v >= 0 && v < n ? (int)v : -1;
+}
+
+/* the board of a puzzle from its variant and texts; NULL: they don't make one */
+static const sudoku_geom_t *sdx_geom(int v, const char *regions, const char *cages, const char *marks,
+                                     const char *thermos, sudoku_geom_t *buf)
+{
+    switch (v) {
+    case VAR_JIGSAW: {
+        uint8_t reg[81];
+        if (strlen(regions) != 81) return NULL;
+        for (int i = 0; i < 81; i++) {
+            if (regions[i] < '0' || regions[i] > '8') return NULL;
+            reg[i] = (uint8_t)(regions[i] - '0');
+        }
+        return sudoku_geom_jigsaw(reg, buf) ? buf : NULL;
+    }
+    case VAR_KILLER:   return sudoku_geom_killer_text(cages, buf) ? buf : NULL;
+    case VAR_EVENODD:
+    case VAR_CONSEC:   return strlen(marks) == 81 && sudoku_geom_marks(v, marks, buf) ? buf : NULL;
+    case VAR_THERMO:   return sudoku_geom_thermo_text(thermos, buf) ? buf : NULL;
+    case VAR_SANDWICH: return sudoku_geom_sandwich_text(marks, buf) ? buf : NULL;
+    default:           return sudoku_geom(v);
+    }
+}
+
+/* one collection row in imported for generated ids first .. first + count - 1 */
+static bool import_collection(const char *name, const char *file, int first, int count)
+{
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(s_db, "INSERT INTO imported(name, file, first_id, count, created_at)"
+                                 " VALUES(?1, ?2, ?3, ?4, ?5)", -1, &st, NULL) != SQLITE_OK) return false;
+    sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(st, 2, file, -1, SQLITE_STATIC);
+    sqlite3_bind_int(st, 3, first);
+    sqlite3_bind_int(st, 4, count);
+    time_t now = time(NULL);
+    if (now > 1700000000) sqlite3_bind_int64(st, 5, now);
+    else sqlite3_bind_null(st, 5);
+    bool ok = step_done(st, "import collection");     /* (a name taken already: the file is skipped) */
+    sqlite3_finalize(st);
+    return ok;
+}
+
+/* reads an .sdx file into generated and imported (in the caller's transaction): its
+ * collection is base (more than 100 puzzles: "base 1", "base 2", ...); *bad counts the
+ * lines left out. How many went in (at most max), or -1 if writing failed. */
+static int import_sdx(const char *path, const char *file, const char *base, int max, int *bad)
+{
+    static char *line;
+    static sudoku_geom_t *geom;
+    if (!line) line = heap_caps_malloc(2048, MALLOC_CAP_SPIRAM);
+    if (!geom) geom = heap_caps_malloc(sizeof(*geom), MALLOC_CAP_SPIRAM);
+    FILE *f = line && geom ? fopen(path, "r") : NULL;
+    if (!f) return 0;
+    /* the puzzles first: are there more than 100 (then the names get numbers)? */
+    int lines = 0;
+    while (fgets(line, 2048, f)) lines += line[0] != '#' && line[0] != '\n' && line[0] != '\r';
+    rewind(f);
+    bool numbered = lines > 100;
+    int added = 0, in_chunk = 0, first = 0, chunk = 0;
+    char name[STATS_IMPORT_NAME];
+    while (added < max && fgets(line, 2048, f)) {
+        size_t l = strlen(line);
+        while (l && (line[l - 1] == '\n' || line[l - 1] == '\r' || line[l - 1] == ' ')) line[--l] = 0;
+        if (!l || line[0] == '#') continue;
+        char *fld[7] = {0};
+        int nf = 0;
+        if (!strchr(line, '|')) {                   /* just the givens: Classic */
+            fld[0] = "Classic"; fld[1] = ""; fld[2] = line; nf = 3;
+        } else {
+            for (char *p = line; nf < 7;) {
+                fld[nf++] = p;
+                char *bar = strchr(p, '|');
+                if (!bar) break;
+                *bar = 0;
+                p = bar + 1;
+            }
+        }
+        for (int i = nf; i < 7; i++) fld[i] = "";
+        int v = name_index(fld[0], VARIANT_NAMES, VAR_COUNT);
+        int lv = fld[1][0] ? name_index(fld[1], GEN_LEVEL_NAMES, GEN_LEVELS) : 0;
+        uint8_t g[81];
+        bool good = v >= 0 && lv >= 0 && strlen(fld[2]) == 81;
+        for (int i = 0; good && i < 81; i++) {
+            char c = fld[2][i];
+            if (c == '.') c = '0';
+            good = c >= '0' && c <= '9';
+            g[i] = (uint8_t)(c - '0');
+        }
+        const sudoku_geom_t *G = good ? sdx_geom(v, fld[3], fld[4], fld[5], fld[6], geom) : NULL;
+        if (!G || !sudoku_unique(G, g)) {          /* broken, or not exactly one solution */
+            (*bad)++;
+            continue;
+        }
+        if (in_chunk == 100) {                      /* the next hundred: another collection */
+            if (!import_collection(name, file, first, in_chunk)) { fclose(f); return -1; }
+            in_chunk = 0;
+        }
+        if (in_chunk == 0) {
+            chunk++;
+            if (numbered) snprintf(name, sizeof(name), "%.*s %d", (int)sizeof(name) - 5, base, chunk);
+            else snprintf(name, sizeof(name), "%s", base);
+        }
+        char gv[82];
+        for (int i = 0; i < 81; i++) gv[i] = (char)('0' + g[i]);
+        gv[81] = 0;
+        sqlite3_stmt *st;
+        if (sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, variant, regions, cages, marks,"
+                                     " thermos, source, number) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)", -1,
+                               &st, NULL) != SQLITE_OK) { fclose(f); return -1; }
+        sqlite3_bind_int(st, 1, lv);
+        sqlite3_bind_text(st, 2, gv, 81, SQLITE_STATIC);
+        time_t now = time(NULL);
+        if (now > 1700000000) sqlite3_bind_int64(st, 3, now);
+        else sqlite3_bind_null(st, 3);
+        sqlite3_bind_int(st, 4, v);
+        for (int k = 3; k < 7; k++) {               /* regions, cages, marks, thermos: NULL when unused */
+            if (fld[k][0]) sqlite3_bind_text(st, 5 + k - 3, fld[k], -1, SQLITE_STATIC);
+            else sqlite3_bind_null(st, 5 + k - 3);
+        }
+        sqlite3_bind_text(st, 9, name, -1, SQLITE_STATIC);
+        sqlite3_bind_int(st, 10, in_chunk + 1);
+        bool ok = step_done(st, "import puzzle");
+        sqlite3_finalize(st);
+        if (!ok) { fclose(f); return -1; }
+        if (in_chunk == 0) first = (int)sqlite3_last_insert_rowid(s_db);
+        in_chunk++;
+        added++;
+    }
+    fclose(f);
+    if (in_chunk && !import_collection(name, file, first, in_chunk)) return -1;
+    return added;
+}
+
 static void do_import(void)
 {
     if (!s_db) return;
@@ -2107,14 +2266,28 @@ static void do_import(void)
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && total < IMPORT_MAX_RUN) {
         const char *fn = e->d_name;
-        bool xml = ends_with(fn, ".opensudoku");
-        if (!xml && !ends_with(fn, ".sdm") && !ends_with(fn, ".txt")) continue;
+        bool xml = ends_with(fn, ".opensudoku"), sdx = ends_with(fn, ".sdx");
+        if (!xml && !sdx && !ends_with(fn, ".sdm") && !ends_with(fn, ".txt")) continue;
         if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
             skipped++;
             continue;
         }
         char path[300];
         snprintf(path, sizeof(path), IMPORT_DIR "/%s", fn);
+        if (sdx) {                                  /* any variant: line by line (see import_sdx) */
+            char base[STATS_IMPORT_NAME];
+            snprintf(base, sizeof(base), "%.*s", (int)(strrchr(fn, '.') - fn), fn);
+            int got = exec("BEGIN") ? import_sdx(path, fn, base, IMPORT_MAX_RUN - total, &bad) : -1;
+            if (got > 0 && exec("COMMIT")) {
+                files++;
+                added += got;
+                total += got;
+                printf("stats_db: imported %d puzzles from %s\n", got, fn);
+            } else {
+                exec("ROLLBACK");
+            }
+            continue;
+        }
         int n = parse_file(path, xml, cells, IMPORT_MAX_RUN - total);
         int good = 0;
         for (int i = 0; i < n; i++) {               /* keep the ones with exactly one solution */
@@ -2184,7 +2357,7 @@ static void do_import(void)
     } else if (skipped && !bad) {
         snprintf(msg, sizeof(msg), "Nothing new in puzzles/: those files are imported already.");
     } else {
-        snprintf(msg, sizeof(msg), "No puzzles found in puzzles/ (.opensudoku, .sdm or .txt files).");
+        snprintf(msg, sizeof(msg), "No puzzles found in puzzles/ (.opensudoku, .sdm, .sdx or .txt files).");
     }
     post_message(msg);
 }
@@ -2340,6 +2513,89 @@ static void do_saved_remove(void)
             sqlite3_finalize(st);
         }
     }
+    xSemaphoreGive(s_gen_done);
+}
+
+/* collection s_gen.id -> puzzles/<name>.sdx (see import_sdx); the result in s_gen.why */
+static void do_saved_export(void)
+{
+    s_gen.ok = false;
+    char name[STATS_IMPORT_NAME] = "";
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT name FROM saved_collections WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_gen.id);
+        if (sqlite3_step(st) == SQLITE_ROW) snprintf(name, sizeof(name), "%s", (const char *)sqlite3_column_text(st, 0));
+        sqlite3_finalize(st);
+    }
+    if (!name[0]) {
+        snprintf(s_gen.why, sizeof(s_gen.why), "That collection isn't there any more.");
+        xSemaphoreGive(s_gen_done);
+        return;
+    }
+    char file[STATS_IMPORT_NAME], path[96];                /* its name, as a file name */
+    size_t k = 0;
+    for (const char *p = name; *p && k + 1 < sizeof(file); p++) {
+        char c = *p;
+        bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' ||
+                  c == '-' || c == '_' || (unsigned char)c >= 0x80;
+        file[k++] = ok ? c : '_';
+    }
+    file[k] = 0;
+    mkdir(IMPORT_DIR, 0775);
+    snprintf(path, sizeof(path), IMPORT_DIR "/%s.sdx", file);
+    FILE *f = fopen(path, "w");
+    int n = 0;
+    bool ok = f && fprintf(f, SDX_HEADER "\n# %s\n", name) > 0;
+    if (ok && sqlite3_prepare_v2(s_db, "SELECT g.variant, g.level, g.givens, g.regions, g.cages, g.marks, g.thermos"
+                                       " FROM saved_puzzles sp JOIN generated g ON g.id = sp.puzzle - ?2"
+                                       " WHERE sp.collection_id = ?1 ORDER BY sp.number", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_gen.id);
+        sqlite3_bind_int(st, 2, PUZZLE_GEN_BASE);
+        while (ok && sqlite3_step(st) == SQLITE_ROW) {
+            int v = sqlite3_column_int(st, 0), lv = sqlite3_column_int(st, 1);
+            const char *t[5];
+            for (int i = 0; i < 5; i++) {
+                t[i] = (const char *)sqlite3_column_text(st, 2 + i);
+                if (!t[i]) t[i] = "";
+            }
+            ok = fprintf(f, "%s|%s|%s|%s|%s|%s|%s\n", v >= 0 && v < VAR_COUNT ? VARIANT_NAMES[v] : "Classic",
+                         lv >= 0 && lv < GEN_LEVELS ? GEN_LEVEL_NAMES[lv] : "Easy", t[0],
+                         v == VAR_JIGSAW ? t[1] : "", t[2], t[3], t[4]) > 0;
+            n++;
+        }
+        sqlite3_finalize(st);
+    }
+    if (f && fclose(f) != 0) ok = false;
+    if (ok) {
+        snprintf(s_gen.why, sizeof(s_gen.why), "Wrote puzzles/%s.sdx: %d puzzle%s.", file, n, n == 1 ? "" : "s");
+        printf("stats_db: exported %s (%d puzzles)\n", path, n);
+    } else {
+        if (f) unlink(path);
+        snprintf(s_gen.why, sizeof(s_gen.why), "Couldn't write puzzles/%s.sdx.", file);
+    }
+    s_gen.ok = ok;
+    xSemaphoreGive(s_gen_done);
+}
+
+/* a whole collection: saved (s_gen.id > 0) or imported (s_gen.name); its puzzles stay */
+static void do_coll_delete(void)
+{
+    static const char *const SAVED[] = {"DELETE FROM saved_puzzles WHERE collection_id = ?1",
+                                        "DELETE FROM saved_collections WHERE id = ?1"};
+    bool ok = s_db && exec("BEGIN");
+    for (int i = 0; ok && i < (s_gen.id > 0 ? 2 : 1); i++) {
+        sqlite3_stmt *st;
+        const char *sql = s_gen.id > 0 ? SAVED[i] : "DELETE FROM imported WHERE name = ?2";
+        ok = sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) == SQLITE_OK;
+        if (!ok) break;
+        if (sqlite3_bind_parameter_index(st, "?1")) sqlite3_bind_int(st, 1, s_gen.id);
+        if (sqlite3_bind_parameter_index(st, "?2")) sqlite3_bind_text(st, 2, s_gen.name, -1, SQLITE_STATIC);
+        ok = step_done(st, "delete collection");
+        sqlite3_finalize(st);
+    }
+    if (ok) ok = exec("COMMIT");
+    else if (s_db) exec("ROLLBACK");
+    s_gen.ok = ok;
     xSemaphoreGive(s_gen_done);
 }
 
@@ -2995,6 +3251,12 @@ static void worker(void *arg)
         case CMD_SOLVED_LIST:
             do_solved_list();
             break;
+        case CMD_SAVED_EXPORT:
+            do_saved_export();
+            break;
+        case CMD_COLL_DELETE:
+            do_coll_delete();
+            break;
         case CMD_GEN_SOURCE:
             s_gen.ok = s_db != NULL && gen_source_of(s_gen.id, s_gen.source, &s_gen.number);
             xSemaphoreGive(s_gen_done);
@@ -3499,6 +3761,32 @@ bool stats_db_saved_remove(int collection, uint16_t puzzle)
     s_gen.id = collection;
     s_gen.puzzle = puzzle;
     return gen_call(CMD_SAVED_REMOVE);
+}
+
+bool stats_db_saved_delete(int collection)
+{
+    if (!s_genp || collection <= 0) return false;
+    s_gen.id = collection;
+    return gen_call(CMD_COLL_DELETE);
+}
+
+bool stats_db_import_delete(const char *name)
+{
+    if (!s_genp) return false;
+    s_gen.id = 0;
+    snprintf(s_gen.name, sizeof(s_gen.name), "%s", name);
+    return gen_call(CMD_COLL_DELETE);
+}
+
+bool stats_db_saved_export(int collection, char *msg, size_t msg_n)
+{
+    snprintf(msg, msg_n, "There's no sudoku.db on a microSD card.");
+    if (!s_genp) return false;
+    s_gen.id = collection;
+    s_gen.why[0] = 0;
+    bool ok = gen_call(CMD_SAVED_EXPORT);
+    snprintf(msg, msg_n, "%s", s_gen.why[0] ? s_gen.why : "sudoku.db didn't answer.");
+    return ok;
 }
 
 int stats_db_solved_list(const uint16_t *ids, int n, uint8_t *solved)

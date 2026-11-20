@@ -207,6 +207,10 @@ int sudoku_count_solutions(const sudoku_geom_t *g, const uint8_t cells[81], int 
 /* A classic puzzle has exactly one solution (its own scratch: for the
  * database task, which checks imported puzzles while the generator may run). */
 bool sudoku_classic_unique(const uint8_t cells[81]);
+/* The same on any board (its own work space, like sudoku_classic_unique: for the
+ * database task's import, alongside the UI's own solving); gives up (false) on a
+ * puzzle that takes too long. */
+bool sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
 
 /* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
  * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.) */
