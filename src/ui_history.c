@@ -2,6 +2,7 @@
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
+static void history_row_cb(lv_event_t *e);
 static void fmt_clock(char *buf, size_t n, int64_t t);
 static void history_hint(const char *text);
 static void render_day(const stats_day_t *d);
@@ -16,6 +17,17 @@ static void plays_export_cb(lv_event_t *e);
 static void plays_pager_update(void);
 static void render_plays(const stats_plays_t *p);
 static void plays_page_cb(lv_event_t *e);
+
+/* history screen */
+static lv_obj_t *hz_cal, *hz_title, *hz_list;
+static lv_calendar_date_t hz_marked[31];  /* highlighted days (the calendar keeps the pointer) */
+static int hz_year, hz_month;             /* month asked for / shown, 0 = not yet */
+static uint8_t hz_count[31];              /* games per day of the highlighted month (badges) */
+static lv_calendar_date_t hz_sel;         /* the day tapped (its list is shown), year 0 = none */
+static bool hz_latest_pending;            /* asked for "the latest month"; show what comes back */
+
+/* a solve from History: ask sudoku.db, history_poll() opens it */
+static int64_t hz_row_solve[STATS_MAX_DAY_ROWS];
 
 /* ------------------------------------------------------------- history */
 
@@ -419,12 +431,6 @@ static void plays_page_cb(lv_event_t *e)
     plays_ask(pl_offset + dir * STATS_MAX_DAY_ROWS);
 }
 
-void plays_cb(lv_event_t *e)
-{
-    plays_ask(0);
-    lv_screen_load(scr_plays);
-}
-
 /* results from sudoku.db (called from sd_poll_cb) */
 void plays_poll(void)
 {
@@ -461,4 +467,12 @@ void build_plays(void)
     lv_obj_set_hidden(pl_newer, true);
     lv_obj_set_hidden(pl_older, true);
     plays_hint("Loading...");
+}
+
+static void history_row_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) return;
+    rp_want_export = false;
+    stats_db_query_replay(hz_row_solve[i]);
 }

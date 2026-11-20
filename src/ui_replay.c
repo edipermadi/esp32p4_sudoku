@@ -17,7 +17,6 @@ static lv_obj_t *ins_heading(const char *text);
 static void ins_show(const stats_insights_t *in);
 static void ins_poll_cb(lv_timer_t *t);
 static lv_obj_t *rp_build(uint16_t id, const char *sub, const char *player);
-static void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player);
 static void rx_flush_cb(lv_display_t *d, const lv_area_t *area, uint8_t *px);
 static void rx_cancel_cb(lv_event_t *e);
 static void rx_finish(bool ok);
@@ -473,7 +472,7 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub, const char *player)
 }
 
 /* Opens the Replay screen for a log of puzzle `id`; sub = the line under the title. */
-static void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player)
+void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player)
 {
     if (!rp_prepare(id, moves, n)) return;
     if (scr_replay) rp_close();
@@ -487,29 +486,8 @@ static void open_replay(uint16_t id, const game_move_t *moves, int n, const char
     if (n == 0) sudoku_ui_notice("No moves were recorded for this game.", 3000);
 }
 
-/* the game just solved (from the Solved dialog) */
-void win_replay_cb(lv_event_t *e)
-{
-    char t[16], sub[96];
-    fmt_time(t, sizeof(t), s_solve_secs);
-    snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
-             store_player_name(), t, (unsigned)g_hints, g_hints == 1 ? "" : "s");
-    open_replay(g_id, g_moves, g_moves ? g_nmoves : 0, sub, store_player_name());
-}
-
-/* a solve from History: ask sudoku.db, history_poll() opens it */
-int64_t hz_row_solve[STATS_MAX_DAY_ROWS];
-
 bool rp_want_export;                 /* the replay asked for is to be exported, not shown */
 bool rx_busy;                        /* an export is running */
-
-void history_row_cb(lv_event_t *e)
-{
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) return;
-    rp_want_export = false;
-    stats_db_query_replay(hz_row_solve[i]);
-}
 
 void history_replay_poll(void)
 {

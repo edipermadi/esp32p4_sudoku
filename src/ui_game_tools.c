@@ -10,7 +10,6 @@ static void rules_pic_draw_cb(lv_event_t *e);
 static void rules_show(int variant);
 static bool share_text(char *buf, size_t n);
 static void qr_draw_cb(lv_event_t *e);
-static lv_obj_t *qr_dialog(const char *title, const char *text, const char *note);
 static uint16_t pz_crc16(const char *p, size_t n);
 static int pz_line(char *buf, size_t n);
 static void pz_send_poll(lv_timer_t *t);
@@ -24,6 +23,8 @@ static void sv_toggle_cb(lv_event_t *e);
 static void sv_new_done(const char *text);
 static void sv_new_cb(lv_event_t *e);
 static void sv_open(void);
+
+static uint16_t atk_last;
 
 /* ------------------------------------------------------------- time attack */
 
@@ -443,7 +444,7 @@ static void qr_draw_cb(lv_event_t *e)
 }
 
 /* a QR code of text in a dialog, the note under it, then the text itself */
-static lv_obj_t *qr_dialog(const char *title, const char *text, const char *note)
+lv_obj_t *qr_dialog(const char *title, const char *text, const char *note)
 {
     if (!qr_code) qr_code = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
     if (!qr_temp) qr_temp = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
@@ -465,27 +466,6 @@ static lv_obj_t *qr_dialog(const char *title, const char *text, const char *note
     lv_obj_set_style_margin_top(t, 6, 0);
     msgbox_button(m, "Close", mbox_close_cb, false);
     return m;
-}
-
-/* Solved dialog of a daily puzzle: the result as a QR code, for a phone (and a message to friends) */
-void win_share_cb(lv_event_t *e)
-{
-    char day[12] = "", kind[48] = "", t[16];
-    int var = 0, lv = 0;
-    if (!puzzle_is_generated(s_solve_id) || !gen_lookup_day(s_solve_id, NULL, &var, &lv, day) || !day[0]) return;
-    daily_kind_text(var, lv, kind, sizeof(kind));
-    fmt_time(t, sizeof(t), s_solve_secs);
-    char hints[24];
-    if (s_solve_hints) snprintf(hints, sizeof(hints), "%u hint%s", (unsigned)s_solve_hints, s_solve_hints == 1 ? "" : "s");
-    else snprintf(hints, sizeof(hints), "no hints");
-    static char text[256];
-    snprintf(text, sizeof(text), "Sudoku daily %s (%s)\n%s: solved in %s, %u mistake%s, %s%s\nESP32-P4 Sudoku",
-             day, kind, store_player_name(), t, (unsigned)s_solve_mistakes, s_solve_mistakes == 1 ? "" : "s", hints,
-             (s_solve_flags & GAME_FLAG_NO_NOTES) ? ", no notes" : "");
-    if (!qr_dialog(SYMBOL_QR "  Today's result", text,
-                   "Scan it with a phone to send it to friends: the day, the puzzle, your time and mistakes.")) {
-        sudoku_ui_notice("Couldn't make a QR code of the result.", 3000);
-    }
 }
 
 static uint16_t pz_crc16(const char *p, size_t n)
@@ -855,13 +835,4 @@ void save_cb(lv_event_t *e)
     }
     imports_reload();                               /* (current: another player may have changed them) */
     sv_open();
-}
-
-void star_cb(lv_event_t *e)
-{
-    if (g_practice >= 0 || g_id >= PUZZLE_GEN_RAM_BASE) return;
-    g_starred = !g_starred;
-    stats_db_set_bookmark(g_id, g_starred);
-    update_header();
-    sudoku_ui_notice(g_starred ? "Starred: it's under Puzzles > Starred." : "No longer starred.", 2000);
 }

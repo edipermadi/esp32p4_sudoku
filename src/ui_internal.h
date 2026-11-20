@@ -408,10 +408,8 @@ enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
 extern const uint8_t SLEEP_MIN[7];   /* sudoku_ui.c */
 extern const palette_t PAL_DARK;   /* ui_common.c */
 extern const palette_t *ui_pal;   /* ui_common.c */
-extern const char *const ACCENT_NAMES;   /* ui_common.c */
 extern bool s_night;   /* ui_common.c */
 extern lv_obj_t *s_saver;   /* ui_common.c */
-extern bool s_dark;   /* ui_common.c */
 extern uint8_t s_sleep_min;   /* ui_common.c */
 extern const char *const DIGITS[10];   /* ui_common.c */
 extern uint16_t g_id;   /* ui_common.c */
@@ -420,7 +418,6 @@ extern const sudoku_geom_t *g_geo;   /* ui_common.c */
 extern sudoku_geom_t *g_geo_buf;   /* ui_common.c */
 extern uint8_t  g_given[81];   /* ui_common.c */
 extern board_t  g_b;   /* ui_common.c */
-extern bool     g_conflict[81];   /* ui_common.c */
 extern int      g_sel;   /* ui_common.c */
 extern bool     g_notes_mode;   /* ui_common.c */
 extern bool     g_solved;   /* ui_common.c */
@@ -429,7 +426,6 @@ extern uint32_t g_elapsed_ms;   /* ui_common.c */
 extern uint16_t g_mistakes;   /* ui_common.c */
 extern uint16_t g_hints;   /* ui_common.c */
 extern uint32_t g_flags;   /* ui_common.c */
-extern lv_obj_t *g_auto_btn, *g_win_badge, *g_win_share;   /* ui_common.c */
 extern uint8_t  g_sol[81];   /* ui_common.c */
 extern game_move_t *g_moves;   /* ui_common.c */
 extern uint8_t  h_mark[81];   /* ui_common.c */
@@ -439,11 +435,8 @@ extern int      g_practice;   /* ui_common.c */
 extern bool     g_attack;   /* ui_common.c */
 extern uint32_t atk_used_ms;   /* ui_common.c */
 extern int      atk_solved, atk_mistakes;   /* ui_common.c */
-extern uint16_t atk_last;   /* ui_common.c */
 extern bool     g_starred;   /* ui_common.c */
 extern lv_obj_t *g_star_btn;   /* ui_common.c */
-extern lv_obj_t *g_save_btn;   /* ui_common.c */
-extern lv_obj_t *tour_ovl;   /* ui_common.c */
 extern lv_obj_t *h_card, *h_text, *h_act;   /* ui_common.c */
 extern int      g_nmoves;   /* ui_common.c */
 extern bool     g_sol_ok;   /* ui_common.c */
@@ -463,88 +456,44 @@ extern lv_obj_t *h_menu;   /* ui_common.c */
 extern int h_menu_grid;   /* ui_common.c */
 extern lv_obj_t *h_page[HOME_PAGES_MAX], *h_dots;   /* ui_common.c */
 extern lv_obj_t *h_items[16];   /* ui_common.c */
-extern int h_nitems, h_npages;   /* ui_common.c */
-extern lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player, *h_daily_sub, *h_daily;   /* ui_common.c */
-extern lv_obj_t *h_player_title, *h_player_avatar;   /* ui_common.c */
-extern lv_obj_t *hz_cal, *hz_title, *hz_list;   /* ui_common.c */
-extern lv_calendar_date_t hz_marked[31];   /* ui_common.c */
-extern int hz_year, hz_month;   /* ui_common.c */
-extern uint8_t hz_count[31];   /* ui_common.c */
-extern lv_calendar_date_t hz_sel;   /* ui_common.c */
-extern bool hz_latest_pending;   /* ui_common.c */
-extern lv_obj_t *p_list, *p_menu_btn, *p_note;   /* ui_common.c */
+extern int h_nitems, h_npages;   /* ui_list.c */
 extern stats_player_t p_players[STATS_MAX_PLAYERS];   /* ui_common.c */
 extern int p_count;   /* ui_common.c */
-extern lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];   /* ui_common.c */
-extern lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_player_dd;   /* ui_common.c */
-extern lv_obj_t *x_chart, *x_plot, *x_trend, *x_chart_btn;   /* ui_common.c */
-extern bool      x_chart_mode;   /* ui_common.c */
-extern bool      x_from_db;   /* ui_common.c */
-extern char      x_player_txt[STORE_NAME_LEN + 8];   /* ui_common.c */
-extern lv_obj_t *x_player_av;   /* ui_common.c */
 extern int       x_sel;   /* ui_common.c */
-extern lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;   /* ui_common.c */
+extern lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;   /* ui_settings.c */
 extern lv_obj_t *st_wifi_eye;   /* ui_common.c */
 extern lv_obj_t *st_lock_dd, *st_pin_btn;   /* ui_common.c */
-extern lv_obj_t *st_night_bright_lbl;   /* ui_common.c */
-extern lv_obj_t *st_night_from, *st_night_to;   /* ui_common.c */
-extern bool      st_wifi_reveal;   /* ui_common.c */
-extern lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;   /* ui_common.c */
-extern char      st_tz_txt[48];   /* ui_common.c */
-extern lv_obj_t *st_sd_btn, *st_sd_hint;   /* ui_common.c */
-extern lv_obj_t *u_ovl;   /* ui_common.c */
-extern lv_obj_t *st_usb_btn, *st_usb_hint;   /* ui_common.c */
-extern bool u_reloading;   /* ui_common.c */
-extern bool u_reload_home;   /* ui_common.c */
-extern lv_obj_t *l_total, *l_colls;   /* ui_common.c */
-extern lv_obj_t *l_coll_btn[L_COLLS], *l_coll_cnt[L_COLLS];   /* ui_common.c */
-extern lv_obj_t *l_coll_name[L_COLLS];   /* ui_common.c */
-extern uint8_t   l_solved_bits[16];   /* ui_common.c */
+extern lv_obj_t *st_sd_btn, *st_sd_hint;   /* ui_settings.c */
 extern int s_nimports;   /* ui_common.c */
 extern stats_saved_t *s_saved;   /* ui_common.c */
 extern int s_nsaved;   /* ui_common.c */
 extern int g_from_coll;   /* ui_common.c */
 extern int l_tab;   /* ui_common.c */
-extern int l_tab_coll[2];   /* ui_common.c */
-extern lv_obj_t *l_tab_btn[2], *l_empty, *l_export, *l_del;   /* ui_common.c */
-extern lv_obj_t *l_list;   /* ui_common.c */
-extern lv_obj_t *l_name, *l_stats, *l_btnm;   /* ui_common.c */
 extern int       l_coll;   /* ui_common.c */
-extern char      l_labels[MAX_PER_COLL][4];   /* ui_common.c */
-extern const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];   /* ui_common.c */
-extern uint16_t  l_pending_id;   /* ui_common.c */
 extern lv_obj_t *g_grid, *g_boxes[9], *g_cells[81], *g_cell_lbl[81];   /* ui_common.c */
 extern lv_obj_t *g_clues[18];   /* ui_common.c */
-extern lv_obj_t *g_pad[9], *g_pad_cnt[9];   /* ui_common.c */
+extern lv_obj_t *g_pad[9], *g_pad_cnt[9];   /* ui_game.c */
 extern int       g_layout_var;   /* ui_common.c */
-extern bool      g_layout_left;   /* ui_common.c */
-extern lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;   /* ui_common.c */
-extern lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;   /* ui_common.c */
-extern lv_obj_t *g_hint_cnt;   /* ui_common.c */
-extern lv_obj_t *g_win_h2h;   /* ui_common.c */
-extern lv_obj_t *g_win_h2h_row;   /* ui_common.c */
-extern lv_obj_t *g_undo_btn, *g_redo_btn;   /* ui_common.c */
+extern lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;   /* ui_game.c */
+extern lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;   /* ui_game.c */
+extern lv_obj_t *g_undo_btn, *g_redo_btn;   /* ui_game.c */
 extern lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* ui_common.c */
 extern const char *const LEARN_NAMES[LEARN_COUNT];   /* ui_common.c */
 extern stats_game_row_t s_games[STATS_MAX_GAMES];   /* ui_common.c */
 extern int s_ngames;   /* ui_common.c */
 extern gen_cache_t *s_gen_cache;   /* ui_common.c */
 extern uint16_t s_gen_ram_next;   /* ui_common.c */
-extern uint16_t s_solve_id;   /* ui_game.c */
-extern uint32_t s_solve_secs, s_solve_mistakes, s_solve_hints, s_solve_flags;   /* ui_game.c */
 extern lv_obj_t *scr_replay, *rp_return;   /* ui_replay.c */
-extern int64_t hz_row_solve[STATS_MAX_DAY_ROWS];   /* ui_replay.c */
 extern bool rp_want_export;   /* ui_replay.c */
 extern bool rx_busy;   /* ui_replay.c */
 extern lv_obj_t *scr_edit, *ed_cells[81], *ed_lbl[81], *ed_status;   /* ui_newpuzzle.c */
+extern lv_obj_t *l_star_btn, *l_new_btn;   /* ui_list.c */
 extern stats_view_t *x_view_p;   /* ui_stats.c */
 extern volatile bool s_sd_present;   /* ui_settings.c */
 extern uint64_t   s_sd_bytes;   /* ui_settings.c */
 extern char       s_sd_name[8];   /* ui_settings.c */
 extern int pl_offset, pl_total;   /* ui_history.c */
 extern lv_obj_t *h_trophy_sub;   /* ui_trophies.c */
-extern lv_obj_t *st_tab_btn[ST_TABS], *st_pane[ST_TABS];   /* ui_stats.c */
-extern int st_tab;   /* ui_stats.c */
 
 /* ---- functions shared between the UI files */
 int effective_brightness(void);
@@ -554,13 +503,6 @@ lv_color_t player_color(int k);
 lv_obj_t *player_dot(lv_obj_t *parent, int color, int size);
 const stats_player_t *player_find(int32_t id, const char *name);
 lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, int size, int dot);
-void left_hand_sw_cb(lv_event_t *e);
-void no_notes_sw_cb(lv_event_t *e);
-void cvd_sw_cb(lv_event_t *e);
-void night_sw_cb(lv_event_t *e);
-void night_hours_cb(lv_event_t *e);
-void night_bright_cb(lv_event_t *e);
-void saver_clock_sw_cb(lv_event_t *e);
 void fmt_time(char *buf, size_t n, uint32_t s);
 const char *ordinal(int n);
 void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages, const char *marks, const char *thermos, const char *day);
@@ -592,34 +534,21 @@ lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t col
 int compute_conflicts(void);
 lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given);
 bool has_progress(void);
-void mark_started(void);
 void save_current(void);
 void update_timer_label(void);
 void update_header(void);
 void refresh_board(void);
-void after_move(void);
-void push_undo(void);
-void record_move(int cell, int digit, move_kind_t kind);
 void enter_digit(int d);
-void place_digit(int i, int d);
-void placed_sounds(int i, int d);
 void challenge_ui(void);
 void set_paused(bool p);
 bool hint_nudge(void);
 void hint_drop(void);
 void hint_render(void);
-void hint_act_cb(lv_event_t *e);
-void hint_close_cb(lv_event_t *e);
-void hint_cb(lv_event_t *e);
-void pause_cb(lv_event_t *e);
 void mbox_close_cb(lv_event_t *e);
 lv_obj_t *make_msgbox(const char *title, const char *text);
 void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary);
 void restart_cb(lv_event_t *e);
 void back_cb(lv_event_t *e);
-void win_next_cb(lv_event_t *e);
-void win_list_cb(lv_event_t *e);
-void win_hide_cb(lv_event_t *e);
 void tick_cb(lv_timer_t *t);
 void board_regions_draw_cb(lv_event_t *e);
 void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells, lv_obj_t *const *clues, int x0);
@@ -631,25 +560,21 @@ void attack_cb(lv_event_t *e);
 void atk_finish(void);
 void rules_cb(lv_event_t *e);
 void rules_first_time(void);
-void win_share_cb(lv_event_t *e);
+lv_obj_t *qr_dialog(const char *title, const char *text, const char *note);
 void share_cb(lv_event_t *e);
 void sv_changed(void);
 void save_cb(lv_event_t *e);
-void star_cb(lv_event_t *e);
 void build_game(void);
 void screenshot_cb(lv_event_t *e);
 void insights_cb(lv_event_t *e);
+void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player);
 void win_replay_cb(lv_event_t *e);
-void history_row_cb(lv_event_t *e);
 void history_replay_poll(void);
 void gen_start(int variant, int level);
 bool daily_today(char day[12], int *level, int *wday);
 void daily_kind_text(int variant, int level, char *buf, size_t n);
-void daily_btn_update(void);
+void daily_sub_text(char *buf, size_t n);
 void daily_cb(lv_event_t *e);
-void new_puzzle_cb(lv_event_t *e);
-void learn_cb(lv_event_t *e);
-void enter_cb(lv_event_t *e);
 void games_refresh(void);
 bool game_in_progress(uint16_t id);
 void list_fill_rows(int lc);
@@ -664,21 +589,11 @@ void show_home(void);
 void home_cb(lv_event_t *e);
 void st_wifi_update(void);
 void st_wifi_eye_cb(lv_event_t *e);
-void wifi_open_cb(lv_event_t *e);
 void wifi_back_cb(lv_event_t *e);
-const char *tz_dropdown_options(void);
-void tz_show_selected(void);
-void tz_dd_cb(lv_event_t *e);
 void clock_cb(lv_timer_t *t);
 void stats_player_dd_update(void);
 void render_stats(const stats_view_t *v, bool from_db);
 void refresh_stats(void);
-void stats_cb(lv_event_t *e);
-void gibberlink_sw_cb(lv_event_t *e);
-void sound_sw_cb(lv_event_t *e);
-void bright_sl_cb(lv_event_t *e);
-void vol_sl_cb(lv_event_t *e);
-lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_cb_t cb, lv_obj_t **lbl);
 void fmt_gb(char *buf, size_t n, uint64_t bytes);
 void sd_poll_cb(lv_timer_t *t);
 void apply_loaded_prefs(void);
@@ -689,7 +604,6 @@ void history_cb(lv_event_t *e);
 void history_poll(void);
 void build_history(void);
 void plays_ask(int offset);
-void plays_cb(lv_event_t *e);
 void plays_poll(void);
 void build_plays(void);
 void tr_ask(void);
@@ -699,13 +613,12 @@ void build_trophies(void);
 void trophy_toast_poll(void);
 void nd_open_ex(const char *title, const char *current, int max_len, const char *ok_text, void (*done)(const char *name));
 void render_players(void);
-void profile_cb(lv_event_t *e);
 void build_profile(void);
 void apply_theme(bool dark);
-void theme_sw_cb(lv_event_t *e);
 void open_puzzle(uint16_t id);
 lv_obj_t *make_coll_column(lv_obj_t *parent);
 lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name_lbl, lv_obj_t **cnt_lbl, lv_event_cb_t cb, int user);
+void new_menu_cb(lv_event_t *e);
 void list_fill_colls(void);
 void build_list(void);
 void build_home(void);

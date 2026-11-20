@@ -2,11 +2,15 @@
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
+static void daily_btn_update(void);
 static void home_total_text(void);
 static void week_row(lv_obj_t *parent, const char *name, const char *a, const char *b, bool head);
 static void week_cb(lv_event_t *e);
 static void puzzles_cb(lv_event_t *e);
 static void settings_cb(lv_event_t *e);
+static void stats_cb(lv_event_t *e);
+static void plays_cb(lv_event_t *e);
+static void profile_cb(lv_event_t *e);
 static bool resume_game(uint16_t id);
 static void ug_close(void);
 static void ug_close_cb(lv_event_t *e);
@@ -17,6 +21,11 @@ static void continue_cb(lv_event_t *e);
 static void discard_confirm_cb(lv_event_t *e);
 static void resume_other_cb(lv_event_t *e);
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub);
+
+static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player, *h_daily_sub, *h_daily;
+static lv_obj_t *h_player_title, *h_player_avatar;   /* the Players button's title: the avatar, or the icon */
+static bool      st_wifi_reveal;            /* name shown; hidden again each time Settings opens */
+static uint16_t  l_pending_id;
 
 /* ------------------------------------------------------------- the week (Home) */
 /* The "puzzles solved" line also says how this week is going; a tap compares it
@@ -211,52 +220,10 @@ static void settings_cb(lv_event_t *e)
     lv_screen_load(scr_settings);
 }
 
-void wifi_open_cb(lv_event_t *e)
-{
-    lv_screen_load(scr_wifi);
-    wifi_ui_set_shown(true);
-}
-
 void wifi_back_cb(lv_event_t *e)
 {
     wifi_ui_set_shown(false);
     settings_cb(e);
-}
-
-/* "Asia/Dubai  UTC+4\n..." for the time zone dropdown (built once) */
-const char *tz_dropdown_options(void)
-{
-    static char *opts;
-    if (opts) return opts;
-    size_t n = 0;
-    for (int i = 0; i < tz_count(); i++) n += strlen(tz_get(i)->name) + 16;
-    opts = (char *)malloc(n);
-    if (!opts) return "UTC";
-    char *p = opts;
-    for (int i = 0; i < tz_count(); i++) {
-        const tz_entry_t *z = tz_get(i);
-        const char *sp = strstr(z->label, "  ");          /* label: "UTC+4  Dubai" */
-        int off_len = sp ? (int)(sp - z->label) : 0;
-        if (strcmp(z->name, "UTC") == 0) off_len = 0;
-        p += sprintf(p, "%s%s%.*s%s", z->name, off_len ? "  " : "", off_len, z->label,
-                     i < tz_count() - 1 ? "\n" : "");
-    }
-    return opts;
-}
-
-void tz_show_selected(void)
-{
-    const tz_entry_t *z = tz_get((int)lv_dropdown_get_selected(st_tz_dd));
-    snprintf(st_tz_txt, sizeof(st_tz_txt), "%s", z->name);
-    lv_dropdown_set_text(st_tz_dd, st_tz_txt);
-}
-
-void tz_dd_cb(lv_event_t *e)
-{
-    const tz_entry_t *z = tz_get((int)lv_dropdown_get_selected(st_tz_dd));
-    store_set_timezone(z->name);
-    tz_apply(z->name);
-    tz_show_selected();
 }
 
 /* home clock and the Settings Wi-Fi line; runs every second */
@@ -597,4 +564,47 @@ void build_home(void)
     lv_obj_t *src = make_label(scr_home, &lv_font_montserrat_12, C_MUTED);
     lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
     lv_obj_align(src, LV_ALIGN_BOTTOM_MID, 0, -8);
+}
+
+/* the Daily puzzle button: its line, and greyed out (not tappable) until
+ * the clock is set (Wi-Fi connected, time fetched) */
+static void daily_btn_update(void)
+{
+    char ds[80];
+    daily_sub_text(ds, sizeof(ds));
+    lv_label_set_text(h_daily_sub, ds);
+    time_t now = time(NULL);
+    lv_obj_set_state(h_daily, LV_STATE_DISABLED, !CLOCK_VALID(now));
+}
+
+static void stats_cb(lv_event_t *e)
+{
+    if (stats_db_ready()) stats_db_list_players();   /* fresh list for the player dropdown */
+    refresh_stats();
+    lv_screen_load(scr_stats);
+}
+
+static void plays_cb(lv_event_t *e)
+{
+    plays_ask(0);
+    lv_screen_load(scr_plays);
+}
+
+static void profile_cb(lv_event_t *e)
+{
+    render_players();
+    if (stats_db_ready()) stats_db_list_players();      /* fresh counts; drawn when they arrive */
+    lv_screen_load(scr_profile);
+}
+
+void sysmon_open_cb(lv_event_t *e)
+{
+    lv_screen_load(scr_sysmon);
+    sysmon_ui_set_shown(true);
+}
+
+void files_open_cb(lv_event_t *e)
+{
+    lv_screen_load(scr_files);
+    file_ui_set_shown(true);
 }

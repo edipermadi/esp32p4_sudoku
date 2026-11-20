@@ -2,6 +2,7 @@
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
+static void mark_started(void);
 static void unit_name(int u, char *buf, size_t n);
 static const char *units_word(void);
 static void digit_list(int mask, const char *last_word, char *buf, size_t n);
@@ -20,6 +21,9 @@ static void tour_skip_cb(lv_event_t *e);
 static void tour_dim(int x1, int y1, int x2, int y2);
 static void tour_show(int step);
 static void tour_check_cb(lv_timer_t *t);
+
+static lv_obj_t *tour_ovl;        /* the game screen's tour, while it's up */
+static bool      g_layout_left;         /* ... and on which side the pad is (Left-handed) */
 
 /* ------------------------------------------------------------- hints */
 /*
@@ -276,63 +280,6 @@ void hint_render(void)
     refresh_board();
 }
 
-void hint_act_cb(lv_event_t *e)
-{
-    if (!h_step || g_solved || g_paused) return;
-    if (h_step == 1 && hint_nudge()) return;
-    if (h_step == 1) {
-        h_step = 2;
-        hint_render();
-        return;
-    }
-    int i = h_info.cell, d = h_info.digit;
-    bool wrong = h_info.kind == STEP_WRONG;
-    push_undo();
-    if (wrong) {
-        record_move(i, 0, MOVE_ERASE);
-        g_b.val[i] = 0;
-    } else {
-        place_digit(i, d);
-        record_move(i, d, MOVE_FILL);
-        if (g_practice >= 0) stats_db_learned(g_practice);   /* Learn: this technique practised (Graduate) */
-    }
-    g_sel = i;
-    after_move();                                   /* closes the hint */
-    if (!wrong && !g_solved) placed_sounds(i, d);
-}
-
-void hint_close_cb(lv_event_t *e)
-{
-    hint_drop();
-    refresh_board();
-}
-
-void hint_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused || !g_sol_ok) return;
-    if (g_attack) {
-        sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
-        return;
-    }
-    if (h_step) {                                   /* already open: same as More / Place it */
-        if (hint_nudge()) return;                   /* (a nudge goes no further) */
-        hint_act_cb(e);
-        return;
-    }
-    if (!sudoku_next_step(g_geo, g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
-    if (g_hints < 0xFFFF) g_hints++;               /* every hint opened counts once */
-    if (h_info.tech.kind > 0 && h_info.tech.kind < 16) g_flags |= 1u << h_info.tech.kind;   /* (achievements) */
-    refresh_board();                                /* the hint count on the Fill button */
-    save_current();
-    h_step = 1;
-    hint_render();
-}
-
-void pause_cb(lv_event_t *e)
-{
-    set_paused(!g_paused);
-}
-
 static void reset_game(void)
 {
     memcpy(g_b.val, g_given, sizeof(g_b.val));
@@ -435,46 +382,6 @@ void back_cb(lv_event_t *e)
     }
     save_current();
     show_list();
-}
-
-void win_next_cb(lv_event_t *e)
-{
-    if (g_from_coll >= PUZZLE_COLLECTION_COUNT && coll_saved_index(g_from_coll) >= 0) {   /* a saved collection */
-        int i = coll_find(g_from_coll, g_id);
-        if (i >= 0) {
-            open_puzzle(coll_puzzle(g_from_coll, (i + 1) % coll_size(g_from_coll)));
-            return;
-        }
-    }
-    int ic = coll_of(g_id);
-    if (ic >= PUZZLE_COLLECTION_COUNT) {         /* imported: the next one of its collection */
-        uint16_t first = coll_first(ic), next = g_id + 1;
-        if (next >= first + coll_size(ic)) next = first;
-        open_puzzle(next);
-        return;
-    }
-    if (puzzle_is_generated(g_id)) {             /* another one of the same variant and level */
-        int lv = GEN_MEDIUM, var = VAR_CLASSIC;
-        gen_lookup(g_id, NULL, &var, &lv);
-        gen_start(var, lv);
-        return;
-    }
-    int c = puzzle_collection_of(g_id);
-    const puzzle_collection_t *pc = &puzzle_collections[c];
-    uint16_t next = g_id + 1;
-    if (next >= pc->first + pc->count) next = pc->first;
-    open_puzzle(next);
-}
-
-void win_list_cb(lv_event_t *e)
-{
-    show_list();
-}
-
-void win_hide_cb(lv_event_t *e)
-{
-    /* tap outside the card: look at the solved board */
-    if (lv_event_get_target_obj(e) == g_win_ovl) lv_obj_set_hidden(g_win_ovl, true);
 }
 
 void tick_cb(lv_timer_t *t)
@@ -967,4 +874,12 @@ void tour_maybe(void)
 {
     lv_timer_t *t = lv_timer_create(tour_check_cb, 500, NULL);   /* (after Learn / Time attack set their flags) */
     lv_timer_set_repeat_count(t, 1);
+}
+
+static void mark_started(void)
+{
+    time_t now = time(NULL);
+    g_started_at = CLOCK_VALID(now) ? (int64_t)now : 0;
+    g_started_tick = lv_tick_get();
+    if (!g_started_tick) g_started_tick = 1;
 }

@@ -18,7 +18,18 @@ static void list_export_cb(lv_event_t *e);
 static void list_tab_cb(lv_event_t *e);
 static void home_dots(void);
 static void btnm_cb(lv_event_t *e);
-static void new_menu_cb(lv_event_t *e);
+
+int h_nitems, h_npages;
+static lv_obj_t *l_total, *l_colls;
+static lv_obj_t *l_coll_btn[L_COLLS], *l_coll_cnt[L_COLLS];
+static lv_obj_t *l_coll_name[L_COLLS];
+static uint8_t   l_solved_bits[16];       /* an imported or saved collection's solved puzzles (sudoku.db) */
+static int l_tab_coll[2] = {0, -1};       /* the collection last shown in each tab */
+static lv_obj_t *l_tab_btn[2], *l_empty, *l_export, *l_del;
+static lv_obj_t *l_list;                  /* the Saved tab: a collection's puzzles as rows */
+static lv_obj_t *l_name, *l_stats, *l_btnm;
+static char      l_labels[MAX_PER_COLL][4];
+static const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];
 
 /* ============================================================= list screen */
 
@@ -160,7 +171,7 @@ void list_fill_rows(int lc)
 /* ---- Starred (the star in the title row, a toggle): the player's bookmarks in the
  * right pane, newest first, instead of the collection's puzzles */
 static bool      l_starred;
-static lv_obj_t *l_star_btn, *l_new_btn;
+lv_obj_t *l_star_btn, *l_new_btn;
 static uint16_t  l_star_ids[STATS_MAX_BOOKMARKS];
 static int       l_nstar;
 
@@ -531,17 +542,6 @@ lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name_lbl, l
     lv_obj_align(*cnt_lbl, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, (void *)(intptr_t)user);
     return b;
-}
-
-/* ---- the title row's context menu (the vertical dots): New puzzle, Enter, Learn */
-static void new_menu_cb(lv_event_t *e)
-{
-    static const ctx_item_t ITEMS[] = {
-        {LV_SYMBOL_PLUS, "New puzzle", new_puzzle_cb},
-        {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
-        {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
-    };
-    ctx_menu_toggle(l_new_btn, ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));
 }
 
 /* the rows of the collection column (name + solved count), one per collection; again

@@ -17,9 +17,14 @@ static void cf_tick(lv_timer_t *t);
 static void confetti(void (*done)(void));
 static void win_show(void);
 static void on_solved(void);
+static void after_move(void);
 static void push_undo_keep_redo(void);
+static void push_undo(void);
 static bool can_edit(void);
+static void record_move(int cell, int digit, move_kind_t kind);
 static void fill_cb(lv_event_t *e);
+static void place_digit(int i, int d);
+static void placed_sounds(int i, int d);
 static void cell_click_cb(lv_event_t *e);
 static void cm_close(void);
 static void cm_backdrop_cb(lv_event_t *e);
@@ -34,6 +39,26 @@ static void erase_cb(lv_event_t *e);
 static void undo_cb(lv_event_t *e);
 static void redo_cb(lv_event_t *e);
 static void notes_cb(lv_event_t *e);
+static void hint_act_cb(lv_event_t *e);
+static void hint_close_cb(lv_event_t *e);
+static void hint_cb(lv_event_t *e);
+static void pause_cb(lv_event_t *e);
+static void win_next_cb(lv_event_t *e);
+static void win_list_cb(lv_event_t *e);
+static void win_hide_cb(lv_event_t *e);
+static void win_share_cb(lv_event_t *e);
+static void star_cb(lv_event_t *e);
+
+static bool     g_conflict[81];
+static lv_obj_t *g_auto_btn, *g_win_badge, *g_win_share;
+static lv_obj_t *g_save_btn;      /* put it in a saved collection (generated and typed-in puzzles) */
+lv_obj_t *g_pad[9], *g_pad_cnt[9];
+lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
+lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
+static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
+static lv_obj_t *g_win_h2h;      /* Solved dialog: how others did on this puzzle */
+static lv_obj_t *g_win_h2h_row;  /* ... in a row with the leader's avatar */
+lv_obj_t *g_undo_btn, *g_redo_btn;
 
 /* ============================================================= sudoku rules */
 
@@ -172,14 +197,6 @@ bool has_progress(void)
         if ((g_b.val[i] && !g_given[i]) || g_b.notes[i] || g_b.colors[i]) return true;
     }
     return false;
-}
-
-void mark_started(void)
-{
-    time_t now = time(NULL);
-    g_started_at = CLOCK_VALID(now) ? (int64_t)now : 0;
-    g_started_tick = lv_tick_get();
-    if (!g_started_tick) g_started_tick = 1;
 }
 
 /* Start time, worked out from uptime if the clock was set after the puzzle
@@ -352,8 +369,8 @@ void refresh_board(void)
     }
 }
 
-uint16_t s_solve_id;
-uint32_t s_solve_secs, s_solve_mistakes, s_solve_hints, s_solve_flags;
+static uint16_t s_solve_id;
+static uint32_t s_solve_secs, s_solve_mistakes, s_solve_hints, s_solve_flags;
 static int64_t  s_solve_started;
 
 static void solve_commit_cb(lv_timer_t *t)
@@ -594,7 +611,7 @@ static void on_solved(void)
     confetti(win_show);                             /* then the dialog (win_show) */
 }
 
-void after_move(void)
+static void after_move(void)
 {
     hint_drop();                                    /* the board changed: an open hint no longer fits */
     compute_conflicts();
@@ -614,7 +631,7 @@ static void push_undo_keep_redo(void)
 }
 
 /* before every edit: the board goes on the undo ring, and redo is gone */
-void push_undo(void)
+static void push_undo(void)
 {
     push_undo_keep_redo();
     g_redo_len = 0;
@@ -626,7 +643,7 @@ static bool can_edit(void)
 }
 
 /* one entry in the move log (a cell's digit changed) */
-void record_move(int cell, int digit, move_kind_t kind)
+static void record_move(int cell, int digit, move_kind_t kind)
 {
     if (!g_moves) g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
     if (!g_moves || g_nmoves >= GAME_MOVES_MAX) return;
@@ -698,7 +715,7 @@ static void fill_cb(lv_event_t *e)
 }
 
 /* a digit placed in cell i: its notes go, and peers lose that note */
-void place_digit(int i, int d)
+static void place_digit(int i, int d)
 {
     g_b.val[i] = (uint8_t)d;
     g_b.notes[i] = 0;
@@ -708,7 +725,7 @@ void place_digit(int i, int d)
 }
 
 /* chimes for a digit d placed in cell i without a conflict */
-void placed_sounds(int i, int d)
+static void placed_sounds(int i, int d)
 {
     if (g_conflict[i]) return;
     int n = 0;
@@ -1251,4 +1268,141 @@ void build_game(void)
 
     g_layout_var = -1;                              /* new widgets: lay them out for the current puzzle */
     game_layout();
+}
+
+static void hint_act_cb(lv_event_t *e)
+{
+    if (!h_step || g_solved || g_paused) return;
+    if (h_step == 1 && hint_nudge()) return;
+    if (h_step == 1) {
+        h_step = 2;
+        hint_render();
+        return;
+    }
+    int i = h_info.cell, d = h_info.digit;
+    bool wrong = h_info.kind == STEP_WRONG;
+    push_undo();
+    if (wrong) {
+        record_move(i, 0, MOVE_ERASE);
+        g_b.val[i] = 0;
+    } else {
+        place_digit(i, d);
+        record_move(i, d, MOVE_FILL);
+        if (g_practice >= 0) stats_db_learned(g_practice);   /* Learn: this technique practised (Graduate) */
+    }
+    g_sel = i;
+    after_move();                                   /* closes the hint */
+    if (!wrong && !g_solved) placed_sounds(i, d);
+}
+
+static void hint_close_cb(lv_event_t *e)
+{
+    hint_drop();
+    refresh_board();
+}
+
+static void hint_cb(lv_event_t *e)
+{
+    if (g_solved || g_paused || !g_sol_ok) return;
+    if (g_attack) {
+        sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
+        return;
+    }
+    if (h_step) {                                   /* already open: same as More / Place it */
+        if (hint_nudge()) return;                   /* (a nudge goes no further) */
+        hint_act_cb(e);
+        return;
+    }
+    if (!sudoku_next_step(g_geo, g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
+    if (g_hints < 0xFFFF) g_hints++;               /* every hint opened counts once */
+    if (h_info.tech.kind > 0 && h_info.tech.kind < 16) g_flags |= 1u << h_info.tech.kind;   /* (achievements) */
+    refresh_board();                                /* the hint count on the Fill button */
+    save_current();
+    h_step = 1;
+    hint_render();
+}
+
+static void pause_cb(lv_event_t *e)
+{
+    set_paused(!g_paused);
+}
+
+static void win_next_cb(lv_event_t *e)
+{
+    if (g_from_coll >= PUZZLE_COLLECTION_COUNT && coll_saved_index(g_from_coll) >= 0) {   /* a saved collection */
+        int i = coll_find(g_from_coll, g_id);
+        if (i >= 0) {
+            open_puzzle(coll_puzzle(g_from_coll, (i + 1) % coll_size(g_from_coll)));
+            return;
+        }
+    }
+    int ic = coll_of(g_id);
+    if (ic >= PUZZLE_COLLECTION_COUNT) {         /* imported: the next one of its collection */
+        uint16_t first = coll_first(ic), next = g_id + 1;
+        if (next >= first + coll_size(ic)) next = first;
+        open_puzzle(next);
+        return;
+    }
+    if (puzzle_is_generated(g_id)) {             /* another one of the same variant and level */
+        int lv = GEN_MEDIUM, var = VAR_CLASSIC;
+        gen_lookup(g_id, NULL, &var, &lv);
+        gen_start(var, lv);
+        return;
+    }
+    int c = puzzle_collection_of(g_id);
+    const puzzle_collection_t *pc = &puzzle_collections[c];
+    uint16_t next = g_id + 1;
+    if (next >= pc->first + pc->count) next = pc->first;
+    open_puzzle(next);
+}
+
+static void win_list_cb(lv_event_t *e)
+{
+    show_list();
+}
+
+static void win_hide_cb(lv_event_t *e)
+{
+    /* tap outside the card: look at the solved board */
+    if (lv_event_get_target_obj(e) == g_win_ovl) lv_obj_set_hidden(g_win_ovl, true);
+}
+
+/* Solved dialog of a daily puzzle: the result as a QR code, for a phone (and a message to friends) */
+static void win_share_cb(lv_event_t *e)
+{
+    char day[12] = "", kind[48] = "", t[16];
+    int var = 0, lv = 0;
+    if (!puzzle_is_generated(s_solve_id) || !gen_lookup_day(s_solve_id, NULL, &var, &lv, day) || !day[0]) return;
+    daily_kind_text(var, lv, kind, sizeof(kind));
+    fmt_time(t, sizeof(t), s_solve_secs);
+    char hints[24];
+    if (s_solve_hints) snprintf(hints, sizeof(hints), "%u hint%s", (unsigned)s_solve_hints, s_solve_hints == 1 ? "" : "s");
+    else snprintf(hints, sizeof(hints), "no hints");
+    static char text[256];
+    snprintf(text, sizeof(text), "Sudoku daily %s (%s)\n%s: solved in %s, %u mistake%s, %s%s\nESP32-P4 Sudoku",
+             day, kind, store_player_name(), t, (unsigned)s_solve_mistakes, s_solve_mistakes == 1 ? "" : "s", hints,
+             (s_solve_flags & GAME_FLAG_NO_NOTES) ? ", no notes" : "");
+    if (!qr_dialog(SYMBOL_QR "  Today's result", text,
+                   "Scan it with a phone to send it to friends: the day, the puzzle, your time and mistakes.")) {
+        sudoku_ui_notice("Couldn't make a QR code of the result.", 3000);
+    }
+}
+
+static void star_cb(lv_event_t *e)
+{
+    if (g_practice >= 0 || g_id >= PUZZLE_GEN_RAM_BASE) return;
+    g_starred = !g_starred;
+    stats_db_set_bookmark(g_id, g_starred);
+    update_header();
+    sudoku_ui_notice(g_starred ? "Starred: it's under Puzzles > Starred." : "No longer starred.", 2000);
+}
+
+/* the game just solved (from the Solved dialog) */
+void win_replay_cb(lv_event_t *e)
+{
+    char t[16], sub[96];
+    fmt_time(t, sizeof(t), s_solve_secs);
+    snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
+             store_player_name(), t, (unsigned)g_hints, g_hints == 1 ? "" : "s");
+    open_replay(g_id, g_moves, g_moves ? g_nmoves : 0, sub, store_player_name());
 }

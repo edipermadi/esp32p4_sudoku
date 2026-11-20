@@ -26,6 +26,9 @@ static void player_avatar_cb(lv_event_t *e);
 static void player_menu_cb(lv_event_t *e);
 static void player_color_cb(lv_event_t *e);
 
+/* players screen */
+static lv_obj_t *p_list, *p_menu_btn, *p_note;
+
 /* ------------------------------------------------------------- players */
 
 /* name dialog (add or rename), on the top layer with an on-screen keyboard */
@@ -459,13 +462,6 @@ void render_players(void)
     lv_label_set_text(p_note, stats_db_ready()
         ? "Statistics and the game in progress are kept per player in sudoku.db."
         : "No sudoku.db: insert a FAT32 microSD card before switching on to keep players.");
-}
-
-void profile_cb(lv_event_t *e)
-{
-    render_players();
-    if (stats_db_ready()) stats_db_list_players();      /* fresh counts; drawn when they arrive */
-    lv_screen_load(scr_profile);
 }
 
 void build_profile(void)

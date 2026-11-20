@@ -2,6 +2,22 @@
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
+static void left_hand_sw_cb(lv_event_t *e);
+static void no_notes_sw_cb(lv_event_t *e);
+static void cvd_sw_cb(lv_event_t *e);
+static void night_sw_cb(lv_event_t *e);
+static void night_hours_cb(lv_event_t *e);
+static void night_bright_cb(lv_event_t *e);
+static void saver_clock_sw_cb(lv_event_t *e);
+static void wifi_open_cb(lv_event_t *e);
+static const char *tz_dropdown_options(void);
+static void tz_show_selected(void);
+static void tz_dd_cb(lv_event_t *e);
+static void gibberlink_sw_cb(lv_event_t *e);
+static void sound_sw_cb(lv_event_t *e);
+static void bright_sl_cb(lv_event_t *e);
+static void vol_sl_cb(lv_event_t *e);
+static lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_cb_t cb, lv_obj_t **lbl);
 static bool fw_file_desc(esp_app_desc_t *d, uint32_t *size);
 static void fw_build_id(const esp_app_desc_t *d, char out[9]);
 static void fw_row_update(void);
@@ -27,6 +43,7 @@ static void factory_reset_cb(lv_event_t *e);
 static void power_off_confirm_cb(lv_event_t *e);
 static void usb_done_cb(lv_event_t *e);
 static void usb_connect_cb(lv_event_t *e);
+static void theme_sw_cb(lv_event_t *e);
 static void st_tab_cb(lv_event_t *e);
 static void st_close_lists_cb(lv_event_t *e);
 static void hint_mode_dd_cb(lv_event_t *e);
@@ -35,6 +52,24 @@ static void sysmon_back_cb(lv_event_t *e);
 static void files_back_cb(lv_event_t *e);
 static lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint);
 static lv_obj_t *settings_switch(lv_obj_t *row, bool on, lv_event_cb_t cb);
+
+static const char *const ACCENT_NAMES = "Blue\nTeal\nGreen\nPurple\nPink";
+static bool s_dark = true;
+
+/* settings screen */
+lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
+static lv_obj_t *st_night_bright_lbl;
+
+static lv_obj_t *st_night_from, *st_night_to;
+static lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;
+static char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
+lv_obj_t *st_sd_btn, *st_sd_hint;
+static lv_obj_t *u_ovl;                   /* "USB drive" panel while the computer has the card */
+static lv_obj_t *st_usb_btn, *st_usb_hint;
+static bool u_reloading;                  /* card back / reset: waiting for sudoku.db to (re)open */
+static bool u_reload_home;                /* ... then show Home (factory reset) */
+static lv_obj_t *st_tab_btn[ST_TABS], *st_pane[ST_TABS];
+static int st_tab;                                  /* the open tab; Settings opens on Network */
 
 static lv_obj_t *st_fw_btn, *st_fw_hint;
 static lv_obj_t *fw_ovl, *fw_bar, *fw_lbl;
@@ -745,22 +780,10 @@ void big_digits_dd_cb(lv_event_t *e)
     }
 }
 
-void sysmon_open_cb(lv_event_t *e)
-{
-    lv_screen_load(scr_sysmon);
-    sysmon_ui_set_shown(true);
-}
-
 static void sysmon_back_cb(lv_event_t *e)
 {
     sysmon_ui_set_shown(false);
     lv_screen_load(scr_home);                       /* (opened from the Home menu) */
-}
-
-void files_open_cb(lv_event_t *e)
-{
-    lv_screen_load(scr_files);
-    file_ui_set_shown(true);
 }
 
 static void files_back_cb(lv_event_t *e)
@@ -1034,4 +1057,223 @@ void build_files(void)
 {
     scr_files = make_screen();
     file_ui_create(scr_files, files_back_cb);
+}
+
+static void left_hand_sw_cb(lv_event_t *e)
+{
+    store_set_left_hand(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+    game_layout();                                  /* the game screen moves its board and pad now */
+}
+
+static void no_notes_sw_cb(lv_event_t *e)
+{
+    store_set_no_notes(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));   /* (games started from now) */
+}
+
+static void cvd_sw_cb(lv_event_t *e)
+{
+    store_set_cvd(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+    apply_theme(s_dark);                            /* every screen again, in the new colours */
+}
+
+static void night_sw_cb(lv_event_t *e)
+{
+    store_set_night_mode(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+    night_check(NULL);                              /* at once (also off: back to the day look) */
+}
+
+static void night_hours_cb(lv_event_t *e)
+{
+    store_set_night_hours((uint8_t)lv_dropdown_get_selected(st_night_from),
+                          (uint8_t)lv_dropdown_get_selected(st_night_to));
+    night_check(NULL);
+}
+
+static void night_bright_cb(lv_event_t *e)
+{
+    int v = lv_slider_get_value(lv_event_get_target_obj(e));
+    lv_label_set_text_fmt(st_night_bright_lbl, "%d%%", v);
+    if (s_night) bsp_display_brightness_set(v < store_brightness() ? v : store_brightness());   /* see it now */
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_night_brightness((uint8_t)v);
+}
+
+static void saver_clock_sw_cb(lv_event_t *e)
+{
+    store_set_saver_clock(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+}
+
+static void wifi_open_cb(lv_event_t *e)
+{
+    lv_screen_load(scr_wifi);
+    wifi_ui_set_shown(true);
+}
+
+/* "Asia/Dubai  UTC+4\n..." for the time zone dropdown (built once) */
+static const char *tz_dropdown_options(void)
+{
+    static char *opts;
+    if (opts) return opts;
+    size_t n = 0;
+    for (int i = 0; i < tz_count(); i++) n += strlen(tz_get(i)->name) + 16;
+    opts = (char *)malloc(n);
+    if (!opts) return "UTC";
+    char *p = opts;
+    for (int i = 0; i < tz_count(); i++) {
+        const tz_entry_t *z = tz_get(i);
+        const char *sp = strstr(z->label, "  ");          /* label: "UTC+4  Dubai" */
+        int off_len = sp ? (int)(sp - z->label) : 0;
+        if (strcmp(z->name, "UTC") == 0) off_len = 0;
+        p += sprintf(p, "%s%s%.*s%s", z->name, off_len ? "  " : "", off_len, z->label,
+                     i < tz_count() - 1 ? "\n" : "");
+    }
+    return opts;
+}
+
+static void tz_show_selected(void)
+{
+    const tz_entry_t *z = tz_get((int)lv_dropdown_get_selected(st_tz_dd));
+    snprintf(st_tz_txt, sizeof(st_tz_txt), "%s", z->name);
+    lv_dropdown_set_text(st_tz_dd, st_tz_txt);
+}
+
+static void tz_dd_cb(lv_event_t *e)
+{
+    const tz_entry_t *z = tz_get((int)lv_dropdown_get_selected(st_tz_dd));
+    store_set_timezone(z->name);
+    tz_apply(z->name);
+    tz_show_selected();
+}
+
+static void gibberlink_sw_cb(lv_event_t *e)
+{
+    bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
+    store_set_gibberlink(on);
+    gibberlink_set_enabled(on);
+}
+
+static void sound_sw_cb(lv_event_t *e)
+{
+    bool on = lv_obj_has_state(st_sound_sw, LV_STATE_CHECKED);
+    sfx_set_enabled(on);
+    store_set_sound_enabled(on);
+    if (on) sfx_play(SFX_TOUCH);   /* the tick for this press was skipped while muted */
+}
+
+/* brightness and volume: applied while the slider moves, saved when it's let go */
+static void bright_sl_cb(lv_event_t *e)
+{
+    int v = lv_slider_get_value(st_bright_sl);
+    int nb = store_night_brightness();
+    bsp_display_brightness_set(s_night && store_night_mode() && nb < v ? nb : v);   /* (at night: at most that) */
+    lv_label_set_text_fmt(st_bright_lbl, "%d%%", v);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_brightness((uint8_t)v);
+}
+
+static void vol_sl_cb(lv_event_t *e)
+{
+    int v = lv_slider_get_value(st_vol_sl);
+    bsp_audio_set_volume(v);
+    lv_label_set_text_fmt(st_vol_lbl, "%d%%", v);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
+        store_set_volume((uint8_t)v);
+        sfx_play(SFX_TOUCH);                       /* hear the new level */
+    }
+}
+
+/* a slider + its value on the right of a settings row */
+static lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_cb_t cb, lv_obj_t **lbl)
+{
+    lv_obj_t *sl = lv_slider_create(row);
+    lv_obj_set_size(sl, 220, 14);
+    lv_obj_align(sl, LV_ALIGN_RIGHT_MID, -14, 0);
+    lv_slider_set_range(sl, min, max);
+    lv_slider_set_value(sl, value, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(sl, C_CARD2, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(sl, C_ACCENT, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(sl, C_ACCENT, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(sl, 8, LV_PART_KNOB);              /* a knob a finger can find */
+    lv_obj_set_ext_click_area(sl, 24);
+    lv_obj_add_event_cb(sl, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(sl, cb, LV_EVENT_RELEASED, NULL);
+    *lbl = make_label(row, &lv_font_montserrat_18, C_MUTED);
+    lv_obj_set_width(*lbl, 56);
+    lv_obj_set_style_text_align(*lbl, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_label_set_text_fmt(*lbl, "%d%%", value);
+    lv_obj_align(*lbl, LV_ALIGN_RIGHT_MID, -250, 0);
+    return sl;
+}
+
+/* Switches palette and LVGL theme, then rebuilds every screen around the
+ * current state (all of which lives outside the widgets) and shows the
+ * rebuilt copy of the screen that was open (home at start-up). */
+void apply_theme(bool dark)
+{
+    s_dark = dark;
+    palette_build(dark, store_accent());
+    lv_display_t *disp = lv_display_get_default();
+    lv_display_set_theme(disp, lv_theme_default_init(disp, C_ACCENT, C_ORANGE, dark, &lv_font_montserrat_16));
+
+    lv_obj_t *old_home = scr_home, *old_list = scr_list, *old_settings = scr_settings, *old_game = scr_game;
+    lv_obj_t *old_stats = scr_stats, *old_wifi = scr_wifi, *old_profile = scr_profile, *old_history = scr_history;
+    lv_obj_t *old_plays = scr_plays, *old_trophy = scr_trophy, *old_sysmon = scr_sysmon, *old_files = scr_files;
+    lv_obj_t *act = lv_screen_active();
+
+    build_game();
+    build_list();
+    build_home();
+    build_stats();
+    build_settings();
+    build_wifi();
+    build_sysmon();
+    build_files();
+    build_profile();
+    build_history();
+    build_plays();
+    build_trophies();
+    if (g_id != STORE_NO_GAME) {
+        lv_obj_set_state(g_notes_btn, LV_STATE_CHECKED, g_notes_mode);
+        lv_obj_set_hidden(g_pause_ovl, !g_paused);
+        compute_conflicts();
+        refresh_board();
+        update_header();
+    }
+    refresh_list();
+    refresh_home();
+    refresh_stats();
+    lv_obj_t *to = act && act == old_game     ? scr_game
+                 : act && act == old_stats    ? scr_stats
+                 : act && act == old_wifi     ? scr_wifi
+                 : act && act == old_sysmon   ? scr_sysmon
+                 : act && act == old_files    ? scr_files
+                 : act && act == old_profile  ? scr_profile
+                 : act && act == old_history  ? scr_history
+                 : act && act == old_plays    ? scr_plays
+                 : act && act == old_trophy   ? scr_trophy
+                 : act && act == old_list     ? scr_list
+                 : act && act == old_settings ? scr_settings
+                 : scr_home;
+    lv_screen_load(to);
+    if (to == scr_plays) plays_ask(pl_offset);         /* fill the rebuilt list */
+    if (to == scr_trophy) tr_ask();
+
+    /* the old screens may be running this very event: delete them later */
+    if (old_home) lv_obj_delete_async(old_home);
+    if (old_list) lv_obj_delete_async(old_list);
+    if (old_settings) lv_obj_delete_async(old_settings);
+    if (old_stats) lv_obj_delete_async(old_stats);
+    if (old_wifi) lv_obj_delete_async(old_wifi);
+    if (old_sysmon) lv_obj_delete_async(old_sysmon);
+    if (old_files) lv_obj_delete_async(old_files);
+    if (old_profile) lv_obj_delete_async(old_profile);
+    if (old_history) lv_obj_delete_async(old_history);
+    if (old_plays) lv_obj_delete_async(old_plays);
+    if (old_trophy) lv_obj_delete_async(old_trophy);
+    if (old_game) lv_obj_delete_async(old_game);
+}
+
+static void theme_sw_cb(lv_event_t *e)
+{
+    bool dark = lv_obj_has_state(st_theme_sw, LV_STATE_CHECKED);
+    store_set_dark_mode(dark);
+    apply_theme(dark);
 }

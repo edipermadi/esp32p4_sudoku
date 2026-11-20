@@ -35,7 +35,6 @@ static palette_t s_pal;                   /* the active scheme with the chosen a
 static const uint32_t ACCENTS[ACCENT_COUNT][2] = {
     {0x4F8CFF, 0x2F6FE0}, {0x2DD4BF, 0x0D9488}, {0x4ADE80, 0x16A34A}, {0xA78BFA, 0x7C3AED}, {0xF472B6, 0xDB2777},
 };
-const char *const ACCENT_NAMES = "Blue\nTeal\nGreen\nPurple\nPink";
 
 /* Night mode (Settings > Display): between the night hours, dark mode and the backlight
  * at most the night brightness. Only the switch-over changes things (night_check), so
@@ -112,7 +111,6 @@ lv_obj_t *player_dot(lv_obj_t *parent, int color, int size)
     lv_obj_set_clickable(d, false);
     return d;
 }
-bool s_dark = true;
 uint8_t s_sleep_min = 5;       /* screen timeout, 0 = never */
 
 const char *const DIGITS[10] = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
@@ -123,7 +121,6 @@ const sudoku_geom_t *g_geo;       /* and its geometry: units, peers, size */
 sudoku_geom_t *g_geo_buf;         /* PSRAM: a Jigsaw puzzle's geometry (its regions) */
 uint8_t  g_given[81];
 board_t  g_b;
-bool     g_conflict[81];
 int      g_sel = -1;
 bool     g_notes_mode;
 bool     g_solved;
@@ -132,7 +129,6 @@ uint32_t g_elapsed_ms;
 uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
 uint16_t g_hints;         /* cells filled with Fill (undo doesn't remove them either) */
 uint32_t g_flags;         /* GAME_FLAG_* (store.h): the no-notes challenge, techniques the hints showed */
-lv_obj_t *g_auto_btn, *g_win_badge, *g_win_share;
 uint8_t  g_sol[81];       /* the solution, for Fill */
 game_move_t *g_moves;     /* move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
 uint8_t  h_mark[81];      /* hint highlight: 0, 1 = where to look, 2 = the cell */
@@ -142,11 +138,8 @@ int      g_practice = -1;  /* Learn: the technique being practised (LEARN_*), -1
 bool     g_attack;         /* this game is part of a run */
 uint32_t atk_used_ms;      /* the run's earlier puzzles */
 int      atk_solved, atk_mistakes;
-uint16_t atk_last;
 bool     g_starred;        /* the puzzle is bookmarked (the star in the top bar) */
 lv_obj_t *g_star_btn;
-lv_obj_t *g_save_btn;      /* put it in a saved collection (generated and typed-in puzzles) */
-lv_obj_t *tour_ovl;        /* the game screen's tour, while it's up */
 lv_obj_t *h_card, *h_text, *h_act;
 int      g_nmoves;
 bool     g_sol_ok;
@@ -170,20 +163,6 @@ lv_obj_t *h_menu;                  /* the pages, side by side: swipe between the
 int h_menu_grid;                   /* layout signature (home_layout), -1 = not laid out */
 lv_obj_t *h_page[HOME_PAGES_MAX], *h_dots;
 lv_obj_t *h_items[16];             /* the menu buttons, in order */
-int h_nitems, h_npages;
-lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player, *h_daily_sub, *h_daily;
-lv_obj_t *h_player_title, *h_player_avatar;   /* the Players button's title: the avatar, or the icon */
-
-/* history screen */
-lv_obj_t *hz_cal, *hz_title, *hz_list;
-lv_calendar_date_t hz_marked[31];  /* highlighted days (the calendar keeps the pointer) */
-int hz_year, hz_month;             /* month asked for / shown, 0 = not yet */
-uint8_t hz_count[31];              /* games per day of the highlighted month (badges) */
-lv_calendar_date_t hz_sel;         /* the day tapped (its list is shown), year 0 = none */
-bool hz_latest_pending;            /* asked for "the latest month"; show what comes back */
-
-/* players screen */
-lv_obj_t *p_list, *p_menu_btn, *p_note;
 stats_player_t p_players[STATS_MAX_PLAYERS];
 int p_count = -1;                 /* last list from sudoku.db, -1 = none yet */
 
@@ -217,77 +196,9 @@ lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, in
     }
     return box;
 }
-lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
-lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_player_dd;
-lv_obj_t *x_chart, *x_plot, *x_trend, *x_chart_btn;   /* progress chart (instead of the table) */
-bool      x_chart_mode;            /* chart shown (kept until power-off) */
-bool      x_from_db;               /* what the info popup says the numbers come from */
-char      x_player_txt[STORE_NAME_LEN + 8];    /* closed dropdown: icon + name */
-lv_obj_t *x_player_av;                         /* ... or the avatar left of the name */
 int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, then the kinds (STATS_LEVEL_KIND) */
-
-/* settings screen */
-lv_obj_t *st_theme_sw, *st_sound_sw, *st_sleep_dd, *st_wifi_lbl, *st_tz_dd;
 lv_obj_t *st_wifi_eye;               /* shows the network's name (hidden until tapped) */
 lv_obj_t *st_lock_dd, *st_pin_btn;   /* the lock screen: Off / Swipe / PIN, and Change PIN */
-lv_obj_t *st_night_bright_lbl;
-
-void left_hand_sw_cb(lv_event_t *e)
-{
-    store_set_left_hand(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
-    game_layout();                                  /* the game screen moves its board and pad now */
-}
-
-void no_notes_sw_cb(lv_event_t *e)
-{
-    store_set_no_notes(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));   /* (games started from now) */
-}
-
-void cvd_sw_cb(lv_event_t *e)
-{
-    store_set_cvd(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
-    apply_theme(s_dark);                            /* every screen again, in the new colours */
-}
-
-void night_sw_cb(lv_event_t *e)
-{
-    store_set_night_mode(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
-    night_check(NULL);                              /* at once (also off: back to the day look) */
-}
-
-lv_obj_t *st_night_from, *st_night_to;
-
-void night_hours_cb(lv_event_t *e)
-{
-    store_set_night_hours((uint8_t)lv_dropdown_get_selected(st_night_from),
-                          (uint8_t)lv_dropdown_get_selected(st_night_to));
-    night_check(NULL);
-}
-
-void night_bright_cb(lv_event_t *e)
-{
-    int v = lv_slider_get_value(lv_event_get_target_obj(e));
-    lv_label_set_text_fmt(st_night_bright_lbl, "%d%%", v);
-    if (s_night) bsp_display_brightness_set(v < store_brightness() ? v : store_brightness());   /* see it now */
-    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_night_brightness((uint8_t)v);
-}
-
-void saver_clock_sw_cb(lv_event_t *e)
-{
-    store_set_saver_clock(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
-}
-bool      st_wifi_reveal;            /* name shown; hidden again each time Settings opens */
-lv_obj_t *st_bright_sl, *st_bright_lbl, *st_vol_sl, *st_vol_lbl, *st_assist_dd;
-char      st_tz_txt[48];     /* closed dropdown shows just the IANA name */
-lv_obj_t *st_sd_btn, *st_sd_hint;
-lv_obj_t *u_ovl;                   /* "USB drive" panel while the computer has the card */
-lv_obj_t *st_usb_btn, *st_usb_hint;
-bool u_reloading;                  /* card back / reset: waiting for sudoku.db to (re)open */
-bool u_reload_home;                /* ... then show Home (factory reset) */
-lv_obj_t *l_total, *l_colls;
-lv_obj_t *l_coll_btn[L_COLLS], *l_coll_cnt[L_COLLS];
-lv_obj_t *l_coll_name[L_COLLS];
-uint8_t   l_solved_bits[16];       /* an imported or saved collection's solved puzzles (sudoku.db) */
 /* collections imported from puzzles/ on the card (stats_db_import_puzzles) */
 static stats_import_t s_imports[STATS_MAX_IMPORTS];
 int s_nimports;
@@ -297,27 +208,12 @@ int s_nsaved;
 int g_from_coll = -1;              /* the collection the game was opened from (Next, back to the list) */
 /* Puzzles' tabs: 0 the built-in collections, 1 the player's (imported and saved) */
 int l_tab;
-int l_tab_coll[2] = {0, -1};       /* the collection last shown in each tab */
-lv_obj_t *l_tab_btn[2], *l_empty, *l_export, *l_del;
-lv_obj_t *l_list;                  /* the Saved tab: a collection's puzzles as rows */
-lv_obj_t *l_name, *l_stats, *l_btnm;
 int       l_coll;
-char      l_labels[MAX_PER_COLL][4];
-const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];
-uint16_t  l_pending_id;
 
 /* game screen */
 lv_obj_t *g_grid, *g_boxes[9], *g_cells[81], *g_cell_lbl[81];
 lv_obj_t *g_clues[18];                       /* Sandwich: the sums by the rows and columns */
-lv_obj_t *g_pad[9], *g_pad_cnt[9];
 int       g_layout_var = -1;     /* variant the board and pad are laid out for */
-bool      g_layout_left;         /* ... and on which side the pad is (Left-handed) */
-lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
-lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
-lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
-lv_obj_t *g_win_h2h;      /* Solved dialog: how others did on this puzzle */
-lv_obj_t *g_win_h2h_row;  /* ... in a row with the leader's avatar */
-lv_obj_t *g_undo_btn, *g_redo_btn;
 lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the tour points at them) */
 const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
                                                      "Naked pair", "Hidden pair", "Naked triple", "X-Wing",

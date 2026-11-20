@@ -7,13 +7,13 @@ static void gen_poll_cb(lv_timer_t *t);
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day);
 static bool daily_today_v(char day[12], int *level, int *variant);
 static uint32_t daily_seed(const char *day);
-static void daily_sub_text(char *buf, size_t n);
 static void gen_levels_update(void);
 static void gen_pick_close(void);
 static void gen_level_cb(lv_event_t *e);
 static void gen_var_cb(lv_event_t *e);
 static void gen_cancel_cb(lv_event_t *e);
 static void gen_backdrop_cb(lv_event_t *e);
+static void new_puzzle_cb(lv_event_t *e);
 static int learn_variant(int target);
 static int learn_variant_tech(int target);
 static int learn_tech(int target);
@@ -24,6 +24,7 @@ static void learn_task(void *arg);
 static void learn_poll_cb(lv_timer_t *t);
 static void learn_pick_cb(lv_event_t *e);
 static void learn_close_cb(lv_event_t *e);
+static void learn_cb(lv_event_t *e);
 static void ed_refresh(void);
 static void ed_cell_cb(lv_event_t *e);
 static void ed_digit_cb(lv_event_t *e);
@@ -34,6 +35,7 @@ static void ed_clear_cb(lv_event_t *e);
 static void ed_check_task(void *arg);
 static void ed_check_done(lv_timer_t *t);
 static void ed_play_cb(lv_event_t *e);
+static void enter_cb(lv_event_t *e);
 
 /* ------------------------------------------------------------- new puzzle (generator) */
 /*
@@ -191,19 +193,8 @@ static uint32_t daily_seed(const char *day)          /* FNV-1a of the date */
     return h ? h : 1;
 }
 
-/* the Daily puzzle button: its line, and greyed out (not tappable) until
- * the clock is set (Wi-Fi connected, time fetched) */
-void daily_btn_update(void)
-{
-    char ds[80];
-    daily_sub_text(ds, sizeof(ds));
-    lv_label_set_text(h_daily_sub, ds);
-    time_t now = time(NULL);
-    lv_obj_set_state(h_daily, LV_STATE_DISABLED, !CLOCK_VALID(now));
-}
-
 /* the Daily puzzle line on the home screen */
-static void daily_sub_text(char *buf, size_t n)
+void daily_sub_text(char *buf, size_t n)
 {
     char day[12], kind[32];
     int level, variant, id, streak;
@@ -313,7 +304,7 @@ static void gen_backdrop_cb(lv_event_t *e)
     if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) gen_pick_close();
 }
 
-void new_puzzle_cb(lv_event_t *e)
+static void new_puzzle_cb(lv_event_t *e)
 {
     lv_obj_t *m = make_msgbox("New puzzle", NULL);
     gen_pick = m;
@@ -627,7 +618,7 @@ static void learn_close_cb(lv_event_t *e)
     learn_box = NULL;
 }
 
-void learn_cb(lv_event_t *e)
+static void learn_cb(lv_event_t *e)
 {
     lv_obj_t *m = make_msgbox("Learn a technique", NULL);
     learn_box = m;
@@ -817,7 +808,7 @@ static void ed_play_cb(lv_event_t *e)
     ed_check_timer = lv_timer_create(ed_check_done, 50, NULL);
 }
 
-void enter_cb(lv_event_t *e)
+static void enter_cb(lv_event_t *e)
 {
     memset(ed_val, 0, sizeof(ed_val));
     ed_sel = 0;
@@ -875,4 +866,15 @@ void enter_cb(lv_event_t *e)
     lv_obj_set_pos(hint, 8, BOT_Y + (BOT_H - 18) / 2);
     ed_refresh();
     lv_screen_load(scr_edit);
+}
+
+/* ---- the title row's context menu (the vertical dots): New puzzle, Enter, Learn */
+void new_menu_cb(lv_event_t *e)
+{
+    static const ctx_item_t ITEMS[] = {
+        {LV_SYMBOL_PLUS, "New puzzle", new_puzzle_cb},
+        {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
+        {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
+    };
+    ctx_menu_toggle(l_new_btn, ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));
 }

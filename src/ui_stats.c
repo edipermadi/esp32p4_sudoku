@@ -25,6 +25,14 @@ static void stats_info_cb(lv_event_t *e);
 static void stats_row_cb(lv_event_t *e);
 static void stats_table_draw_cb(lv_event_t *e);
 
+static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
+static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_player_dd;
+static lv_obj_t *x_chart, *x_plot, *x_trend, *x_chart_btn;   /* progress chart (instead of the table) */
+static bool      x_chart_mode;            /* chart shown (kept until power-off) */
+static bool      x_from_db;               /* what the info popup says the numbers come from */
+static char      x_player_txt[STORE_NAME_LEN + 8];    /* closed dropdown: icon + name */
+static lv_obj_t *x_player_av;                         /* ... or the avatar left of the name */
+
 static void add_puzzle_stat(level_stat_t *st, uint16_t id)
 {
     uint32_t t = store_best_time(id);
@@ -524,13 +532,6 @@ void refresh_stats(void)
     }
 }
 
-void stats_cb(lv_event_t *e)
-{
-    if (stats_db_ready()) stats_db_list_players();   /* fresh list for the player dropdown */
-    refresh_stats();
-    lv_screen_load(scr_stats);
-}
-
 static void stats_row_cb(lv_event_t *e)
 {
     x_sel = (int)(intptr_t)lv_event_get_user_data(e);
@@ -552,65 +553,6 @@ static void stats_table_draw_cb(lv_event_t *e)
         if (row == 0) ld->color = C_MUTED;
         if (col > 0) ld->align = LV_TEXT_ALIGN_RIGHT;
     }
-}
-
-void gibberlink_sw_cb(lv_event_t *e)
-{
-    bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
-    store_set_gibberlink(on);
-    gibberlink_set_enabled(on);
-}
-
-void sound_sw_cb(lv_event_t *e)
-{
-    bool on = lv_obj_has_state(st_sound_sw, LV_STATE_CHECKED);
-    sfx_set_enabled(on);
-    store_set_sound_enabled(on);
-    if (on) sfx_play(SFX_TOUCH);   /* the tick for this press was skipped while muted */
-}
-
-/* brightness and volume: applied while the slider moves, saved when it's let go */
-void bright_sl_cb(lv_event_t *e)
-{
-    int v = lv_slider_get_value(st_bright_sl);
-    int nb = store_night_brightness();
-    bsp_display_brightness_set(s_night && store_night_mode() && nb < v ? nb : v);   /* (at night: at most that) */
-    lv_label_set_text_fmt(st_bright_lbl, "%d%%", v);
-    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_brightness((uint8_t)v);
-}
-
-void vol_sl_cb(lv_event_t *e)
-{
-    int v = lv_slider_get_value(st_vol_sl);
-    bsp_audio_set_volume(v);
-    lv_label_set_text_fmt(st_vol_lbl, "%d%%", v);
-    if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
-        store_set_volume((uint8_t)v);
-        sfx_play(SFX_TOUCH);                       /* hear the new level */
-    }
-}
-
-/* a slider + its value on the right of a settings row */
-lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_cb_t cb, lv_obj_t **lbl)
-{
-    lv_obj_t *sl = lv_slider_create(row);
-    lv_obj_set_size(sl, 220, 14);
-    lv_obj_align(sl, LV_ALIGN_RIGHT_MID, -14, 0);
-    lv_slider_set_range(sl, min, max);
-    lv_slider_set_value(sl, value, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(sl, C_CARD2, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(sl, C_ACCENT, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(sl, C_ACCENT, LV_PART_KNOB);
-    lv_obj_set_style_pad_all(sl, 8, LV_PART_KNOB);              /* a knob a finger can find */
-    lv_obj_set_ext_click_area(sl, 24);
-    lv_obj_add_event_cb(sl, cb, LV_EVENT_VALUE_CHANGED, NULL);
-    lv_obj_add_event_cb(sl, cb, LV_EVENT_RELEASED, NULL);
-    *lbl = make_label(row, &lv_font_montserrat_18, C_MUTED);
-    lv_obj_set_width(*lbl, 56);
-    lv_obj_set_style_text_align(*lbl, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_label_set_text_fmt(*lbl, "%d%%", value);
-    lv_obj_align(*lbl, LV_ALIGN_RIGHT_MID, -250, 0);
-    return sl;
 }
 
 void build_stats(void)
@@ -726,5 +668,3 @@ void build_stats(void)
     lv_obj_set_hidden(x_chart, true);
 
 }
-lv_obj_t *st_tab_btn[ST_TABS], *st_pane[ST_TABS];
-int st_tab;                                  /* the open tab; Settings opens on Network */
