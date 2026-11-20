@@ -31,6 +31,10 @@ Both colour schemes are tables at the top of `src/sudoku_ui.c`: `PAL_DARK` and `
 
 The effects are note tables at the top of `src/sfx.c`. Each note has a frequency, a length in ms, a waveform (sine, triangle or square) and a level. `SFX_VOLUME` sets the codec volume, 70 % by default.
 
+## Internal RAM
+
+The P4's internal RAM (768 KB) is the tight resource; PSRAM (32 MB) is plenty. Some things must have one contiguous block of internal RAM: the hardware H.264 encoder for MP4 export (~52 KB), the microSD card's and the Wi-Fi link's DMA buffers. `setup()` calls `heap_caps_malloc_extmem_enable(4)`, so every `malloc()` of 4 bytes or more goes to PSRAM; code that needs internal RAM asks for it with `heap_caps_malloc(..., MALLOC_CAP_INTERNAL / MALLOC_CAP_DMA)`. With a higher limit (16 before 2026-11-20), LVGL's thousands of tiny allocations stayed internal and cut it into pieces: 99 KB free but no block over 35 KB, and MP4 export failed with "No memory for reference frame". Check with `heap 1` over [devctl](devctl.md) (the main region's `alloc_blocks` and `largest_free_block`): about 225 KB free and a 143 KB largest block at the Home screen is normal. Big buffers of your own go to PSRAM (`MALLOC_CAP_SPIRAM`), and avoid rebuilding every screen at once (`apply_theme`) as a reaction to data changes: two copies of all screens exist for a moment.
+
 ## Layout
 
 ```
