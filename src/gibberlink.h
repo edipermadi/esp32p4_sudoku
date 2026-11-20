@@ -15,6 +15,9 @@
  * another one; with the check, a garbled one isn't run ("ERR checksum"), and
  * the answer carries the same kind of check over its text after "P4$".
  *
+ * "pz" messages are parts of a puzzle sent by sound (another board's Share >
+ * Send by sound): no answer is played for them, so the next part isn't missed.
+ *
  * Off by default (Settings > Sound > Gibberlink): while on, a worker on core 0
  * reads the microphones and decodes, and a small icon shows at the bottom right
  * (it lights up while a command runs). What the board plays itself (its reply,
@@ -32,6 +35,14 @@ bool gibberlink_enabled(void);
 
 /* Call from loop() (the LVGL task): runs a received command, if any. */
 void gibberlink_poll(void);
+
+/* Sends text (up to 140 bytes, a Gibberlink id first: "SU$pz ...") as sound,
+ * ggwave audible Fast, after what's queued already, with a short gap between
+ * messages; works whether listening is on or not (the worker starts for it and
+ * ends after). false: no room or no memory. gibberlink_sending(): how many are
+ * still to play (0: done). */
+bool gibberlink_send(const char *text);
+int gibberlink_sending(void);
 
 #ifdef __cplusplus
 }

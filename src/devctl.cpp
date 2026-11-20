@@ -529,7 +529,7 @@ static void run(char *line)
     }
     if (s_cap) {                                    /* over sound: touches, wait, heap, screenoff only */
         static const char *const ok[] = {"tap", "long", "swipe", "press", "move", "release", "wait", "heap", "screenoff",
-                                         "fill", "state"};
+                                         "fill", "state", "pz"};
         bool allowed = false;
         for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) allowed |= !strcmp(cmd, ok[i]);
         if (!allowed) {
@@ -546,6 +546,12 @@ static void run(char *line)
     }
     if (!strcmp(cmd, "state")) {                   /* the game on screen, as text */
         cmd_state();
+        return;
+    }
+    if (!strcmp(cmd, "pz")) {                      /* pz <id> <i>/<n> <part>: a puzzle sent by sound (sudoku_ui.c) */
+        char o[96];
+        sudoku_ui_puzzle_part(line + 2, o, sizeof(o));
+        reply("%s\n", o);
         return;
     }
     if (!strcmp(cmd, "fill")) {                    /* fill <cell> <digit> ...: any separators, e.g. (12,5),(13,7) */

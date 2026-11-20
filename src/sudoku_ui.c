@@ -341,6 +341,37 @@ static lv_obj_t *p_list, *p_menu_btn, *p_note;
 static stats_player_t p_players[STATS_MAX_PLAYERS];
 static int p_count = -1;                 /* last list from sudoku.db, -1 = none yet */
 
+/* a player in that list, by id (non-zero) or else by name (names are unique, ignoring case);
+ * NULL: not there (yet) */
+static const stats_player_t *player_find(int32_t id, const char *name)
+{
+    for (int i = 0; i < p_count; i++) {
+        if (id ? p_players[i].id == id : (name && !strcasecmp(p_players[i].name, name))) return &p_players[i];
+    }
+    return NULL;
+}
+
+/* A player's avatar shrunk to size px or, without one, a dot (dot px) of their colour, centred
+ * in a size x size box that takes no taps. color < 0: the colour from the player list. */
+static lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, int size, int dot)
+{
+    lv_obj_t *box = lv_obj_create(parent);
+    lv_obj_remove_style_all(box);
+    lv_obj_set_size(box, size, size);
+    lv_obj_set_clickable(box, false);
+    lv_obj_set_scrollable(box, false);
+    if (color < 0) color = pl ? pl->color : 0;
+    if (pl && pl->avatar && pl->avatar <= AVATAR_COUNT) {
+        lv_obj_t *im = lv_image_create(box);
+        lv_image_set_src(im, &avatar_images[pl->avatar - 1]);
+        if (size < AVATAR_SIZE) lv_image_set_scale(im, (uint32_t)(256 * size / AVATAR_SIZE));
+        lv_obj_center(im);
+    } else {
+        lv_obj_center(player_dot(box, color, dot));
+    }
+    return box;
+}
+
 /* statistics screen: row 0 of the left column is "All levels" */
 #define X_ROWS (PUZZLE_COLLECTION_COUNT + 1 + KIND_COUNT)   /* all, collections, kinds made on the board */
 static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
@@ -457,6 +488,7 @@ static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_
 static lv_obj_t *g_pause_ovl, *g_win_ovl, *g_win_time, *g_win_best, *g_win_miss, *g_win_hint;
 static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
 static lv_obj_t *g_win_h2h;      /* Solved dialog: how others did on this puzzle */
+static lv_obj_t *g_win_h2h_row;  /* ... in a row with the leader's avatar */
 static lv_obj_t *g_undo_btn, *g_redo_btn;
 static lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the tour points at them) */
 
@@ -1275,7 +1307,12 @@ static void solve_commit_cb(lv_timer_t *t)
         else snprintf(line, sizeof(line), "%d%s of %d   -   %s leads with %s", h.rank, ordinal(h.rank), h.of, h.leader, t);
     }
     lv_label_set_text(g_win_h2h, line);
-    if (store_saved_game()->id == s_solve_id) store_clear_game();
+    while (lv_obj_get_child_count(g_win_h2h_row) > 1) lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
+    const stats_player_t *lead = line[0] && h.leader[0] ? player_find(0, h.leader) : NULL;
+    if (lead && lead->avatar && lead->avatar <= AVATAR_COUNT) {   /* the one ahead (or behind): their avatar */
+        lv_obj_t *b = player_badge(g_win_h2h_row, lead, -1, 26, 8);
+        lv_obj_move_to_index(b, 0);
+    }
     char day[12] = "";
     if (puzzle_is_generated(s_solve_id) && gen_lookup_day(s_solve_id, NULL, NULL, NULL, day) && day[0]) {
         int id, streak;
@@ -1489,6 +1526,7 @@ static void on_solved(void)
         lv_obj_set_style_text_color(g_win_miss, C_MUTED, 0);
     }
     lv_label_set_text(g_win_h2h, "");                 /* (solve_commit_cb fills it in) */
+    while (lv_obj_get_child_count(g_win_h2h_row) > 1) lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
     if (g_hints == 0) {
         lv_label_set_text(g_win_hint, "No hints");
         lv_obj_set_style_text_color(g_win_hint, C_GREEN, 0);
@@ -2951,11 +2989,15 @@ static void atk_board_fill(lv_obj_t *c)
     for (int i = 0; i < n; i++) {
         lv_obj_t *r = lv_obj_create(c);
         lv_obj_remove_style_all(r);
-        lv_obj_set_size(r, LV_PCT(100), 32);
+        lv_obj_set_size(r, LV_PCT(100), 36);
         lv_color_t col = rows[i].me ? C_ACCENT : C_TEXT;
         lv_obj_t *l = make_label(r, &lv_font_montserrat_18, col);
-        lv_label_set_text_fmt(l, "%d.  %s", i + 1, rows[i].name);
+        lv_label_set_text_fmt(l, "%d.", i + 1);
         lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_align(player_badge(r, player_find(0, rows[i].name), -1, 28, 10), LV_ALIGN_LEFT_MID, 28, 0);
+        lv_obj_t *nm = make_label(r, &lv_font_montserrat_18, col);
+        lv_label_set_text(nm, rows[i].name);
+        lv_obj_align(nm, LV_ALIGN_LEFT_MID, 64, 0);
         lv_obj_t *v = make_label(r, &lv_font_montserrat_18, col);
         lv_label_set_text_fmt(v, "%d solved   (%d run%s)", rows[i].best, rows[i].runs, rows[i].runs == 1 ? "" : "s");
         lv_obj_align(v, LV_ALIGN_RIGHT_MID, 0, 0);
@@ -3338,14 +3380,14 @@ static void qr_draw_cb(lv_event_t *e)
 }
 
 /* a QR code of text in a dialog, the note under it, then the text itself */
-static bool qr_dialog(const char *title, const char *text, const char *note)
+static lv_obj_t *qr_dialog(const char *title, const char *text, const char *note)
 {
     if (!qr_code) qr_code = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
     if (!qr_temp) qr_temp = heap_caps_malloc(qrcodegen_BUFFER_LEN_MAX, MALLOC_CAP_SPIRAM);
     if (!qr_code || !qr_temp ||
         !qrcodegen_encodeText(text, qr_temp, qr_code, qrcodegen_Ecc_LOW, qrcodegen_VERSION_MIN, qrcodegen_VERSION_MAX,
                               qrcodegen_Mask_AUTO, true)) {
-        return false;
+        return NULL;
     }
     lv_obj_t *m = make_msgbox(title, NULL);
     lv_obj_set_width(m, 560);
@@ -3359,7 +3401,7 @@ static bool qr_dialog(const char *title, const char *text, const char *note)
     lv_obj_t *t = make_wrap_text(c, &lv_font_montserrat_12, C_TEXT, text);
     lv_obj_set_style_margin_top(t, 6, 0);
     msgbox_button(m, "Close", mbox_close_cb, false);
-    return true;
+    return m;
 }
 
 /* Solved dialog of a daily puzzle: the result as a QR code, for a phone (and a message to friends) */
@@ -3383,6 +3425,326 @@ static void win_share_cb(lv_event_t *e)
     }
 }
 
+static void sv_changed(void);
+
+/* ------------------------------------------------------------- send a puzzle by sound */
+/*
+ * Share > Send by sound plays the puzzle on screen as Gibberlink (ggwave) messages;
+ * another board with Gibberlink on (Settings > Sound) takes it in, checks it has one
+ * solution, keeps it in Puzzles > Saved > "Received" and offers to play it.
+ *
+ * The puzzle is its .sdx line (stats_db.c): variant|level|givens|regions|cages|marks|
+ * thermos, the variant and level as numbers (level "-": the receiver rates it), the
+ * givens shortened (a run of 1-26 empty cells is one letter, a-z), trailing empty
+ * fields left out. A message carries at most 140 bytes, so the line goes in parts:
+ *
+ *   SU$pz <id> <i>/<n> <part>*<crc>
+ *
+ * id: 2 hex digits, the same in all parts of one puzzle; crc: CRC-16/CCITT-FALSE of
+ * the text after "SU$" (gibberlink.h). A Classic one is one part (about 6 s); a
+ * Killer one three or four. The receiver plays no answer to a part (devctl "pz").
+ */
+#define PZ_ID        "SU"                         /* our Gibberlink sender id for puzzles */
+#define PZ_PART      110                          /* characters of the line per message */
+#define PZ_MAX_PARTS 16
+#define PZ_TIMEOUT_MS 90000                       /* a puzzle's parts must all come within this */
+
+static uint16_t pz_crc16(const char *p, size_t n)
+{
+    uint16_t c = 0xFFFF;
+    while (n--) {
+        c ^= (uint16_t)((uint8_t)*p++ << 8);
+        for (int k = 0; k < 8; k++) c = (uint16_t)(c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1);
+    }
+    return c;
+}
+
+/* the puzzle on screen as that line; its length, 0 if it doesn't fit */
+static int pz_line(char *buf, size_t n)
+{
+    const sudoku_geom_t *G = g_geo;
+    int v = VAR_CLASSIC, lv = -1;
+    if (puzzle_is_generated(g_id)) gen_lookup(g_id, NULL, &v, &lv);
+    char giv[90];
+    int k = 0;
+    for (int i = 0; i < 81;) {
+        if (g_given[i]) {
+            giv[k++] = (char)('0' + g_given[i++]);
+            continue;
+        }
+        int run = 0;
+        while (i < 81 && !g_given[i] && run < 26) { run++; i++; }
+        giv[k++] = (char)('a' + run - 1);
+    }
+    giv[k] = 0;
+    static char extra[STATS_CAGES_LEN];
+    char regions[82] = "";
+    const char *cages = "", *marks = "", *thermos = "";
+    extra[0] = 0;
+    switch (g_var) {
+    case VAR_JIGSAW:
+        for (int i = 0; i < 81; i++) regions[i] = (char)('0' + G->region[i]);
+        regions[81] = 0;
+        break;
+    case VAR_KILLER:   if (sudoku_cages_text(G, extra, sizeof(extra))) cages = extra; break;
+    case VAR_EVENODD:
+    case VAR_CONSEC:   if (sudoku_marks_text(G, extra, sizeof(extra))) marks = extra; break;
+    case VAR_SANDWICH: if (sudoku_sandwich_text(G, extra, sizeof(extra))) marks = extra; break;
+    case VAR_THERMO:   if (sudoku_thermos_text(G, extra, sizeof(extra))) thermos = extra; break;
+    default: break;
+    }
+    char lvs[4] = "-";
+    if (lv >= 0 && lv < GEN_LEVELS) snprintf(lvs, sizeof(lvs), "%d", lv);
+    int len = snprintf(buf, n, "%d|%s|%s|%s|%s|%s|%s", g_var, lvs, giv, regions, cages, marks, thermos);
+    if (len < 0 || (size_t)len >= n) return 0;
+    while (len && buf[len - 1] == '|') buf[--len] = 0;     /* the empty fields at the end */
+    return len;
+}
+
+static lv_timer_t *pz_send_timer;
+
+static void pz_send_poll(lv_timer_t *t)
+{
+    if (gibberlink_sending()) return;
+    lv_timer_delete(pz_send_timer);
+    pz_send_timer = NULL;
+    sudoku_ui_notice("Sent by sound.", 2500);
+}
+
+static void pz_send_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    if (pz_send_timer || gibberlink_sending()) {
+        sudoku_ui_notice("Still sending the last one.", 2500);
+        return;
+    }
+    static char line[STATS_CAGES_LEN + 400];
+    int len = pz_line(line, sizeof(line));
+    int parts = (len + PZ_PART - 1) / PZ_PART;
+    if (!len || parts > PZ_MAX_PARTS) {
+        sudoku_ui_notice("This puzzle is too long to send by sound.", 3000);
+        return;
+    }
+    unsigned id = esp_random() & 0xFF;
+    for (int i = 0; i < parts; i++) {
+        char body[160], msg[176];
+        int k = len - i * PZ_PART < PZ_PART ? len - i * PZ_PART : PZ_PART;
+        snprintf(body, sizeof(body), "pz %02X %d/%d %.*s", id, i + 1, parts, k, line + i * PZ_PART);
+        snprintf(msg, sizeof(msg), PZ_ID "$%s*%04X", body, pz_crc16(body, strlen(body)));
+        if (!gibberlink_send(msg)) {
+            sudoku_ui_notice("Couldn't send it: no memory for the sound.", 3000);
+            return;
+        }
+    }
+    char name[48], msg[200];
+    puzzle_name(g_id, name, sizeof(name));
+    snprintf(msg, sizeof(msg), "Sending %s by sound: %d part%s, about %d s. On the other board, Gibberlink must be "
+             "on (Settings > Sound).", name, parts, parts == 1 ? "" : "s", (len + 20 * parts) / 16 + parts + 1);
+    sudoku_ui_notice(msg, 5000);
+    pz_send_timer = lv_timer_create(pz_send_poll, 500, NULL);
+}
+
+/* ---- receiving: the parts gathered (devctl "pz"), then checked off the LVGL task */
+static struct {
+    int id, n;                                    /* id -1: nothing coming */
+    uint32_t got;                                 /* bit i-1: part i is here */
+    uint32_t start;                               /* lv_tick of the first part */
+    char part[PZ_MAX_PARTS][PZ_PART + 1];
+} pz_rx = {.id = -1};
+
+/* the received puzzle, while it's checked: the fields of its line and the result */
+typedef struct {
+    int variant, level;                           /* level -1: rate it */
+    uint8_t givens[81];
+    char regions[82], cages[STATS_CAGES_LEN], marks[82], thermos[STATS_THERMOS_LEN];
+    sudoku_geom_t geom;
+    volatile int graded;                          /* sudoku_grade: -1 not one solution; -2 still checking */
+} pz_got_t;
+static pz_got_t *pz_got;                          /* PSRAM */
+static lv_timer_t *pz_check_timer;
+static TaskHandle_t pz_check_task;
+
+static void pz_check_fn(void *arg)
+{
+    pz_got->graded = sudoku_grade(&pz_got->geom, pz_got->givens);
+    vTaskSuspend(NULL);                           /* (deleted by pz_check_poll) */
+}
+
+static uint16_t pz_play_id;                       /* the one just received (its dialog's Play) */
+
+static void pz_play_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+    open_puzzle(pz_play_id);
+}
+
+static void pz_check_poll(lv_timer_t *t)
+{
+    if (pz_got->graded == -2 || eTaskGetState(pz_check_task) != eSuspended) return;
+    vTaskDeleteWithCaps(pz_check_task);
+    pz_check_task = NULL;
+    lv_timer_delete(pz_check_timer);
+    pz_check_timer = NULL;
+    pz_got_t *p = pz_got;
+    if (p->graded < 0) {
+        sudoku_ui_notice("A puzzle came by sound, but it doesn't have exactly one solution: not kept.", 4000);
+        return;
+    }
+    int level = p->level >= 0 ? p->level : p->graded;
+    if (level < 0 || level >= GEN_LEVELS) level = GEN_EXPERT;
+    const uint8_t *regions = p->variant == VAR_JIGSAW ? p->geom.region : NULL;
+    const char *cages = p->cages[0] ? p->cages : NULL, *marks = p->marks[0] ? p->marks : NULL;
+    const char *thermos = p->thermos[0] ? p->thermos : NULL;
+    int gid = stats_db_ready() ? stats_db_gen_add(p->variant, level, p->givens, regions, cages, marks, thermos, NULL)
+                               : -1;
+    uint16_t id;
+    if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
+        id = (uint16_t)(PUZZLE_GEN_BASE + gid);
+    } else {
+        id = s_gen_ram_next++;                    /* no card: until power-off */
+        if (s_gen_ram_next == 0xFFFF) s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+    }
+    gen_cache_put(id, p->variant, level, p->givens, regions, cages, marks, thermos, NULL);
+    char why[96] = "", text[200];
+    bool kept = gid > 0 && stats_db_saved_add("Received", id, why, sizeof(why));
+    if (kept) sv_changed();                       /* (Puzzles' column: "Received" may be new) */
+    snprintf(text, sizeof(text), "%s %s came by sound%s.", VARIANT_NAMES[p->variant], GEN_LEVEL_NAMES[level],
+             kept ? ": it's in Puzzles > Saved > Received" : gid > 0 ? "" : " (kept until power-off: no card)");
+    pz_play_id = id;
+    lv_obj_t *m = make_msgbox(LV_SYMBOL_AUDIO "  Puzzle received", text);
+    msgbox_button(m, "Later", mbox_close_cb, false);
+    msgbox_button(m, LV_SYMBOL_PLAY "  Play", pz_play_cb, true);
+}
+
+static int pz_name_index(const char *s, const char *const *names, int n)
+{
+    for (int i = 0; i < n; i++) {
+        if (!strcasecmp(s, names[i])) return i;
+    }
+    char *end;
+    long v = strtol(s, &end, 10);
+    return *s && !*end && v >= 0 && v < n ? (int)v : -1;
+}
+
+/* the whole line: its fields read, the board made, the check started; why on failure */
+static bool pz_take(char *line, char *why, size_t n)
+{
+    if (pz_check_timer) { snprintf(why, n, "busy with the last one"); return false; }
+    if (!pz_got && !(pz_got = heap_caps_calloc(1, sizeof(*pz_got), MALLOC_CAP_SPIRAM))) {
+        snprintf(why, n, "no memory");
+        return false;
+    }
+    pz_got_t *p = pz_got;
+    char *fld[7] = {0};
+    int nf = 0;
+    for (char *q = line; nf < 7;) {
+        fld[nf++] = q;
+        char *bar = strchr(q, '|');
+        if (!bar) break;
+        *bar = 0;
+        q = bar + 1;
+    }
+    for (int i = nf; i < 7; i++) fld[i] = "";
+    p->variant = pz_name_index(fld[0], VARIANT_NAMES, VAR_COUNT);
+    p->level = !fld[1][0] || !strcmp(fld[1], "-") ? -1 : pz_name_index(fld[1], GEN_LEVEL_NAMES, GEN_LEVELS);
+    if (p->variant < 0 || (fld[1][0] && strcmp(fld[1], "-") && p->level < 0)) {
+        snprintf(why, n, "unknown variant or level");
+        return false;
+    }
+    int c = 0;                                    /* the givens: digits, a-z = 1-26 empty cells, 0 or . = one */
+    for (const char *q = fld[2]; *q && c <= 81; q++) {
+        if (*q >= '1' && *q <= '9') p->givens[c++] = (uint8_t)(*q - '0');
+        else if (*q == '0' || *q == '.') p->givens[c++] = 0;
+        else if (*q >= 'a' && *q <= 'z') for (int r = 0; r <= *q - 'a' && c < 81; r++) p->givens[c++] = 0;
+        else { c = -1; break; }
+    }
+    if (c != 81) { snprintf(why, n, "the givens aren't 81 cells"); return false; }
+    snprintf(p->regions, sizeof(p->regions), "%s", fld[3]);
+    snprintf(p->cages, sizeof(p->cages), "%s", fld[4]);
+    snprintf(p->marks, sizeof(p->marks), "%s", fld[5]);
+    snprintf(p->thermos, sizeof(p->thermos), "%s", fld[6]);
+    bool ok;
+    switch (p->variant) {
+    case VAR_JIGSAW: {
+        uint8_t reg[81];
+        ok = strlen(p->regions) == 81;
+        for (int i = 0; ok && i < 81; i++) {
+            ok = p->regions[i] >= '0' && p->regions[i] <= '8';
+            reg[i] = (uint8_t)(p->regions[i] - '0');
+        }
+        ok = ok && sudoku_geom_jigsaw(reg, &p->geom);
+        break;
+    }
+    case VAR_KILLER:   ok = sudoku_geom_killer_text(p->cages, &p->geom); break;
+    case VAR_EVENODD:
+    case VAR_CONSEC:   ok = strlen(p->marks) == 81 && sudoku_geom_marks(p->variant, p->marks, &p->geom); break;
+    case VAR_THERMO:   ok = sudoku_geom_thermo_text(p->thermos, &p->geom); break;
+    case VAR_SANDWICH: ok = sudoku_geom_sandwich_text(p->marks, &p->geom); break;
+    default: {
+        const sudoku_geom_t *G = sudoku_geom(p->variant);
+        ok = G != NULL;
+        if (ok) memcpy(&p->geom, G, sizeof(p->geom));
+    }
+    }
+    if (!ok) { snprintf(why, n, "its layout doesn't read"); return false; }
+    p->graded = -2;
+    if (xTaskCreatePinnedToCoreWithCaps(pz_check_fn, "pzcheck", 16384, NULL, 2, &pz_check_task, WORKER_CORE,
+                                        MALLOC_CAP_SPIRAM) != pdPASS) {
+        snprintf(why, n, "no memory for the check");
+        return false;
+    }
+    pz_check_timer = lv_timer_create(pz_check_poll, 50, NULL);
+    sudoku_ui_notice("A puzzle came by sound: checking it...", 2000);
+    return true;
+}
+
+bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n)
+{
+    unsigned id;
+    int i, cnt, off = 0;
+    while (*args == ' ') args++;
+    if (sscanf(args, "%x %d/%d %n", &id, &i, &cnt, &off) < 3 || !off || cnt < 1 || cnt > PZ_MAX_PARTS || i < 1 ||
+        i > cnt) {
+        snprintf(out, n, "ERR pz: pz <id> <i>/<n> <part>");
+        return false;
+    }
+    const char *data = args + off;
+    if (strlen(data) > PZ_PART) {
+        snprintf(out, n, "ERR pz: a part is %d characters at most", PZ_PART);
+        return false;
+    }
+    if (pz_rx.id != (int)id || pz_rx.n != cnt || lv_tick_elaps(pz_rx.start) > PZ_TIMEOUT_MS) {   /* a new one */
+        pz_rx.id = (int)id;
+        pz_rx.n = cnt;
+        pz_rx.got = 0;
+        pz_rx.start = lv_tick_get();
+    }
+    snprintf(pz_rx.part[i - 1], sizeof(pz_rx.part[0]), "%s", data);
+    pz_rx.got |= 1u << (i - 1);
+    int have = __builtin_popcount(pz_rx.got);
+    if (have < cnt) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), LV_SYMBOL_AUDIO "  Puzzle by sound: part %d of %d", have, cnt);
+        sudoku_ui_notice(msg, 3000);
+        snprintf(out, n, "OK pz %d/%d", have, cnt);
+        return true;
+    }
+    static char line[PZ_MAX_PARTS * PZ_PART + 1];
+    line[0] = 0;
+    for (int k = 0; k < cnt; k++) strlcat(line, pz_rx.part[k], sizeof(line));
+    pz_rx.id = -1;
+    char why[64];
+    if (!pz_take(line, why, sizeof(why))) {
+        char msg[120];
+        snprintf(msg, sizeof(msg), "A puzzle came by sound, but %s.", why);
+        sudoku_ui_notice(msg, 4000);
+        snprintf(out, n, "ERR pz: %s", why);
+        return false;
+    }
+    snprintf(out, n, "OK pz done");
+    return true;
+}
+
 static void share_cb(lv_event_t *e)
 {
     if (g_id == STORE_NO_GAME) return;
@@ -3390,13 +3752,19 @@ static void share_cb(lv_event_t *e)
     char name[48], title[64];
     puzzle_name(g_id, name, sizeof(name));
     snprintf(title, sizeof(title), SYMBOL_QR "  %s", name);
-    if (!share_text(text, sizeof(text)) ||
-        !qr_dialog(title, text, g_var == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most "
-                                                       "Sudoku apps can import this."
-                                                     : "Scan it with a phone: the variant, the givens row by row "
-                                                       "(0 = empty) and its layout.")) {
+    lv_obj_t *m = share_text(text, sizeof(text))
+        ? qr_dialog(title, text, g_var == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most "
+                                                        "Sudoku apps can import this. Or send it by sound to another "
+                                                        "board (Gibberlink on there)."
+                                                      : "Scan it with a phone: the variant, the givens row by row "
+                                                        "(0 = empty) and its layout. Or send it by sound to another "
+                                                        "board (Gibberlink on there).")
+        : NULL;
+    if (!m) {
         sudoku_ui_notice("Couldn't make a QR code of this puzzle.", 3000);
+        return;
     }
+    msgbox_button(m, LV_SYMBOL_AUDIO "  Send by sound", pz_send_cb, true);   /* (another board, by Gibberlink) */
 }
 
 /* ------------------------------------------------------------- bookmarks */
@@ -3730,11 +4098,18 @@ static void build_game(void)
     lv_obj_align(g_win_miss, LV_ALIGN_TOP_MID, 0, 164);
     g_win_hint = make_label(card, &lv_font_montserrat_18, C_MUTED);
     lv_obj_align(g_win_hint, LV_ALIGN_TOP_MID, 0, 190);
-    g_win_h2h = make_label(card, &font_icons_20, C_ACCENT);      /* head-to-head: filled in a moment later */
-    lv_obj_set_width(g_win_h2h, 440);
-    lv_obj_set_style_text_align(g_win_h2h, LV_TEXT_ALIGN_CENTER, 0);
+    g_win_h2h_row = lv_obj_create(card);            /* head-to-head: filled in a moment later */
+    lv_obj_remove_style_all(g_win_h2h_row);
+    lv_obj_set_size(g_win_h2h_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(g_win_h2h_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(g_win_h2h_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(g_win_h2h_row, 8, 0);
+    lv_obj_set_clickable(g_win_h2h_row, false);
+    lv_obj_align(g_win_h2h_row, LV_ALIGN_TOP_MID, 0, 218);
+    g_win_h2h = make_label(g_win_h2h_row, &font_icons_20, C_ACCENT);   /* (with a leader's avatar: 26 + 8 less) */
+    lv_obj_set_style_max_width(g_win_h2h, 440 - 34, 0);
+    lv_obj_set_height(g_win_h2h, lv_font_get_line_height(&font_icons_20));   /* one line */
     lv_label_set_long_mode(g_win_h2h, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_align(g_win_h2h, LV_ALIGN_TOP_MID, 0, 220);
     g_win_badge = make_label(card, &lv_font_montserrat_16, C_ACCENT);   /* the no-notes challenge */
     lv_label_set_text(g_win_badge, LV_SYMBOL_EDIT "  No-notes challenge: done without notes");
     lv_obj_align(g_win_badge, LV_ALIGN_TOP_MID, 0, 250);
@@ -4139,7 +4514,7 @@ static void insights_cb(lv_event_t *e)
 
 static lv_obj_t *rp_shot;                           /* the Replay screen's camera (hidden in exported videos) */
 
-static lv_obj_t *rp_build(uint16_t id, const char *sub)
+static lv_obj_t *rp_build(uint16_t id, const char *sub, const char *player)
 {
     lv_obj_t *scr = make_screen();
     make_btn(scr, 8, 6, 104, 48, LV_SYMBOL_LEFT "  Back", &lv_font_montserrat_18, rp_back_cb, NULL);
@@ -4150,7 +4525,13 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
     lv_obj_set_pos(rp_title, 126, 6);
     rp_sub = make_label(scr, &lv_font_montserrat_14, C_MUTED);
     lv_label_set_text(rp_sub, sub);
-    lv_obj_set_pos(rp_sub, 126, 36);
+    const stats_player_t *who = player_find(0, player);
+    if (who && who->avatar && who->avatar <= AVATAR_COUNT) {   /* whose game: their avatar first */
+        lv_obj_set_pos(player_badge(scr, who, -1, 22, 8), 126, 32);
+        lv_obj_set_pos(rp_sub, 126 + 22 + 6, 36);
+    } else {
+        lv_obj_set_pos(rp_sub, 126, 36);
+    }
 
     lv_obj_t *grid = lv_obj_create(scr);
     lv_obj_remove_style_all(grid);
@@ -4225,12 +4606,12 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub)
 }
 
 /* Opens the Replay screen for a log of puzzle `id`; sub = the line under the title. */
-static void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub)
+static void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player)
 {
     if (!rp_prepare(id, moves, n)) return;
     if (scr_replay) rp_close();
     rp_return = lv_screen_active();
-    scr_replay = rp_build(id, sub);
+    scr_replay = rp_build(id, sub, player);
     rp_playing = false;
     rp_seek(0, false);
     rp_last_tick = lv_tick_get();
@@ -4246,7 +4627,7 @@ static void win_replay_cb(lv_event_t *e)
     fmt_time(t, sizeof(t), s_solve_secs);
     snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
              store_player_name(), t, (unsigned)g_hints, g_hints == 1 ? "" : "s");
-    open_replay(g_id, g_moves, g_moves ? g_nmoves : 0, sub);
+    open_replay(g_id, g_moves, g_moves ? g_nmoves : 0, sub, store_player_name());
 }
 
 /* a solve from History: ask sudoku.db, history_poll() opens it */
@@ -4284,7 +4665,7 @@ static void history_replay_poll(void)
     fmt_time(t, sizeof(t), rp_loaded->seconds);
     snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
              rp_loaded->player, t, (unsigned)rp_loaded->hints, rp_loaded->hints == 1 ? "" : "s");
-    open_replay(rp_loaded->puzzle, rp_loaded->moves, rp_loaded->n, sub);
+    open_replay(rp_loaded->puzzle, rp_loaded->moves, rp_loaded->n, sub, rp_loaded->player);
 }
 
 /* ------------------------------------------------------------- export as MP4 */
@@ -4470,7 +4851,7 @@ static void export_start(const stats_replay_t *r)
     fmt_time(t, sizeof(t), r->seconds);
     snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
              r->player, t, (unsigned)r->hints, r->hints == 1 ? "" : "s");
-    lv_obj_t *scr = rp_build(r->puzzle, sub);
+    lv_obj_t *scr = rp_build(r->puzzle, sub, r->player);
     lv_obj_set_hidden(rp_shot, true);               /* (not in the video) */
     lv_screen_load(scr);
     lv_display_set_default(main_disp);
@@ -7444,7 +7825,15 @@ static void render_day(const stats_day_t *d)
         fmt_time(took, sizeof(took), r->seconds);
         fmt_clock(start, sizeof(start), r->started_at);
         fmt_clock(end, sizeof(end), r->finished_at);
-        lv_obj_t *who = make_label(card, &lv_font_montserrat_18, C_TEXT);
+        lv_obj_t *wr = lv_obj_create(card);            /* who: the avatar (or colour dot), name, puzzle */
+        lv_obj_remove_style_all(wr);
+        lv_obj_set_size(wr, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(wr, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(wr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(wr, 8, 0);
+        lv_obj_set_clickable(wr, false);
+        player_badge(wr, player_find(0, r->player), -1, 28, 10);
+        lv_obj_t *who = make_label(wr, &lv_font_montserrat_18, C_TEXT);
         lv_label_set_text_fmt(who, "%s   -   %s", r->player, name);
         lv_obj_t *what = make_label(card, &lv_font_montserrat_14, r->in_progress ? C_ORANGE : C_MUTED);
         if (r->in_progress) {
@@ -7738,9 +8127,10 @@ static void render_plays(const stats_plays_t *p)
         } else {
             snprintf(when, sizeof(when), "Date unknown");
         }
+        lv_obj_align(player_badge(card, player_find(0, r->player), -1, AVATAR_SIZE, 12), LV_ALIGN_LEFT_MID, -4, 0);
         lv_obj_t *who = make_label(card, &lv_font_montserrat_18, C_TEXT);
         lv_label_set_text_fmt(who, "%s   -   %s", r->player, name);
-        lv_obj_align(who, LV_ALIGN_LEFT_MID, 0, -13);
+        lv_obj_align(who, LV_ALIGN_LEFT_MID, 44, -13);
         lv_obj_t *what = make_label(card, &lv_font_montserrat_14, C_MUTED);
         snprintf(line, sizeof(line), "%s   -   %s   -   %u mistake%s", when, took,
                  (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s");
@@ -7753,7 +8143,7 @@ static void render_plays(const stats_plays_t *p)
             snprintf(line + len, sizeof(line) - len, "   -   no notes");
         }
         lv_label_set_text(what, line);
-        lv_obj_align(what, LV_ALIGN_LEFT_MID, 0, 14);
+        lv_obj_align(what, LV_ALIGN_LEFT_MID, 44, 14);
         lv_obj_t *play = make_label(card, &lv_font_montserrat_24, C_ACCENT);
         lv_label_set_text(play, LV_SYMBOL_PLAY);
         lv_obj_align(play, LV_ALIGN_RIGHT_MID, 0, 0);
@@ -8022,9 +8412,11 @@ static void render_board(const stats_board_t *b)
             lv_obj_set_style_border_width(card, 2, 0);
         }
         if (!r->solved) {
+            lv_obj_align(player_badge(card, player_find(r->player_id, r->player), r->color, 32, 12),
+                         LV_ALIGN_LEFT_MID, 50, 0);
             lv_obj_t *n = make_label(card, &lv_font_montserrat_18, C_MUTED);
             lv_label_set_text_fmt(n, "%s   -   not solved yet", r->player);
-            lv_obj_align(n, LV_ALIGN_LEFT_MID, 56, 0);
+            lv_obj_align(n, LV_ALIGN_LEFT_MID, 96, 0);
             continue;
         }
         rank++;
@@ -8035,10 +8427,11 @@ static void render_board(const stats_board_t *b)
         lv_obj_set_width(pos, 40);
         lv_obj_set_style_text_align(pos, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(pos, LV_ALIGN_LEFT_MID, 0, 0);
-        lv_obj_align(player_dot(card, r->color, 12), LV_ALIGN_LEFT_MID, 50, -13);
+        lv_obj_align(player_badge(card, player_find(r->player_id, r->player), r->color, AVATAR_SIZE, 12),
+                     LV_ALIGN_LEFT_MID, 48, 0);         /* their avatar (or colour dot) */
         lv_obj_t *n = make_label(card, &lv_font_montserrat_20, C_TEXT);
         lv_label_set_text_fmt(n, "%s%s", r->player, me ? "  (you)" : "");
-        lv_obj_align(n, LV_ALIGN_LEFT_MID, 70, -13);
+        lv_obj_align(n, LV_ALIGN_LEFT_MID, 96, -13);
         char line[96];
         snprintf(line, sizeof(line), "%d%s   -   %u mistake%s   -   %u hint%s", rank, ordinal(rank),
                  (unsigned)r->mistakes, r->mistakes == 1 ? "" : "s", (unsigned)r->hints, r->hints == 1 ? "" : "s");
@@ -8052,7 +8445,7 @@ static void render_board(const stats_board_t *b)
         }
         lv_obj_t *sub = make_label(card, &lv_font_montserrat_14, C_MUTED);
         lv_label_set_text(sub, line);
-        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 70, 14);
+        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 96, 14);
         char t[16];
         fmt_time(t, sizeof(t), r->seconds);
         lv_obj_t *tl = make_label(card, &font_timer_36, rank == 1 ? C_ORANGE : C_TEXT);
@@ -8110,10 +8503,11 @@ static void render_week(const stats_week_t *w)
         lv_obj_set_width(pos, 40);
         lv_obj_set_style_text_align(pos, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(pos, LV_ALIGN_LEFT_MID, 0, 0);
-        lv_obj_align(player_dot(card, r->color, 12), LV_ALIGN_LEFT_MID, 50, -16);
+        lv_obj_align(player_badge(card, player_find(r->player_id, r->player), r->color, AVATAR_SIZE, 12),
+                     LV_ALIGN_LEFT_MID, 48, 0);         /* their avatar (or colour dot) */
         lv_obj_t *n = make_label(card, &lv_font_montserrat_20, C_TEXT);
         lv_label_set_text_fmt(n, "%s%s   -   %d of 7 days", r->player, me ? "  (you)" : "", r->days);
-        lv_obj_align(n, LV_ALIGN_LEFT_MID, 70, -16);
+        lv_obj_align(n, LV_ALIGN_LEFT_MID, 96, -16);
         static const char *const DAYS[7] = {"M", "T", "W", "T", "F", "S", "S"};
         for (int d = 0; d < 7; d++) {               /* which days: a square each, green if solved */
             lv_obj_t *sq = lv_obj_create(card);
@@ -8122,7 +8516,7 @@ static void render_week(const stats_week_t *w)
             lv_obj_set_style_radius(sq, 5, 0);
             lv_obj_set_style_bg_opa(sq, LV_OPA_COVER, 0);
             lv_obj_set_style_bg_color(sq, r->best[d] ? C_GREEN : C_CARD2, 0);
-            lv_obj_align(sq, LV_ALIGN_LEFT_MID, 70 + d * 30, 16);
+            lv_obj_align(sq, LV_ALIGN_LEFT_MID, 96 + d * 30, 16);
             lv_obj_t *dl = make_label(sq, &lv_font_montserrat_12, r->best[d] ? lv_color_white() : C_MUTED);
             lv_label_set_text(dl, DAYS[d]);
             lv_obj_center(dl);

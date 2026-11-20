@@ -40,6 +40,9 @@ static volatile bool s_on, s_task_up;
  * gibberlink_set_enabled(true) at that moment never both think the other one runs */
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 static QueueHandle_t s_cmdq;            /* messages heard: char[MSG_MAX] */
+static QueueHandle_t s_txq;             /* messages to send (gibberlink_send): char[MSG_MAX] */
+static volatile int s_tx_count;         /* of them, not yet played out (under s_mux) */
+#define TX_GAP_MS  700                  /* between two messages sent: the listener's decoder settles */
 static char s_reply[MSG_MAX];
 static volatile bool s_reply_ready;
 static int16_t *s_tx;                   /* the reply's samples, while it plays */
@@ -76,25 +79,34 @@ static bool make_ggwave(void)
     return true;
 }
 
-/* encodes s_reply and starts it playing */
-static void send_reply(void)
+/* encodes text and starts it playing */
+static void send_text(const char *text)
 {
     while (sfx_pcm_busy()) vTaskDelay(pdMS_TO_TICKS(20));   /* (the last one first) */
-    if (!s_gg->init(s_reply, GGWAVE_PROTOCOL_AUDIBLE_FAST, TX_VOLUME)) {
-        printf("gibberlink: can't encode \"%s\"\n", s_reply);
+    if (!s_gg->init(text, GGWAVE_PROTOCOL_AUDIBLE_FAST, TX_VOLUME)) {
+        printf("gibberlink: can't encode \"%s\"\n", text);
         return;
     }
     uint32_t bytes = s_gg->encode();
     size_t n = bytes / sizeof(int16_t);
-    if (!n) return;
+    if (!n) {
+        printf("gibberlink: \"%s\" encoded to nothing\n", text);
+        return;
+    }
     if (n > s_tx_cap) {
         heap_caps_free(s_tx);
         s_tx = (int16_t *)heap_caps_malloc(n * sizeof(int16_t), MALLOC_CAP_SPIRAM);
         s_tx_cap = s_tx ? n : 0;
-        if (!s_tx) return;
+        if (!s_tx) {
+            printf("gibberlink: no memory for %u samples\n", (unsigned)n);
+            return;
+        }
     }
     memcpy(s_tx, s_gg->txWaveform(), n * sizeof(int16_t));
-    if (sfx_play_pcm(s_tx, n)) printf("gibberlink: sent \"%s\" (%.1f s)\n", s_reply, n / (double)sfx_rate());
+    bool played = false;                                /* (the sound queue may be full of taps' ticks: retry) */
+    for (int k = 0; k < 50 && !(played = sfx_play_pcm(s_tx, n)); k++) vTaskDelay(pdMS_TO_TICKS(20));
+    if (played) printf("gibberlink: sent \"%s\" (%.1f s)\n", text, n / (double)sfx_rate());
+    else printf("gibberlink: \"%s\" not played (the sound task was busy or off)\n", text);
 }
 
 /* "AB$tap 1 2" -> "tap 1 2" (a Gibberlink sender id); false: our own, or empty */
@@ -115,6 +127,26 @@ static void worker(void *arg)
     bool mic = false;
     int64_t deaf_until = 0;
     for (;;) {
+        char out[MSG_MAX];
+        bool have_tx = s_txq && xQueuePeek(s_txq, out, 0) == pdTRUE;
+        if (have_tx) {                                  /* something to send (listening or not) */
+            if (!s_gg && !make_ggwave()) {
+                xQueueReset(s_txq);                     /* (can't: dropped) */
+                portENTER_CRITICAL(&s_mux);
+                s_tx_count = 0;
+                portEXIT_CRITICAL(&s_mux);
+                continue;
+            }
+            xQueueReceive(s_txq, out, 0);
+            send_text(out);
+            while (sfx_pcm_busy()) vTaskDelay(pdMS_TO_TICKS(20));
+            vTaskDelay(pdMS_TO_TICKS(TX_GAP_MS));
+            deaf_until = esp_timer_get_time() + ECHO_MS * 1000;
+            portENTER_CRITICAL(&s_mux);
+            if (s_tx_count > 0) s_tx_count--;
+            portEXIT_CRITICAL(&s_mux);
+            continue;
+        }
         if (!s_on) {
             if (mic) {
                 bsp_mic_stop();
@@ -134,7 +166,7 @@ static void worker(void *arg)
             /* not used: the task ends (gibberlink_set_enabled starts another), unless it was
              * just turned on again */
             portENTER_CRITICAL(&s_mux);
-            bool end = !s_on;
+            bool end = !s_on && !s_tx_count;            /* (nothing more to send either) */
             if (end) s_task_up = false;
             portEXIT_CRITICAL(&s_mux);
             if (end) {
@@ -158,7 +190,7 @@ static void worker(void *arg)
             printf("gibberlink: listening\n");
         }
         if (s_reply_ready) {
-            send_reply();
+            send_text(s_reply);
             s_reply_ready = false;
         }
         size_t got = 0;
@@ -209,6 +241,41 @@ static void icon_update(void)
         lv_obj_set_style_bg_color(s_icon, lit ? C_ACCENT : lv_color_black(), 0);
         lv_obj_set_style_bg_opa(s_icon, lit ? LV_OPA_COVER : LV_OPA_50, 0);
     }
+}
+
+bool gibberlink_send(const char *text)
+{
+    if (!s_txq) s_txq = xQueueCreate(8, MSG_MAX);
+    if (!s_txq || strlen(text) >= MSG_MAX) return false;
+    char m[MSG_MAX];
+    strlcpy(m, text, sizeof(m));
+    portENTER_CRITICAL(&s_mux);
+    s_tx_count++;                                       /* (before the worker can see the queue empty and end) */
+    bool start = !s_task_up;
+    if (start) s_task_up = true;
+    portEXIT_CRITICAL(&s_mux);
+    bool ok = xQueueSend(s_txq, m, 0) == pdTRUE;
+    if (start && ok && xTaskCreatePinnedToCore(worker, "gibberlink", 8192, NULL, 3, NULL, 0) != pdPASS) {
+        printf("gibberlink: no memory for the worker\n");
+        xQueueReset(s_txq);
+        ok = false;
+        portENTER_CRITICAL(&s_mux);
+        s_task_up = false;
+        s_tx_count = 0;
+        portEXIT_CRITICAL(&s_mux);
+        return false;
+    }
+    if (!ok) {
+        portENTER_CRITICAL(&s_mux);
+        if (s_tx_count > 0) s_tx_count--;
+        portEXIT_CRITICAL(&s_mux);
+    }
+    return ok;
+}
+
+int gibberlink_sending(void)
+{
+    return s_tx_count;
 }
 
 /* on: starts the worker (unless one runs); off: the worker stops listening, frees ggwave and ends */
@@ -280,6 +347,7 @@ void gibberlink_poll(void)
         devctl_run_line(msg, out, sizeof(out));
     }
     printf("gibberlink: %s -> %s\n", msg, out);
+    if (!strncmp(msg, "pz ", 3)) return;                /* a puzzle's part: no answer (it would talk over the next) */
     if (checked) {                                      /* asked with a check: answered with one */
         snprintf(s_reply, sizeof(s_reply), REPLY_ID "$%s*%04X", out, crc16(out, strlen(out)));
     } else {

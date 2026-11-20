@@ -43,6 +43,12 @@ typedef struct {
 } sudoku_ui_state_t;
 bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82]);
 
+/* A part of a puzzle sent by sound (devctl / Gibberlink "pz <id> <i>/<n> <part>",
+ * another board's Share > Send by sound; the format is in sudoku_ui.c). When the
+ * last part is in, the puzzle is checked (one solution), kept in Puzzles > Saved >
+ * "Received" and offered to play. out: "OK pz 1/3", "OK pz done" or "ERR pz: ...". */
+bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n);
+
 /* Call once start-up went well (screens up, sudoku.db open): a firmware just
  * installed from update.bin is kept; until then, a restart goes back to the
  * previous one (the bootloader's rollback). */
