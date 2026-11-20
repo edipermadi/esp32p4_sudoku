@@ -6,8 +6,9 @@
  *     Gameplays and Settings, in a column or, when they don't fit, a grid;
  *     a power button (top right) turns the board off (deep sleep until RESET).
  *   - gameplays: every recorded solve, newest first, tap one to replay it.
- *   - list: a scrolling row of collections at the top, a 10x10 grid of
- *     puzzles below it.
+ *   - list: two panes under New puzzle / Enter / Learn: the collections in a
+ *     scrolling column on the left (Built-in | Saved tabs above it), the
+ *     selected collection's 10x10 grid of puzzles (or rows, Saved) on the right.
  *     Solved puzzles are green, the game in progress is orange.
  *   - statistics: per level and per puzzle best times, mistakes, solves,
  *     read from sudoku.db on the microSD card (stats_db.c).
@@ -412,11 +413,12 @@ static bool u_reloading;                  /* card back / reset: waiting for sudo
 static bool u_reload_home;                /* ... then show Home (factory reset) */
 
 /* list screen */
-#define L_BTN_Y   72
-#define L_STRIP_Y (L_BTN_Y + 52 + 10)
-#define L_TAB_W   100                       /* Built-in | Saved, left of the collection row */
-#define L_STRIP_X (12 + 2 * L_TAB_W + 4 + 8)   /* the row's < arrow; the chips right of it */
-static lv_obj_t *l_total, *l_strip, *l_arrow_l, *l_arrow_r;
+#define L_BTN_Y   72                        /* under the title: Starred and the solved count */
+#define L_NEW_W   170                       /* the title row's "New" menu button */
+#define L_PANE_Y  (L_BTN_Y + 52 + 10)       /* the two panes: collections left, puzzles right */
+#define L_TAB_H   48                        /* Built-in | Saved, over the collection column */
+#define L_GRID_Y  (L_PANE_Y + 62)           /* the right pane's grid or rows, under name and stats */
+static lv_obj_t *l_total, *l_colls;
 #define L_COLLS (PUZZLE_COLLECTION_COUNT + STATS_MAX_IMPORTS + STATS_MAX_SAVED)   /* built-in, imported, saved */
 static lv_obj_t *l_coll_btn[L_COLLS], *l_coll_cnt[L_COLLS];
 static lv_obj_t *l_coll_name[L_COLLS];
@@ -454,7 +456,7 @@ static lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the t
 
 static void show_list(void);
 static void open_puzzle(uint16_t id);
-static void list_fill_strip(void);
+static void list_fill_colls(void);
 static void list_fill_rows(int lc);
 static void list_reveal_coll(lv_anim_enable_t anim);
 static void refresh_list(void);
@@ -3318,7 +3320,7 @@ static void sv_changed(void)
 {
     int before = s_nsaved;
     imports_reload();
-    if (s_nsaved != before) list_fill_strip();
+    if (s_nsaved != before) list_fill_colls();
     refresh_list();
     update_header();
 }
@@ -5347,7 +5349,7 @@ static void list_fill_rows(int lc)
         puzzle_name(id, name, sizeof(name));
         lv_obj_t *nm = make_label(r, &lv_font_montserrat_20, C_TEXT);
         lv_label_set_text(nm, name);
-        lv_obj_set_width(nm, saved ? 500 : 560);
+        lv_obj_set_width(nm, PANE_W - 28 - 40 - (saved ? 60 : 0));
         lv_label_set_long_mode(nm, LV_LABEL_LONG_MODE_DOTS);
         lv_obj_align(nm, LV_ALIGN_LEFT_MID, 40, -12);
         int v = VAR_CLASSIC, lv = 0;
@@ -5358,6 +5360,8 @@ static void list_fill_rows(int lc)
                  solved ? "Solved" : active ? "In progress" : "Not solved yet");
         lv_obj_t *sl = make_label(r, &lv_font_montserrat_14, solved ? C_GREEN : active ? C_ORANGE : C_MUTED);
         lv_label_set_text(sl, sub);
+        lv_obj_set_width(sl, PANE_W - 28 - 40 - (saved ? 60 : 0));
+        lv_label_set_long_mode(sl, LV_LABEL_LONG_MODE_DOTS);
         lv_obj_align(sl, LV_ALIGN_LEFT_MID, 40, 14);
         if (saved) {
             lv_obj_t *d = make_btn(r, 0, 0, 52, 44, LV_SYMBOL_TRASH, &lv_font_montserrat_20, list_row_del_cb,
@@ -5380,7 +5384,7 @@ static void list_del_confirm_cb(lv_event_t *e)
     bool ok = k >= 0 ? stats_db_saved_delete(s_saved[k].id) : stats_db_import_delete(name);
     snprintf(msg, sizeof(msg), ok ? "%s deleted." : "Couldn't delete %s.", name);
     imports_reload();
-    list_fill_strip();
+    list_fill_colls();
     l_coll = PUZZLE_COLLECTION_COUNT;               /* the Saved tab's first, if any */
     l_tab_coll[1] = -1;
     refresh_list();
@@ -5432,8 +5436,7 @@ static void refresh_list(void)
     bool listed = !none && l_tab == 1;              /* the Saved tab: rows, not numbers */
     lv_obj_set_hidden(l_export, !exportable);       /* a saved collection: to the card, for Import puzzles */
     lv_obj_set_hidden(l_del, !listed);              /* saved or imported: delete the collection */
-    lv_obj_align(l_export, LV_ALIGN_TOP_RIGHT, -12 - 52 - 8, L_STRIP_Y + 66);
-    lv_obj_align(l_stats, LV_ALIGN_TOP_RIGHT, -16 - (listed ? 52 + 8 : 0) - (exportable ? 130 + 8 : 0), L_STRIP_Y + 78);
+    lv_obj_set_width(l_name, PANE_W - 4 - (listed ? 52 + 8 : 0) - (exportable ? 130 + 8 : 0));
     lv_obj_set_hidden(l_btnm, none || listed);
     lv_obj_set_hidden(l_list, !listed);
     const int lc = l_coll, lsize = coll_size(lc);
@@ -5455,6 +5458,7 @@ static void refresh_list(void)
         lv_obj_set_style_text_opa(l_coll_cnt[c], sel ? LV_OPA_80 : LV_OPA_COVER, 0);
     }
     lv_label_set_text_fmt(l_total, "%u of %u solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
+    lv_obj_invalidate(l_colls);                     /* (rows hidden or shown: no stale scrollbar left) */
 
     /* collection panel (best times: the built-in ones, which the board keeps in RAM) */
     uint32_t sum = 0, best = 0;
@@ -5501,30 +5505,11 @@ static void refresh_list(void)
     }
 }
 
-/* < and > at the ends of the collection row: shown while more is off screen that way */
-static void list_update_arrows(void)
-{
-    lv_obj_set_hidden(l_arrow_l, lv_obj_get_scroll_left(l_strip) <= 0);
-    lv_obj_set_hidden(l_arrow_r, lv_obj_get_scroll_right(l_strip) <= 0);
-}
-
-static void strip_scroll_cb(lv_event_t *e)
-{
-    list_update_arrows();
-}
-
-static void strip_arrow_cb(lv_event_t *e)
-{
-    int dir = (int)(intptr_t)lv_event_get_user_data(e);   /* -1 left, +1 right */
-    lv_obj_scroll_by_bounded(l_strip, -dir * (SCR_W / 2), 0, LV_ANIM_ON);
-}
-
-/* scrolls the collection row so the selected one is visible */
+/* scrolls the collection column so the selected one is visible */
 static void list_reveal_coll(lv_anim_enable_t anim)
 {
     lv_obj_update_layout(scr_list);
     if (l_coll < coll_total() && coll_tab(l_coll) == l_tab) lv_obj_scroll_to_view(l_coll_btn[l_coll], anim);
-    list_update_arrows();
 }
 
 static void show_list(void)
@@ -5564,7 +5549,7 @@ static void list_tab_cb(lv_event_t *e)
     int t = (int)(intptr_t)lv_event_get_user_data(e);
     if (t == l_tab) return;
     l_tab = t;
-    lv_obj_scroll_to_x(l_strip, 0, LV_ANIM_OFF);
+    lv_obj_scroll_to_y(l_colls, 0, LV_ANIM_OFF);
     refresh_list();                                 /* (takes the tab's last collection) */
     list_reveal_coll(LV_ANIM_OFF);
 }
@@ -8725,9 +8710,6 @@ static lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name
     return b;
 }
 
-/* the Puzzles screen, top down: title, New puzzle / Learn, collections, puzzles */
-#define L_GRID_Y  (L_STRIP_Y + 108)
-
 /* Puzzles > Starred: the player's bookmarks, newest first; a tap opens one */
 static void starred_open_cb(lv_event_t *e)
 {
@@ -8778,32 +8760,87 @@ static void starred_cb(lv_event_t *e)
     msgbox_button(m, "Close", mbox_close_cb, false);
 }
 
-/* the chips of the collection row (name + solved count), one per collection; again
- * when a collection comes or goes (Save) */
-static void list_fill_strip(void)
+/* ---- the title row's New menu: New puzzle, Enter, Learn (a card under the button;
+ * a tap anywhere else closes it) */
+static lv_obj_t *l_new_btn, *l_new_menu;
+
+static void new_menu_close(void)
 {
-    lv_obj_clean(l_strip);
+    if (!l_new_menu) return;
+    lv_obj_delete_async(l_new_menu);
+    l_new_menu = NULL;
+    lv_obj_set_state(l_new_btn, LV_STATE_CHECKED, false);
+}
+
+static void new_menu_backdrop_cb(lv_event_t *e)
+{
+    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) new_menu_close();
+}
+
+static void new_menu_item_cb(lv_event_t *e)
+{
+    lv_event_cb_t cb = (lv_event_cb_t)lv_event_get_user_data(e);
+    new_menu_close();
+    cb(NULL);                                       /* (new_puzzle_cb, enter_cb, learn_cb: no event needed) */
+}
+
+static void new_menu_cb(lv_event_t *e)
+{
+    if (l_new_menu) {
+        new_menu_close();
+        return;
+    }
+    l_new_menu = lv_obj_create(lv_layer_top());     /* the backdrop: invisible, catches taps outside */
+    lv_obj_remove_style_all(l_new_menu);
+    lv_obj_set_size(l_new_menu, SCR_W, SCR_W);
+    lv_obj_set_clickable(l_new_menu, true);
+    lv_obj_add_event_cb(l_new_menu, new_menu_backdrop_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_state(l_new_btn, LV_STATE_CHECKED, true);
+
+    const int w = 240;
+    lv_obj_t *card = lv_obj_create(l_new_menu);
+    lv_obj_set_pos(card, SCR_W - 12 - w, 10 + 52 + 6);
+    lv_obj_set_size(card, w, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_color(card, C_CARD2, 0);
+    lv_obj_set_style_border_width(card, 1, 0);
+    lv_obj_set_style_radius(card, 12, 0);
+    lv_obj_set_style_shadow_width(card, 24, 0);
+    lv_obj_set_style_shadow_opa(card, LV_OPA_30, 0);
+    lv_obj_set_style_shadow_offset_y(card, 4, 0);
+    lv_obj_set_style_pad_all(card, 6, 0);
+    lv_obj_set_style_pad_row(card, 4, 0);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scrollable(card, false);
+    static const struct { const char *text; lv_event_cb_t cb; } ITEMS[] = {
+        {LV_SYMBOL_PLUS "  New puzzle", new_puzzle_cb},
+        {LV_SYMBOL_KEYBOARD "  Enter puzzle", enter_cb},     /* type one in from a book */
+        {LV_SYMBOL_EYE_OPEN "  Learn", learn_cb},            /* practise a technique */
+    };
+    for (size_t i = 0; i < sizeof(ITEMS) / sizeof(ITEMS[0]); i++) {
+        lv_obj_t *b = make_btn(card, 0, 0, LV_PCT(100), 56, ITEMS[i].text, &lv_font_montserrat_18, new_menu_item_cb,
+                               (void *)ITEMS[i].cb);
+        lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_PRESSED);
+        lv_obj_set_style_bg_color(b, C_CARD2, LV_STATE_PRESSED);
+        lv_obj_t *l = lv_obj_get_child(b, 0);
+        lv_obj_set_style_text_color(l, C_TEXT, 0);
+        lv_obj_align(l, LV_ALIGN_LEFT_MID, 6, 0);
+    }
+}
+
+/* the rows of the collection column (name + solved count), one per collection; again
+ * when a collection comes or goes (Save) */
+static void list_fill_colls(void)
+{
+    lv_obj_clean(l_colls);
     memset(l_coll_btn, 0, sizeof(l_coll_btn));
-    lv_obj_t *strip = l_strip;
     imports_reload();                               /* the imported collections follow the built-in ones */
     for (int c = 0; c < coll_total(); c++) {
-        lv_obj_t *b = lv_button_create(strip);
-        lv_obj_set_size(b, LV_SIZE_CONTENT, 58);
-        lv_obj_set_style_bg_color(b, C_CARD, 0);
-        lv_obj_set_style_bg_color(b, C_CARD2, LV_STATE_PRESSED);
-        lv_obj_set_style_bg_color(b, C_ACCENT, LV_STATE_CHECKED);
-        lv_obj_set_style_shadow_width(b, 0, 0);
-        lv_obj_set_style_radius(b, 10, 0);
-        lv_obj_set_style_pad_hor(b, 16, 0);
-        lv_obj_set_style_pad_ver(b, 0, 0);
-        lv_obj_set_style_pad_row(b, 1, 0);
-        lv_obj_set_flex_flow(b, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(b, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        l_coll_name[c] = make_label(b, &lv_font_montserrat_16, C_TEXT);
-        lv_label_set_text(l_coll_name[c], coll_name(c));
-        l_coll_cnt[c] = make_label(b, &lv_font_montserrat_14, C_MUTED);
-        lv_obj_add_event_cb(b, coll_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)c);
-        l_coll_btn[c] = b;
+        l_coll_btn[c] = make_coll_btn(l_colls, coll_name(c), &l_coll_name[c], &l_coll_cnt[c], coll_click_cb, c);
+        lv_obj_set_size(l_coll_name[c], COLL_W - 12 - 24 - 58,      /* one line, room for "100/100" */
+                        lv_font_get_line_height(&lv_font_montserrat_16));
+        lv_label_set_long_mode(l_coll_name[c], LV_LABEL_LONG_MODE_DOTS);
     }
 }
 
@@ -8816,78 +8853,58 @@ static void build_list(void)
     lv_label_set_text(t, "Puzzles");
     lv_obj_set_pos(t, 150, 20);
     l_total = make_label(scr_list, &lv_font_montserrat_16, C_MUTED);
-    lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -16, 28);
-    lv_obj_t *stb = make_btn(scr_list, 290, 10, 150, 52, SYMBOL_STAR "  Starred", &font_icons_20, starred_cb, NULL);
+    /* New: a menu of New puzzle, Enter (type one in from a book) and Learn */
+    l_new_btn = make_btn(scr_list, SCR_W - 12 - L_NEW_W, 10, L_NEW_W, 52, LV_SYMBOL_PLUS "  New  " LV_SYMBOL_DOWN,
+                         &lv_font_montserrat_18, new_menu_cb, NULL);
+    lv_obj_set_style_bg_color(l_new_btn, C_ACCENT, 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(l_new_btn, 0), lv_color_white(), 0);
+    /* under the title: Starred (over the collections), the solved count right */
+    lv_obj_t *stb = make_btn(scr_list, 12, L_BTN_Y, COLL_W, 52, SYMBOL_STAR "  Starred", &font_icons_20, starred_cb,
+                             NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(stb, 0), C_ORANGE, 0);
-    /* under the title: New puzzle, Enter (type one in) and Learn, across the page */
-    const int bw = (SCR_W - 24 - 2 * 8) / 3;
-    lv_obj_t *nb = make_btn(scr_list, 12, L_BTN_Y, bw, 52, LV_SYMBOL_PLUS "  New puzzle", &lv_font_montserrat_18,
-                            new_puzzle_cb, NULL);
-    lv_obj_t *eb = make_btn(scr_list, 12 + bw + 8, L_BTN_Y, bw, 52, LV_SYMBOL_KEYBOARD "  Enter",
-                            &lv_font_montserrat_18, enter_cb, NULL);   /* type one in from a book */
-    lv_obj_set_style_text_color(lv_obj_get_child(eb, 0), C_ACCENT, 0);
-    lv_obj_t *lb = make_btn(scr_list, 12 + 2 * (bw + 8), L_BTN_Y, bw, 52, LV_SYMBOL_EYE_OPEN "  Learn",
-                            &lv_font_montserrat_18, learn_cb, NULL);   /* practise a technique */
-    lv_obj_set_style_text_color(lv_obj_get_child(lb, 0), C_ACCENT, 0);
-    lv_obj_set_style_bg_color(nb, C_ACCENT, 0);
-    lv_obj_set_style_text_color(lv_obj_get_child(nb, 0), lv_color_white(), 0);
+    lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -16, L_BTN_Y + 16);
 
-    /* collections: one row of chips (name + solved count), scrolls sideways */
-    lv_obj_t *strip = lv_obj_create(scr_list);
-    l_strip = strip;
-    lv_obj_remove_style_all(strip);
-    /* right of the tabs and between the < > arrows (40 + 4 on each side), so chips never pass under them */
-    lv_obj_set_pos(strip, L_STRIP_X + 44, L_STRIP_Y);
-    lv_obj_set_size(strip, SCR_W - L_STRIP_X - 44 - 52, 62);
-    lv_obj_set_flex_flow(strip, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_hor(strip, 0, 0);
-    lv_obj_set_style_pad_column(strip, 8, 0);
-    lv_obj_set_scroll_dir(strip, LV_DIR_HOR);
-    lv_obj_set_scrollbar_mode(strip, LV_SCROLLBAR_MODE_OFF);
-    list_fill_strip();
-
-    /* the tabs: the built-in collections, or the player's (imported and saved) */
+    /* left pane: the tabs (the built-in collections, or the player's: imported and saved),
+     * and under them that tab's collections in a column that scrolls */
     static const char *const TAB[2] = {"Built-in", "Saved"};
+    const int tw = (COLL_W - 6) / 2;
     for (int i = 0; i < 2; i++) {
-        l_tab_btn[i] = make_btn(scr_list, 12 + i * (L_TAB_W + 4), L_STRIP_Y, L_TAB_W, 58, TAB[i],
+        l_tab_btn[i] = make_btn(scr_list, 12 + i * (COLL_W - tw), L_PANE_Y, tw, L_TAB_H, TAB[i],
                                 &lv_font_montserrat_16, list_tab_cb, (void *)(intptr_t)i);
         lv_obj_set_style_bg_color(l_tab_btn[i], C_CARD, 0);
         lv_obj_set_style_bg_color(l_tab_btn[i], C_ACCENT, LV_STATE_CHECKED);
         lv_obj_set_style_radius(l_tab_btn[i], 10, 0);
     }
+    l_colls = make_coll_column(scr_list);
+    lv_obj_set_pos(l_colls, 12, L_PANE_Y + L_TAB_H + 8);
+    lv_obj_set_size(l_colls, COLL_W, SCR_W - (L_PANE_Y + L_TAB_H + 8) - 12);
+    lv_obj_set_scroll_dir(l_colls, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(l_colls, LV_SCROLLBAR_MODE_AUTO);
+    list_fill_colls();
 
-    lv_obj_add_event_cb(strip, strip_scroll_cb, LV_EVENT_SCROLL, NULL);
-    lv_obj_add_event_cb(strip, strip_scroll_cb, LV_EVENT_SCROLL_END, NULL);
-    for (int i = 0; i < 2; i++) {
-        lv_obj_t *a = make_btn(scr_list, i ? SCR_W - 8 - 40 : L_STRIP_X, L_STRIP_Y, 40, 58,
-                               i ? LV_SYMBOL_RIGHT : LV_SYMBOL_LEFT, &lv_font_montserrat_20,
-                               strip_arrow_cb, (void *)(intptr_t)(i ? 1 : -1));
-        lv_obj_set_style_bg_opa(a, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_bg_opa(a, LV_OPA_COVER, LV_STATE_PRESSED);
-        lv_obj_set_style_text_color(lv_obj_get_child(a, 0), C_ACCENT, 0);
-        if (i) l_arrow_r = a;
-        else l_arrow_l = a;
-    }
-
-    /* puzzles of the selected collection: full width */
+    /* right pane: the selected collection's name and stats, Export / Delete, its puzzles */
     l_name = make_label(scr_list, &lv_font_montserrat_22, C_TEXT);
-    lv_obj_set_pos(l_name, 16, L_STRIP_Y + 72);
+    lv_label_set_long_mode(l_name, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_pos(l_name, PANE_X + 4, L_PANE_Y + 2);
+    lv_obj_set_width(l_name, PANE_W - 4);
     l_stats = make_label(scr_list, &lv_font_montserrat_14, C_MUTED);
-    lv_obj_align(l_stats, LV_ALIGN_TOP_RIGHT, -16, L_STRIP_Y + 78);
+    lv_obj_set_pos(l_stats, PANE_X + 4, L_PANE_Y + 34);
+    lv_obj_set_width(l_stats, PANE_W - 4);
+    lv_label_set_long_mode(l_stats, LV_LABEL_LONG_MODE_DOTS);
     l_export = make_btn(scr_list, 0, 0, 130, 40, LV_SYMBOL_UPLOAD "  Export", &lv_font_montserrat_16, list_export_cb,
                         NULL);                      /* a saved collection to puzzles/<name>.sdx */
-    lv_obj_align(l_export, LV_ALIGN_TOP_RIGHT, -12 - 52 - 8, L_STRIP_Y + 66);
+    lv_obj_align(l_export, LV_ALIGN_TOP_RIGHT, -12 - 52 - 8, L_PANE_Y - 4);
     l_del = make_btn(scr_list, 0, 0, 52, 40, LV_SYMBOL_TRASH, &lv_font_montserrat_18, list_del_cb, NULL);
     lv_obj_set_style_bg_color(l_del, C_CARD, 0);
     lv_obj_set_style_text_color(lv_obj_get_child(l_del, 0), C_RED, 0);
-    lv_obj_align(l_del, LV_ALIGN_TOP_RIGHT, -12, L_STRIP_Y + 66);
+    lv_obj_align(l_del, LV_ALIGN_TOP_RIGHT, -12, L_PANE_Y - 4);
     lv_obj_set_hidden(l_del, true);
     lv_obj_set_style_text_color(lv_obj_get_child(l_export, 0), C_ACCENT, 0);
     lv_obj_set_hidden(l_export, true);
 
     l_btnm = lv_buttonmatrix_create(scr_list);
-    lv_obj_set_pos(l_btnm, 12, L_GRID_Y);
-    lv_obj_set_size(l_btnm, SCR_W - 24, SCR_W - L_GRID_Y - 24);   /* cells about 65 x 40; the credit below */
+    lv_obj_set_pos(l_btnm, PANE_X, L_GRID_Y);
+    lv_obj_set_size(l_btnm, PANE_W, SCR_W - L_GRID_Y - 24);   /* cells about 39 x 45; the credit below */
     lv_obj_set_style_bg_opa(l_btnm, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(l_btnm, 0, 0);
     lv_obj_set_style_pad_all(l_btnm, 0, 0);
@@ -8905,8 +8922,8 @@ static void build_list(void)
     /* the Saved tab: the collection's puzzles as rows (name, variant, level, solved) */
     l_list = lv_obj_create(scr_list);
     lv_obj_remove_style_all(l_list);
-    lv_obj_set_pos(l_list, 12, L_GRID_Y);
-    lv_obj_set_size(l_list, SCR_W - 24, SCR_W - L_GRID_Y - 24);
+    lv_obj_set_pos(l_list, PANE_X, L_GRID_Y);
+    lv_obj_set_size(l_list, PANE_W, SCR_W - L_GRID_Y - 24);
     lv_obj_set_flex_flow(l_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(l_list, 6, 0);
     lv_obj_set_scroll_dir(l_list, LV_DIR_VER);
@@ -8914,14 +8931,14 @@ static void build_list(void)
 
     /* the Saved tab with nothing in it */
     l_empty = make_label(scr_list, &lv_font_montserrat_20, C_MUTED);
-    lv_obj_set_width(l_empty, SCR_W - 80);
+    lv_obj_set_width(l_empty, PANE_W - 24);
     lv_label_set_long_mode(l_empty, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_align(l_empty, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(l_empty, "Nothing saved yet.\n\nOpen a puzzle made with New puzzle or Enter and tap "
                                LV_SYMBOL_SAVE " next to the star to put it in a collection of your own. "
                                "Collections imported from the card (Settings > Data > Import puzzles) are here "
                                "too.");
-    lv_obj_align(l_empty, LV_ALIGN_TOP_MID, 0, L_GRID_Y + 60);
+    lv_obj_set_pos(l_empty, PANE_X + 12, L_GRID_Y + 20);
     lv_obj_set_hidden(l_empty, true);
 
     /* attribution */
