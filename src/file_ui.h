@@ -6,7 +6,8 @@
  * empty). The game's database (sudoku.db and SQLite's journal files next to
  * it) is protected: it can't be renamed or deleted, and nothing can be renamed
  * to its names. Folders are listed by a worker task on core 0. A tap on a
- * JPEG or MP4 opens it in the viewer (media_view.h).
+ * JPEG or MP4 opens it in the viewer (media_view.h); a tap on an .sdm, .sdx or
+ * .opensudoku puzzle file previews its puzzles on a board, with Close and Import.
  */
 #include <stdbool.h>
 #include <lvgl.h>

@@ -10,6 +10,8 @@
 #include "file_ui.h"
 #include "media_view.h"
 #include "ui_palette.h"
+#include "stats_db.h"
+#include "generator.h"
 #include "bsp/bsp_board.h"
 #include <stdio.h>
 #include <string.h>
@@ -30,6 +32,7 @@
 #define POLL_MS      150
 
 LV_FONT_DECLARE(font_icons_24)       /* Montserrat 24 + FontAwesome icons, among them the lock */
+LV_FONT_DECLARE(font_digits_44)      /* the game's board digits */
 #define SYMBOL_LOCK "\xEF\x80\xA3"   /* FontAwesome U+F023 */
 
 typedef struct {
@@ -592,6 +595,389 @@ static void on_empty(lv_event_t *e)
     if (!s_busy && !s_job_busy && s_n > 0) dlg_open(-1, DLG_EMPTY);
 }
 
+/* ------------------------------------------------------------- puzzle file preview */
+/* A tap on an .sdm, .sdx or .opensudoku file: its puzzles one at a time on a board (< > to step
+ * through them), what's in it, and Close / Import (stats_db_import_file: the same
+ * import as Settings > Data > Import puzzles, for this file, wherever it is). The file
+ * is read here, on the spot: they are small (a line per puzzle). */
+#define PV_MAX_BYTES (512 * 1024)                /* read at most this much of a file */
+#define PV_MAX       2000                        /* puzzles listed (an import takes as many) */
+#define PV_BOARD     432                         /* px: 48 per cell (9x9), 72 (6x6) */
+static lv_obj_t *s_pv, *s_pv_board, *s_pv_pos, *s_pv_prev, *s_pv_next;
+static char *s_pv_buf;                           /* the file, split into lines (PSRAM) */
+static char **s_pv_line;                         /* its puzzles' lines */
+static int s_pv_n, s_pv_at;
+static char s_pv_path[PATH_MAX_B + NAME_MAX_B];
+static sudoku_geom_t *s_pv_geom;                 /* the puzzle shown: its board ... */
+static uint8_t s_pv_givens[81];                  /* ... and digits */
+static int s_pv_var, s_pv_lv;                    /* its variant, level (-1: none given) */
+static bool s_pv_shown;                          /* a puzzle could be drawn */
+
+static bool ends_with_ci(const char *s, const char *suffix)
+{
+    size_t a = strlen(s), b = strlen(suffix);
+    return a >= b && strcasecmp(s + a - b, suffix) == 0;
+}
+
+static bool is_puzzle_file(const char *name)
+{
+    return ends_with_ci(name, ".sdm") || ends_with_ci(name, ".sdx") || ends_with_ci(name, ".opensudoku");
+}
+
+static int pv_name_index(const char *s, const char *const *names, int n)
+{
+    for (int i = 0; i < n; i++) {
+        if (!strcasecmp(s, names[i])) return i;
+    }
+    char *end;
+    long v = strtol(s, &end, 10);
+    return *s && !*end && v >= 0 && v < n ? (int)v : -1;
+}
+
+/* one line (.sdx: variant|level|givens|regions|cages|marks|thermos; or just 81 digits, as
+ * in .sdm) into variant, level, givens and its board; false if it isn't a puzzle. The
+ * same reading as the import's (stats_db.c), without the one-solution check. */
+static bool pv_parse(const char *src, int *var, int *lv, uint8_t g[81], sudoku_geom_t *geom)
+{
+    static char line[2048];
+    snprintf(line, sizeof(line), "%s", src);
+    char *fld[7] = {0};
+    int nf = 0;
+    if (!strchr(line, '|')) {                       /* just the givens: Classic, no level */
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (strlen(p) > 81 && ((p[81] >= '0' && p[81] <= '9') || p[81] == '.')) return false;
+        if (strlen(p) > 81) p[81] = 0;
+        fld[0] = "Classic"; fld[1] = ""; fld[2] = p; nf = 3;
+    } else {
+        for (char *p = line; nf < 7;) {
+            fld[nf++] = p;
+            char *bar = strchr(p, '|');
+            if (!bar) break;
+            *bar = 0;
+            p = bar + 1;
+        }
+    }
+    for (int i = nf; i < 7; i++) fld[i] = "";
+    int v = pv_name_index(fld[0], VARIANT_NAMES, VAR_COUNT);
+    int l = fld[1][0] ? pv_name_index(fld[1], GEN_LEVEL_NAMES, GEN_LEVELS) : -1;
+    if (v < 0 || (fld[1][0] && l < 0) || strlen(fld[2]) != 81) return false;
+    for (int i = 0; i < 81; i++) {
+        char c = fld[2][i] == '.' ? '0' : fld[2][i];
+        if (c < '0' || c > '9') return false;
+        g[i] = (uint8_t)(c - '0');
+    }
+    bool ok;
+    switch (v) {
+    case VAR_JIGSAW: {
+        uint8_t reg[81];
+        ok = strlen(fld[3]) == 81;
+        for (int i = 0; ok && i < 81; i++) {
+            ok = fld[3][i] >= '0' && fld[3][i] <= '8';
+            reg[i] = (uint8_t)(fld[3][i] - '0');
+        }
+        ok = ok && sudoku_geom_jigsaw(reg, geom);
+        break;
+    }
+    case VAR_KILLER:   ok = sudoku_geom_killer_text(fld[4], geom); break;
+    case VAR_EVENODD:
+    case VAR_CONSEC:   ok = strlen(fld[5]) == 81 && sudoku_geom_marks(v, fld[5], geom); break;
+    case VAR_THERMO:   ok = sudoku_geom_thermo_text(fld[6], geom); break;
+    case VAR_SANDWICH: ok = sudoku_geom_sandwich_text(fld[5], geom); break;
+    default: {
+        const sudoku_geom_t *G = sudoku_geom(v);
+        ok = G != NULL;
+        if (ok) memcpy(geom, G, sizeof(*geom));
+    }
+    }
+    *var = v;
+    *lv = l;
+    return ok;
+}
+
+static void pv_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, int w, lv_color_t c)
+{
+    lv_draw_line_dsc_t d;
+    lv_draw_line_dsc_init(&d);
+    d.color = c;
+    d.width = w;
+    d.p1.x = x1; d.p1.y = y1;
+    d.p2.x = x2; d.p2.y = y2;
+    lv_draw_line(layer, &d);
+}
+
+/* the board: cells (the X-Sudoku diagonals and Hyper windows tinted), the givens, thin lines
+ * between cells and thick ones between boxes (Jigsaw: regions); Killer: the cages, dashed in
+ * the accent colour, with their sums */
+static void pv_draw_cb(lv_event_t *e)
+{
+    if (!s_pv_shown) return;
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    lv_area_t a;
+    lv_obj_get_coords(obj, &a);
+    const sudoku_geom_t *g = s_pv_geom;
+    int n = g->n, cs = PV_BOARD / n;
+    lv_draw_rect_dsc_t rd;
+    lv_draw_rect_dsc_init(&rd);
+    lv_draw_label_dsc_t ld;
+    lv_draw_label_dsc_init(&ld);
+    ld.font = n == 9 ? &lv_font_montserrat_28 : &font_digits_44;   /* (6x6: the game's own digits) */
+    ld.color = C_TEXT;
+    ld.align = LV_TEXT_ALIGN_CENTER;
+    for (int r = 0; r < n; r++) {
+        for (int c = 0; c < n; c++) {
+            int cell = r * 9 + c;
+            lv_area_t ca = {a.x1 + c * cs, a.y1 + r * cs, a.x1 + (c + 1) * cs - 1, a.y1 + (r + 1) * cs - 1};
+            rd.bg_color = sudoku_geom_tinted(g, cell) ? C_CELL_PEER : (s_pv_givens[cell] ? C_CELL_GIVEN : C_CELL);
+            lv_draw_rect(layer, &rd, &ca);
+            if (s_pv_givens[cell]) {
+                char t[2] = {(char)('0' + s_pv_givens[cell]), 0};
+                lv_area_t ta = ca;
+                ta.y1 += (cs - lv_font_get_line_height(ld.font)) / 2;
+                ld.text = t;
+                ld.text_local = 1;
+                lv_draw_label(layer, &ld, &ta);
+            }
+        }
+    }
+    /* Killer cages: a dashed line just inside each cage edge, the sum in its first cell */
+    if (s_pv_var == VAR_KILLER) {
+        lv_draw_line_dsc_t d;
+        lv_draw_line_dsc_init(&d);
+        d.color = C_ACCENT;
+        d.width = 1;
+        d.dash_width = 4;
+        d.dash_gap = 3;
+        const int in = 4;
+        for (int r = 0; r < n; r++) {
+            for (int c = 0; c < n; c++) {
+                int cell = r * 9 + c, k = g->cage_of[cell];
+                if (k == CAGE_NONE) continue;
+                int x1 = a.x1 + c * cs, y1 = a.y1 + r * cs, x2 = x1 + cs - 1, y2 = y1 + cs - 1;
+                bool top = r == 0 || g->cage_of[cell - 9] != k, bot = r == n - 1 || g->cage_of[cell + 9] != k;
+                bool lef = c == 0 || g->cage_of[cell - 1] != k, rig = c == n - 1 || g->cage_of[cell + 1] != k;
+                int xa = lef ? x1 + in : x1, xb = rig ? x2 - in : x2, ya = top ? y1 + in : y1, yb = bot ? y2 - in : y2;
+                if (top) { d.p1.x = xa; d.p1.y = ya; d.p2.x = xb; d.p2.y = ya; lv_draw_line(layer, &d); }
+                if (bot) { d.p1.x = xa; d.p1.y = yb; d.p2.x = xb; d.p2.y = yb; lv_draw_line(layer, &d); }
+                if (lef) { d.p1.x = xa; d.p1.y = ya; d.p2.x = xa; d.p2.y = yb; lv_draw_line(layer, &d); }
+                if (rig) { d.p1.x = xb; d.p1.y = ya; d.p2.x = xb; d.p2.y = yb; lv_draw_line(layer, &d); }
+                if (g->cage_cell[k][0] == cell) {   /* the top-left cell: the sum */
+                    char t[4];
+                    snprintf(t, sizeof(t), "%d", g->cage_sum[k]);
+                    lv_draw_label_dsc_t sd;
+                    lv_draw_label_dsc_init(&sd);
+                    sd.font = &lv_font_montserrat_12;
+                    sd.color = C_ACCENT;
+                    sd.text = t;
+                    sd.text_local = 1;
+                    lv_area_t sa = {x1 + in + 2, y1 + in + 1, x2, y2};
+                    lv_draw_label(layer, &sd, &sa);
+                }
+            }
+        }
+    }
+    /* lines: thin between cells, thick between boxes / regions and round the edge */
+    for (int r = 0; r < n; r++) {
+        for (int c = 0; c < n; c++) {
+            int cell = r * 9 + c, x = a.x1 + c * cs, y = a.y1 + r * cs;
+            if (c < n - 1) {
+                bool thick = g->region[cell] != g->region[cell + 1];
+                pv_line(layer, x + cs, y, x + cs, y + cs, thick ? 3 : 1, thick ? C_GRID_THICK : C_GRID_THIN);
+            }
+            if (r < n - 1) {
+                bool thick = g->region[cell] != g->region[cell + 9];
+                pv_line(layer, x, y + cs, x + cs, y + cs, thick ? 3 : 1, thick ? C_GRID_THICK : C_GRID_THIN);
+            }
+        }
+    }
+    int e2 = a.x1 + n * cs, f2 = a.y1 + n * cs;
+    pv_line(layer, a.x1, a.y1 + 1, e2, a.y1 + 1, 3, C_GRID_THICK);
+    pv_line(layer, a.x1, f2 - 1, e2, f2 - 1, 3, C_GRID_THICK);
+    pv_line(layer, a.x1 + 1, a.y1, a.x1 + 1, f2, 3, C_GRID_THICK);
+    pv_line(layer, e2 - 1, a.y1, e2 - 1, f2, 3, C_GRID_THICK);
+}
+
+static void pv_show(int at)
+{
+    if (s_pv_n <= 0) return;
+    s_pv_at = (at + s_pv_n) % s_pv_n;
+    s_pv_shown = pv_parse(s_pv_line[s_pv_at], &s_pv_var, &s_pv_lv, s_pv_givens, s_pv_geom);
+    int n = s_pv_shown ? s_pv_geom->n : 9;
+    int side = n * (PV_BOARD / n);
+    lv_obj_set_size(s_pv_board, side, side);
+    lv_obj_set_x(s_pv_board, (720 - side) / 2);
+    lv_obj_invalidate(s_pv_board);
+    char t[96];
+    snprintf(t, sizeof(t), "%d / %d  -  %s%s%s", s_pv_at + 1, s_pv_n, VARIANT_NAMES[s_pv_var],
+             s_pv_lv >= 0 ? " " : "", s_pv_lv >= 0 ? GEN_LEVEL_NAMES[s_pv_lv] : "");
+    lv_label_set_text(s_pv_pos, t);
+    lv_obj_set_state(s_pv_prev, LV_STATE_DISABLED, s_pv_n < 2);
+    lv_obj_set_state(s_pv_next, LV_STATE_DISABLED, s_pv_n < 2);
+}
+
+static void pv_close(void)
+{
+    if (!s_pv) return;
+    lv_obj_delete_async(s_pv);
+    s_pv = NULL;
+    heap_caps_free(s_pv_buf);
+    heap_caps_free(s_pv_line);
+    s_pv_buf = NULL;
+    s_pv_line = NULL;
+    s_pv_n = 0;
+}
+
+static void on_pv_close(lv_event_t *e) { pv_close(); }
+static void on_pv_step(lv_event_t *e) { pv_show(s_pv_at + (int)(intptr_t)lv_event_get_user_data(e)); }
+
+static void on_pv_import(lv_event_t *e)
+{
+    stats_db_import_file(s_pv_path);                /* (the result comes back as a notice) */
+    pv_close();
+}
+
+/* the file read and its lines sorted out: the puzzles, what kinds, how many lines aren't one */
+static int pv_load(const char *path, char *summary, size_t n)
+{
+    FILE *f = fopen(path, "r");
+    s_pv_buf = heap_caps_malloc(PV_MAX_BYTES + 1, MALLOC_CAP_SPIRAM);
+    s_pv_line = heap_caps_malloc(PV_MAX * sizeof(char *), MALLOC_CAP_SPIRAM);
+    if (!s_pv_geom) s_pv_geom = heap_caps_malloc(sizeof(sudoku_geom_t), MALLOC_CAP_SPIRAM);
+    if (!f || !s_pv_buf || !s_pv_line || !s_pv_geom) {
+        if (f) fclose(f);
+        snprintf(summary, n, f ? "Out of memory." : "Couldn't open the file.");
+        return 0;
+    }
+    size_t len = fread(s_pv_buf, 1, PV_MAX_BYTES, f);
+    bool cut = !feof(f);
+    fclose(f);
+    s_pv_buf[len] = 0;
+    int kinds[VAR_COUNT] = {0}, bad = 0;
+    if (ends_with_ci(path, ".opensudoku")) {        /* OpenSudoku's XML: each data="..." (or '...') is a Classic one */
+        for (char *q = s_pv_buf; s_pv_n < PV_MAX && (q = strstr(q, "data=")) != NULL; q += 5) {
+            char quote = q[5];
+            if (quote != '"' && quote != '\'') continue;
+            char *d = q + 6, *end = strchr(d, quote);
+            if (!end) break;                        /* (cut off at the end) */
+            int v, lv;
+            uint8_t g[81];
+            *end = 0;
+            if (end - d == 81 && pv_parse(d, &v, &lv, g, s_pv_geom)) {
+                s_pv_line[s_pv_n++] = d;
+                kinds[v]++;
+            } else {
+                bad++;
+            }
+            q = end;
+        }
+    }
+    for (char *p = s_pv_buf; !ends_with_ci(path, ".opensudoku") && *p && s_pv_n < PV_MAX;) {
+        char *nl = strchr(p, '\n');
+        if (nl) *nl = 0;
+        else if (cut) break;                        /* (a line cut off at the end) */
+        size_t l = strlen(p);
+        while (l && (p[l - 1] == '\r' || p[l - 1] == ' ' || p[l - 1] == '\t')) p[--l] = 0;
+        if (l && p[0] != '#') {
+            int v, lv;
+            uint8_t g[81];
+            if (pv_parse(p, &v, &lv, g, s_pv_geom)) {
+                s_pv_line[s_pv_n++] = p;
+                kinds[v]++;
+            } else {
+                bad++;
+            }
+        }
+        if (!nl) break;
+        p = nl + 1;
+    }
+    /* "42 puzzles: 30 Classic, 12 Killer" (+ the lines left out) */
+    int o = snprintf(summary, n, "%d puzzle%s%s", s_pv_n, s_pv_n == 1 ? "" : "s", s_pv_n ? ": " : "");
+    for (int v = 0, first = 1; v < VAR_COUNT && o < (int)n; v++) {
+        if (!kinds[v]) continue;
+        o += snprintf(summary + o, n - o, "%s%d %s", first ? "" : ", ", kinds[v], VARIANT_NAMES[v]);
+        first = 0;
+    }
+    if (bad && o < (int)n) o += snprintf(summary + o, n - o, "  -  %d %s that %s", bad,
+                                         ends_with_ci(path, ".opensudoku") ? (bad == 1 ? "entry" : "entries")
+                                                                           : (bad == 1 ? "line" : "lines"),
+                                         bad == 1 ? "isn't a puzzle" : "aren't puzzles");
+    if ((cut || s_pv_n == PV_MAX) && o < (int)n) snprintf(summary + o, n - o, "  -  the first %d shown", s_pv_n);
+    return s_pv_n;
+}
+
+static void pv_open(int i)
+{
+    pv_close();
+    snprintf(s_pv_path, sizeof(s_pv_path), "%s/%s", s_path, s_ent[i].name);
+    char summary[160];
+    pv_load(s_pv_path, summary, sizeof(summary));
+
+    s_pv = lv_obj_create(lv_layer_top());           /* the whole screen: nothing under it takes taps */
+    lv_obj_remove_style_all(s_pv);
+    lv_obj_set_size(s_pv, 720, 720);
+    lv_obj_set_style_bg_color(s_pv, C_BG, 0);
+    lv_obj_set_style_bg_opa(s_pv, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(s_pv, true);
+    lv_obj_t *t = label(s_pv, &lv_font_montserrat_22, C_TEXT, s_ent[i].name);
+    lv_obj_set_width(t, 720 - 32);
+    lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_pos(t, 16, 14);
+    lv_obj_t *sm = label(s_pv, &lv_font_montserrat_16, C_MUTED, summary);
+    lv_obj_set_width(sm, 720 - 32);
+    lv_label_set_long_mode(sm, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_pos(sm, 16, 48);
+
+    s_pv_board = lv_obj_create(s_pv);
+    lv_obj_remove_style_all(s_pv_board);
+    lv_obj_set_pos(s_pv_board, (720 - PV_BOARD) / 2, 84);
+    lv_obj_set_size(s_pv_board, PV_BOARD, PV_BOARD);
+    lv_obj_add_event_cb(s_pv_board, pv_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+
+    /* under it: < 3 / 42 - Killer Hard > */
+    s_pv_prev = icon_btn(s_pv, LV_SYMBOL_LEFT, C_TEXT, on_pv_step, (void *)(intptr_t)-1);
+    lv_obj_set_pos(s_pv_prev, (720 - PV_BOARD) / 2, 84 + PV_BOARD + 12);
+    s_pv_next = icon_btn(s_pv, LV_SYMBOL_RIGHT, C_TEXT, on_pv_step, (void *)(intptr_t)1);
+    lv_obj_set_pos(s_pv_next, (720 + PV_BOARD) / 2 - 56, 84 + PV_BOARD + 12);
+    lv_obj_set_style_opa(s_pv_prev, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_set_style_opa(s_pv_next, LV_OPA_40, LV_STATE_DISABLED);
+    s_pv_pos = label(s_pv, &lv_font_montserrat_18, C_TEXT, "");
+    lv_obj_set_size(s_pv_pos, PV_BOARD - 2 * 56 - 16, lv_font_get_line_height(&lv_font_montserrat_18));   /* one line */
+    lv_obj_set_style_text_align(s_pv_pos, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(s_pv_pos, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_pos(s_pv_pos, (720 - PV_BOARD) / 2 + 56 + 8, 84 + PV_BOARD + 12 + 13);
+
+    /* what Import does (or why it can't) */
+    bool db = stats_db_ready();
+    lv_obj_t *note = label(s_pv, &lv_font_montserrat_14, C_MUTED,
+        !db ? "Importing needs sudoku.db: insert the card before switching on."
+        : !s_pv_n ? "Nothing here to import."
+        : "Import adds them to Puzzles > Saved as a collection named after the file (each checked for exactly "
+          "one solution; more than 100 make several).");
+    lv_obj_set_width(note, 720 - 32);
+    lv_label_set_long_mode(note, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(note, 16, 84 + PV_BOARD + 12 + 48 + 10);
+
+    lv_obj_t *row = lv_obj_create(s_pv);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, 720 - 32, 56);
+    lv_obj_set_pos(row, 16, 720 - 16 - 56);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 16, 0);
+    lv_obj_t *cl = pill_btn(row, LV_SYMBOL_CLOSE "  Close", C_CARD2, C_TEXT, on_pv_close);
+    lv_obj_set_width(cl, 300);
+    lv_obj_t *im = pill_btn(row, LV_SYMBOL_DOWNLOAD "  Import", C_ACCENT, lv_color_white(), on_pv_import);
+    lv_obj_set_width(im, 300);
+    lv_obj_set_style_opa(im, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_set_state(im, LV_STATE_DISABLED, !db || !s_pv_n);
+
+    s_pv_shown = false;
+    if (s_pv_n) pv_show(0);
+    else lv_label_set_text(s_pv_pos, "No puzzles");
+}
+
 /* a picture or video: the viewer, with the folder's others for Prev / Next */
 static void open_media(int i)
 {
@@ -611,6 +997,7 @@ static void on_row(lv_event_t *e)
     if (i < 0 || i >= s_n || s_busy || s_job_busy || in_trash()) return;
     if (!s_ent[i].dir) {
         if (media_view_kind(s_ent[i].name)) open_media(i);
+        else if (is_puzzle_file(s_ent[i].name)) pv_open(i);   /* .sdm / .sdx: the preview */
         return;
     }
     size_t len = strlen(s_path);
@@ -676,7 +1063,9 @@ static void show_list(void)
         lv_obj_set_style_border_color(r, C_CARD2, 0);
         lv_obj_set_style_border_width(r, i < s_n - 1 ? 1 : 0, 0);
         int media = e->dir ? MEDIA_NONE : media_view_kind(e->name);
-        if ((e->dir || media) && !trashed) {        /* a folder or a picture/video opens on a tap (not in the bin) */
+        bool puzzles = !e->dir && is_puzzle_file(e->name);
+        if ((e->dir || media || puzzles) && !trashed) {   /* a folder, picture/video or puzzle file opens on a tap
+                                                             (not in the bin) */
             lv_obj_set_clickable(r, true);
             lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
             lv_obj_set_style_bg_opa(r, LV_OPA_COVER, LV_STATE_PRESSED);
@@ -686,7 +1075,7 @@ static void show_list(void)
         lv_obj_t *ic = label(r, &lv_font_montserrat_24, bin ? C_ORANGE : (e->dir ? C_ACCENT : C_MUTED),
                              bin ? LV_SYMBOL_TRASH : e->dir ? LV_SYMBOL_DIRECTORY
                                  : media == MEDIA_IMAGE ? LV_SYMBOL_IMAGE : media == MEDIA_VIDEO ? LV_SYMBOL_VIDEO
-                                 : LV_SYMBOL_FILE);
+                                 : puzzles ? LV_SYMBOL_LIST : LV_SYMBOL_FILE);
         lv_obj_set_width(ic, 30);
 
         lv_obj_t *col = lv_obj_create(r);
@@ -756,6 +1145,7 @@ static void poll(lv_timer_t *t)
 void file_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
 {
     media_view_close();                             /* (it lives on the old screen) */
+    pv_close();
     if (s_timer) {                                  /* rebuilt on a theme change */
         lv_timer_delete(s_timer);
         s_timer = NULL;
@@ -830,5 +1220,6 @@ void file_ui_set_shown(bool shown)
         lv_timer_pause(s_timer);
         dlg_close();
         media_view_close();
+        pv_close();
     }
 }

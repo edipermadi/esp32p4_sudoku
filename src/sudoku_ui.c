@@ -5596,7 +5596,7 @@ static void list_del_cb(lv_event_t *e)
     if (n == 1) snprintf(what, sizeof(what), "Its puzzle stays on the board: its");
     else snprintf(what, sizeof(what), "Its %d puzzles stay on the board: their", n);
     snprintf(text, sizeof(text), "The collection goes%s. %s solves, History and Gameplays are kept%s.",
-             imported ? " (its file in puzzles/ can be imported again)" : "", what,
+             imported ? " (its file can be imported again)" : "", what,
              imported ? "" : n == 1 ? ", and Save can put it in a collection again"
                                     : ", and Save can put them in a collection again");
     lv_obj_t *m = make_msgbox(title, text);
@@ -7130,7 +7130,14 @@ static void sd_poll_cb(lv_timer_t *t)
     }
     if (scr_history) history_poll();
     if (scr_plays) plays_poll();
-    if (stats_db_take_imports_changed()) apply_theme(s_dark);   /* new collections: rebuild the list (and all) */
+    if (stats_db_take_imports_changed()) {                 /* new collections: Puzzles' column and pane again */
+        list_fill_colls();                                 /* (reloads them; not a rebuild of every screen:
+                                                              two copies of them all left internal RAM to the
+                                                              SD card's DMA buffers short, and a Files rescan
+                                                              then failed) */
+        refresh_list();
+        update_header();                                   /* (the game screen's Save icon) */
+    }
     trophy_poll();
     trophy_toast_poll();
     history_replay_poll();                                 /* a solve tapped in History or Gameplays */

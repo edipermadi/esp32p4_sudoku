@@ -43,7 +43,7 @@ typedef enum {
     CMD_PLAYERS, CMD_ADD_PLAYER, CMD_RENAME_PLAYER, CMD_SWITCH_PLAYER, CMD_DELETE_PLAYER,
     CMD_MONTH, CMD_DAY, CMD_RESET, CMD_REPLAY, CMD_PLAYS, CMD_GEN_ADD, CMD_GEN_GET, CMD_DAILY,
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
-    CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_PLAYER_AVATAR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
+    CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_PLAYER_AVATAR, CMD_IMPORT, CMD_IMPORT_FILE, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
     CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM, CMD_BM_GET, CMD_BM_SET, CMD_BM_LIST, CMD_SEEN_GET, CMD_SEEN_SET,
     CMD_ATTACK, CMD_ATTACK_BOARD, CMD_SAVED_LIST, CMD_SAVED_ADD, CMD_SAVED_REMOVE, CMD_SOLVED_LIST, CMD_SAVED_EXPORT,
     CMD_COLL_DELETE,
@@ -2254,6 +2254,60 @@ static int import_sdx(const char *path, const char *file, const char *base, int 
     return added;
 }
 
+/* one file into generated and imported, as a collection named after it (more than 100
+ * puzzles: "name 1", "name 2" ...), in its own transaction; *bad counts the puzzles left
+ * out (broken, or not exactly one solution). How many went in (at most max), 0 if none
+ * did, -1 if writing failed. fn: the file's name, kept to skip it next time. */
+static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], int max, int *bad)
+{
+    char base[STATS_IMPORT_NAME];                   /* the collection's name: the file's, without the extension */
+    const char *dot = strrchr(fn, '.');
+    snprintf(base, sizeof(base), "%.*s", (int)(dot ? dot - fn : (int)strlen(fn)), fn);
+    if (ends_with(fn, ".sdx")) {                    /* any variant: line by line (see import_sdx) */
+        int got = exec("BEGIN") ? import_sdx(path, fn, base, max, bad) : -1;
+        if (got > 0 && exec("COMMIT")) return got;
+        exec("ROLLBACK");
+        return got < 0 ? -1 : 0;
+    }
+    int n = parse_file(path, ends_with(fn, ".opensudoku"), cells, max);
+    int good = 0;
+    for (int i = 0; i < n; i++) {                   /* keep the ones with exactly one solution */
+        if (sudoku_classic_unique(cells[i])) memmove(cells[good++], cells[i], 81);
+        else (*bad)++;
+    }
+    if (!good) return 0;
+    bool ok = exec("BEGIN");
+    int chunks = (good + 99) / 100;
+    for (int k = 0; ok && k < chunks; k++) {
+        int from = k * 100, cnt = good - from < 100 ? good - from : 100, first = 0;
+        char name[STATS_IMPORT_NAME];
+        if (chunks == 1) snprintf(name, sizeof(name), "%s", base);
+        else snprintf(name, sizeof(name), "%.*s %d", (int)sizeof(name) - 5, base, k + 1);
+        for (int i = 0; ok && i < cnt; i++) {
+            sqlite3_stmt *st;
+            char g[82];
+            for (int c = 0; c < 81; c++) g[c] = (char)('0' + cells[from + i][c]);
+            g[81] = 0;
+            ok = sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, variant, source, number)"
+                                          " VALUES(0, ?1, ?2, 0, ?3, ?4)", -1, &st, NULL) == SQLITE_OK;
+            if (!ok) break;
+            sqlite3_bind_text(st, 1, g, 81, SQLITE_STATIC);
+            time_t now = time(NULL);
+            if (now > 1700000000) sqlite3_bind_int64(st, 2, now);
+            else sqlite3_bind_null(st, 2);
+            sqlite3_bind_text(st, 3, name, -1, SQLITE_STATIC);
+            sqlite3_bind_int(st, 4, i + 1);
+            ok = step_done(st, "import puzzle");
+            sqlite3_finalize(st);
+            if (ok && i == 0) first = (int)sqlite3_last_insert_rowid(s_db);
+        }
+        ok = ok && import_collection(name, fn, first, cnt);   /* (a name taken already: the file is skipped) */
+    }
+    if (ok && exec("COMMIT")) return good;
+    exec("ROLLBACK");
+    return -1;
+}
+
 static void do_import(void)
 {
     if (!s_db) return;
@@ -2270,86 +2324,20 @@ static void do_import(void)
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && total < IMPORT_MAX_RUN) {
         const char *fn = e->d_name;
-        bool xml = ends_with(fn, ".opensudoku"), sdx = ends_with(fn, ".sdx");
-        if (!xml && !sdx && !ends_with(fn, ".sdm") && !ends_with(fn, ".txt")) continue;
+        if (!ends_with(fn, ".opensudoku") && !ends_with(fn, ".sdx") && !ends_with(fn, ".sdm") &&
+            !ends_with(fn, ".txt")) continue;
         if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
             skipped++;
             continue;
         }
         char path[300];
         snprintf(path, sizeof(path), IMPORT_DIR "/%s", fn);
-        if (sdx) {                                  /* any variant: line by line (see import_sdx) */
-            char base[STATS_IMPORT_NAME];
-            snprintf(base, sizeof(base), "%.*s", (int)(strrchr(fn, '.') - fn), fn);
-            int got = exec("BEGIN") ? import_sdx(path, fn, base, IMPORT_MAX_RUN - total, &bad) : -1;
-            if (got > 0 && exec("COMMIT")) {
-                files++;
-                added += got;
-                total += got;
-                printf("stats_db: imported %d puzzles from %s\n", got, fn);
-            } else {
-                exec("ROLLBACK");
-            }
-            continue;
-        }
-        int n = parse_file(path, xml, cells, IMPORT_MAX_RUN - total);
-        int good = 0;
-        for (int i = 0; i < n; i++) {               /* keep the ones with exactly one solution */
-            if (sudoku_classic_unique(cells[i])) memmove(cells[good++], cells[i], 81);
-            else bad++;
-        }
-        if (!good) continue;
-        /* the collection's name: the file's, without the extension */
-        char base[STATS_IMPORT_NAME];
-        snprintf(base, sizeof(base), "%.*s", (int)(strrchr(fn, '.') - fn), fn);
-        bool ok = exec("BEGIN");
-        int chunks = (good + 99) / 100;
-        for (int k = 0; ok && k < chunks; k++) {
-            int from = k * 100, cnt = good - from < 100 ? good - from : 100, first = 0;
-            char name[STATS_IMPORT_NAME];
-            if (chunks == 1) snprintf(name, sizeof(name), "%s", base);
-            else snprintf(name, sizeof(name), "%.*s %d", (int)sizeof(name) - 5, base, k + 1);
-            for (int i = 0; ok && i < cnt; i++) {
-                sqlite3_stmt *st;
-                char g[82];
-                for (int c = 0; c < 81; c++) g[c] = (char)('0' + cells[from + i][c]);
-                g[81] = 0;
-                ok = sqlite3_prepare_v2(s_db, "INSERT INTO generated(level, givens, created_at, variant, source, number)"
-                                              " VALUES(0, ?1, ?2, 0, ?3, ?4)", -1, &st, NULL) == SQLITE_OK;
-                if (!ok) break;
-                sqlite3_bind_text(st, 1, g, 81, SQLITE_STATIC);
-                time_t now = time(NULL);
-                if (now > 1700000000) sqlite3_bind_int64(st, 2, now);
-                else sqlite3_bind_null(st, 2);
-                sqlite3_bind_text(st, 3, name, -1, SQLITE_STATIC);
-                sqlite3_bind_int(st, 4, i + 1);
-                ok = step_done(st, "import puzzle");
-                sqlite3_finalize(st);
-                if (ok && i == 0) first = (int)sqlite3_last_insert_rowid(s_db);
-            }
-            sqlite3_stmt *st;
-            if (ok && sqlite3_prepare_v2(s_db, "INSERT INTO imported(name, file, first_id, count, created_at)"
-                                               " VALUES(?1, ?2, ?3, ?4, ?5)", -1, &st, NULL) == SQLITE_OK) {
-                sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
-                sqlite3_bind_text(st, 2, fn, -1, SQLITE_STATIC);
-                sqlite3_bind_int(st, 3, first);
-                sqlite3_bind_int(st, 4, cnt);
-                time_t now = time(NULL);
-                if (now > 1700000000) sqlite3_bind_int64(st, 5, now);
-                else sqlite3_bind_null(st, 5);
-                ok = step_done(st, "import collection");     /* (a name taken already: the file is skipped) */
-                sqlite3_finalize(st);
-            } else {
-                ok = false;
-            }
-        }
-        if (ok && exec("COMMIT")) {
+        int got = import_one(path, fn, cells, IMPORT_MAX_RUN - total, &bad);
+        if (got > 0) {
             files++;
-            added += good;
-            total += good;
-            printf("stats_db: imported %d puzzles from %s\n", good, fn);
-        } else {
-            exec("ROLLBACK");
+            added += got;
+            total += got;
+            printf("stats_db: imported %d puzzles from %s\n", got, fn);
         }
     }
     closedir(dir);
@@ -2362,6 +2350,36 @@ static void do_import(void)
         snprintf(msg, sizeof(msg), "Nothing new in puzzles/: those files are imported already.");
     } else {
         snprintf(msg, sizeof(msg), "No puzzles found in puzzles/ (.opensudoku, .sdm, .sdx or .txt files).");
+    }
+    post_message(msg);
+}
+
+/* one file, anywhere on the card (Files' preview: stats_db_import_file) */
+static char s_import_path[300];
+
+static void do_import_file(void)
+{
+    if (!s_db) return;
+    static uint8_t (*cells)[81];
+    if (!cells) cells = heap_caps_malloc(81 * IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM);
+    if (!cells) return;
+    const char *slash = strrchr(s_import_path, '/'), *fn = slash ? slash + 1 : s_import_path;
+    char msg[128];
+    if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
+        snprintf(msg, sizeof(msg), "%.80s is imported already: it's in Puzzles > Saved.", fn);
+        post_message(msg);
+        return;
+    }
+    int bad = 0, got = import_one(s_import_path, fn, cells, IMPORT_MAX_RUN, &bad);
+    if (got > 0) {
+        printf("stats_db: imported %d puzzles from %s\n", got, s_import_path);
+        snprintf(msg, sizeof(msg), "Imported %d puzzle%s: Puzzles > Saved%s.", got, got == 1 ? "" : "s",
+                 bad ? " (some had no single solution and were left out)" : "");
+        s_imports_changed = true;
+    } else if (got < 0) {
+        snprintf(msg, sizeof(msg), "Couldn't import %.60s (is a collection of that name there already?).", fn);
+    } else {
+        snprintf(msg, sizeof(msg), "No puzzle with exactly one solution in %.70s.", fn);
     }
     post_message(msg);
 }
@@ -3234,6 +3252,9 @@ static void worker(void *arg)
         case CMD_WEEK:
             do_week(c.text);
             break;
+        case CMD_IMPORT_FILE:
+            do_import_file();
+            break;
         case CMD_IMPORT:
             do_import();
             break;
@@ -3721,6 +3742,13 @@ bool stats_db_puzzle_rank(uint16_t puzzle, stats_h2h_t *out)
     if (!gen_call(CMD_PRANK)) return false;
     *out = s_gen.h2h;
     return true;
+}
+
+void stats_db_import_file(const char *path)
+{
+    snprintf(s_import_path, sizeof(s_import_path), "%s", path);   /* (one at a time: the preview waits) */
+    cmd_t c = {.type = CMD_IMPORT_FILE};
+    if (!send(&c)) post_message("Importing needs sudoku.db on the microSD card.");
 }
 
 void stats_db_import_puzzles(void)

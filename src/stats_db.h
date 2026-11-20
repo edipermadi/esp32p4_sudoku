@@ -392,6 +392,9 @@ typedef struct {
     int count;
 } stats_import_t;
 void stats_db_import_puzzles(void);
+/* One file of those kinds anywhere on the card (a full path): the same, but
+ * just that file (Files' preview). */
+void stats_db_import_file(const char *path);
 bool stats_db_take_imports_changed(void);
 /* The imported collections (waits for the database); -1 without one. */
 int stats_db_list_imports(stats_import_t *out);

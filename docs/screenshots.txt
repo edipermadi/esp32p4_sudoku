@@ -3,7 +3,8 @@
 # Coordinates are screen pixels (720 x 720). Nothing here changes the game data
 # (no puzzle is played or made, no setting is changed). The game screen tour must
 # have been seen (tour.png is taken by hand). It expects one recorded
-# solve (for Gameplays and the replay); the Home menu always has its two pages.
+# solve (for Gameplays and the replay) and a puzzle file (.sdx, .sdm or .opensudoku)
+# first in puzzles/ (for the preview); the Home menu always has its two pages.
 
 wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
 shot docs/screenshots/home.png
@@ -124,6 +125,15 @@ wait 500
 tap 513 637                 # Files (Home, page 1): the card's root
 wait 1500
 shot docs/screenshots/files.png
+tap 250 217                 # the puzzles folder
+wait 1200
+tap 250 148                 # its first file (an .sdx): the puzzle file preview (only looked at)
+wait 1500
+shot docs/screenshots/file-preview.png
+tap 200 676                 # Close
+wait 500
+tap 581 36                  # Up, back to the card's root (Files opens where it was left)
+wait 1200
 tap 80 36                   # Home
 wait 500
 swipe 600 450 120 450 300   # the menu's second page

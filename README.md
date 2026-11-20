@@ -25,7 +25,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 - **Helpers**: a left-handed layout, pencil marks, Auto notes, digit-first entry, cell colours, undo/redo, mistake check, step-by-step hints (up to X-Wing, Swordfish and XY-Wing, or nudges only), a Learn mode for ten techniques and four variant rules, a tour of the game screen, starred puzzles and a 10-minute time attack.
 - **Players, statistics and trophies**: per-player progress and emoji avatars, a history calendar, charts, achievements, daily and weekly leaderboards.
 - **Replays**: every solve can be played back, or exported as an H.264 MP4 video.
-- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, puzzle import, a file manager with a Recycle bin (the database protected) and a picture/video viewer, screenshots, USB drive mode and firmware updates from the card.
+- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, puzzle import, a file manager with a Recycle bin (the database protected), a picture/video viewer and a puzzle file preview, screenshots, USB drive mode and firmware updates from the card.
 - **Wi-Fi clock**, light and dark mode, a night mode, accent colours, colour-blind friendly colours, lock screen, screen-saver clock, synthesised sound effects, remote control by sound (Gibberlink / ggwave) and a system monitor with graphs of the last hour.
 
 ## Documentation
@@ -53,3 +53,7 @@ Needs esp32 Arduino core 3.3.x, LVGL 9.6.0 and `extras/lv_conf.h` at `~/Arduino/
 ## Credits
 
 The puzzles come from the [OpenSudoku](https://opensudoku.gitlab.io/) collections, which include puzzles from Gnome Sudoku. The board support code is shared with the `esp32p4_86box` project. The player avatars are [Noto Color Emoji](https://github.com/googlefonts/noto-emoji) (SIL Open Font License 1.1), as images in `src/avatars.c`. Data over sound is [ggwave](https://github.com/ggerganov/ggwave) by Georgi Gerganov (MIT, in `src/ggwave/`); the ES7210 and ES8311 register setup follows Espressif's `esp_codec_dev` drivers (Apache-2.0).
+
+---
+
+Powered by [Claude Code](https://claude.com/claude-code)
