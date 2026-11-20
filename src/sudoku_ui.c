@@ -70,6 +70,7 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "video_enc.h"
+#include "driver/jpeg_encode.h"
 #include <sys/stat.h>
 #include <unistd.h>
 #include "moves.h"
@@ -3483,87 +3484,60 @@ static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
 /* Builds the Replay screen (on the default display) for the prepared log. */
 /* ------------------------------------------------------------- screenshot */
 /*
- * The camera buttons (Solved dialog, Replay): the screen as a PNG in screenshots/ on
+ * The camera buttons (Solved dialog, Replay): the screen as a JPEG in screenshots/ on
  * the card. The frame is copied at once (the screen keeps going); a worker task on
- * core 0 turns it into a PNG and writes it. The PNG is uncompressed ("stored" deflate
- * blocks: there's no zlib here), 1.5 MB, readable everywhere.
+ * core 0 has the hardware JPEG encoder compress it (by DMA, full colour resolution,
+ * quality 90: about 100-200 KB instead of a 1.5 MB uncompressed PNG) and writes it.
+ * The encoder gets RGB888, widened from RGB565 here: given RGB565 it widens by
+ * shifting alone, and white came out (236, 245, 244), with a green cast.
  */
-#define SS_ROW (1 + SCR_W * 3)                       /* filter byte + RGB */
-static uint16_t *ss_frame;
+#define SS_QUALITY 90
+#define SS_OUT_MAX (1024 * 1024)
+static uint16_t *ss_frame;                          /* 64-byte aligned: the encoder reads it by DMA */
 static volatile int ss_state;                       /* 0 idle, 1 writing, 2 done, 3 failed */
 static char ss_path[64];
 static lv_timer_t *ss_timer;
-static uint32_t ss_crc_tab[256];
-
-static uint32_t ss_crc(uint32_t c, const uint8_t *p, size_t n)
-{
-    if (!ss_crc_tab[1]) {
-        for (uint32_t i = 0; i < 256; i++) {
-            uint32_t k = i;
-            for (int j = 0; j < 8; j++) k = k & 1 ? 0xEDB88320u ^ (k >> 1) : k >> 1;
-            ss_crc_tab[i] = k;
-        }
-    }
-    c = ~c;
-    while (n--) c = ss_crc_tab[(c ^ *p++) & 0xFF] ^ (c >> 8);
-    return ~c;
-}
-
-static bool ss_put32(FILE *f, uint32_t v)
-{
-    const uint8_t b[4] = {(uint8_t)(v >> 24), (uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v};
-    return fwrite(b, 1, 4, f) == 4;
-}
 
 static void ss_task(void *arg)
 {
-    const size_t raw_n = (size_t)SCR_W * SS_ROW;
-    uint8_t *raw = heap_caps_malloc(raw_n, MALLOC_CAP_SPIRAM);
-    FILE *f = raw ? fopen(ss_path, "wb") : NULL;
-    bool ok = f != NULL;
-    if (ok) {
-        uint32_t a = 1, b = 0;                      /* Adler-32 of the image data, for zlib */
-        for (int y = 0; y < SCR_W; y++) {
-            uint8_t *row = raw + (size_t)y * SS_ROW;
-            row[0] = 0;                             /* filter: none */
-            for (int x = 0; x < SCR_W; x++) {
-                uint16_t px = ss_frame[y * SCR_W + x];
-                int r = px >> 11, g = (px >> 5) & 0x3F, bl = px & 0x1F;
-                row[1 + x * 3] = (uint8_t)(r << 3 | r >> 2);
-                row[2 + x * 3] = (uint8_t)(g << 2 | g >> 4);
-                row[3 + x * 3] = (uint8_t)(bl << 3 | bl >> 2);
-            }
-            for (int i = 0; i < SS_ROW; i++) {
-                a = (a + row[i]) % 65521;
-                b = (b + a) % 65521;
+    bool ok = false;
+    jpeg_encoder_handle_t enc = NULL;
+    jpeg_encode_engine_cfg_t ecfg = {.timeout_ms = 1000};
+    jpeg_encode_memory_alloc_cfg_t mcfg = {.buffer_direction = JPEG_ENC_ALLOC_OUTPUT_BUFFER};
+    size_t out_cap = 0;
+    uint8_t *out = jpeg_alloc_encoder_mem(SS_OUT_MAX, &mcfg, &out_cap);
+    uint8_t *rgb = heap_caps_aligned_alloc(64, (size_t)SCR_W * SCR_W * 3, MALLOC_CAP_SPIRAM);
+    esp_err_t err = out && rgb ? jpeg_new_encoder_engine(&ecfg, &enc) : ESP_ERR_NO_MEM;
+    if (err == ESP_OK) {
+        for (size_t i = 0; i < (size_t)SCR_W * SCR_W; i++) {   /* RGB565 -> bytes B, G, R */
+            uint16_t px = ss_frame[i];
+            int r = px >> 11, g = (px >> 5) & 0x3F, b = px & 0x1F;
+            rgb[i * 3] = (uint8_t)(b << 3 | b >> 2);
+            rgb[i * 3 + 1] = (uint8_t)(g << 2 | g >> 4);
+            rgb[i * 3 + 2] = (uint8_t)(r << 3 | r >> 2);
+        }
+        jpeg_encode_cfg_t cfg = {
+            .width = SCR_W,
+            .height = SCR_W,
+            .src_type = JPEG_ENCODE_IN_FORMAT_RGB888,
+            .sub_sample = JPEG_DOWN_SAMPLING_YUV444,   /* sharp coloured text and lines */
+            .image_quality = SS_QUALITY,
+        };
+        uint32_t len = 0;
+        err = jpeg_encoder_process(enc, &cfg, rgb, SCR_W * SCR_W * 3, out, out_cap, &len);
+        if (err == ESP_OK && len > 0) {
+            FILE *f = fopen(ss_path, "wb");
+            if (f) {
+                ok = fwrite(out, 1, len, f) == len;
+                ok = fclose(f) == 0 && ok;
+                if (!ok) unlink(ss_path);
             }
         }
-        const size_t blocks = (raw_n + 65534) / 65535;
-        const uint32_t idat_n = (uint32_t)(2 + blocks * 5 + raw_n + 4);
-        static const uint8_t sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
-        uint8_t ihdr[17] = {'I', 'H', 'D', 'R', 0, 0, SCR_W >> 8, SCR_W & 0xFF, 0, 0, SCR_W >> 8, SCR_W & 0xFF,
-                            8, 2, 0, 0, 0};          /* 8-bit RGB */
-        ok = fwrite(sig, 1, 8, f) == 8 && ss_put32(f, 13) && fwrite(ihdr, 1, 17, f) == 17 &&
-             ss_put32(f, ss_crc(0, ihdr, 17)) && ss_put32(f, idat_n);
-        uint32_t crc = ss_crc(0, (const uint8_t *)"IDAT", 4);
-        const uint8_t zh[2] = {0x78, 0x01};
-        ok = ok && fwrite("IDAT", 1, 4, f) == 4 && fwrite(zh, 1, 2, f) == 2;
-        crc = ss_crc(crc, zh, 2);
-        for (size_t off = 0; ok && off < raw_n; off += 65535) {
-            size_t len = raw_n - off < 65535 ? raw_n - off : 65535;
-            const uint8_t bh[5] = {(uint8_t)(off + len >= raw_n), (uint8_t)len, (uint8_t)(len >> 8),
-                                   (uint8_t)~len, (uint8_t)(~len >> 8)};
-            ok = fwrite(bh, 1, 5, f) == 5 && fwrite(raw + off, 1, len, f) == len;
-            crc = ss_crc(ss_crc(crc, bh, 5), raw + off, len);
-        }
-        const uint8_t ad[4] = {(uint8_t)(b >> 8), (uint8_t)b, (uint8_t)(a >> 8), (uint8_t)a};
-        crc = ss_crc(crc, ad, 4);
-        ok = ok && fwrite(ad, 1, 4, f) == 4 && ss_put32(f, crc) && ss_put32(f, 0) && fwrite("IEND", 1, 4, f) == 4 &&
-             ss_put32(f, ss_crc(0, (const uint8_t *)"IEND", 4));
-        ok = fclose(f) == 0 && ok;
-        if (!ok) unlink(ss_path);
     }
-    heap_caps_free(raw);
+    if (err != ESP_OK) printf("screenshot: JPEG encoder: %s\n", esp_err_to_name(err));
+    if (enc) jpeg_del_encoder_engine(enc);
+    if (out) heap_caps_free(out);
+    heap_caps_free(rgb);
     ss_state = ok ? 2 : 3;
     vTaskDelete(NULL);
 }
@@ -3589,7 +3563,7 @@ static void screenshot_cb(lv_event_t *e)
         sudoku_ui_notice("Screenshots go on the microSD card: there's none to write to.", 3000);
         return;
     }
-    if (!ss_frame) ss_frame = heap_caps_malloc((size_t)SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
+    if (!ss_frame) ss_frame = heap_caps_aligned_alloc(64, (size_t)SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
     lv_refr_now(NULL);
     const uint16_t *fb = bsp_display_frame();
     if (!ss_frame || !fb) return;
@@ -3598,8 +3572,8 @@ static void screenshot_cb(lv_event_t *e)
     struct tm tm;
     localtime_r(&now, &tm);
     mkdir(BSP_SD_MOUNT_POINT "/screenshots", 0775);
-    if (now > 1700000000) strftime(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/%Y%m%d-%H%M%S.png", &tm);
-    else snprintf(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/shot-%lu.png",
+    if (now > 1700000000) strftime(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/%Y%m%d-%H%M%S.jpg", &tm);
+    else snprintf(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/shot-%lu.jpg",
                   (unsigned long)(esp_timer_get_time() / 1000000));
     ss_state = 1;
     if (xTaskCreatePinnedToCore(ss_task, "screenshot", 4096, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
