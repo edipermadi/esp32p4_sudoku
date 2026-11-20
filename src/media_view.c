@@ -11,10 +11,9 @@
  * full size, then scaled down (nearest pixel) to fit the screen.
  * Videos: mp4_reader gives each frame's place; frames go through tinyh264 as
  * Annex-B and come out as I420, converted (and scaled to fit) to RGB565 here.
- * Playback is paced by the frames' times. A 720x720 replay frame takes about
- * 55 ms to decode and 30 ms to convert (only the rows that changed), more than
- * the 67 ms a frame lasts at 15 fps: when behind, frames are decoded but not
- * shown, so the video keeps its speed (about 5 frames a second on screen).
+ * Playback is paced by the frames' times. Decoding (core 0) and converting
+ * (core 1, only the rows that changed) overlap (see do_video); when still behind,
+ * frames are decoded but not shown, so the video keeps its speed.
  * Seeking decodes from the key frame before the target and shows only the
  * target. tinyh264 takes about 55 KB of internal RAM while a video is open.
  */
@@ -27,6 +26,7 @@
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_heap_caps.h"
 #include "esp_cache.h"
 #include "esp_timer.h"
@@ -323,14 +323,105 @@ static bool feed(esp_h264_dec_handle_t dec, uint8_t *buf, size_t len, uint8_t **
     return true;
 }
 
+/*
+ * Two cores: this task (core 0) only decodes; the converter task (core 1, where
+ * LVGL mostly just copies the picture while a video plays) takes each frame to
+ * show straight from the decoder's output, finds the rows that changed (against
+ * `prev`, its copy of the last frame it took), converts those to RGB565, waits
+ * for the frame's time and hands it to the screen. A 720x720 replay frame takes
+ * ~55-60 ms to decode (slower while core 1 also reads PSRAM) and ~50 ms to
+ * compare and convert; they overlap instead of adding up. 15 fps allows 67 ms a
+ * frame, so decoding alone nearly fills it: about 8 of the 15 frames a second
+ * are shown (was 5 with everything on core 0), the rest decoded only.
+ *
+ * That works because the decoder (tinyh264, from h264bsd) writes each new
+ * picture into another buffer than the one before (the reference it predicts
+ * from), so frame N stays untouched while N+1 is decoded. Before a decode, the
+ * converter must be done unless what it reads is the last frame out. This is
+ * checked on the first frames (and all along): if a frame ever comes out in the
+ * same buffer as the one before, every decode waits for the converter.
+ */
+typedef struct {
+    const uint8_t *src;                 /* I420, W x H planes (the decoder's output) */
+    uint8_t *prev;                      /* 1:1 only (else NULL): copy of the last frame taken */
+    uint32_t *chg;
+    int W, H, vw, vh, dw, dh;
+    uint32_t pos, pos_ms;
+    int64_t due;                        /* when to show it (esp_timer us); 0: at once */
+} cv_job_t;
+
+static cv_job_t s_cv;
+static SemaphoreHandle_t s_cv_go, s_cv_done;   /* a job is in s_cv / the converter is done reading src */
+static volatile bool s_cv_quit, s_cv_alive;
+
+static void converter(void *arg)
+{
+    int32_t buf_seq[2] = {-1, -1};      /* the frame each display buffer holds (-1: none of ours) */
+    uint32_t seq = 0;
+    bool prev_ok = false;
+    while (!s_cv_quit) {
+        if (xSemaphoreTake(s_cv_go, pdMS_TO_TICKS(20)) != pdTRUE) continue;
+        cv_job_t j = s_cv;
+        seq++;
+        if (j.prev) {                   /* which pairs of rows changed (a replay: few) */
+            const uint8_t *fr = j.src;
+            uint8_t *pv = j.prev;
+            const size_t W = (size_t)j.W, ys = W * j.H, cs = (W / 2) * (j.H / 2);
+            if (!prev_ok) {
+                memcpy(pv, fr, ys + 2 * cs);
+                for (int r = 0; r < j.H / 2; r++) j.chg[r] = seq;
+                prev_ok = true;
+            } else {
+                for (int r = 0; r < j.vh / 2; r++) {
+                    const size_t yo = 2 * r * W, co = r * (W / 2);
+                    if (memcmp(fr + yo, pv + yo, 2 * W) || memcmp(fr + ys + co, pv + ys + co, W / 2) ||
+                        memcmp(fr + ys + cs + co, pv + ys + cs + co, W / 2)) {
+                        memcpy(pv + yo, fr + yo, 2 * W);
+                        memcpy(pv + ys + co, fr + ys + co, W / 2);
+                        memcpy(pv + ys + cs + co, fr + ys + cs + co, W / 2);
+                        j.chg[r] = seq;
+                    }
+                }
+            }
+        }
+        if (!wait_free()) {             /* stopping */
+            xSemaphoreGive(s_cv_done);
+            continue;
+        }
+        int bk = 1 - s_front;
+        i420_to_565(j.src, j.W, j.H, j.vw, j.vh, back_buf(), j.dw, j.dh, j.prev ? j.chg : NULL, buf_seq[bk]);
+        buf_seq[bk] = (int32_t)seq;
+        xSemaphoreGive(s_cv_done);      /* the decoder may reuse src now */
+        if (j.due) {
+            int64_t wait = j.due - esp_timer_get_time();
+            if (wait > 2000) vTaskDelay(pdMS_TO_TICKS(wait / 1000));
+        }
+        if (s_stop) continue;
+        publish(j.dw, j.dh);
+        s_v_pos = j.pos;
+        s_v_pos_ms = j.pos_ms;
+    }
+    s_cv_alive = false;
+    vTaskDelete(NULL);
+}
+
+/* waits until the converter is done with its frame; false: stop */
+static bool cv_wait_done(void)
+{
+    while (xSemaphoreTake(s_cv_done, pdMS_TO_TICKS(20)) != pdTRUE) {
+        if (s_stop) return false;
+    }
+    return true;
+}
+
 static void do_video(const char *path)
 {
     mp4r_t m;
     char err[96];
-    uint8_t *inb = NULL, *prev = NULL;            /* (prev, chg: see below) */
+    uint8_t *inb = NULL, *prev = NULL;
     uint32_t *chg = NULL;
     esp_h264_dec_handle_t dec = NULL;
-    bool opened = false;
+    bool opened = false, cv = false;
     FILE *f = fopen(path, "rb");
     if (!f) {
         set_msg("Couldn't open the file.");
@@ -365,6 +456,22 @@ static void do_video(const char *path)
         set_msg("The video decoder didn't start.");
         goto done;
     }
+    if (!s_cv_go) s_cv_go = xSemaphoreCreateBinary();
+    if (!s_cv_done) s_cv_done = xSemaphoreCreateBinary();
+    if (!s_cv_go || !s_cv_done) {
+        set_msg("Out of memory.");
+        goto done;
+    }
+    xSemaphoreTake(s_cv_go, 0);                     /* (nothing left from the last video) */
+    xSemaphoreTake(s_cv_done, 0);
+    s_cv_quit = false;
+    s_cv_alive = true;
+    if (xTaskCreatePinnedToCore(converter, "media_cv", 4096, NULL, 1, NULL, 1) != pdPASS) {
+        s_cv_alive = false;
+        set_msg("Out of memory.");
+        goto done;
+    }
+    cv = true;
     yuv_tables();
     uint8_t *fr;
     feed(dec, m.ps, m.ps_len, &fr);                /* SPS, PPS */
@@ -374,12 +481,10 @@ static void do_video(const char *path)
     s_v_pos_ms = 0;
     s_v_info = true;
 
-    /* which pairs of rows changed when, against a copy of the last frame shown: a
-     * replay changes little from frame to frame (the clock, the slider, a digit), so
-     * most rows needn't be converted again (1:1 only) */
-    uint32_t seq = 0;
-    int32_t buf_seq[2] = {-1, -1};                  /* the frame each buffer holds (-1: none of ours) */
-    bool prev_ok = false;
+    bool busy = false;                              /* a frame handed over, its done not yet taken */
+    const uint8_t *handed = NULL, *last_out = NULL;
+    int checked = 0;                                /* frames out so far, up to 3; until then: wait */
+    bool sync = true;                               /* wait for the converter before every decode */
     int skipped = 0;
     const int64_t frame_us = m.n > 1 ? (int64_t)((uint64_t)m.duration * 1000000 / m.timescale / m.n) : 66666;
 
@@ -415,12 +520,27 @@ static void do_video(const char *path)
             set_msg("Couldn't read frame %u of the video.", (unsigned)i + 1);
             break;
         }
+        /* the decode writes into a buffer other than the last one out: safe unless
+         * the converter reads an older one */
+        if (busy && (sync || handed != last_out)) {
+            if (!cv_wait_done()) break;
+            busy = false;
+        }
         if (!feed(dec, inb, len, &fr)) {
             if (!shown) {
                 set_msg("This video can't be decoded here.");
                 break;
             }
             fr = NULL;                              /* (a broken frame: go on) */
+        }
+        if (fr) {
+            if (fr == last_out && !sync) {
+                sync = true;
+                printf("media: the decoder reused its last buffer; converting in step\n");
+            } else if (sync && checked < 3 && (fr != last_out || !last_out) && ++checked == 3) {
+                sync = false;                       /* 3 frames, each in another buffer */
+            }
+            last_out = fr;
         }
         if (fr && (target < 0 || (int32_t)i >= target)) {
             if (!res_known) {
@@ -444,60 +564,44 @@ static void do_video(const char *path)
                     }
                 }
             }
-            /* behind time (decoding plus showing takes longer than a frame lasts):
+            /* when it's due; behind time (the frames come slower than they last):
              * decode this one only, so the video keeps its speed and shows fewer
-             * frames; at least every fourth one is shown */
+             * frames; at least every fourth one is shown. (Skipping already when
+             * half a frame late dropped twice as many: decoding runs close to real
+             * time, so lateness hovers, and a skip makes the next decode wait for
+             * the converter.) */
+            int64_t now = esp_timer_get_time(), due = 0;
             bool skip = false;
-            if (target < 0 && !rebase && skipped < 3) {
-                int64_t due = t0 + (int64_t)(m.time[i] - tick0) * 1000000 / m.timescale;
-                skip = esp_timer_get_time() - due > frame_us / 2;
+            if (target < 0) {
+                if (rebase) {
+                    t0 = now + frame_us;            /* (room for the conversion) */
+                    tick0 = m.time[i];
+                    rebase = false;
+                }
+                due = t0 + (int64_t)(m.time[i] - tick0) * 1000000 / m.timescale;
+                if (now - due > 300000) {           /* far behind (a stall): carry on from here */
+                    t0 = now + frame_us;
+                    tick0 = m.time[i];
+                    due = t0;
+                }
+                skip = skipped < 3 && now - due > 2 * frame_us;
             }
             if (skip) {
                 skipped++;
             } else {
                 skipped = 0;
-                if (!wait_free()) break;
-                seq++;
-                if (prev) {
-                    const size_t ys = (size_t)W * H, cs = (size_t)(W / 2) * (H / 2);
-                    if (!prev_ok) {
-                        memcpy(prev, fr, ys + 2 * cs);
-                        for (int r = 0; r < H / 2; r++) chg[r] = seq;
-                        prev_ok = true;
-                    } else {
-                        for (int r = 0; r < vh / 2; r++) {
-                            const size_t yo = (size_t)2 * r * W, co = (size_t)r * (W / 2);
-                            if (memcmp(fr + yo, prev + yo, (size_t)2 * W) || memcmp(fr + ys + co, prev + ys + co, W / 2) ||
-                                memcmp(fr + ys + cs + co, prev + ys + cs + co, W / 2)) {
-                                memcpy(prev + yo, fr + yo, (size_t)2 * W);
-                                memcpy(prev + ys + co, fr + ys + co, W / 2);
-                                memcpy(prev + ys + cs + co, fr + ys + cs + co, W / 2);
-                                chg[r] = seq;
-                            }
-                        }
-                    }
+                if (busy) {                         /* one frame at a time */
+                    if (!cv_wait_done()) break;
+                    busy = false;
                 }
-                int bk = 1 - s_front;
-                i420_to_565(fr, W, H, vw, vh, back_buf(), dw, dh, chg, buf_seq[bk]);
-                buf_seq[bk] = (int32_t)seq;
-                if (target < 0) {                       /* playing: on time */
-                    int64_t now = esp_timer_get_time();
-                    if (rebase) {
-                        t0 = now;
-                        tick0 = m.time[i];
-                        rebase = false;
-                    }
-                    int64_t due = t0 + (int64_t)(m.time[i] - tick0) * 1000000 / m.timescale;
-                    if (due - now > 2000) vTaskDelay(pdMS_TO_TICKS((due - now) / 1000));
-                    else if (now - due > 300000) {      /* far behind (slow decoding): carry on from here */
-                        t0 = now;
-                        tick0 = m.time[i];
-                    }
-                }
-                publish(dw, dh);
+                s_cv = (cv_job_t){
+                    .src = fr, .prev = prev, .chg = chg, .W = W, .H = H, .vw = vw, .vh = vh, .dw = dw, .dh = dh,
+                    .pos = i, .pos_ms = (uint32_t)((uint64_t)m.time[i] * 1000 / m.timescale), .due = due,
+                };
+                xSemaphoreGive(s_cv_go);
+                busy = true;
+                handed = fr;
                 shown = true;
-                s_v_pos = i;
-                s_v_pos_ms = (uint32_t)((uint64_t)m.time[i] * 1000 / m.timescale);
             }
         }
         if (target >= 0 && (int32_t)i >= target) {
@@ -507,6 +611,10 @@ static void do_video(const char *path)
         i++;
     }
 done:
+    if (cv) {                                       /* the converter ends before prev goes */
+        s_cv_quit = true;
+        while (s_cv_alive) vTaskDelay(1);
+    }
     if (dec) {
         esp_h264_dec_close(dec);
         esp_h264_dec_del(dec);
