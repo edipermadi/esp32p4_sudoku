@@ -8,6 +8,7 @@
  * FAT volume (BSP_SD_MOUNT_POINT), which stats_db keeps mounted.
  */
 #include "file_ui.h"
+#include "media_view.h"
 #include "ui_palette.h"
 #include "bsp/bsp_board.h"
 #include <stdio.h>
@@ -591,10 +592,27 @@ static void on_empty(lv_event_t *e)
     if (!s_busy && !s_job_busy && s_n > 0) dlg_open(-1, DLG_EMPTY);
 }
 
+/* a picture or video: the viewer, with the folder's others for Prev / Next */
+static void open_media(int i)
+{
+    static const char *names[MAX_ENTRIES];
+    int n = 0, at = 0;
+    for (int k = 0; k < s_n; k++) {
+        if (s_ent[k].dir || !media_view_kind(s_ent[k].name)) continue;
+        if (k == i) at = n;
+        names[n++] = s_ent[k].name;
+    }
+    if (n) media_view_open(s_scr, s_path, names, n, at);
+}
+
 static void on_row(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= s_n || !s_ent[i].dir || s_busy || in_trash()) return;
+    if (i < 0 || i >= s_n || s_busy || s_job_busy || in_trash()) return;
+    if (!s_ent[i].dir) {
+        if (media_view_kind(s_ent[i].name)) open_media(i);
+        return;
+    }
     size_t len = strlen(s_path);
     if (len + 1 + strlen(s_ent[i].name) >= sizeof(s_path)) return;
     snprintf(s_path + len, sizeof(s_path) - len, "/%s", s_ent[i].name);
@@ -657,7 +675,8 @@ static void show_list(void)
         lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
         lv_obj_set_style_border_color(r, C_CARD2, 0);
         lv_obj_set_style_border_width(r, i < s_n - 1 ? 1 : 0, 0);
-        if (e->dir && !trashed) {                   /* a folder opens on a tap (not one in the bin) */
+        int media = e->dir ? MEDIA_NONE : media_view_kind(e->name);
+        if ((e->dir || media) && !trashed) {        /* a folder or a picture/video opens on a tap (not in the bin) */
             lv_obj_set_clickable(r, true);
             lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
             lv_obj_set_style_bg_opa(r, LV_OPA_COVER, LV_STATE_PRESSED);
@@ -665,7 +684,9 @@ static void show_list(void)
         }
 
         lv_obj_t *ic = label(r, &lv_font_montserrat_24, bin ? C_ORANGE : (e->dir ? C_ACCENT : C_MUTED),
-                             bin ? LV_SYMBOL_TRASH : (e->dir ? LV_SYMBOL_DIRECTORY : LV_SYMBOL_FILE));
+                             bin ? LV_SYMBOL_TRASH : e->dir ? LV_SYMBOL_DIRECTORY
+                                 : media == MEDIA_IMAGE ? LV_SYMBOL_IMAGE : media == MEDIA_VIDEO ? LV_SYMBOL_VIDEO
+                                 : LV_SYMBOL_FILE);
         lv_obj_set_width(ic, 30);
 
         lv_obj_t *col = lv_obj_create(r);
@@ -734,6 +755,7 @@ static void poll(lv_timer_t *t)
 /* ------------------------------------------------------------- build */
 void file_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
 {
+    media_view_close();                             /* (it lives on the old screen) */
     if (s_timer) {                                  /* rebuilt on a theme change */
         lv_timer_delete(s_timer);
         s_timer = NULL;
@@ -807,5 +829,6 @@ void file_ui_set_shown(bool shown)
     } else {
         lv_timer_pause(s_timer);
         dlg_close();
+        media_view_close();
     }
 }

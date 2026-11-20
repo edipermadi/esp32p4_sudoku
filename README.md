@@ -25,7 +25,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 - **Helpers**: a left-handed layout, pencil marks, Auto notes, digit-first entry, cell colours, undo/redo, mistake check, step-by-step hints (up to X-Wing, Swordfish and XY-Wing, or nudges only), a Learn mode for ten techniques and four variant rules, a tour of the game screen, starred puzzles and a 10-minute time attack.
 - **Players, statistics and trophies**: per-player progress, a history calendar, charts, achievements, daily and weekly leaderboards.
 - **Replays**: every solve can be played back, or exported as an H.264 MP4 video.
-- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, puzzle import, a file manager with a Recycle bin (the database protected), screenshots, USB drive mode and firmware updates from the card.
+- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, puzzle import, a file manager with a Recycle bin (the database protected) and a picture/video viewer, screenshots, USB drive mode and firmware updates from the card.
 - **Wi-Fi clock**, light and dark mode, a night mode, accent colours, colour-blind friendly colours, lock screen, screen-saver clock, synthesised sound effects and a system monitor with graphs of the last hour.
 
 ## Documentation

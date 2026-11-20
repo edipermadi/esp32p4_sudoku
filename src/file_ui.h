@@ -5,7 +5,8 @@
  * Rename (on-screen keyboard) and Delete (asks first; folders only when
  * empty). The game's database (sudoku.db and SQLite's journal files next to
  * it) is protected: it can't be renamed or deleted, and nothing can be renamed
- * to its names. Folders are listed by a worker task on core 0.
+ * to its names. Folders are listed by a worker task on core 0. A tap on a
+ * JPEG or MP4 opens it in the viewer (media_view.h).
  */
 #include <stdbool.h>
 #include <lvgl.h>
