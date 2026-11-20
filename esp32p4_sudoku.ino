@@ -53,6 +53,11 @@ static const char *abnormal_reset_text(esp_reset_reason_t r)
   }
 }
 
+/* loop() runs LVGL and everything the screens do, the sudoku solver's recursion
+ * among it (up to ~90 bytes a level, a level per empty cell): 8 KB (the default)
+ * overflowed when Continue re-solved a hard Hyper puzzle under a devctl tap. */
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
+
 void setup()
 {
   /* malloc() of 16 bytes or more goes to PSRAM (the core default is 4096):

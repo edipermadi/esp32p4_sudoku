@@ -45,7 +45,7 @@ typedef enum {
     CMD_RANK, CMD_BOARD, CMD_ACH, CMD_GAME_SPILL, CMD_CLEAR_GAME, CMD_LIST_GAMES, CMD_LOAD_GAME, CMD_RECORDS,
     CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_IMPORT, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
     CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM, CMD_BM_GET, CMD_BM_SET, CMD_BM_LIST, CMD_SEEN_GET, CMD_SEEN_SET,
-    CMD_ATTACK, CMD_ATTACK_BOARD,
+    CMD_ATTACK, CMD_ATTACK_BOARD, CMD_SAVED_LIST, CMD_SAVED_ADD, CMD_SAVED_REMOVE, CMD_SOLVED_LIST,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -145,6 +145,12 @@ typedef struct {
     stats_attack_row_t attack[STATS_ATTACK_ROWS];
     int ngames;                  /* CMD_LIST_GAMES result */
     stats_game_row_t games[STATS_MAX_GAMES];
+    int nsaved;                  /* CMD_SAVED_LIST result */
+    stats_saved_t saved[STATS_MAX_SAVED];
+    char name[STATS_IMPORT_NAME];     /* CMD_SAVED_ADD: the collection (puzzle: the puzzle) */
+    char why[96];                     /* CMD_SAVED_ADD: why not */
+    int nlist;                   /* CMD_SOLVED_LIST: list[0..nlist-1] -> solved_bits, nsolved */
+    uint16_t list[128];
 } gen_call_t;
 static gen_call_t *s_genp;               /* PSRAM (internal RAM is tight), made with s_gen_done */
 #define s_gen (*s_genp)
@@ -289,6 +295,16 @@ static const char SCHEMA[] =
     "  what TEXT NOT NULL,"
     "  at INTEGER,"
     "  PRIMARY KEY (player_id, what));"
+    "CREATE TABLE IF NOT EXISTS saved_collections("      /* collections made on the board (Save) */
+    "  id INTEGER PRIMARY KEY,"
+    "  name TEXT NOT NULL UNIQUE,"
+    "  created_at INTEGER);"
+    "CREATE TABLE IF NOT EXISTS saved_puzzles("          /* their puzzles */
+    "  collection_id INTEGER NOT NULL REFERENCES saved_collections(id),"
+    "  puzzle INTEGER NOT NULL,"                         /* puzzle id (generated: 2000 + generated.id) */
+    "  number INTEGER NOT NULL,"                         /* its place in the collection, from 1 */
+    "  added_at INTEGER,"
+    "  PRIMARY KEY (collection_id, puzzle));"
     "CREATE TABLE IF NOT EXISTS attack("                 /* time attack runs: Easy puzzles solved in 10 minutes */
     "  id INTEGER PRIMARY KEY,"
     "  player_id INTEGER NOT NULL REFERENCES players(id),"
@@ -2214,6 +2230,141 @@ static void do_solved_in(void)
     xSemaphoreGive(s_gen_done);
 }
 
+/* ------------------------------------------------------------- saved collections */
+
+static void do_saved_list(void)
+{
+    s_gen.nsaved = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT id, name FROM saved_collections ORDER BY id", -1, &st, NULL) ==
+                    SQLITE_OK) {
+        while (s_gen.nsaved < STATS_MAX_SAVED && sqlite3_step(st) == SQLITE_ROW) {
+            stats_saved_t *c = &s_gen.saved[s_gen.nsaved++];
+            c->id = sqlite3_column_int(st, 0);
+            const char *n = (const char *)sqlite3_column_text(st, 1);
+            snprintf(c->name, sizeof(c->name), "%s", n ? n : "");
+            c->count = 0;
+        }
+        sqlite3_finalize(st);
+    }
+    for (int k = 0; s_db && k < s_gen.nsaved; k++) {
+        stats_saved_t *c = &s_gen.saved[k];
+        if (sqlite3_prepare_v2(s_db, "SELECT puzzle FROM saved_puzzles WHERE collection_id = ?1 ORDER BY number", -1,
+                               &st, NULL) != SQLITE_OK) continue;
+        sqlite3_bind_int(st, 1, c->id);
+        while (c->count < STATS_SAVED_MAX && sqlite3_step(st) == SQLITE_ROW) {
+            c->puzzles[c->count++] = (uint16_t)sqlite3_column_int(st, 0);
+        }
+        sqlite3_finalize(st);
+    }
+    s_gen.ok = s_db != NULL;
+    xSemaphoreGive(s_gen_done);
+}
+
+/* one value from a query with ?1 = an int (or -1) */
+static int query_int_arg(const char *sql, int a1, int fallback)
+{
+    sqlite3_stmt *st;
+    int v = fallback;
+    if (sqlite3_prepare_v2(s_db, sql, -1, &st, NULL) != SQLITE_OK) return fallback;
+    if (sqlite3_bind_parameter_count(st) >= 1) sqlite3_bind_int(st, 1, a1);
+    if (sqlite3_step(st) == SQLITE_ROW && sqlite3_column_type(st, 0) != SQLITE_NULL) v = sqlite3_column_int(st, 0);
+    sqlite3_finalize(st);
+    return v;
+}
+
+static void do_saved_add(void)
+{
+    s_gen.ok = false;
+    s_gen.why[0] = 0;
+    sqlite3_stmt *st;
+    int cid = -1;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT id FROM saved_collections WHERE name = ?1", -1, &st, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(st, 1, s_gen.name, -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(st) == SQLITE_ROW) cid = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+    }
+    if (!s_db) {
+        snprintf(s_gen.why, sizeof(s_gen.why), "There's no sudoku.db on a microSD card.");
+    } else if (cid < 0 && query_int_arg("SELECT COUNT(*) FROM saved_collections", -1, 0) >= STATS_MAX_SAVED) {
+        snprintf(s_gen.why, sizeof(s_gen.why), "There are %d collections already: that's the most.", STATS_MAX_SAVED);
+    } else if (cid >= 0 && query_int_arg("SELECT COUNT(*) FROM saved_puzzles WHERE collection_id = ?1", cid, 0) >=
+                               STATS_SAVED_MAX) {
+        snprintf(s_gen.why, sizeof(s_gen.why), "%s is full (%d puzzles).", s_gen.name, STATS_SAVED_MAX);
+    } else {
+        time_t now = time(NULL);
+        bool ok = true;
+        if (cid < 0) {
+            ok = sqlite3_prepare_v2(s_db, "INSERT INTO saved_collections(name, created_at) VALUES(?1, ?2)", -1, &st,
+                                    NULL) == SQLITE_OK;
+            if (ok) {
+                sqlite3_bind_text(st, 1, s_gen.name, -1, SQLITE_TRANSIENT);
+                if (now > 1700000000) sqlite3_bind_int64(st, 2, now);
+                else sqlite3_bind_null(st, 2);
+                ok = step_done(st, "new collection");
+                sqlite3_finalize(st);
+                cid = (int)sqlite3_last_insert_rowid(s_db);
+            }
+        }
+        int number = query_int_arg("SELECT MAX(number) FROM saved_puzzles WHERE collection_id = ?1", cid, 0) + 1;
+        if (ok && sqlite3_prepare_v2(s_db, "INSERT OR IGNORE INTO saved_puzzles(collection_id, puzzle, number, added_at)"
+                                           " VALUES(?1, ?2, ?3, ?4)", -1, &st, NULL) == SQLITE_OK) {
+            sqlite3_bind_int(st, 1, cid);
+            sqlite3_bind_int(st, 2, s_gen.puzzle);
+            sqlite3_bind_int(st, 3, number);
+            if (now > 1700000000) sqlite3_bind_int64(st, 4, now);
+            else sqlite3_bind_null(st, 4);
+            ok = step_done(st, "save to collection");
+            sqlite3_finalize(st);
+        }
+        s_gen.ok = ok;
+        if (!ok) snprintf(s_gen.why, sizeof(s_gen.why), "Couldn't write to sudoku.db.");
+    }
+    xSemaphoreGive(s_gen_done);
+}
+
+static void do_saved_remove(void)
+{
+    s_gen.ok = false;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "DELETE FROM saved_puzzles WHERE collection_id = ?1 AND puzzle = ?2", -1, &st,
+                                   NULL) == SQLITE_OK) {
+        sqlite3_bind_int(st, 1, s_gen.id);
+        sqlite3_bind_int(st, 2, s_gen.puzzle);
+        s_gen.ok = step_done(st, "take out of collection");
+        sqlite3_finalize(st);
+        if (query_int_arg("SELECT COUNT(*) FROM saved_puzzles WHERE collection_id = ?1", s_gen.id, 1) == 0 &&
+            sqlite3_prepare_v2(s_db, "DELETE FROM saved_collections WHERE id = ?1", -1, &st, NULL) == SQLITE_OK) {
+            sqlite3_bind_int(st, 1, s_gen.id);                   /* (its last one: the collection goes) */
+            step_done(st, "empty collection");
+            sqlite3_finalize(st);
+        }
+    }
+    xSemaphoreGive(s_gen_done);
+}
+
+static void do_solved_list(void)
+{
+    memset(s_gen.solved_bits, 0, sizeof(s_gen.solved_bits));
+    s_gen.nsolved = 0;
+    sqlite3_stmt *st;
+    if (s_db && sqlite3_prepare_v2(s_db, "SELECT 1 FROM puzzle_stats WHERE player_id = ?1 AND puzzle = ?2", -1, &st,
+                                   NULL) == SQLITE_OK) {
+        for (int i = 0; i < s_gen.nlist && i < 128; i++) {
+            sqlite3_reset(st);
+            sqlite3_bind_int(st, 1, s_player);
+            sqlite3_bind_int(st, 2, s_gen.list[i]);
+            if (sqlite3_step(st) == SQLITE_ROW) {
+                s_gen.solved_bits[i >> 3] |= (uint8_t)(1u << (i & 7));
+                s_gen.nsolved++;
+            }
+        }
+        sqlite3_finalize(st);
+    }
+    s_gen.ok = s_db != NULL;
+    xSemaphoreGive(s_gen_done);
+}
+
 /* ------------------------------------------------------------- weekly challenge */
 
 static stats_week_t *s_week;         /* CMD_WEEK result (PSRAM) */
@@ -2832,6 +2983,18 @@ static void worker(void *arg)
         case CMD_SOLVED_IN:
             do_solved_in();
             break;
+        case CMD_SAVED_LIST:
+            do_saved_list();
+            break;
+        case CMD_SAVED_ADD:
+            do_saved_add();
+            break;
+        case CMD_SAVED_REMOVE:
+            do_saved_remove();
+            break;
+        case CMD_SOLVED_LIST:
+            do_solved_list();
+            break;
         case CMD_GEN_SOURCE:
             s_gen.ok = s_db != NULL && gen_source_of(s_gen.id, s_gen.source, &s_gen.number);
             xSemaphoreGive(s_gen_done);
@@ -3308,6 +3471,43 @@ int stats_db_solved_in(uint16_t first, int count, uint8_t *solved)
     s_gen.count = count > 128 ? 128 : count;
     if (!gen_call(CMD_SOLVED_IN)) return 0;
     if (solved) memcpy(solved, s_gen.solved_bits, (size_t)(s_gen.count + 7) / 8);
+    return s_gen.nsolved;
+}
+
+int stats_db_list_saved(stats_saved_t *out)
+{
+    if (!s_genp || !gen_call(CMD_SAVED_LIST)) return -1;
+    memcpy(out, s_gen.saved, sizeof(stats_saved_t) * (size_t)s_gen.nsaved);
+    return s_gen.nsaved;
+}
+
+bool stats_db_saved_add(const char *name, uint16_t puzzle, char *why, size_t why_n)
+{
+    snprintf(why, why_n, "There's no sudoku.db on a microSD card.");
+    if (!s_genp) return false;
+    snprintf(s_gen.name, sizeof(s_gen.name), "%s", name);
+    s_gen.puzzle = puzzle;
+    s_gen.why[0] = 0;
+    bool ok = gen_call(CMD_SAVED_ADD);
+    if (!ok) snprintf(why, why_n, "%s", s_gen.why[0] ? s_gen.why : "sudoku.db didn't answer.");
+    return ok;
+}
+
+bool stats_db_saved_remove(int collection, uint16_t puzzle)
+{
+    if (!s_genp) return false;
+    s_gen.id = collection;
+    s_gen.puzzle = puzzle;
+    return gen_call(CMD_SAVED_REMOVE);
+}
+
+int stats_db_solved_list(const uint16_t *ids, int n, uint8_t *solved)
+{
+    if (!s_genp) return 0;
+    s_gen.nlist = n > 128 ? 128 : n;
+    memcpy(s_gen.list, ids, sizeof(uint16_t) * (size_t)s_gen.nlist);
+    if (!gen_call(CMD_SOLVED_LIST)) return 0;
+    if (solved) memcpy(solved, s_gen.solved_bits, (size_t)(s_gen.nlist + 7) / 8);
     return s_gen.nsolved;
 }
 

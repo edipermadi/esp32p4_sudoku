@@ -38,6 +38,11 @@
  *   imported(id, name, file, first_id, count, created_at): the collections
  *       imported from puzzles/ (up to 100 puzzles each; a bigger file makes
  *       several): generated ids first_id .. first_id + count - 1
+ *   saved_collections(id, name, created_at) and saved_puzzles(collection_id,
+ *       puzzle, number, added_at): collections the players make on the board
+ *       (the game screen's Save button) from generated and typed-in puzzles;
+ *       number = the puzzle's place in the collection, from 1. A collection
+ *       goes when its last puzzle is taken out.
  *   achievements(player_id, key, unlocked_at): achievements each player has
  *       unlocked (see stats_db_query_achievements()); unlocked_at NULL =
  *       found already done when the table was first filled, or clock not set
@@ -395,6 +400,28 @@ int stats_db_solved_in(uint16_t first, int count, uint8_t *solved);
 int stats_db_gen_add_own(const uint8_t givens[81], int level, int *number);
 /* An imported puzzle's collection and number; false if it isn't one. */
 bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number);
+
+/* ---------------------------------------------------------------- saved collections */
+/* Collections made on the board: the game screen's Save puts the puzzle shown
+ * (one made on the board: generated or typed in) in a collection, by name. */
+#define STATS_MAX_SAVED   16             /* collections */
+#define STATS_SAVED_MAX   100            /* puzzles in one */
+typedef struct {
+    int id;
+    char name[STATS_IMPORT_NAME];
+    int count;
+    uint16_t puzzles[STATS_SAVED_MAX];   /* in their order (number 1, 2, ...) */
+} stats_saved_t;
+/* All of them, oldest first (waits for the database); -1 without one. */
+int stats_db_list_saved(stats_saved_t *out);
+/* Puts puzzle at the end of the collection called name, made if there's none
+ * (waits). false: why says (full, too many collections, no database). */
+bool stats_db_saved_add(const char *name, uint16_t puzzle, char *why, size_t why_n);
+/* Takes puzzle out of collection id; the collection goes if that was its last (waits). */
+bool stats_db_saved_remove(int collection, uint16_t puzzle);
+/* The current player's solved puzzles among ids[0..n-1] (n <= 128): bit i of
+ * solved. How many. Waits for the database. */
+int stats_db_solved_list(const uint16_t *ids, int n, uint8_t *solved);
 
 /* ---------------------------------------------------------------- weekly challenge */
 /* The daily puzzles of a week (Monday to Sunday) added up: per player, how

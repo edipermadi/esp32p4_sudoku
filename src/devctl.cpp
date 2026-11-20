@@ -454,6 +454,68 @@ static bool run_file(char *line)
 
 /* ---------------------------------------------------------------- commands */
 
+/* (fill and state are functions of their own, not inline in run(): their buffers would
+ * sit on the stack under every command, a tap among them, and a tap that opens a hard
+ * puzzle runs the solver's deep recursion on top) */
+/* the game on screen, as text */
+static void __attribute__((noinline)) cmd_state(void)
+{
+    sudoku_ui_state_t st;
+    char board[82];
+    if (!sudoku_ui_state(&st, board)) {
+        reply("ERR state: no game on screen\n");
+        return;
+    }
+    if (s_cap) {                                /* over sound: what fits a message (140 bytes) */
+        reply("OK state s%d %s\n", st.solved, board);
+        return;
+    }
+    Serial.printf("STATE name=\"%s\" variant=%s size=%d solved=%d paused=%d filled=%d/%d time=%u "
+                  "mistakes=%u hints=%u%s%s\n", st.name, st.variant, st.size, st.solved, st.paused, st.filled,
+                  st.cells, (unsigned)st.seconds, st.mistakes, st.hints, st.practice ? " practice=1" : "",
+                  st.attack ? " attack=1" : "");
+    Serial.printf("BOARD %s\n", board);
+    reply("OK state\n");
+}
+
+/* fill <cell> <digit> ...: any separators, e.g. (12,5),(13,7) */
+static void __attribute__((noinline)) cmd_fill(const char *line)
+{
+    uint8_t cells[81], digits[81];
+    int nums = 0, np = 0, v = -1;
+    bool bad = false;
+    for (const char *p = line + 4;; p++) {      /* the numbers after "fill", in pairs */
+        if (*p >= '0' && *p <= '9') {
+            v = (v < 0 ? 0 : v * 10) + (*p - '0');
+            if (v > 255) bad = true;
+            continue;
+        }
+        if (v >= 0) {
+            if (nums % 2 == 0) {
+                if (np >= 81) bad = true;
+                else cells[np] = (uint8_t)v;
+            } else if (np < 81) {
+                digits[np++] = (uint8_t)v;
+            }
+            nums++;
+            v = -1;
+        }
+        if (!*p) break;
+    }
+    if (bad || nums == 0 || nums % 2) {
+        reply("ERR fill: pairs of <cell 0-80> <digit>, e.g. fill 12:5 13:7 (at most 81)\n");
+        return;
+    }
+    char why[64];
+    int placed = sudoku_ui_fill(cells, digits, np, why, sizeof(why));
+    if (placed < 0) {
+        reply("ERR fill: %s\n", why);
+        return;
+    }
+    pump(SETTLE_MS);                            /* the board redraws (and the solve begins, if done) */
+    reply("OK fill %d\n", placed);
+}
+
 static void run(char *line)
 {
     if (!s_cap && run_file(line)) return;           /* (files: serial only) */
@@ -483,58 +545,11 @@ static void run(char *line)
         }
     }
     if (!strcmp(cmd, "state")) {                   /* the game on screen, as text */
-        sudoku_ui_state_t st;
-        char board[82];
-        if (!sudoku_ui_state(&st, board)) {
-            reply("ERR state: no game on screen\n");
-            return;
-        }
-        if (s_cap) {                                /* over sound: what fits a message (140 bytes) */
-            reply("OK state s%d %s\n", st.solved, board);
-            return;
-        }
-        Serial.printf("STATE name=\"%s\" variant=%s size=%d solved=%d paused=%d filled=%d/%d time=%u "
-                      "mistakes=%u hints=%u%s%s\n", st.name, st.variant, st.size, st.solved, st.paused, st.filled,
-                      st.cells, (unsigned)st.seconds, st.mistakes, st.hints, st.practice ? " practice=1" : "",
-                      st.attack ? " attack=1" : "");
-        Serial.printf("BOARD %s\n", board);
-        reply("OK state\n");
+        cmd_state();
         return;
     }
     if (!strcmp(cmd, "fill")) {                    /* fill <cell> <digit> ...: any separators, e.g. (12,5),(13,7) */
-        uint8_t cells[81], digits[81];
-        int nums = 0, np = 0, v = -1;
-        bool bad = false;
-        for (const char *p = line + 4;; p++) {      /* the numbers after "fill", in pairs */
-            if (*p >= '0' && *p <= '9') {
-                v = (v < 0 ? 0 : v * 10) + (*p - '0');
-                if (v > 255) bad = true;
-                continue;
-            }
-            if (v >= 0) {
-                if (nums % 2 == 0) {
-                    if (np >= 81) bad = true;
-                    else cells[np] = (uint8_t)v;
-                } else if (np < 81) {
-                    digits[np++] = (uint8_t)v;
-                }
-                nums++;
-                v = -1;
-            }
-            if (!*p) break;
-        }
-        if (bad || nums == 0 || nums % 2) {
-            reply("ERR fill: pairs of <cell 0-80> <digit>, e.g. fill 12:5 13:7 (at most 81)\n");
-            return;
-        }
-        char why[64];
-        int placed = sudoku_ui_fill(cells, digits, np, why, sizeof(why));
-        if (placed < 0) {
-            reply("ERR fill: %s\n", why);
-            return;
-        }
-        pump(SETTLE_MS);                            /* the board redraws (and the solve begins, if done) */
-        reply("OK fill %d\n", placed);
+        cmd_fill(line);
         return;
     }
     if (!strcmp(cmd, "baud") && n >= 1 && a[0] >= 9600) {
