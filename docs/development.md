@@ -115,7 +115,10 @@ src/ui_common.c         palette, widgets and helpers, the generated-puzzle cache
 src/ui_game.c           the game: rules check, saving, the board, confetti, input, building its screen
 src/ui_hints.c          hints and the game screen tour
 src/ui_game_tools.c     time attack, the rules card, Share (QR code), Send by sound, save to a collection
-src/ui_replay.c         replay, screenshots, mistake insights, MP4 export
+src/ui_replay.c         the Replay screen (ui_replay_part.h)
+src/ui_replay_export.c  a replay exported as an MP4: the invisible display, the progress dialog
+src/ui_screenshot.c     the camera buttons: the screen as a JPEG on the card
+src/ui_insights.c       mistake insights (Statistics)
 src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle
 src/ui_list.c           the Puzzles screen
 src/ui_home.c           Home: the week, Continue and unfinished games, the menu
@@ -132,7 +135,12 @@ src/fw_update.c         firmware update from the card: update.bin into the other
 src/sd_card.c           the microSD card: probe and format
 src/device_ops.c        factory reset, power off
 src/usb_drive.c         the card lent to a computer over USB
-src/ui_history.c        History and Gameplays
+src/ui_history.c        History
+src/ui_gameplays.c      Gameplays: the pages of recorded solves
+src/gameplays_core.h    Gameplays and Replay without LVGL (a header for the three parts below)
+src/gameplays_list.c    the Gameplays pages, opening a row's replay or video
+src/replay_timeline.c   a move log played back: the board at any step, play times, speed
+src/replay_video.c      a replay as an MP4: the file name, frames, the encoder
 src/ui_trophies.c       Trophies: the screen around the tabs, the tab bar, the unlock toast (ui_trophies_tab.h)
 src/ui_trophies_achievements.c   its Achievements tab
 src/ui_trophies_daily.c          its Daily tab: a daily puzzle's leaderboard

@@ -26,6 +26,7 @@
 #include "ui_file.h"
 #include "timezones.h"
 #include "stats_db.h"
+#include "gameplays_core.h"
 #include "usb_msc.h"
 #include "generator.h"
 #include "esp_random.h"
@@ -261,18 +262,9 @@ typedef struct {
 } pz_got_t;
 
 /* ============================================================= replay */
-/*
- * Plays a move log (moves.h) back over the puzzle's givens. The board at
- * step k is the givens plus moves 0..k-1, so any point can be shown at once:
- * step back and forth, jump to the start or end, or drag the slider. Playing
- * follows the game clock (pauses longer than RP_MAX_GAP_MS are shortened),
- * at 1x, 2x, 4x or 8x. Digits from Fill are orange, the last move is
- * highlighted, and digits that break a rule are red.
- */
-#define RP_MAX_GAP_MS 2000
+/* (the timeline: replay_timeline.h; the screen: ui_replay.c, ui_replay_part.h) */
 
-/* Builds the Replay screen (on the default display) for the prepared log. */
-/* ------------------------------------------------------------- screenshot */
+/* ------------------------------------------------------------- screenshot (ui_screenshot.c) */
 /*
  * The camera buttons (Solved dialog, Replay): the screen as a JPEG in screenshots/ on
  * the card. The frame is copied at once (the screen keeps going); a worker task on
@@ -285,20 +277,7 @@ typedef struct {
 #define SS_OUT_MAX (1024 * 1024)
 
 /* ------------------------------------------------------------- export as MP4 */
-/*
- * The Replay screen played into a video: it is built on a second, invisible
- * LVGL display (rendered into rx_fb in memory, never shown), stepped through
- * the game frame by frame, and every frame goes through the hardware H.264
- * encoder into an MP4 on the card (video_enc.c, mp4_writer.c). The video
- * holds the start for RX_INTRO_MS, plays the moves at RX_SPEED x the replay
- * timeline (pauses already shortened to RP_MAX_GAP_MS), then holds the solved
- * board for RX_OUTRO_MS. A dialog on the real screen shows the progress.
- */
-#define RX_FPS        15
-#define RX_SPEED      2
-#define RX_INTRO_MS   1000
-#define RX_OUTRO_MS   3000
-#define RX_DIR        BSP_SD_MOUNT_POINT "/replays"
+/* (replay_video.h; the screen side: ui_replay_export.c) */
 
 /* ------------------------------------------------------------- statistics */
 
@@ -479,7 +458,6 @@ void ui_set_nsaved(int v);
 /* ui_hints.c */
 const uint8_t *hint_mark(void);
 /* ui_history.c */
-int plays_offset(void);
 lv_obj_t *screen_plays(void);
 /* ui_home.c */
 lv_obj_t *home_dots_obj(void);
@@ -504,7 +482,6 @@ void list_set_tab(int v);
 /* ui_sudoku.c */
 lv_obj_t *ui_saver(void);
 /* what's using the microSD card (or the generator) right now (sudoku_ui_io_busy) */
-bool is_replay_exporting(void);
 bool is_screenshot_busy(void);
 bool is_files_busy(void);
 const char *settings_card_busy(void);
@@ -524,9 +501,6 @@ const stats_player_t *players_all(void);
 int players_count(void);
 void players_set_count(int v);
 /* ui_replay.c */
-bool is_replay_busy(void);
-bool is_replay_want_export(void);
-void replay_set_want_export(bool v);
 lv_obj_t *screen_replay(void);
 /* ui_settings.c */
 lv_obj_t *screen_files(void);

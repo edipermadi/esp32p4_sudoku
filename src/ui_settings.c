@@ -560,7 +560,7 @@ void apply_theme(bool dark)
                    : scr_home;
     lv_screen_load(to);
     if (to == screen_plays()) {
-        plays_ask(plays_offset());    /* fill the rebuilt list */
+        plays_ask(gameplays_offset());    /* fill the rebuilt list */
     }
     if (to == screen_trophy()) {
         tr_ask();
