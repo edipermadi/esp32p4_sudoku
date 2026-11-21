@@ -23,6 +23,7 @@ static void fw_build_id(const esp_app_desc_t *d, char out[9]);
 static void fw_row_update(void);
 static void fw_task(void *arg);
 static void fw_poll_cb(lv_timer_t *t);
+static void fw_start_cb(lv_timer_t *t);
 static void fw_go_cb(lv_event_t *e);
 static void fw_update_cb(lv_event_t *e);
 static void timer_sw_cb(lv_event_t *e);
@@ -87,7 +88,6 @@ static lv_obj_t *st_tab_btn[ST_TABS], *st_pane[ST_TABS];
 static int st_tab;                                  /* the open tab; Settings opens on Network */
 
 static lv_obj_t *st_fw_btn, *st_fw_hint;
-static lv_obj_t *fw_ovl, *fw_bar, *fw_lbl;
 static lv_timer_t *fw_timer;
 static volatile int fw_state;                       /* 0 writing, 1 done, 2 failed */
 static volatile uint32_t fw_done_bytes, fw_size;
@@ -143,7 +143,8 @@ static void fw_task(void *arg)
     FILE *f = fopen(FW_FILE, "rb");
     esp_ota_handle_t h = 0;
     esp_err_t err = !buf ? ESP_ERR_NO_MEM : !part ? ESP_ERR_NOT_FOUND : !f ? ESP_ERR_INVALID_STATE : ESP_OK;
-    if (err == ESP_OK) err = esp_ota_begin(part, fw_size, &h);   /* erases what the image needs */
+    /* erases what the image needs, all at once (the screen is dark: sudoku_ui_flash_dark) */
+    if (err == ESP_OK) err = esp_ota_begin(part, fw_size, &h);
     while (err == ESP_OK) {
         size_t n = fread(buf, 1, FW_CHUNK, f);
         if (!n) break;
@@ -169,25 +170,95 @@ static void fw_task(void *arg)
     vTaskDelete(NULL);
 }
 
+/* The screen is dark while the flash is written: any flash erase or write keeps the display
+ * from its frame buffer (PSRAM) for a moment, and the panel flickers cyan (even sector by sector).
+ * Backlight off and the panel asleep, it shows nothing instead. (Also the avatars' install.) */
+static lv_obj_t *fb_ovl;                            /* the card over everything, while busy */
+static lv_timer_t *fb_keep;                         /* keeps the screen timeout away meanwhile */
+static bool fb_dark;
+
+static void fb_keep_cb(lv_timer_t *t) { lv_display_trigger_activity(NULL); }
+
+void sudoku_ui_flash_busy(const char *title, const char *text)
+{
+    if (fb_ovl) return;
+    fb_ovl = lv_obj_create(lv_layer_top());          /* nothing else meanwhile */
+    lv_obj_remove_style_all(fb_ovl);
+    lv_obj_set_size(fb_ovl, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(fb_ovl, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(fb_ovl, (lv_opa_t)P->scrim_opa, 0);
+    lv_obj_set_clickable(fb_ovl, true);
+    lv_obj_t *card = lv_obj_create(fb_ovl);
+    lv_obj_set_size(card, 520, LV_SIZE_CONTENT);
+    lv_obj_center(card);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_width(card, 0, 0);
+    lv_obj_set_style_radius(card, 16, 0);
+    lv_obj_set_style_pad_all(card, 20, 0);
+    lv_obj_set_style_pad_row(card, 12, 0);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scrollable(card, false);
+    lv_obj_t *tl = make_label(card, &lv_font_montserrat_22, C_TEXT);
+    lv_label_set_text(tl, title);
+    lv_obj_t *m = make_label(card, &lv_font_montserrat_16, C_TEXT);
+    lv_obj_set_width(m, LV_PCT(100));
+    lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(m, text);
+    lv_obj_t *w = make_label(card, &lv_font_montserrat_14, C_MUTED);
+    lv_label_set_text(w, "Don't switch off or take the card out.");
+    fb_keep = lv_timer_create(fb_keep_cb, 1000, NULL);
+}
+
+void sudoku_ui_flash_dark(void)
+{
+    if (fb_dark) return;
+    fb_dark = true;
+    lv_refr_now(NULL);
+    bsp_display_brightness_set(0);
+    bsp_display_sleep(true);
+}
+
+void sudoku_ui_flash_done(void)
+{
+    if (fb_ovl) lv_obj_delete(fb_ovl);
+    fb_ovl = NULL;
+    if (fb_keep) lv_timer_delete(fb_keep);
+    fb_keep = NULL;
+    if (!fb_dark) return;
+    fb_dark = false;
+    lv_refr_now(NULL);                              /* (drawn without the card before the light comes on) */
+    bsp_display_sleep(false);
+    bsp_display_brightness_set(effective_brightness());
+}
+
 static void fw_poll_cb(lv_timer_t *t)
 {
-    if (fw_size) lv_bar_set_value(fw_bar, (int32_t)((uint64_t)fw_done_bytes * 100 / fw_size), LV_ANIM_OFF);
-    lv_label_set_text_fmt(fw_lbl, "%u of %u KB", (unsigned)(fw_done_bytes / 1024), (unsigned)(fw_size / 1024));
     if (fw_state == 0) return;
     lv_timer_delete(fw_timer);
     fw_timer = NULL;
     if (fw_state == 2) {
-        lv_obj_delete(fw_ovl);
-        fw_ovl = NULL;
+        sudoku_ui_flash_done();
         sudoku_ui_notice(fw_err, 6000);
         fw_row_update();
         return;
     }
-    lv_label_set_text(fw_lbl, "Done: restarting into the new firmware...");
-    lv_refr_now(NULL);
     stats_db_suspend();                             /* sudoku.db closed, the card unmounted */
-    vTaskDelay(pdMS_TO_TICKS(800));
-    esp_restart();
+    vTaskDelay(pdMS_TO_TICKS(300));
+    esp_restart();                                  /* (the screen comes back with the new firmware) */
+}
+
+/* after the card has been on screen a moment: dark, then the write */
+static void fw_start_cb(lv_timer_t *t)
+{
+    sudoku_ui_flash_dark();
+    printf("update: writing %u bytes, the screen dark meanwhile\n", (unsigned)fw_size);
+    if (xTaskCreatePinnedToCore(fw_task, "fwupdate", 8192, NULL, 3, NULL, WORKER_CORE) != pdPASS) {
+        fw_timer = NULL;
+        sudoku_ui_flash_done();
+        sudoku_ui_notice("Couldn't start the update.", 4000);
+        return;
+    }
+    fw_timer = lv_timer_create(fw_poll_cb, 200, NULL);
 }
 
 static void fw_go_cb(lv_event_t *e)
@@ -199,40 +270,12 @@ static void fw_go_cb(lv_event_t *e)
     fw_size = size;
     fw_done_bytes = 0;
     fw_state = 0;
-    fw_ovl = lv_obj_create(lv_layer_top());          /* nothing else while it writes */
-    lv_obj_remove_style_all(fw_ovl);
-    lv_obj_set_size(fw_ovl, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(fw_ovl, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(fw_ovl, (lv_opa_t)P->scrim_opa, 0);
-    lv_obj_set_clickable(fw_ovl, true);
-    lv_obj_t *card = lv_obj_create(fw_ovl);
-    lv_obj_set_size(card, 520, 200);
-    lv_obj_center(card);
-    lv_obj_set_style_bg_color(card, C_CARD, 0);
-    lv_obj_set_style_border_width(card, 0, 0);
-    lv_obj_set_style_radius(card, 16, 0);
-    lv_obj_set_scrollable(card, false);
-    lv_obj_t *tl = make_label(card, &lv_font_montserrat_22, C_TEXT);
-    lv_label_set_text(tl, LV_SYMBOL_DOWNLOAD "  Updating the firmware");
-    lv_obj_align(tl, LV_ALIGN_TOP_MID, 0, 6);
-    fw_bar = lv_bar_create(card);
-    lv_obj_set_size(fw_bar, 460, 16);
-    lv_bar_set_range(fw_bar, 0, 100);
-    lv_obj_set_style_bg_color(fw_bar, C_CARD2, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(fw_bar, C_ACCENT, LV_PART_INDICATOR);
-    lv_obj_align(fw_bar, LV_ALIGN_TOP_MID, 0, 60);
-    fw_lbl = make_label(card, &lv_font_montserrat_16, C_MUTED);
-    lv_label_set_text(fw_lbl, "Starting...");
-    lv_obj_align(fw_lbl, LV_ALIGN_TOP_MID, 0, 92);
-    lv_obj_t *w = make_label(card, &lv_font_montserrat_14, C_MUTED);
-    lv_label_set_text(w, "Don't switch off or take the card out.");
-    lv_obj_align(w, LV_ALIGN_TOP_MID, 0, 126);
-    if (xTaskCreatePinnedToCore(fw_task, "fwupdate", 8192, NULL, 3, NULL, WORKER_CORE) != pdPASS) {
-        lv_obj_delete(fw_ovl);
-        fw_ovl = NULL;
-        return;
-    }
-    fw_timer = lv_timer_create(fw_poll_cb, 200, NULL);
+    char text[160];
+    snprintf(text, sizeof(text), "The screen goes dark while the firmware is written (about %u seconds), then "
+             "the board restarts into it by itself.", (unsigned)(fw_size / (100 * 1024)) + 5);
+    sudoku_ui_flash_busy(LV_SYMBOL_DOWNLOAD "  Updating the firmware", text);
+    fw_timer = lv_timer_create(fw_start_cb, 3000, NULL);
+    lv_timer_set_repeat_count(fw_timer, 1);
 }
 
 static void fw_update_cb(lv_event_t *e)

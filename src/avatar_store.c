@@ -107,6 +107,7 @@ static void install_task(void *arg)
               header_ok(&h);
     if (ok) {
         printf("avatars: installing %s into the avatars partition\n", AV_FILE);
+        /* all at once, quicker than sector by sector (the screen is dark meanwhile: the caller) */
         ok = esp_partition_erase_range(p, 0, (AV_HEADER + AV_BYTES + 0xFFF) & ~0xFFFu) == ESP_OK;
     }
     uint32_t crc = 0;
@@ -116,6 +117,7 @@ static void install_task(void *arg)
         crc = esp_rom_crc32_le(crc, buf, n);
         at += n;
         s_done = at;
+        if (!(at % (1024 * 1024))) printf("avatars: %u MB written\n", (unsigned)(at >> 20));
     }
     ok = ok && crc == AVATAR_CRC;                   /* the file's pixels are the ones expected */
     if (ok) {                                       /* and they're in flash as they were read */
@@ -134,14 +136,19 @@ static void install_task(void *arg)
     vTaskDelete(NULL);
 }
 
-bool avatars_install(void)
+bool avatars_installable(void)
 {
-    if (s_pixels || s_install == 1) return false;
+    if (s_pixels || s_install == 1 || !partition()) return false;
     FILE *f = fopen(AV_FILE, "rb");
     av_header_t h;
     bool ok = f && fread(&h, 1, sizeof(h), f) == sizeof(h) && header_ok(&h);
     if (f) fclose(f);
-    if (!ok || !partition()) return false;
+    return ok;
+}
+
+bool avatars_install(void)
+{
+    if (!avatars_installable()) return false;
     s_install = 1;
     s_done = 0;
     if (xTaskCreatePinnedToCore(install_task, "avatars", 4096, NULL, 1, NULL, 0) != pdPASS) {

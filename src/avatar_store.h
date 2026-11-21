@@ -12,9 +12,10 @@ extern "C" {
 bool avatars_init(void);
 bool avatars_ready(void);
 
-/* If the avatars aren't in flash and the card has a matching avatars.bin in its root: writes it
- * into the partition in the background (about a minute), true when started. The card must be
- * mounted. */
+/* The avatars aren't in flash and the card has a matching avatars.bin in its root (mounted). */
+bool avatars_installable(void);
+/* Then: writes it into the partition in the background (about a minute), true when started.
+ * (Writing the flash makes the panel flicker: the caller darkens the screen first.) */
 bool avatars_install(void);
 
 /* The install: 0 none, 1 running (done of total bytes), 2 just finished (the avatars are there

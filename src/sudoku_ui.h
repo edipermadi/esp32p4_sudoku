@@ -15,6 +15,15 @@ esp_err_t sudoku_ui_start(void);
 /* Shows a message banner at the bottom of the screen for `ms` milliseconds. */
 void sudoku_ui_notice(const char *text, uint32_t ms);
 
+/* Writing the flash makes the panel flicker cyan (the display can't reach its frame buffer
+ * meanwhile), so the screen is dark during it: sudoku_ui_flash_busy() covers the screen with a
+ * card (title, text) that takes all taps; sudoku_ui_flash_dark() then turns the screen off (and
+ * keeps the screen timeout from firing) until sudoku_ui_flash_done() brings it back and removes
+ * the card. Call from the LVGL task. */
+void sudoku_ui_flash_busy(const char *title, const char *text);
+void sudoku_ui_flash_dark(void);
+void sudoku_ui_flash_done(void);
+
 /* Turns the screen off now, as its timeout does (and shows the lock screen
  * under it, if that's on); the next tap wakes it. For serial control. */
 void sudoku_ui_screen_off(void);

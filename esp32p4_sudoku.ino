@@ -110,24 +110,35 @@ void setup()
 }
 
 /* The avatars, if they aren't in flash: installed from avatars.bin on the card, once the card is
- * mounted (sudoku.db open); the screen is redrawn with them when they're there. */
+ * mounted (sudoku.db open), with the screen dark meanwhile (writing the flash makes the panel
+ * flicker); it comes back with them. */
 static void avatars_poll(void)
 {
-  static uint32_t next;
+  static uint32_t next, dark_at;
   static bool tried;
   if (millis() < next) return;
   next = millis() + 500;
   if (!tried && !avatars_ready() && stats_db_ready()) {
     tried = true;
-    if (avatars_install()) sudoku_ui_notice("Installing the avatars from the card (about a minute)...", 5000);
+    if (avatars_installable()) {
+      sudoku_ui_flash_busy("Installing the avatars",
+                           "From avatars.bin on the card. The screen goes dark meanwhile (about a minute), "
+                           "then comes back with them.");
+      dark_at = millis() + 3000;
+    }
+  }
+  if (dark_at && millis() >= dark_at) {
+    dark_at = 0;
+    sudoku_ui_flash_dark();
+    if (!avatars_install()) {
+      sudoku_ui_flash_done();
+      sudoku_ui_notice("Couldn't install the avatars from avatars.bin.", 5000);
+    }
   }
   int st = avatars_install_poll(NULL, NULL);
-  if (st == 2) {
-    lv_obj_invalidate(lv_screen_active());     /* (LVGL keeps no image cache here: lv_conf.h) */
-    sudoku_ui_notice("Avatars installed.", 3000);
-  } else if (st == 3) {
-    sudoku_ui_notice("Couldn't install the avatars from avatars.bin.", 5000);
-  }
+  if (st == 2 || st == 3) sudoku_ui_flash_done();   /* (the screen is redrawn as it comes back) */
+  if (st == 2) sudoku_ui_notice("Avatars installed.", 3000);
+  else if (st == 3) sudoku_ui_notice("Couldn't install the avatars from avatars.bin.", 5000);
 }
 
 void loop()
