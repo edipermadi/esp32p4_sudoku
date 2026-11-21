@@ -2,7 +2,7 @@
 
 `devctl` is the board's remote control over its USB-UART port: screenshots, touches, and files on the microSD card. It's built for documentation and testing. `tools/devctl.py` is the ready-made client. This page describes the wire protocol, for writing a client of your own or for debugging one.
 
-- Firmware: `src/devctl.cpp`. The summary in `src/devctl.h` should match this page.
+- Firmware: `src/devctl.c` and the `src/devctl_*.c` files it dispatches to (a file per command group; `src/devctl_internal.h`). The summary in `src/devctl.h` should match this page.
 - Commands run in the LVGL task (`devctl_poll()` from `loop()`), one at a time. The UI doesn't run while a command is busy, except where the command lets it (`wait`, touches).
 
 ## Connection

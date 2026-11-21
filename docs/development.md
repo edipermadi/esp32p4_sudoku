@@ -135,7 +135,15 @@ src/usb_drive.c         the card lent to a computer over USB
 src/ui_history.c        History and Gameplays
 src/ui_trophies.c       Trophies: achievements, leaderboards, records
 src/ui_players.c        the name dialog, Players, avatars
-src/devctl.cpp          serial control: screenshots and simulated touches (tools/devctl.py)
+src/devctl.c            serial control: screenshots, simulated touches, files, SQL (tools/devctl.py)
+src/devctl_touch.c      devctl: tap, long, swipe, press, move, release
+src/devctl_screen.c     devctl: shot, bench, screenoff
+src/devctl_files.c      devctl: ls, get, put, mv, rm, mkdir
+src/devctl_game.c       devctl: state, fill
+src/devctl_genbench.c   devctl: genbench
+src/devctl_sql.c        devctl: sql
+src/devctl_stream.c     devctl: data to and from the host (base64 lines, CRC, compression); devctl_internal.h lists them
+src/serial_port.cpp     the USB-UART port (Arduino's Serial) as C functions, for devctl.c
 src/qrcode/             Project Nayuki's QR Code generator (MIT), for Share
 src/store.cpp           RAM copy of statistics, saved game and settings; reads the old NVS keys once
 src/stats_db.c          sudoku.db on the microSD card: statistics, saved game, settings, queries

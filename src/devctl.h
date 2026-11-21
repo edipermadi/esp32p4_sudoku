@@ -1,5 +1,22 @@
+/**
+ * @file devctl.h
+ * @ingroup devctl
+ * @brief Serial control: commands on the USB-UART port, for documentation and testing.
+ */
 #pragma once
-/*
+#include <stdbool.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @defgroup devctl Serial control (devctl)
+ * @brief Commands on the USB-UART port that take screenshots, play touches, move files and run SQL,
+ *        so screens can be captured and tested by a script (tools/devctl.py).
+ *
+ * @verbatim
  * Serial control for documentation and testing: commands on the USB-UART
  * port (Serial, a line each) take screenshots and play touches, so screens
  * can be captured by a script (tools/devctl.py). Runs in the LVGL task.
@@ -52,23 +69,26 @@
  *   SHOT BEGIN <width> <height>
  *   S <n> <base64 of up to 96 bytes>      n = 0, 1, 2, ...
  *   SHOT END <bytes> <crc32 of all bytes, hex>
+ * @endverbatim
+ * @{
  */
-#include <stdbool.h>
-#include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* Call from loop() (the LVGL task): reads and runs any commands waiting. */
+/** @brief Reads and runs any commands waiting on the port. Call from loop() (the LVGL task). */
 void devctl_poll(void);
 
-/* Runs one command line from elsewhere (gibberlink.h: commands as sound), in the
- * LVGL task: touches, wait (at most 10 s), fill, state (one line: "OK state s<0|1>
- * <board>"), ping, heap (short), screenoff; not
- * shot, files, baud or bench. The answer ("OK ..." / "ERR ...", one line) goes
- * into out, not to Serial. true: OK. */
+/**
+ * @brief Runs one command line from elsewhere (gibberlink.h: commands as sound), in the LVGL task.
+ *
+ * Only touches, wait (at most 10 s), fill, state (one line: "OK state s<0|1> <board>"), ping, heap
+ * (short), screenoff and pz; not shot, files, sql, baud or bench.
+ * @param line      the command
+ * @param[out] out  the answer ("OK ..." / "ERR ...", one line), not sent to the port
+ * @param n         out's size
+ * @return true if the answer is OK
+ */
 bool devctl_run_line(const char *line, char *out, size_t n);
+
+/** @} */
 
 #ifdef __cplusplus
 }

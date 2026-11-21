@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Drive the board over its USB-UART port: screenshots (PNG) and touches, for
-documentation and testing. The firmware side is src/devctl.cpp.
+documentation and testing. The firmware side is src/devctl.c.
 
     python3 tools/devctl.py [--port /dev/ttyACM0] [--baud 921600] COMMAND...
     python3 tools/devctl.py --script docs/shots.txt
@@ -639,7 +639,9 @@ def run(board, words):
         board.ser.write((" ".join(words) + "\n").encode())
         line = board.wait_for("OK fill", 30, fail="ERR")
         print("filled %s cell%s" % (line.split()[2], "" if line.split()[2] == "1" else "s"))
-    elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "ping", "screenoff"):
+    elif cmd == "ping":                             # (it answers "OK pong")
+        board.command("ping", expect="OK pong")
+    elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "screenoff"):
         timeout = 20 + (int(words[1]) / 1000 if cmd == "wait" and len(words) > 1 else 0)
         board.command(" ".join(words), timeout=timeout)
     else:

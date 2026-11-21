@@ -106,7 +106,7 @@ void bsp_sdcard_unmount(void);
 esp_err_t bsp_touch_init(void);
 /* Returns true while touched; fills the first contact point. */
 bool bsp_touch_read(uint16_t *x, uint16_t *y);
-/* A simulated touch (serial control, devctl.cpp): while on, LVGL reads this
+/* A simulated touch (serial control, devctl.c): while on, LVGL reads this
  * instead of the panel: pressed or not, at x, y. */
 void bsp_touch_sim(bool on, bool pressed, uint16_t x, uint16_t y);
 

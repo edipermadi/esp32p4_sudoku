@@ -21,6 +21,10 @@ EXCLUDE                = src/sqlite/sqlite3.h \
                          src/puzzles_count.h
 
 OPTIMIZE_OUTPUT_FOR_C  = YES
+# __attribute__((...)) left out, so a declaration and its definition match
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = "__attribute__(x)="
 # every file and function browsable, documented or not
 EXTRACT_ALL            = YES
 # (most of the UI's functions are static)
