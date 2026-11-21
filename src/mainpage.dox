@@ -1,0 +1,106 @@
+/**
+ * @file mainpage.dox
+ * @brief The documentation's main page (Doxygen only, not built).
+ */
+
+/**
+ * @mainpage Sudoku for ESP32-P4
+ *
+ * A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4-inch 720×720 MIPI-DSI
+ * display, GT911 touch, ES8311 speaker), built with LVGL 9.6 as an Arduino sketch. These pages
+ * document the code; how to play, the features and how to build are in the project's `docs/`
+ * folder (and online at https://edipermadi.github.io/esp32p4_sudoku/docs/).
+ *
+ * @section mp_what What the firmware does
+ *
+ * - **Puzzles**: 1600 built-in puzzles (the OpenSudoku collections), a generator for new ones at four
+ *   levels, a daily puzzle, 23 variants besides Classic, puzzles typed in, imported from the card
+ *   or saved into collections of one's own.
+ * - **Playing**: pencil marks, Auto notes, undo/redo, a mistake check, step-by-step hints (up to
+ *   X-Wing, Swordfish and XY-Wing), a Learn mode, starred puzzles, a 10-minute time attack.
+ * - **Players and progress**: per-player statistics and emoji avatars, a history calendar, charts,
+ *   achievements, daily and weekly leaderboards, records; every solve can be replayed or exported
+ *   as an H.264 MP4.
+ * - **Data**: everything kept in a SQLite database on the microSD card (`sudoku.db`), with CSV
+ *   export, backups, a file manager with a Recycle bin, a USB drive mode and firmware updates from
+ *   the card.
+ * - **System**: a Wi-Fi clock, light and dark themes, sound effects, a lock screen, a system
+ *   monitor, and remote control over the serial port (devctl) or by sound.
+ *
+ * @section mp_topics Where to start: the topics
+ *
+ * Each screen with logic of its own is split in two: the **screen** (`ui_*.c`: LVGL widgets,
+ * drawing, taps) and its **core** (no LVGL calls: the state, the rules, sudoku.db and the card),
+ * often a `.c` / `.h` per part. Both are bundled under a topic:
+ *
+ * | Topic | The screen, and what its core does |
+ * |-------|------------------------------------|
+ * | @ref topic_puzzles | the collections, the grid of numbers or rows, Starred; selection, solved counts, the player's collections |
+ * | @ref topic_statistics | levels, the table and progress chart; the view from sudoku.db or RAM, totals, trends |
+ * | @ref topic_history | the calendar and a day's games; the month asked for, the badges, the day picked |
+ * | @ref topic_gameplays | recorded solves, the Replay screen, MP4 export; paging, the replay timeline, the video's frames |
+ * | @ref topic_trophies | achievements, daily and weekly leaderboards, records; the day and week shown, the results |
+ * | @ref topic_players | players, colours, the avatar picker; the list, switching, adding, renaming, deleting |
+ * | @ref topic_files | the card's folders and files; reading a folder, rename, the Recycle bin, a puzzle file's preview |
+ * | @ref topic_settings | the five Settings tabs; firmware update, the microSD card, factory reset, the USB drive |
+ * | @ref topic_sysmon | the system monitor's tabs; the chip, CPU load, memory, storage, tasks, the last hour |
+ *
+ * Besides those:
+ *
+ * - @ref stats_db : the game's data in `sudoku.db`. One worker task does all database and card
+ *   work; the UI queues commands and picks up the results (the tables are described there, and in
+ *   `docs/internals/database.md`).
+ * - @ref devctl : commands on the USB-UART port (screenshots, touches, files, SQL) for
+ *   documentation and testing, driven by `tools/devctl.py`; @ref serial_port is Arduino's Serial
+ *   for it, from C.
+ * - @ref ui_home_menu : how Home lays out its menu buttons.
+ * - The rest of the UI (start-up, Home, the game screen, hints, New puzzle, Learn, dialogs) is in
+ *   `ui_sudoku.c` and the other `ui_*.c` files, which share `ui_internal.h`; the puzzle generator
+ *   and grader in `generator.c`, the RAM copy of the settings and statistics in `store.c`, the
+ *   `.sdx` puzzle format in `sdx.c`.
+ *
+ * @section mp_running How it runs
+ *
+ * - **LVGL** runs on core 1, from the sketch's `loop()`: every screen, and devctl's commands.
+ * - **sudoku.db's worker** (stats_db.c) runs every query and write, one at a time; writes are
+ *   queued and forgotten, reads are answered later and taken by each screen's poll.
+ * - **Short worker tasks** on core 0 do the slow card work away from LVGL: reading a folder for
+ *   Files, deleting for good, writing a screenshot, counting the card's free space, the task list
+ *   for the system monitor.
+ * - **The generator** makes puzzles on a worker core while the screen keeps going.
+ *
+ * Internal RAM (768 KB) is the tight resource and PSRAM (32 MB) is plenty: `malloc()` goes to
+ * PSRAM, and big buffers are asked for there explicitly; only DMA and the video encoder need
+ * internal RAM.
+ *
+ * @section mp_rules Conventions
+ *
+ * - **No `extern` variables**: every variable is `static` in the file that owns it; other files call
+ *   its accessors. Constant tables too are read through a function.
+ * - **Names**: a function that answers a yes/no question about state starts with `is_`
+ *   (is_stats_db_ready()); UI files are `ui_*.c`; the code without LVGL is `*_core.c`, or a file per
+ *   part under a `*_core.h` that includes them all.
+ * - **Style**: `make format` (astyle, every if/for/while/else body in braces); `make format-check`
+ *   says whether anything isn't formatted.
+ * - **Documentation**: every function, parameter, return value and variable is documented; a
+ *   function declared in a header is documented there, its definition says
+ *   `(documented in X.h)`. `make doxygen` builds these pages and counts the warnings (kept at 0;
+ *   they are in `build/doxygen/warnings.log`).
+ *
+ * @section mp_build Building
+ *
+ * | Command | What it does |
+ * |---------|--------------|
+ * | `make` | builds the firmware into `build/` |
+ * | `make upload PORT=/dev/ttyACM0` | builds, then flashes it over the UART port |
+ * | `make avatars PORT=/dev/ttyACM0` | flashes the emoji avatars into their partition (once per board) |
+ * | `make test` | the tests of the plain-C parts on the computer: the generator, the built-in puzzles, the `.sdx` format |
+ * | `make format` / `make format-check` | formats the C code / checks it is formatted |
+ * | `make doxygen` | these pages, into `build/doxygen/html` |
+ * | `make release VERSION=v1.2.3` | the release files into `dist/` |
+ * | `make site` | the web flasher and docs site into `site/` |
+ *
+ * The full instructions (the libraries, `lv_conf.h`, the board settings, the partition table,
+ * the web flasher) are in `docs/building.md`; the source layout and how to regenerate the
+ * embedded data in `docs/development.md`.
+ */

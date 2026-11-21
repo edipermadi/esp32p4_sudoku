@@ -37,7 +37,7 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 
 ## Code documentation
 
-`make doxygen` builds HTML documentation of the firmware's code into `build/doxygen/html/index.html` (Doxygen with Graphviz: `apt install doxygen graphviz`; settings in `Doxyfile`). Every source file, function and structure is there with its code, documented or not; the Settings screen's files (`ui_settings*.c`, `ui_settings.h`, the **Settings screen** topic) are fully documented in Doxygen's `/** ... */` style, with `@brief`, `@param` and `@return`. Vendored and generated code is left out, as in `make format`. Warnings (a documented function missing a parameter, a malformed tag) go to `build/doxygen/warnings.log`, and `make doxygen` prints how many.
+`make doxygen` builds HTML documentation of the firmware's code into `build/doxygen/html/index.html` (Doxygen with Graphviz: `apt install doxygen graphviz`; settings in `Doxyfile`). Every source file, function and structure is there with its code, documented or not. The main page (`src/mainpage.dox`) says what the firmware does, where to start, how it runs, the conventions and the build commands. Under **Topics** (`src/topics.dox`) each screen's UI and core files are bundled: Puzzles, Statistics, History, Gameplays and Replay, Trophies, Players, Files, Settings, System monitor; with the database (`stats_db`), devctl and the serial port, these are fully documented in Doxygen's `/** ... */` style, with `@brief`, `@param` and `@return`. A new screen's UI and core go under a topic of their own: a `@defgroup` in `topics.dox` and an `@ingroup` line in each. Vendored and generated code is left out, as in `make format`. Warnings (a documented function missing a parameter, a malformed tag) go to `build/doxygen/warnings.log`, and `make doxygen` prints how many.
 
 ## Tests
 
@@ -164,6 +164,7 @@ src/trophies_view.c     the day and week shown: moving them, asking sudoku.db
 src/trophies_results.c  sudoku.db's answers for the screen, taken (PSRAM buffers)
 src/trophies_text.c     an achievement's progress, the unlock toast's text
 src/ui_players.c        the name dialog, Players, avatars
+src/players_core.c      Players' data without LVGL calls: the list, switching, colours, avatars, add, rename, delete
 src/devctl.c            serial control: screenshots, simulated touches, files, SQL (tools/devctl.py)
 src/devctl_touch.c      devctl: tap, long, swipe, press, move, release
 src/devctl_screen.c     devctl: shot, bench, screenoff

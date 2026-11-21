@@ -1,5 +1,19 @@
-/* ui_sudoku.c split: the name dialog, Players, avatars. See ui_sudoku.c for the whole. */
+/**
+ * @file ui_players.c
+ * @ingroup ui_players
+ * @brief Players (Home): a row per player (tap one to play as them; their avatar or colour dot, tapped,
+ *        gives the next colour), the ⋮ menu (Add, Rename, Avatar, Delete), the avatar picker, and the
+ *        name dialog other screens use too. The data: players_core.h.
+ */
 #include "ui_internal.h"
+#include "players_core.h"
+
+/**
+ * @defgroup ui_players Players screen
+ * @ingroup topic_players
+ * @brief The Players screen, its avatar picker, and the name dialog.
+ * @{
+ */
 
 /* this file's own functions, in any order */
 static void nd_close(void);
@@ -12,10 +26,6 @@ static void player_rename_cb(lv_event_t *e);
 static void player_delete_confirm_cb(lv_event_t *e);
 static void player_delete_cb(lv_event_t *e);
 static void player_add_cb(lv_event_t *e);
-static stats_player_t *player_current(void);
-static int av_group_end(int g);
-static void av_rows_init(void);
-static int av_row_group(int row);
 static void player_avatar_set(int k);
 static void av_none_cb(lv_event_t *e);
 static void av_grid_click_cb(lv_event_t *e);
@@ -26,18 +36,17 @@ static void player_avatar_cb(lv_event_t *e);
 static void player_menu_cb(lv_event_t *e);
 static void player_color_cb(lv_event_t *e);
 
-/* players screen */
-static lv_obj_t *p_list, *p_menu_btn, *p_note;
-static stats_player_t p_players[STATS_MAX_PLAYERS];
-static int p_count = -1;                 /* last list from sudoku.db, -1 = none yet */
-
-/* ------------------------------------------------------------- players */
+static lv_obj_t *p_list;                  /**< the players' rows */
+static lv_obj_t *p_menu_btn;              /**< the title row's ⋮ menu */
+static lv_obj_t *p_note;                  /**< the line at the bottom */
 
 /* name dialog (add or rename), on the top layer with an on-screen keyboard */
-static lv_obj_t *nd_ovl, *nd_ta;
-static int32_t nd_rename_id;             /* 0 = add a player */
-static void (*nd_done)(const char *name); /* not a player's name: who takes it */
+static lv_obj_t *nd_ovl;                  /**< the dialog's dimmed layer (NULL: closed) */
+static lv_obj_t *nd_ta;                   /**< the name */
+static int32_t nd_rename_id;              /**< the player renamed (0: add a player) */
+static void (*nd_done)(const char *name); /**< not a player's name: who takes it */
 
+/** @brief Closes the name dialog. */
 static void nd_close(void)
 {
     if (!nd_ovl) {
@@ -47,19 +56,22 @@ static void nd_close(void)
     nd_ovl = nd_ta = NULL;
 }
 
+/** @brief The name dialog's OK: the name to whoever asked (a player added or renamed, or nd_open_ex()'s done). */
 static void nd_ok(void)
 {
     const char *name = lv_textarea_get_text(nd_ta);
     if (nd_done) {
         nd_done(name);
-    } else if (nd_rename_id) {
-        stats_db_rename_player(nd_rename_id, name);
     } else {
-        stats_db_add_player(name);
+        players_name_entered(nd_rename_id, name);
     }
     nd_close();
 }
 
+/**
+ * @brief The keyboard's Enter (OK) and close key (Cancel).
+ * @param e  the event
+ */
 static void nd_kb_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -70,6 +82,10 @@ static void nd_kb_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief Cancel or OK.
+ * @param e  the event (user data: 1 OK, 0 Cancel)
+ */
 static void nd_btn_cb(lv_event_t *e)
 {
     if ((intptr_t)lv_event_get_user_data(e)) {
@@ -79,8 +95,14 @@ static void nd_btn_cb(lv_event_t *e)
     }
 }
 
-/* the name dialog: a title, a text box with a keyboard, Cancel and ok_text; done gets the name
- * (NULL: a player's, added or renamed: nd_open) */
+/**
+ * @brief The name dialog: a title, a text box with a keyboard, Cancel and OK.
+ * @param title    the title
+ * @param current  the text to start with (NULL: none)
+ * @param max_len  the longest name
+ * @param ok_text  the OK button's text
+ * @param done     gets the name (NULL: a player's, added or renamed: nd_open())
+ */
 void nd_open_ex(const char *title, const char *current, int max_len, const char *ok_text,
                 void (*done)(const char *name))
 {
@@ -155,6 +177,11 @@ void nd_open_ex(const char *title, const char *current, int max_len, const char 
     lv_obj_add_event_cb(kb, nd_kb_cb, LV_EVENT_ALL, NULL);
 }
 
+/**
+ * @brief The name dialog for a player: New player, or Rename player.
+ * @param rename_id  the player to rename (0: add one)
+ * @param current    their name now (NULL: none)
+ */
 static void nd_open(int32_t rename_id, const char *current)
 {
     nd_open_ex(rename_id ? "Rename player" : "New player", current, STORE_NAME_LEN - 1, rename_id ? "Rename" : "Add",
@@ -162,14 +189,19 @@ static void nd_open(int32_t rename_id, const char *current)
     nd_rename_id = rename_id;
 }
 
+/**
+ * @brief A player's row: play as them.
+ * @param e  the event (user data: players.id)
+ */
 static void player_row_cb(lv_event_t *e)
 {
-    int32_t id = (int32_t)(intptr_t)lv_event_get_user_data(e);
-    if (id && id != store_player_id()) {
-        stats_db_switch_player(id);
-    }
+    players_switch((int32_t)(intptr_t)lv_event_get_user_data(e));
 }
 
+/**
+ * @brief The menu's Rename: who plays now.
+ * @param e  the event
+ */
 static void player_rename_cb(lv_event_t *e)
 {
     if (is_stats_db_ready()) {
@@ -177,31 +209,27 @@ static void player_rename_cb(lv_event_t *e)
     }
 }
 
-static int32_t p_delete_id;
-
+/**
+ * @brief The Delete dialog's Delete.
+ * @param e  the event (user data: the dialog)
+ */
 static void player_delete_confirm_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-    if (p_delete_id) {
-        stats_db_delete_player(p_delete_id);
-    }
-    p_delete_id = 0;
+    players_delete_confirmed();
 }
 
-/* the menu's Delete: who plays now (another takes over); to delete someone else, switch first */
+/**
+ * @brief The menu's Delete: who plays now (another takes over; to delete someone else, switch
+ *        first), asked first.
+ * @param e  the event
+ */
 static void player_delete_cb(lv_event_t *e)
 {
-    int32_t id = store_player_id();
-    const stats_player_t *pl = NULL;
-    for (int i = 0; i < p_count; i++) {
-        if (p_players[i].id == id) {
-            pl = &p_players[i];
-        }
-    }
+    const stats_player_t *pl = players_delete_ask();
     if (!pl) {
         return;
     }
-    p_delete_id = id;
     char title[48], text[256];
     snprintf(title, sizeof(title), "Delete %s?", pl->name);
     snprintf(text, sizeof(text),
@@ -209,7 +237,7 @@ static void player_delete_cb(lv_event_t *e)
              "are erased from sudoku.db. This can't be undone.%s",
              (unsigned)pl->solved, pl->solved == 1 ? "" : "s",
              (unsigned long)pl->solves, pl->solves == 1 ? "" : "s",
-             id == store_player_id() ? "\nAnother player takes over." : "");
+             pl->id == store_player_id() ? "\nAnother player takes over." : "");
     lv_obj_t *m = make_msgbox(title, text);
     msgbox_button(m, "Cancel", mbox_close_cb, false);
     msgbox_button(m, LV_SYMBOL_TRASH "  Delete", player_delete_confirm_cb, true);
@@ -217,6 +245,10 @@ static void player_delete_cb(lv_event_t *e)
     lv_obj_set_style_bg_color(del, C_RED, 0);
 }
 
+/**
+ * @brief The menu's Add.
+ * @param e  the event
+ */
 static void player_add_cb(lv_event_t *e)
 {
     if (is_stats_db_ready()) {
@@ -224,76 +256,53 @@ static void player_add_cb(lv_event_t *e)
     }
 }
 
-/* who plays now, in the list from sudoku.db (NULL: not there yet) */
-static stats_player_t *player_current(void)
-{
-    for (int i = 0; i < p_count; i++) {
-        if (p_players[i].id == store_player_id()) {
-            return &p_players[i];
-        }
-    }
-    return NULL;
-}
-static lv_obj_t *av_scroll, *av_grid, *av_group_btn[AVATAR_GROUPS];
-static int av_cur;                                  /* the player's, 0 = none */
-static int av_row0[AVATAR_GROUPS + 1];              /* each group starts a row: its first; [n] = all rows */
+static lv_obj_t *av_scroll;               /**< the picker's emoji, scrolling */
+static lv_obj_t *av_grid;                 /**< ... drawn on this */
+static lv_obj_t *av_group_btn[AVATAR_GROUPS];   /**< the groups' buttons (each one's first emoji) */
+static int av_cur;                        /**< the player's avatar, 0 = none */
 
-static int av_group_end(int g) { return g + 1 < AVATAR_GROUPS ? avatar_group_first(g + 1) : AVATAR_COUNT; }
-
-static void av_rows_init(void)
-{
-    for (int g = 0, r = 0; g <= AVATAR_GROUPS; g++) {
-        av_row0[g] = r;
-        if (g < AVATAR_GROUPS) {
-            r += (av_group_end(g) - avatar_group_first(g) + AV_COLS - 1) / AV_COLS;
-        }
-    }
-}
-
-/* the group of a row */
-static int av_row_group(int row)
-{
-    int g = 0;
-    while (g + 1 < AVATAR_GROUPS && av_row0[g + 1] <= row) {
-        g++;
-    }
-    return g;
-}
-
+/**
+ * @brief The picker's choice: who plays now gets it, the picker closes.
+ * @param k  1..AVATAR_COUNT, 0 = none
+ */
 static void player_avatar_set(int k)
 {
-    stats_player_t *pl = player_current();
     ctx_menu_close();
     av_scroll = av_grid = NULL;
-    if (!pl) {
-        return;
+    if (players_set_avatar(k)) {
+        render_players();
     }
-    stats_db_set_player_avatar(pl->id, k);           /* the list comes back with it */
-    pl->avatar = (uint16_t)k;
-    render_players();
 }
 
+/**
+ * @brief The picker's None.
+ * @param e  the event
+ */
 static void av_none_cb(lv_event_t *e)
 {
     player_avatar_set(0);
 }
 
+/**
+ * @brief A tap on the picker's emoji: that one.
+ * @param e  the event
+ */
 static void av_grid_click_cb(lv_event_t *e)
 {
     lv_point_t p;
     lv_area_t a;
     lv_indev_get_point(lv_indev_active(), &p);
     lv_obj_get_coords(av_grid, &a);
-    int col = (p.x - a.x1) / AV_CELL, row = (p.y - a.y1) / AV_CELL;
-    if (col < 0 || col >= AV_COLS || row < 0 || row >= av_row0[AVATAR_GROUPS]) {
-        return;
-    }
-    int g = av_row_group(row), k = avatar_group_first(g) + (row - av_row0[g]) * AV_COLS + col;
-    if (k < av_group_end(g)) {
+    int k = players_av_at((p.y - a.y1) / AV_CELL, (p.x - a.x1) / AV_CELL);
+    if (k >= 0) {
         player_avatar_set(k + 1);    /* (not the empty end of a group's last row) */
     }
 }
 
+/**
+ * @brief Draws the picker's emoji (just the rows in view), the player's own outlined.
+ * @param e  the draw event
+ */
 static void av_grid_draw_cb(lv_event_t *e)
 {
     lv_layer_t *layer = lv_event_get_layer(e);
@@ -306,11 +315,10 @@ static void av_grid_draw_cb(lv_event_t *e)
     }
     lv_draw_image_dsc_t d;
     lv_draw_image_dsc_init(&d);
-    for (int r = r0; r <= r1 && r < av_row0[AVATAR_GROUPS]; r++) {
-        int g = av_row_group(r);
+    for (int r = r0; r <= r1 && r < players_av_rows(); r++) {
         for (int c = 0; c < AV_COLS; c++) {
-            int k = avatar_group_first(g) + (r - av_row0[g]) * AV_COLS + c;
-            if (k >= av_group_end(g)) {
+            int k = players_av_at(r, c);
+            if (k < 0) {
                 break;
             }
             lv_area_t cell = {a.x1 + c * AV_CELL, a.y1 + r * AV_CELL, a.x1 + (c + 1) * AV_CELL - 1,
@@ -333,30 +341,41 @@ static void av_grid_draw_cb(lv_event_t *e)
     }
 }
 
-/* the group at the top of the view, checked in the row of groups */
+/**
+ * @brief The group at the top of the view, checked in the row of groups.
+ * @param e  the event (may be NULL)
+ */
 static void av_scroll_cb(lv_event_t *e)
 {
-    int g = av_row_group((lv_obj_get_scroll_y(av_scroll) + AV_CELL / 2) / AV_CELL);
+    int g = players_av_row_group((lv_obj_get_scroll_y(av_scroll) + AV_CELL / 2) / AV_CELL);
     for (int i = 0; i < AVATAR_GROUPS; i++) {
         lv_obj_set_state(av_group_btn[i], LV_STATE_CHECKED, i == g);
     }
 }
 
+/**
+ * @brief A group's button: scrolls to it.
+ * @param e  the event (user data: the group)
+ */
 static void av_group_cb(lv_event_t *e)
 {
     int g = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_obj_scroll_to_y(av_scroll, av_row0[g] * AV_CELL, LV_ANIM_ON);
+    lv_obj_scroll_to_y(av_scroll, players_av_row_first(g) * AV_CELL, LV_ANIM_ON);
 }
 
-/* the menu's Avatar, for who plays now */
+/**
+ * @brief The menu's Avatar: the picker for who plays now (a title and None, a row of groups, the
+ *        emoji scrolling), opened at theirs.
+ * @param e  the event
+ */
 static void player_avatar_cb(lv_event_t *e)
 {
-    stats_player_t *pl = player_current();
+    const stats_player_t *pl = players_current();
     if (!pl) {
         return;
     }
     av_cur = pl->avatar <= AVATAR_COUNT ? pl->avatar : 0;
-    av_rows_init();
+    players_av_layout(AV_COLS);
     const int inner = AV_COLS * AV_CELL, card_h = SCR_W - 68 - 16;
     lv_obj_t *card = ctx_card_open(p_menu_btn, inner + 2 * 6 + 2);
     lv_obj_set_height(card, card_h);
@@ -412,57 +431,57 @@ static void player_avatar_cb(lv_event_t *e)
     lv_obj_add_event_cb(av_scroll, av_scroll_cb, LV_EVENT_SCROLL, NULL);
     av_grid = lv_obj_create(av_scroll);
     lv_obj_remove_style_all(av_grid);
-    lv_obj_set_size(av_grid, inner, av_row0[AVATAR_GROUPS] * AV_CELL);
+    lv_obj_set_size(av_grid, inner, players_av_rows() * AV_CELL);
     lv_obj_set_scrollable(av_grid, false);
     lv_obj_set_clickable(av_grid, true);
     lv_obj_add_event_cb(av_grid, av_grid_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
     lv_obj_add_event_cb(av_grid, av_grid_click_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_update_layout(card);
     if (av_cur) {                                    /* to theirs */
-        int g = 0;
-        while (g + 1 < AVATAR_GROUPS &avatar_group_first(g + 1) <= av_cur - 1) {
-            g++;
-        }
-        lv_obj_scroll_to_y(av_scroll, (av_row0[g] + (av_cur - 1 - avatar_group_first(g)) / AV_COLS) * AV_CELL,
-                           LV_ANIM_OFF);
+        lv_obj_scroll_to_y(av_scroll, players_av_row_of(av_cur - 1) * AV_CELL, LV_ANIM_OFF);
     }
     av_scroll_cb(NULL);
 }
 
-/* the title row's context menu: Add, Rename and Avatar (who plays now), Delete (who plays now: not
- * the only one) */
+/**
+ * @brief The title row's menu: Add, Rename and Avatar (who plays now), Delete (who plays now: not
+ *        the only one).
+ * @param e  the event
+ */
 static void player_menu_cb(lv_event_t *e)
 {
-    bool db = is_stats_db_ready() && p_count >= 0;
+    bool db = is_stats_db_ready() && players_count() >= 0;
     const ctx_item_t items[] = {
         {LV_SYMBOL_PLUS, "Add player", player_add_cb, !db},
         {LV_SYMBOL_EDIT, "Rename player", player_rename_cb, !db},
-        {LV_SYMBOL_IMAGE, "Avatar", player_avatar_cb, !db || !player_current()},
-        {LV_SYMBOL_TRASH, "Delete player", player_delete_cb, !db || p_count < 2, true},
+        {LV_SYMBOL_IMAGE, "Avatar", player_avatar_cb, !db || !players_current()},
+        {LV_SYMBOL_TRASH, "Delete player", player_delete_cb, !db || players_count() < 2, true},
     };
     ctx_menu_toggle(p_menu_btn, items, (int)(sizeof(items) / sizeof(items[0])));
 }
 
-/* one row per player; without sudoku.db just who the board thinks plays */
+/**
+ * @brief A player's avatar or dot: their next colour.
+ * @param e  the event (user data: players.id)
+ */
 static void player_color_cb(lv_event_t *e)
 {
-    int32_t id = (int32_t)(intptr_t)lv_event_get_user_data(e);
-    for (int i = 0; i < p_count; i++) {
-        if (p_players[i].id == id) {
-            stats_db_set_player_color(id, p_players[i].color + 1);   /* the list comes back with it */
-            p_players[i].color = (uint8_t)((p_players[i].color + 1) % STATS_PLAYER_COLORS);
-        }
-    }
+    players_next_color((int32_t)(intptr_t)lv_event_get_user_data(e));
     render_players();
 }
 
+/**
+ * @brief The player list sudoku.db sent, shown.
+ * @param list  the players
+ * @param n     how many
+ */
 void players_take(const stats_player_t *list, int n)
 {
-    memcpy(p_players, list, sizeof(stats_player_t) * n);
-    p_count = n;
+    players_take_list(list, n);
     render_players();
 }
 
+/** @brief Draws the list: a row per player (without sudoku.db just who the board thinks plays), and Home's Players button. */
 void render_players(void)
 {
     home_player_update();                           /* (the avatar on Home's Players button) */
@@ -470,14 +489,14 @@ void render_players(void)
         return;
     }
     lv_obj_clean(p_list);
-    bool db = is_stats_db_ready() && p_count >= 0;
-    int n = db ? p_count : 1;
+    bool db = is_stats_db_ready() && players_count() >= 0;
+    int n = db ? players_count() : 1;
     for (int i = 0; i < n; i++) {
         stats_player_t ram = {.id = store_player_id()};
         if (!db) {
             snprintf(ram.name, sizeof(ram.name), "%s", store_player_name());
         }
-        const stats_player_t *pl = db ? &p_players[i] : &ram;
+        const stats_player_t *pl = db ? &players_all()[i] : &ram;
         bool cur = !db || pl->id == store_player_id();
 
         lv_obj_t *r = lv_obj_create(p_list);
@@ -527,6 +546,7 @@ void render_players(void)
                       : "No sudoku.db: insert a FAT32 microSD card before switching on to keep players.");
 }
 
+/** @brief Builds the screen: Home, the title, the menu, the list, the note. */
 void build_profile(void)
 {
     screen_set_profile(make_screen());
@@ -552,7 +572,5 @@ void build_profile(void)
     render_players();
 }
 
-/* ---- accessors: the other UI files reach this file's state through these */
-const stats_player_t *players_all(void) { return p_players; }
-int players_count(void) { return p_count; }
-void players_set_count(int v) { p_count = v; }
+
+/** @} */

@@ -30,6 +30,7 @@
 #include "statistics_core.h"
 #include "collections.h"
 #include "puzzles_core.h"
+#include "players_core.h"
 #include "usb_msc.h"
 #include "generator.h"
 #include "esp_random.h"
@@ -492,9 +493,6 @@ void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len);
 const char *const *learn_names(void);
 lv_obj_t *screen_edit(void);
 /* ui_players.c */
-const stats_player_t *players_all(void);
-int players_count(void);
-void players_set_count(int v);
 /* ui_replay.c */
 lv_obj_t *screen_replay(void);
 /* ui_settings.c */

@@ -45,3 +45,8 @@
  * @brief Puzzles: the screen (@ref ui_list), its data (@ref puzzles_core) and the collections it lists
  *        (@ref collections).
  */
+
+/**
+ * @defgroup topic_players Players
+ * @brief Players: the screen and its avatar picker (@ref ui_players) and its data (@ref players_core).
+ */
