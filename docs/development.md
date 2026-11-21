@@ -123,6 +123,7 @@ src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Learn, Ent
 src/ui_list.c           the Puzzles screen
 src/ui_home.c           Home: the week, Continue and unfinished games, the menu
 src/ui_stats.c          Statistics and the progress chart
+src/statistics_core.c   Statistics' data without LVGL: the row picked, the view (sudoku.db or RAM), totals, the chart's numbers
 src/ui_settings.c       the Settings screen around its tabs, the rows' look, the theme, settings reloaded, power off,
                         the dark screen while the flash is written (ui_settings.h lists the tab files)
 src/ui_settings_network.c  Settings > Network: Wi-Fi, time zone

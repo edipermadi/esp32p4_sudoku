@@ -175,7 +175,7 @@ void sd_poll_cb(lv_timer_t *t)
     if (!view) {
         view = heap_caps_malloc(sizeof(*view), MALLOC_CAP_SPIRAM);
     }
-    if (view && stats_db_take_view(view) && view->level == stats_sel() - 1) {
+    if (view && stats_db_take_view(view) && view->level == statistics_sel() - 1) {
         stats_take_view(view);
     }
     static uint16_t c_best[PUZZLE_COUNT];

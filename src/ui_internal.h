@@ -27,6 +27,7 @@
 #include "timezones.h"
 #include "stats_db.h"
 #include "gameplays_core.h"
+#include "statistics_core.h"
 #include "usb_msc.h"
 #include "generator.h"
 #include "esp_random.h"
@@ -297,7 +298,7 @@ typedef stats_level_t level_stat_t;
  * a dot per solve and an orange line for the average of the last 5, with
  * minutes up the side. Below it, how the newest 5 compare with the first 5.
  */
-#define AVG_WIN 5
+/* (AVG_WIN: statistics_core.h) */
 #define PLOT_L  58                      /* room for the time labels */
 #define PLOT_R  14
 #define PLOT_T  14
@@ -529,9 +530,6 @@ bool is_ui_night(void);
 uint8_t ui_sleep_min(void);
 void ui_set_sleep_min(uint8_t v);
 /* ui_stats.c */
-int stats_sel(void);
-const stats_view_t *stats_view_p(void);
-void stats_set_view_p(stats_view_t *v);
 /* ui_trophies.c */
 lv_obj_t *home_trophy_sub(void);
 void home_set_trophy_sub(lv_obj_t *v);

@@ -728,8 +728,7 @@ esp_err_t sudoku_ui_start(void)
     game_set_geo(sudoku_geom(VAR_CLASSIC));
     game_set_geo_buf(heap_caps_malloc(sizeof(*game_geo_buf()), MALLOC_CAP_SPIRAM));
     ui_set_gen_cache(heap_caps_calloc(GEN_CACHE, sizeof(gen_cache_t), MALLOC_CAP_SPIRAM));
-    stats_set_view_p(heap_caps_calloc(1, sizeof(stats_view_t), MALLOC_CAP_SPIRAM));
-    if (!game_geo_buf() || !ui_gen_cache() || !stats_view_p()) {
+    if (!game_geo_buf() || !ui_gen_cache() || !statistics_init()) {
         return ESP_ERR_NO_MEM;
     }
 #if LV_USE_PERF_MONITOR

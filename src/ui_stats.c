@@ -1,21 +1,27 @@
-/* ui_sudoku.c split: Statistics and the progress chart. See ui_sudoku.c for the whole. */
+/**
+ * @file ui_stats.c
+ * @ingroup ui_stats
+ * @brief Statistics (Home): the list of levels, the table of the one picked (or the progress chart),
+ *        the summary lines and whose statistics they are. The data: statistics_core.h.
+ */
 #include "ui_internal.h"
+#include "statistics_core.h"
+
+/**
+ * @defgroup ui_stats Statistics screen
+ * @brief The Statistics screen: a level per row on the left; its table or chart on the right.
+ * @{
+ */
 
 /* this file's own functions, in any order */
-static void add_puzzle_stat(level_stat_t *st, uint16_t id);
-static void view_from_ram(int level, stats_view_t *v);
-static void fmt_avg_mistakes(char *buf, size_t n, const level_stat_t *st);
-static void fmt_stat_times(char *fast, char *avg, size_t n, const level_stat_t *st);
-static void stats_summary(const level_stat_t *st, uint16_t count);
+static void fmt_stat_times(char *fast, char *avg, size_t n, const stats_level_t *st);
+static void stats_summary(const stats_level_t *st, uint16_t count);
 static void table_columns(int n, const int32_t *w, const char *const *head);
 static lv_obj_t *player_avatar_obj(lv_obj_t *parent, const stats_player_t *pl);
 static void stats_player_list_draw_cb(lv_event_t *e);
 static void stats_player_dd_cb(lv_event_t *e);
 static void stats_select_rows(void);
-static void kind_total(const stats_view_t *v, int k, stats_level_t *t);
 static void render_stats(const stats_view_t *v, bool from_db);
-static uint32_t chart_step(uint32_t max);
-static uint32_t chart_avg(const stats_view_t *v, int i);
 static void plot_text(lv_layer_t *layer, const char *text, lv_color_t color, int x1, int y1, int x2, lv_text_align_t align);
 static void plot_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, lv_color_t color, int width, lv_opa_t opa);
 static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color);
@@ -26,71 +32,31 @@ static void stats_info_cb(lv_event_t *e);
 static void stats_row_cb(lv_event_t *e);
 static void stats_table_draw_cb(lv_event_t *e);
 
-static lv_obj_t *x_btn[X_ROWS], *x_name_lbl[X_ROWS], *x_cnt_lbl[X_ROWS];
-static lv_obj_t *x_title, *x_sum1, *x_sum2, *x_table, *x_empty, *x_player_dd;
-static lv_obj_t *x_chart, *x_plot, *x_trend, *x_chart_btn;   /* progress chart (instead of the table) */
-static bool      x_chart_mode;            /* chart shown (kept until power-off) */
-static bool      x_from_db;               /* what the info popup says the numbers come from */
-static char      x_player_txt[STORE_NAME_LEN + 8];    /* closed dropdown: icon + name */
-static lv_obj_t *x_player_av;                         /* ... or the avatar left of the name */
-static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, then the kinds (STATS_LEVEL_KIND) */
+static lv_obj_t *x_btn[X_ROWS];           /**< the list's rows: all levels, the collections, the kinds */
+static lv_obj_t *x_name_lbl[X_ROWS];      /**< their names */
+static lv_obj_t *x_cnt_lbl[X_ROWS];       /**< their counts ("12/100") */
+static lv_obj_t *x_title;                 /**< the row picked's name */
+static lv_obj_t *x_sum1;                  /**< the summary's first line */
+static lv_obj_t *x_sum2;                  /**< ... and second */
+static lv_obj_t *x_table;                 /**< the table */
+static lv_obj_t *x_empty;                 /**< instead of an empty table */
+static lv_obj_t *x_player_dd;             /**< whose statistics */
+static lv_obj_t *x_chart;                 /**< the progress chart's card (instead of the table) */
+static lv_obj_t *x_plot;                  /**< its plot */
+static lv_obj_t *x_trend;                 /**< the text under it */
+static lv_obj_t *x_chart_btn;             /**< Chart / Table */
+static bool      x_chart_mode;            /**< the chart is shown (kept until power-off) */
+static char      x_player_txt[STORE_NAME_LEN + 8];    /**< the closed dropdown: icon + name */
+static lv_obj_t *x_player_av;                         /**< ... or the avatar left of the name */
 
-static void add_puzzle_stat(level_stat_t *st, uint16_t id)
-{
-    uint32_t t = store_best_time(id);
-    if (!t) {
-        return;
-    }
-    st->solved++;
-    st->solves += store_solve_count(id);
-    st->time_sum += t;
-    if (!st->fastest || t < st->fastest) {
-        st->fastest = t;
-    }
-    uint8_t m = store_fewest_mistakes(id);
-    if (m != STORE_MISTAKES_UNKNOWN) {
-        st->known++;
-        st->miss_sum += m;
-        if (m == 0) {
-            st->perfect++;
-        }
-    }
-}
-
-/* fallback when there is no sudoku.db: this session's RAM statistics */
-static void view_from_ram(int level, stats_view_t *v)
-{
-    memset(v, 0, sizeof(*v));
-    v->level = level;
-    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++) {
-        const puzzle_collection_t *pc = puzzle_collection(c);
-        for (uint16_t i = 0; i < pc->count; i++) {
-            add_puzzle_stat(&v->levels[c], pc->first + i);
-            add_puzzle_stat(&v->total, pc->first + i);
-            if (c != level || !store_best_time(pc->first + i) || v->n_puzzles >= STATS_MAX_PUZZLES) {
-                continue;
-            }
-            stats_puzzle_t *p = &v->puzzles[v->n_puzzles++];
-            p->number = i + 1;
-            p->best = (uint16_t)store_best_time(pc->first + i);
-            p->fewest = store_fewest_mistakes(pc->first + i);
-            p->solves = store_solve_count(pc->first + i);
-        }
-    }
-}
-
-/* "1.4", or "-" when nothing is known */
-static void fmt_avg_mistakes(char *buf, size_t n, const level_stat_t *st)
-{
-    if (!st->known) {
-        snprintf(buf, n, "-");
-        return;
-    }
-    uint32_t x10 = (st->miss_sum * 10 + st->known / 2) / st->known;
-    snprintf(buf, n, "%lu.%lu", (unsigned long)(x10 / 10), (unsigned long)(x10 % 10));
-}
-
-static void fmt_stat_times(char *fast, char *avg, size_t n, const level_stat_t *st)
+/**
+ * @brief A level's fastest and average time as text ("-" for both when nothing is solved).
+ * @param fast  gets the fastest
+ * @param avg   gets the average
+ * @param n     their size
+ * @param st    the level
+ */
+static void fmt_stat_times(char *fast, char *avg, size_t n, const stats_level_t *st)
 {
     if (st->solved) {
         fmt_time(fast, n, st->fastest);
@@ -101,17 +67,29 @@ static void fmt_stat_times(char *fast, char *avg, size_t n, const level_stat_t *
     }
 }
 
-static void stats_summary(const level_stat_t *st, uint16_t count)
+/**
+ * @brief The summary's two lines: solved of how many, without mistakes, solves; fastest, average,
+ *        mistakes per puzzle.
+ * @param st     the level (or all of them)
+ * @param count  its puzzles
+ */
+static void stats_summary(const stats_level_t *st, uint16_t count)
 {
     char f[16], a[16], m[16];
     fmt_stat_times(f, a, sizeof(f), st);
-    fmt_avg_mistakes(m, sizeof(m), st);
+    statistics_avg_mistakes(m, sizeof(m), st);
     lv_label_set_text_fmt(x_sum1, "Solved %u of %u   -   %u without mistakes   -   %lu solves",
                           (unsigned)st->solved, (unsigned)count, (unsigned)st->perfect,
                           (unsigned long)st->solves);
     lv_label_set_text_fmt(x_sum2, "Fastest %s   -   average %s   -   mistakes %s per puzzle", f, a, m);
 }
 
+/**
+ * @brief The table's columns: their number, widths and headings.
+ * @param n     how many
+ * @param w     their widths
+ * @param head  their headings
+ */
 static void table_columns(int n, const int32_t *w, const char *const *head)
 {
     lv_table_set_column_count(x_table, n);
@@ -121,7 +99,12 @@ static void table_columns(int n, const int32_t *w, const char *const *head)
     }
 }
 
-/* a player's avatar (an image) or, without one, a dot of their colour; not tappable */
+/**
+ * @brief A player's avatar (an image) or, without one, a dot of their colour; not tappable.
+ * @param parent  where
+ * @param pl      the player (NULL: the first colour's dot)
+ * @return it
+ */
 static lv_obj_t *player_avatar_obj(lv_obj_t *parent, const stats_player_t *pl)
 {
     lv_obj_t *o;
@@ -137,6 +120,10 @@ static lv_obj_t *player_avatar_obj(lv_obj_t *parent, const stats_player_t *pl)
     lv_obj_set_clickable(o, false);
     return o;
 }
+/**
+ * @brief The player dropdown: everyone from sudoku.db (else who plays, alone), the closed box
+ *        showing who plays now with their avatar (or the person icon); not tappable with one player.
+ */
 void stats_player_dd_update(void)
 {
     if (!x_player_dd) {
@@ -180,8 +167,12 @@ void stats_player_dd_update(void)
     lv_obj_set_state(x_player_dd, LV_STATE_DISABLED, !db || players_count() < 2);
 }
 
-/* the open list's avatars (or dots), each left of its name. Drawn after the list (DRAW_POST, after the
- * dropdown's own: the selected line's highlight is drawn then too, and would cover children). */
+/**
+ * @brief The open list's avatars (or dots), each left of its name. Drawn after the list (DRAW_POST,
+ *        after the dropdown's own: the selected line's highlight is drawn then too, and would cover
+ *        children).
+ * @param e  the draw event
+ */
 static void stats_player_list_draw_cb(lv_event_t *e)
 {
     if (!(is_stats_db_ready() && players_count() > 0)) {
@@ -214,6 +205,10 @@ static void stats_player_list_draw_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief A player picked: switch to them (the statistics reload when the switch is done).
+ * @param e  the event
+ */
 static void stats_player_dd_cb(lv_event_t *e)
 {
     uint32_t i = lv_dropdown_get_selected(x_player_dd);
@@ -222,35 +217,23 @@ static void stats_player_dd_cb(lv_event_t *e)
     }
 }
 
-static stats_view_t *x_view_p;           /* PSRAM (internal RAM is tight): the view shown */
+/** @brief Marks the row picked in the list. */
 static void stats_select_rows(void)
 {
     for (int r = 0; r < X_ROWS; r++) {
-        bool sel = r == x_sel;
+        bool sel = r == statistics_sel();
         lv_obj_set_state(x_btn[r], LV_STATE_CHECKED, sel);
         lv_obj_set_style_text_color(x_name_lbl[r], sel ? lv_color_white() : C_TEXT, 0);
         lv_obj_set_style_text_color(x_cnt_lbl[r], sel ? lv_color_white() : C_MUTED, 0);
     }
 }
 
-/* a kind's four levels added up (fastest: the lowest) */
-static void kind_total(const stats_view_t *v, int k, stats_level_t *t)
-{
-    memset(t, 0, sizeof(*t));
-    for (int l = 0; l < GEN_LEVELS; l++) {
-        const stats_level_t *x = &v->kinds[k][l];
-        t->solved += x->solved;
-        t->perfect += x->perfect;
-        t->known += x->known;
-        t->solves += x->solves;
-        t->time_sum += x->time_sum;
-        t->miss_sum += x->miss_sum;
-        if (x->fastest && (!t->fastest || x->fastest < t->fastest)) {
-            t->fastest = x->fastest;
-        }
-    }
-}
-
+/**
+ * @brief Shows a view: the list's counts, the dropdown, the title, the summary, and the table (a row
+ *        per level for all levels or a kind; a row per solved puzzle for a collection) or the chart.
+ * @param v        the view
+ * @param from_db  it came from sudoku.db (else from RAM)
+ */
 static void render_stats(const stats_view_t *v, bool from_db)
 {
     chart_render(v, from_db);
@@ -261,12 +244,11 @@ static void render_stats(const stats_view_t *v, bool from_db)
     lv_label_set_text_fmt(x_cnt_lbl[0], "%u/%u", (unsigned)v->total.solved, (unsigned)PUZZLE_COUNT);
     stats_level_t kt[KIND_COUNT];
     for (int k = 0; k < KIND_COUNT; k++) {          /* kinds made on the board: puzzles solved */
-        kind_total(v, k, &kt[k]);
+        statistics_kind_total(v, k, &kt[k]);
         lv_label_set_text_fmt(x_cnt_lbl[1 + PUZZLE_COLLECTION_COUNT + k], "%u", (unsigned)kt[k].solved);
     }
     stats_player_dd_update();
     stats_select_rows();
-    x_from_db = from_db;
 
     char f[16], a[16], m[16];
     lv_obj_scroll_to_y(x_table, 0, LV_ANIM_OFF);
@@ -280,9 +262,9 @@ static void render_stats(const stats_view_t *v, bool from_db)
         table_columns(5, w, h);
         for (int c = 0; c < PUZZLE_COLLECTION_COUNT + KIND_COUNT; c++) {   /* collections, then kinds */
             bool coll = c < PUZZLE_COLLECTION_COUNT;
-            const level_stat_t *st = coll ? &v->levels[c] : &kt[c - PUZZLE_COLLECTION_COUNT];
+            const stats_level_t *st = coll ? &v->levels[c] : &kt[c - PUZZLE_COLLECTION_COUNT];
             fmt_stat_times(f, a, sizeof(f), st);
-            fmt_avg_mistakes(m, sizeof(m), st);
+            statistics_avg_mistakes(m, sizeof(m), st);
             lv_table_set_cell_value(x_table, c + 1, 0, coll ? puzzle_collection(c)->name
                                     : stats_kind_name(c - PUZZLE_COLLECTION_COUNT));
             lv_table_set_cell_value_fmt(x_table, c + 1, 1, "%u", (unsigned)st->solved);
@@ -298,9 +280,9 @@ static void render_stats(const stats_view_t *v, bool from_db)
     if (v->level >= PUZZLE_COLLECTION_COUNT) {     /* a kind made on the board: one row per level */
         int k = v->level - PUZZLE_COLLECTION_COUNT;
         lv_label_set_text(x_title, stats_kind_name(k));
-        const level_stat_t *t = &kt[k];
+        const stats_level_t *t = &kt[k];
         fmt_stat_times(f, a, sizeof(f), t);
-        fmt_avg_mistakes(m, sizeof(m), t);
+        statistics_avg_mistakes(m, sizeof(m), t);
         lv_label_set_text_fmt(x_sum1, "Solved %u puzzle%s   -   %u without mistakes   -   %lu solves",
                               (unsigned)t->solved, t->solved == 1 ? "" : "s", (unsigned)t->perfect,
                               (unsigned long)t->solves);
@@ -310,9 +292,9 @@ static void render_stats(const stats_view_t *v, bool from_db)
         lv_table_set_row_count(x_table, GEN_LEVELS + 1);
         table_columns(5, w, h);
         for (int l = 0; l < GEN_LEVELS; l++) {
-            const level_stat_t *st = &v->kinds[k][l];
+            const stats_level_t *st = &v->kinds[k][l];
             fmt_stat_times(f, a, sizeof(f), st);
-            fmt_avg_mistakes(m, sizeof(m), st);
+            statistics_avg_mistakes(m, sizeof(m), st);
             lv_table_set_cell_value(x_table, l + 1, 0, gen_level_name(l));
             lv_table_set_cell_value_fmt(x_table, l + 1, 1, "%u", (unsigned)st->solved);
             lv_table_set_cell_value(x_table, l + 1, 2, f);
@@ -351,29 +333,16 @@ static void render_stats(const stats_view_t *v, bool from_db)
     lv_obj_set_hidden(x_empty, x_chart_mode || v->n_puzzles != 0);
 }
 
-/* a scale step that gives at most 5 lines up to max seconds */
-static uint32_t chart_step(uint32_t max)
-{
-    static const uint32_t STEPS[] = {30, 60, 120, 300, 600, 900, 1200, 1800, 3600, 7200};
-    for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); i++) {
-        if (max <= STEPS[i] * 5) {
-            return STEPS[i];
-        }
-    }
-    return (max / 5 / 3600 + 1) * 3600;
-}
-
-/* trailing average of up to AVG_WIN solves ending at i */
-static uint32_t chart_avg(const stats_view_t *v, int i)
-{
-    int from = i - AVG_WIN + 1 < 0 ? 0 : i - AVG_WIN + 1;
-    uint32_t sum = 0;
-    for (int k = from; k <= i; k++) {
-        sum += v->recent[k];
-    }
-    return sum / (uint32_t)(i - from + 1);
-}
-
+/**
+ * @brief Text on the plot.
+ * @param layer  where
+ * @param text   the text (copied)
+ * @param color  its colour
+ * @param x1     its box's left
+ * @param y1     its top
+ * @param x2     its right
+ * @param align  in the box
+ */
 static void plot_text(lv_layer_t *layer, const char *text, lv_color_t color, int x1, int y1, int x2,
                       lv_text_align_t align)
 {
@@ -388,6 +357,17 @@ static void plot_text(lv_layer_t *layer, const char *text, lv_color_t color, int
     lv_draw_label(layer, &d, &a);
 }
 
+/**
+ * @brief A line on the plot, round-ended.
+ * @param layer  where
+ * @param x1     from x
+ * @param y1     from y
+ * @param x2     to x
+ * @param y2     to y
+ * @param color  its colour
+ * @param width  its width
+ * @param opa    its opacity
+ */
 static void plot_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, lv_color_t color, int width, lv_opa_t opa)
 {
     lv_draw_line_dsc_t d;
@@ -403,6 +383,14 @@ static void plot_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, lv_colo
     lv_draw_line(layer, &d);
 }
 
+/**
+ * @brief A dot on the plot.
+ * @param layer  where
+ * @param x      its centre
+ * @param y      ...
+ * @param r      its radius
+ * @param color  its colour
+ */
 static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color)
 {
     lv_draw_rect_dsc_t d;
@@ -414,9 +402,14 @@ static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color)
     lv_draw_rect(layer, &d, &a);
 }
 
+/**
+ * @brief Draws the progress chart: the time scale, a dot per solve joined by a faint line, the
+ *        average of the last AVG_WIN on top, and the legend.
+ * @param e  the draw event
+ */
 static void plot_draw_cb(lv_event_t *e)
 {
-    const stats_view_t *v = &(*x_view_p);
+    const stats_view_t *v = statistics_view();
     if (v->n_recent < 2) {
         return;
     }
@@ -430,7 +423,7 @@ static void plot_draw_cb(lv_event_t *e)
             max = v->recent[i];
         }
     }
-    uint32_t step = chart_step(max), lines = (max + step - 1) / step, top_s = lines * step;
+    uint32_t step = statistics_chart_step(max), lines = (max + step - 1) / step, top_s = lines * step;
     if (!top_s) {
         top_s = step;
     }
@@ -463,7 +456,7 @@ static void plot_draw_cb(lv_event_t *e)
     }
     for (int i = 0; i < n; i++) {
         int x = left + (right - left) * i / (n - 1);
-        int y = bottom - (int)((int64_t)(bottom - top) * chart_avg(v, i) / top_s);
+        int y = bottom - (int)((int64_t)(bottom - top) * statistics_chart_avg(v, i) / top_s);
         if (i) {
             plot_line(layer, ax, ay, x, y, C_ORANGE, 4, LV_OPA_COVER);
         }
@@ -479,6 +472,12 @@ static void plot_draw_cb(lv_event_t *e)
     plot_text(layer, "Average of the last 5", C_MUTED, left + 186, ly, right, LV_TEXT_ALIGN_LEFT);
 }
 
+/**
+ * @brief The chart (or table) shown, and the text under the chart: how many solves, the fastest, and
+ *        the newest 5 against the first 5 (or why there's no chart).
+ * @param v        the view
+ * @param from_db  it came from sudoku.db
+ */
 static void chart_render(const stats_view_t *v, bool from_db)
 {
     lv_obj_set_hidden(x_chart, !x_chart_mode);
@@ -496,27 +495,15 @@ static void chart_render(const stats_view_t *v, bool from_db)
         snprintf(text, sizeof(text), "Solve at least two puzzles%s to see a chart.",
                  v->level < 0 ? "" : " at this level");
     } else {
-        uint32_t fastest = 0xFFFFFFFF;
-        for (int i = 0; i < n; i++) {
-            if (v->recent[i] < fastest) {
-                fastest = v->recent[i];
-            }
-        }
         char f[16], a1[16], a2[16];
-        fmt_time(f, sizeof(f), fastest);
+        fmt_time(f, sizeof(f), statistics_fastest(v));
         int len = snprintf(text, sizeof(text), "Your last %d solve%s%s, oldest on the left. Fastest %s.", n,
                            n == 1 ? "" : "s", v->level < 0 ? "" : " at this level", f);
-        if (n >= 2 * AVG_WIN) {                         /* newest 5 against the first 5 shown */
-            uint32_t first = 0, last = 0;
-            for (int i = 0; i < AVG_WIN; i++) {
-                first += v->recent[i];
-                last += v->recent[n - AVG_WIN + i];
-            }
-            first /= AVG_WIN;
-            last /= AVG_WIN;
+        uint32_t first, last;
+        int pct;
+        if (statistics_trend(v, &first, &last, &pct)) {   /* newest 5 against the first 5 shown */
             fmt_time(a1, sizeof(a1), first);
             fmt_time(a2, sizeof(a2), last);
-            int pct = first ? (int)(((int64_t)first - (int64_t)last) * 100 / (int64_t)first) : 0;
             if (pct > 0) {
                 snprintf(text + len, sizeof(text) - len, "\nThe newest 5 average %s, the first 5 %s: "
                          "%d%% faster.", a2, a1, pct);
@@ -533,13 +520,20 @@ static void chart_render(const stats_view_t *v, bool from_db)
     lv_obj_invalidate(x_plot);
 }
 
+/**
+ * @brief Chart / Table: the other one.
+ * @param e  the event
+ */
 static void chart_btn_cb(lv_event_t *e)
 {
     x_chart_mode = !x_chart_mode;
-    render_stats(&(*x_view_p), x_from_db);
+    render_stats(statistics_view(), is_statistics_from_db());
 }
 
-/* the (i) button next to the title: what the numbers mean */
+/**
+ * @brief The (i) button: what the numbers mean, and where they come from.
+ * @param e  the event
+ */
 static void stats_info_cb(lv_event_t *e)
 {
     static char text[640];
@@ -550,7 +544,7 @@ static void stats_info_cb(lv_event_t *e)
              "solved. \"-\" means mistakes weren't counted yet when it was solved.\n\n"
              "Per level: puzzles solved, the fastest and the average of the best times, and the "
              "average of the fewest mistakes.",
-             x_from_db ? "These are the statistics of the player chosen at the top right, from sudoku.db "
+             is_statistics_from_db() ? "These are the statistics of the player chosen at the top right, from sudoku.db "
              "on the microSD card."
              : "No sudoku.db: insert a FAT32 microSD card before switching on to keep statistics. "
              "This shows what the board has in memory.");
@@ -559,26 +553,30 @@ static void stats_info_cb(lv_event_t *e)
     msgbox_button(m, "OK", mbox_close_cb, true);
 }
 
-/* Asks sudoku.db for the selected view (drawn when the answer arrives, see
- * sd_poll_cb); without the database, draws from RAM at once. */
+/** @brief Asks sudoku.db for the row picked's view (drawn when the answer arrives: stats_take_view());
+ *         without the database, draws it from RAM at once. */
 void refresh_stats(void)
 {
     stats_select_rows();
-    if (is_stats_db_ready()) {
-        stats_db_query(x_sel - 1);
-    } else {
-        view_from_ram(x_sel - 1, &(*x_view_p));
-        render_stats(&(*x_view_p), false);
+    if (!statistics_ask()) {
+        render_stats(statistics_view(), false);
     }
 }
 
+/**
+ * @brief A row of the list: its statistics.
+ * @param e  the event (user data: the row)
+ */
 static void stats_row_cb(lv_event_t *e)
 {
-    x_sel = (int)(intptr_t)lv_event_get_user_data(e);
+    statistics_select((int)(intptr_t)lv_event_get_user_data(e));
     refresh_stats();
 }
 
-/* header row in muted text on a darker band; numbers right-aligned */
+/**
+ * @brief The table's look: the header row in muted text on a darker band; numbers right-aligned.
+ * @param e  the draw task event
+ */
 static void stats_table_draw_cb(lv_event_t *e)
 {
     lv_draw_task_t *t = lv_event_get_draw_task(e);
@@ -601,6 +599,7 @@ static void stats_table_draw_cb(lv_event_t *e)
     }
 }
 
+/** @brief Builds the screen: Home, the title, (i), the list, the player dropdown, Insights, Chart, the summary, the table and the chart. */
 void build_stats(void)
 {
     screen_set_stats(make_screen());
@@ -715,14 +714,15 @@ void build_stats(void)
 
 }
 
-/* sudoku.db's results (Settings' card poll hands them over) */
+/**
+ * @brief sudoku.db's answer for the row picked, shown (Settings' card poll hands it over).
+ * @param v  the view
+ */
 void stats_take_view(const stats_view_t *v)
 {
-    *x_view_p = *v;
-    render_stats(x_view_p, true);
+    statistics_take(v);
+    render_stats(statistics_view(), true);
 }
 
-/* ---- accessors: the other UI files reach this file's state through these */
-int stats_sel(void) { return x_sel; }
-const stats_view_t *stats_view_p(void) { return x_view_p; }
-void stats_set_view_p(stats_view_t *v) { x_view_p = v; }
+
+/** @} */
