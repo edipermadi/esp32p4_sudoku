@@ -164,7 +164,15 @@ src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
 src/ui_wifi.c           Wi-Fi screen: networks, password keyboard
-src/ui_file.c           Files screen: browse, rename and delete on the card; sudoku.db protected; puzzle file preview + Import
+src/ui_file.c           Files screen: the page around its parts, the poll, shared widgets (ui_file_part.h)
+src/ui_file_list.c      its list, path, count; Refresh, Up, Empty; a tap on a row
+src/ui_file_dialog.c    its dialog: rename, delete into the Recycle bin, delete for good, empty the bin
+src/ui_file_preview.c   its puzzle file preview + Import
+src/files_core.h        what Files does on the card, without LVGL (a header for the four parts below)
+src/files_folder.c      the folder shown, reading it (a worker task), its entries
+src/files_names.c       protected names, a new name checked, rename, sizes, file types
+src/files_trash.c       the Recycle bin: trash, restore, delete for good (a task)
+src/files_preview.c     a puzzle file read, its puzzles parsed
 src/gibberlink.cpp      remote control by sound: ES7210 mics -> ggwave -> devctl commands, replies by sound
 src/ggwave/             ggwave 060aec7 (MIT), data over sound, vendored unchanged
 src/ui_media_view.c        the Files viewer: JPEG (hardware decoder), MP4 (tinyh264), full screen
