@@ -834,7 +834,7 @@ int home_nitems(void);
 void home_set_nitems(int v);
 lv_obj_t *list_new_btn(void);
 void list_star_cb(lv_event_t *e);       /**< ... toggles that */
-/* ui_sudoku.c */
+/* ui_saver.c */
 lv_obj_t *ui_saver(void);
 /* what's using the microSD card (or the generator) right now (sudoku_ui_io_busy) */
 bool is_screenshot_busy(void);

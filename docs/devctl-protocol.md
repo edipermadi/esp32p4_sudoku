@@ -66,6 +66,7 @@ Coordinates are screen pixels, 0–719, from the top left. Values outside are cl
 | `fill <cell> <digit> ...` | Enters digits in the game on screen as if typed: cells 0–80 row by row, digits 1–9; the numbers after `fill` are taken in pairs, any separators (`fill 12:5 13:7`, `fill (12,5),(13,7)`). All or nothing. Answers `OK fill <entered>` or `ERR fill: <why>`. Up to 81 pairs (lines up to 511 characters). |
 | `pz <id> <i>/<n> <part>` | A part of a puzzle sent by sound (Share → Send by sound; also over serial, for testing): `id` 2 hex digits shared by the parts, `part` up to 110 characters of the puzzle's line. Answers `OK pz <have>/<n>`, then `OK pz done` when the last is in (the puzzle is checked, kept in Puzzles → Saved → Received and offered to play), or `ERR pz: ...`. Over sound it gets no answer, so the next part isn't missed. |
 | `screenoff` | Turns the screen off as its timeout does: black, with the lock screen under it if that's on. The next tap wakes it. |
+| `bench [n]` | Redraws the whole screen shown `n` times (default 30): `BENCH <n> frames: avg <us> us, min <us> us, max <us> us (<fps> fps)`, then `OK bench`. |
 | `shot` | A screenshot (below). |
 
 Every release is followed by 150 ms of UI time before the `OK`, so the tap's effect has started. Use `wait` for anything slower, such as a screen change with an animation (about 400 ms) or a database query.

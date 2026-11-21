@@ -95,7 +95,7 @@ Most take well under a second. The slow ones (seconds) are the variants whose ru
 
 ## The UI files
 
-The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `ui_sudoku.c` for start-up and the public functions. A function stays `static` in its file unless another file calls it; then it is declared once in `src/ui_internal.h` and defined, without `static`, in its file. Macros and types are all in `ui_internal.h`. When a new screen needs a function from another file, move its declaration there rather than copying it.
+The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `ui_sudoku.c` for start-up; the public functions (`ui_sudoku.h`) are in `ui_notice.c` (notices), `ui_saver.c` (the screen saver), `ui_remote.c` (what devctl asks) and the screens' own files. A function stays `static` in its file unless another file calls it; then it is declared once in `src/ui_internal.h` and defined, without `static`, in its file. Macros and types are all in `ui_internal.h`. When a new screen needs a function from another file, move its declaration there rather than copying it.
 
 Variables are always `static`: only the file that owns one touches it, and the other files call that file's accessors, declared in `ui_internal.h` under each owner. The game's state (`g_*`) belongs to `ui_game.c`, so `ui_hints.c` reads `game_sel()` and writes `game_set_sel(i)`; a screen's widget is `screen_home()`. An accessor of an array or a struct gives a `const` pointer (`game_given()[i]`, `game_b()->val[i]`), so the compiler rejects a write from another file. A change another file needs to make is a function in the owner (`game_put_value`, `players_take`, `stats_take_view`). Add an accessor only when another file needs it.
 
@@ -203,6 +203,8 @@ src/gibberlink.cpp      remote control by sound: ES7210 mics -> ggwave -> devctl
 src/ggwave/             ggwave 060aec7 (MIT), data over sound, vendored unchanged
 src/ui_media_view.c        the Files viewer: JPEG (hardware decoder), MP4 (tinyh264), full screen
 src/mp4_reader.c        MP4 index reader for the viewer: frame offsets, times, key frames, SPS/PPS
+src/mp4_writer.c        MP4 writer for replay export: H.264 frames in, the index (moov) written at the end
+src/video_enc.c         RGB888 frames -> the hardware H.264 encoder (colours converted by the PPA) -> mp4_writer
 src/ui_sysmon.c         system monitor screen: the frame around its tabs, the refresh, the history timer (ui_sysmon_tab.h lists the tab files)
 src/ui_sysmon_system.c   System monitor > System: chip, uptime, temperature, CPU load, network; CPU, temperature and Wi-Fi graphs
 src/ui_sysmon_memory.c   System monitor > Memory: internal RAM, PSRAM, DMA; the free RAM graph

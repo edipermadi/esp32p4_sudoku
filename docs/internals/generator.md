@@ -68,21 +68,21 @@ Public entry points built on it:
 
 ## Grading: a solver that thinks like a person
 
-The exact search says *whether* a puzzle has one solution but not *how hard* it is. Grading uses a second solver, `logic_t`, which keeps a candidate bitmask per cell and only makes deductions a person can make. `technique_tier()` runs it until the puzzle is solved or stuck:
+The exact search says *whether* a puzzle has one solution but not *how hard* it is. Grading uses a second solver, `logic_t`, which keeps a candidate bitmask per cell and only makes deductions a person can make. `gen_technique_tier()` runs it until the puzzle is solved or stuck:
 
 1. **Singles** (naked and hidden), repeated as long as they place digits.
 2. **The variant's own logic**, which counts as "simple" too. Each step removes candidates and is traced, so hints can explain it:
 
    | Function | Variants | What it uses |
    |---|---|---|
-   | `cage_logic` | Killer | cage sums |
-   | `consec_logic` | Consecutive, Non-Consecutive | bars |
-   | `thermo_logic` | Thermo, Arrow, Renban, Whispers | thermometers and lines |
-   | `sandwich_logic` | Sandwich | where the 1 and 9 can be |
-   | `edge_logic` | Kropki, XV, Greater-Than | marks |
-   | `quad_logic` | Quadruple | circles |
-   | `sky_logic` | Skyscraper | every order of a nearly full line's missing digits |
-   | `lk_logic` | Little Killer | the range a diagonal's other cells allow |
+   | `gen_cage_logic` | Killer | cage sums |
+   | `gen_consec_logic` | Consecutive, Non-Consecutive | bars |
+   | `gen_thermo_logic` | Thermo, Arrow, Renban, Whispers | thermometers and lines |
+   | `gen_sandwich_logic` | Sandwich | where the 1 and 9 can be |
+   | `gen_edge_logic` | Kropki, XV, Greater-Than | marks |
+   | `gen_quad_logic` | Quadruple | circles |
+   | `gen_sky_logic` | Skyscraper | every order of a nearly full line's missing digits |
+   | `gen_lk_logic` | Little Killer | the range a diagonal's other cells allow |
 
 3. **Locked candidates** (pointing and claiming) and **naked and hidden pairs**: needing any of these makes the puzzle tier 2.
 4. Still stuck: **tier 3**.
@@ -91,7 +91,7 @@ The exact search says *whether* a puzzle has one solution but not *how hard* it 
 
 | Level | Rule |
 |---|---|
-| **Easy** | tier 1, and at least `easy_min_clues()` givens (36 for Classic; fewer where the variant's clues carry information, e.g. Killer 8, Kropki 14, Sandwich 24) |
+| **Easy** | tier 1, and at least `gen_easy_min_clues()` givens (36 for Classic; fewer where the variant's clues carry information, e.g. Killer 8, Kropki 14, Sandwich 24) |
 | **Medium** | tier 1, fewer givens |
 | **Hard** | tier 2 |
 | **Expert** | tier 3: needs more than pairs (triples, X-Wing, Swordfish, XY-Wing, or trial and error) |
@@ -113,7 +113,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
 
 ### 1. A full grid, and the variant's clues
 
-- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Disjoint, Asterisk): `random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and Non-Consecutive sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
+- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Disjoint, Asterisk): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and Non-Consecutive sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
 - **Jigsaw**: `jigsaw_map()` reshapes the 3×3 boxes by swapping cells across region borders while every region stays in one piece. A new shape is made every 4 attempts; one that won't fill quickly is dropped.
 - **Variants with clues**: a random **Classic** grid first, then clues that are true of it, so the solution is known to fit:
 

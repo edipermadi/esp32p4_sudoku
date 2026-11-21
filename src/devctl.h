@@ -52,6 +52,8 @@ extern "C" {
  *                             (an MP4 export, a screenshot, Files, a firmware update, formatting,
  *                             the USB drive, sudoku.db's worker) or a name doesn't match.
  *                             A full-screen "Benchmarking" panel blocks the screen while it runs
+ *   bench [n]                 n full-screen redraws of the screen shown (default 30) -> "BENCH <n> frames:
+ *                             avg <us> us, min <us> us, max <us> us (<fps> fps)"
  *   shot                      the screen, as lines (below)
  *
  * Files on the microSD card (paths from its root, %XX for spaces):
