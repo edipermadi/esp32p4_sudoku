@@ -784,8 +784,8 @@ esp_err_t sudoku_ui_start(void)
         lv_indev_add_event_cb(in, touch_sound_cb, LV_EVENT_PRESSED, NULL);
     }
     tz_apply(store_timezone());
-    list_set_coll(store_last_collection());
-    list_set_tab(coll_tab(list_coll()));
+    puzzles_set_coll(store_last_collection());
+    puzzles_set_tab(coll_tab(puzzles_coll()));
     ui_set_sleep_min(store_screen_timeout_min());
     apply_theme(is_store_dark_mode());
     lv_obj_delete(splash);

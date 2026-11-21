@@ -283,8 +283,8 @@ void apply_loaded_prefs(void)
     bsp_display_brightness_set(effective_brightness());
     tz_apply(store_timezone());
     ui_set_sleep_min(store_screen_timeout_min());
-    list_set_coll(store_last_collection());
-    list_set_tab(coll_tab(list_coll()));
+    puzzles_set_coll(store_last_collection());
+    puzzles_set_tab(coll_tab(puzzles_coll()));
     night_forget();                                    /* (re-checked just below, from these settings) */
     apply_theme(is_store_dark_mode());                    /* redraws every screen with it */
     night_check(NULL);

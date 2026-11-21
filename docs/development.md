@@ -120,7 +120,17 @@ src/ui_replay_export.c  a replay exported as an MP4: the invisible display, the 
 src/ui_screenshot.c     the camera buttons: the screen as a JPEG on the card
 src/ui_insights.c       mistake insights (Statistics)
 src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle
-src/ui_list.c           the Puzzles screen
+src/ui_list.c           Puzzles: the screen, tabs, collection column, panel, grid of numbers (ui_list_part.h)
+src/ui_list_rows.c      its rows: a saved or imported collection's puzzles
+src/ui_list_starred.c   its Starred: the bookmarks
+src/ui_list_manage.c    its Export and Delete of a collection
+src/ui_home_menu.c      Home's menu layout: a column, a grid, or pages
+src/collections.h       the collections as data (declarations; defined in ui_common.c, ui_game_tools.c)
+src/puzzles_core.h      Puzzles without LVGL (a header for the four parts below)
+src/puzzles_select.c    the tab, the collection shown, Starred
+src/puzzles_solved.c    solved counts, the panel's numbers
+src/puzzles_starred.c   the starred puzzles
+src/puzzles_colls.c     delete or export a collection, take a puzzle out
 src/ui_home.c           Home: the week, Continue and unfinished games, the menu
 src/ui_stats.c          Statistics and the progress chart
 src/statistics_core.c   Statistics' data without LVGL: the row picked, the view (sudoku.db or RAM), totals, the chart's numbers

@@ -28,6 +28,8 @@
 #include "stats_db.h"
 #include "gameplays_core.h"
 #include "statistics_core.h"
+#include "collections.h"
+#include "puzzles_core.h"
 #include "usb_msc.h"
 #include "generator.h"
 #include "esp_random.h"
@@ -374,9 +376,7 @@ enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
 /* ui_common.c */
 const gen_cache_t *ui_gen_cache(void);
 void ui_set_gen_cache(gen_cache_t *v);
-int ui_nimports(void);
 const palette_t *ui_palette_dark(void);
-const stats_saved_t *ui_saved(void);
 /* ui_game.c */
 bool is_game_attack(void);
 void game_set_attack(bool v);
@@ -454,7 +454,6 @@ int attack_solved(void);
 void attack_set_solved(int v);
 uint32_t attack_used_ms(void);
 void attack_set_used_ms(uint32_t v);
-int ui_nsaved(void);
 void ui_set_nsaved(int v);
 /* ui_hints.c */
 const uint8_t *hint_mark(void);
@@ -473,13 +472,8 @@ int home_menu_grid(void);
 void home_set_menu_grid(int v);
 int home_nitems(void);
 void home_set_nitems(int v);
-int list_coll(void);
-void list_set_coll(int v);
 lv_obj_t *list_new_btn(void);
-bool is_list_starred(void);                /* the right pane shows the starred puzzles */
 void list_star_cb(lv_event_t *e);       /* ... toggles that */
-int list_tab(void);
-void list_set_tab(int v);
 /* ui_sudoku.c */
 lv_obj_t *ui_saver(void);
 /* what's using the microSD card (or the generator) right now (sudoku_ui_io_busy) */
@@ -549,21 +543,8 @@ uint16_t gen_ram_take(void);
 void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages, const char *marks, const char *thermos, const char *day);
 void gen_cache_source(uint16_t id, const char *source, int number);
 bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12]);
-bool gen_lookup(uint16_t id, uint8_t *givens, int *variant, int *level);
 const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant);
 bool puzzle_get(uint16_t id, uint8_t cells[81]);
-int import_of(uint16_t id, int *number);
-int coll_total(void);
-int coll_saved_index(int c);
-int coll_tab(int c);
-const char *coll_name(int c);
-uint16_t coll_first(int c);
-int coll_size(int c);
-uint16_t coll_puzzle(int c, int i);
-int coll_find(int c, uint16_t id);
-int coll_of(uint16_t id);
-void imports_reload(void);
-void puzzle_name(uint16_t id, char *buf, size_t n);
 lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *text, const lv_font_t *font, lv_event_cb_t cb, void *user);
 lv_obj_t *make_screen(void);
 lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color);

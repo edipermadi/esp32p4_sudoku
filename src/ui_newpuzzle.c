@@ -1159,7 +1159,7 @@ void new_menu_cb(lv_event_t *e)
         {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
         {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
         {
-            is_list_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, is_list_starred() ? "All puzzles" : "Starred puzzles",
+            is_puzzles_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, is_puzzles_starred() ? "All puzzles" : "Starred puzzles",
             list_star_cb
         },                                      /* the starred ones in the right pane, or back */
     };
