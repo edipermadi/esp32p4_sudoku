@@ -11,6 +11,7 @@
 
 /**
  * @defgroup trophies_core Trophies core
+ * @ingroup topic_trophies
  * @brief What the Trophies screen (ui_trophies.c) shows, apart from drawing it: a .c / .h per part.
  *
  * | Files                   | Part |

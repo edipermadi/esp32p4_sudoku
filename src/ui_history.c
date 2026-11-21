@@ -9,6 +9,7 @@
 
 /**
  * @defgroup ui_history History screen
+ * @ingroup topic_history
  * @brief The History screen: the calendar and a day's games (Gameplays: ui_gameplays.c).
  * @{
  */

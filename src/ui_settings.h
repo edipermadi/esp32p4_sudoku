@@ -10,6 +10,7 @@
 
 /**
  * @defgroup settings Settings screen
+ * @ingroup topic_settings
  * @brief The Settings screen: a tab bar over five tabs, a file per tab.
  *
  * | File                  | What's in it |

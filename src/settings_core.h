@@ -11,6 +11,7 @@
 
 /**
  * @defgroup settings_core Settings core
+ * @ingroup topic_settings
  * @brief What the Settings screen does to the board, without LVGL: a .c / .h per part.
  *
  * | Files             | Part |

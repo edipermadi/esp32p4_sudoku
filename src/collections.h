@@ -16,6 +16,7 @@ extern "C" {
 
 /**
  * @defgroup collections Collections
+ * @ingroup topic_puzzles
  * @brief The collections, in the order the Puzzles screen lists them: the built-in ones
  *        (PUZZLE_COLLECTION_COUNT), then the ones imported from the card, then the player's saved
  *        ones (sudoku.db). The built-in and imported ones are runs of puzzle ids.

@@ -14,6 +14,7 @@ extern "C" {
 
 /**
  * @defgroup history_core History core
+ * @ingroup topic_history
  * @brief What the History screen shows, apart from drawing it: which month is asked for, how many
  *        games each of its days had, the day picked and its games, from sudoku.db.
  *

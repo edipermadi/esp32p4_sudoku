@@ -11,6 +11,7 @@
 
 /**
  * @defgroup puzzles_core Puzzles core
+ * @ingroup topic_puzzles
  * @brief What the Puzzles screen shows and does, apart from drawing it (the collections themselves:
  *        @ref collections).
  *

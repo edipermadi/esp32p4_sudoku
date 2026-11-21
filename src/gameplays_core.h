@@ -11,6 +11,7 @@
 
 /**
  * @defgroup gameplays_core Gameplays and Replay core
+ * @ingroup topic_gameplays
  * @brief What the Gameplays list and the Replay screen show and do, apart from drawing it.
  *
  * | Files                   | Part |

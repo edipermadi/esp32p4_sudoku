@@ -13,6 +13,7 @@ extern "C" {
 
 /**
  * @defgroup ui_file Files screen
+ * @ingroup topic_files
  * @brief The microSD card's folders and files, with their size and date (Home > Files).
  *
  * Tap a folder to open it; each row has Rename (on-screen keyboard) and Delete (asks first; into

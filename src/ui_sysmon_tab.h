@@ -18,6 +18,7 @@ extern "C" {
 
 /**
  * @defgroup ui_sysmon System monitor screen
+ * @ingroup topic_sysmon
  * @brief The system monitor (Home > System): a tab bar over five tabs, a file per tab.
  *
  * | File                 | What's in it |

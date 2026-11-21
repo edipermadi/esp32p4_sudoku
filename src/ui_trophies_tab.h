@@ -17,6 +17,7 @@ extern "C" {
 
 /**
  * @defgroup ui_trophies Trophies screen
+ * @ingroup topic_trophies
  * @brief Trophies (Home > Trophies): a tab bar over four tabs, a file per tab.
  *
  * | File                        | What's in it |

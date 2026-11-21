@@ -1,0 +1,47 @@
+/**
+ * @file topics.dox
+ * @brief The documentation's topics: each screen's UI and core under a common one (Doxygen only, not
+ *        built).
+ */
+
+/**
+ * @defgroup topic_settings Settings
+ * @brief Settings: the screen (@ref settings) and what it does on the board (@ref settings_core).
+ */
+
+/**
+ * @defgroup topic_sysmon System monitor
+ * @brief The system monitor: the screen (@ref ui_sysmon) and its numbers (@ref sysmon_core).
+ */
+
+/**
+ * @defgroup topic_trophies Trophies
+ * @brief Trophies: the screen (@ref ui_trophies) and its data (@ref trophies_core).
+ */
+
+/**
+ * @defgroup topic_files Files
+ * @brief Files: the screen (@ref ui_file) and its work on the microSD card (@ref files_core).
+ */
+
+/**
+ * @defgroup topic_gameplays Gameplays and Replay
+ * @brief Gameplays and Replay: the screens (@ref ui_replay) and their data, replay timeline and video
+ *        export (@ref gameplays_core).
+ */
+
+/**
+ * @defgroup topic_history History
+ * @brief History: the screen (@ref ui_history) and its data (@ref history_core).
+ */
+
+/**
+ * @defgroup topic_statistics Statistics
+ * @brief Statistics: the screen (@ref ui_stats) and its data (@ref statistics_core).
+ */
+
+/**
+ * @defgroup topic_puzzles Puzzles
+ * @brief Puzzles: the screen (@ref ui_list), its data (@ref puzzles_core) and the collections it lists
+ *        (@ref collections).
+ */

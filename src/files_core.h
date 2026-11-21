@@ -12,6 +12,7 @@
 
 /**
  * @defgroup files_core Files core
+ * @ingroup topic_files
  * @brief What the Files page does on the card, apart from showing it.
  *
  * - **The folder shown** (files_path()) and moving in it: files_enter(), files_up().

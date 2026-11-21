@@ -14,6 +14,7 @@ extern "C" {
 
 /**
  * @defgroup ui_list Puzzles screen
+ * @ingroup topic_puzzles
  * @brief Puzzles (Home): the collections on the left (tabs: Built-in, Saved), the one picked on the
  *        right as a grid of numbers (built-in) or a list of rows (Saved), or the starred puzzles.
  *

@@ -13,6 +13,7 @@
 
 /**
  * @defgroup sysmon_core System monitor core
+ * @ingroup topic_sysmon
  * @brief What the system monitor (ui_sysmon.c) shows, gathered without LVGL: a .c / .h per part.
  *
  * | Files                 | Part |

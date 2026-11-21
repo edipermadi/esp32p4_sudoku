@@ -15,6 +15,7 @@ extern "C" {
 
 /**
  * @defgroup statistics_core Statistics core
+ * @ingroup topic_statistics
  * @brief What the Statistics screen shows, apart from drawing it.
  *
  * The screen draws a stats_view_t (stats_db.h): normally the answer to a query on sudoku.db; without

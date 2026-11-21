@@ -9,6 +9,7 @@
 
 /**
  * @defgroup ui_stats Statistics screen
+ * @ingroup topic_statistics
  * @brief The Statistics screen: a level per row on the left; its table or chart on the right.
  * @{
  */

@@ -16,6 +16,7 @@ extern "C" {
 
 /**
  * @defgroup ui_replay Gameplays and Replay screens
+ * @ingroup topic_gameplays
  * @brief Gameplays (recorded solves, a page at a time), the Replay screen (a move log played back)
  *        and a replay exported as an MP4.
  *
