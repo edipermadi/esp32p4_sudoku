@@ -40,7 +40,9 @@ static void (*nd_done)(const char *name); /* not a player's name: who takes it *
 
 static void nd_close(void)
 {
-    if (!nd_ovl) return;
+    if (!nd_ovl) {
+        return;
+    }
     lv_obj_delete_async(nd_ovl);
     nd_ovl = nd_ta = NULL;
 }
@@ -48,29 +50,39 @@ static void nd_close(void)
 static void nd_ok(void)
 {
     const char *name = lv_textarea_get_text(nd_ta);
-    if (nd_done) nd_done(name);
-    else if (nd_rename_id) stats_db_rename_player(nd_rename_id, name);
-    else stats_db_add_player(name);
+    if (nd_done) {
+        nd_done(name);
+    } else if (nd_rename_id) {
+        stats_db_rename_player(nd_rename_id, name);
+    } else {
+        stats_db_add_player(name);
+    }
     nd_close();
 }
 
 static void nd_kb_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_READY) nd_ok();
-    else if (code == LV_EVENT_CANCEL) nd_close();
+    if (code == LV_EVENT_READY) {
+        nd_ok();
+    } else if (code == LV_EVENT_CANCEL) {
+        nd_close();
+    }
 }
 
 static void nd_btn_cb(lv_event_t *e)
 {
-    if ((intptr_t)lv_event_get_user_data(e)) nd_ok();
-    else nd_close();
+    if ((intptr_t)lv_event_get_user_data(e)) {
+        nd_ok();
+    } else {
+        nd_close();
+    }
 }
 
 /* the name dialog: a title, a text box with a keyboard, Cancel and ok_text; done gets the name
  * (NULL: a player's, added or renamed: nd_open) */
 void nd_open_ex(const char *title, const char *current, int max_len, const char *ok_text,
-                       void (*done)(const char *name))
+                void (*done)(const char *name))
 {
     nd_close();
     nd_done = done;
@@ -153,12 +165,16 @@ static void nd_open(int32_t rename_id, const char *current)
 static void player_row_cb(lv_event_t *e)
 {
     int32_t id = (int32_t)(intptr_t)lv_event_get_user_data(e);
-    if (id && id != store_player_id()) stats_db_switch_player(id);
+    if (id && id != store_player_id()) {
+        stats_db_switch_player(id);
+    }
 }
 
 static void player_rename_cb(lv_event_t *e)
 {
-    if (stats_db_ready()) nd_open(store_player_id(), store_player_name());   /* who plays now */
+    if (stats_db_ready()) {
+        nd_open(store_player_id(), store_player_name());    /* who plays now */
+    }
 }
 
 static int32_t p_delete_id;
@@ -166,7 +182,9 @@ static int32_t p_delete_id;
 static void player_delete_confirm_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-    if (p_delete_id) stats_db_delete_player(p_delete_id);
+    if (p_delete_id) {
+        stats_db_delete_player(p_delete_id);
+    }
     p_delete_id = 0;
 }
 
@@ -176,9 +194,13 @@ static void player_delete_cb(lv_event_t *e)
     int32_t id = store_player_id();
     const stats_player_t *pl = NULL;
     for (int i = 0; i < p_count; i++) {
-        if (p_players[i].id == id) pl = &p_players[i];
+        if (p_players[i].id == id) {
+            pl = &p_players[i];
+        }
     }
-    if (!pl) return;
+    if (!pl) {
+        return;
+    }
     p_delete_id = id;
     char title[48], text[256];
     snprintf(title, sizeof(title), "Delete %s?", pl->name);
@@ -197,14 +219,18 @@ static void player_delete_cb(lv_event_t *e)
 
 static void player_add_cb(lv_event_t *e)
 {
-    if (stats_db_ready()) nd_open(0, NULL);
+    if (stats_db_ready()) {
+        nd_open(0, NULL);
+    }
 }
 
 /* who plays now, in the list from sudoku.db (NULL: not there yet) */
 static stats_player_t *player_current(void)
 {
     for (int i = 0; i < p_count; i++) {
-        if (p_players[i].id == store_player_id()) return &p_players[i];
+        if (p_players[i].id == store_player_id()) {
+            return &p_players[i];
+        }
     }
     return NULL;
 }
@@ -218,7 +244,9 @@ static void av_rows_init(void)
 {
     for (int g = 0, r = 0; g <= AVATAR_GROUPS; g++) {
         av_row0[g] = r;
-        if (g < AVATAR_GROUPS) r += (av_group_end(g) - avatar_group_first(g) + AV_COLS - 1) / AV_COLS;
+        if (g < AVATAR_GROUPS) {
+            r += (av_group_end(g) - avatar_group_first(g) + AV_COLS - 1) / AV_COLS;
+        }
     }
 }
 
@@ -226,7 +254,9 @@ static void av_rows_init(void)
 static int av_row_group(int row)
 {
     int g = 0;
-    while (g + 1 < AVATAR_GROUPS && av_row0[g + 1] <= row) g++;
+    while (g + 1 < AVATAR_GROUPS && av_row0[g + 1] <= row) {
+        g++;
+    }
     return g;
 }
 
@@ -235,7 +265,9 @@ static void player_avatar_set(int k)
     stats_player_t *pl = player_current();
     ctx_menu_close();
     av_scroll = av_grid = NULL;
-    if (!pl) return;
+    if (!pl) {
+        return;
+    }
     stats_db_set_player_avatar(pl->id, k);           /* the list comes back with it */
     pl->avatar = (uint16_t)k;
     render_players();
@@ -253,9 +285,13 @@ static void av_grid_click_cb(lv_event_t *e)
     lv_indev_get_point(lv_indev_active(), &p);
     lv_obj_get_coords(av_grid, &a);
     int col = (p.x - a.x1) / AV_CELL, row = (p.y - a.y1) / AV_CELL;
-    if (col < 0 || col >= AV_COLS || row < 0 || row >= av_row0[AVATAR_GROUPS]) return;
+    if (col < 0 || col >= AV_COLS || row < 0 || row >= av_row0[AVATAR_GROUPS]) {
+        return;
+    }
     int g = av_row_group(row), k = avatar_group_first(g) + (row - av_row0[g]) * AV_COLS + col;
-    if (k < av_group_end(g)) player_avatar_set(k + 1);   /* (not the empty end of a group's last row) */
+    if (k < av_group_end(g)) {
+        player_avatar_set(k + 1);    /* (not the empty end of a group's last row) */
+    }
 }
 
 static void av_grid_draw_cb(lv_event_t *e)
@@ -265,16 +301,21 @@ static void av_grid_draw_cb(lv_event_t *e)
     lv_obj_get_coords(av_grid, &a);
     int top = lv_obj_get_scroll_y(av_scroll), h = lv_obj_get_height(av_scroll);
     int r0 = top / AV_CELL - 1, r1 = (top + h) / AV_CELL + 1;   /* just the rows in view */
-    if (r0 < 0) r0 = 0;
+    if (r0 < 0) {
+        r0 = 0;
+    }
     lv_draw_image_dsc_t d;
     lv_draw_image_dsc_init(&d);
     for (int r = r0; r <= r1 && r < av_row0[AVATAR_GROUPS]; r++) {
         int g = av_row_group(r);
         for (int c = 0; c < AV_COLS; c++) {
             int k = avatar_group_first(g) + (r - av_row0[g]) * AV_COLS + c;
-            if (k >= av_group_end(g)) break;
+            if (k >= av_group_end(g)) {
+                break;
+            }
             lv_area_t cell = {a.x1 + c * AV_CELL, a.y1 + r * AV_CELL, a.x1 + (c + 1) * AV_CELL - 1,
-                              a.y1 + (r + 1) * AV_CELL - 1};
+                              a.y1 + (r + 1) * AV_CELL - 1
+                             };
             if (k + 1 == av_cur) {                   /* the one they have */
                 lv_draw_rect_dsc_t rd;
                 lv_draw_rect_dsc_init(&rd);
@@ -296,7 +337,9 @@ static void av_grid_draw_cb(lv_event_t *e)
 static void av_scroll_cb(lv_event_t *e)
 {
     int g = av_row_group((lv_obj_get_scroll_y(av_scroll) + AV_CELL / 2) / AV_CELL);
-    for (int i = 0; i < AVATAR_GROUPS; i++) lv_obj_set_state(av_group_btn[i], LV_STATE_CHECKED, i == g);
+    for (int i = 0; i < AVATAR_GROUPS; i++) {
+        lv_obj_set_state(av_group_btn[i], LV_STATE_CHECKED, i == g);
+    }
 }
 
 static void av_group_cb(lv_event_t *e)
@@ -309,7 +352,9 @@ static void av_group_cb(lv_event_t *e)
 static void player_avatar_cb(lv_event_t *e)
 {
     stats_player_t *pl = player_current();
-    if (!pl) return;
+    if (!pl) {
+        return;
+    }
     av_cur = pl->avatar <= AVATAR_COUNT ? pl->avatar : 0;
     av_rows_init();
     const int inner = AV_COLS * AV_CELL, card_h = SCR_W - 68 - 16;
@@ -375,7 +420,9 @@ static void player_avatar_cb(lv_event_t *e)
     lv_obj_update_layout(card);
     if (av_cur) {                                    /* to theirs */
         int g = 0;
-        while (g + 1 < AVATAR_GROUPS &avatar_group_first(g + 1) <= av_cur - 1) g++;
+        while (g + 1 < AVATAR_GROUPS &avatar_group_first(g + 1) <= av_cur - 1) {
+            g++;
+        }
         lv_obj_scroll_to_y(av_scroll, (av_row0[g] + (av_cur - 1 - avatar_group_first(g)) / AV_COLS) * AV_CELL,
                            LV_ANIM_OFF);
     }
@@ -419,13 +466,17 @@ void players_take(const stats_player_t *list, int n)
 void render_players(void)
 {
     home_player_update();                           /* (the avatar on Home's Players button) */
-    if (!p_list) return;
+    if (!p_list) {
+        return;
+    }
     lv_obj_clean(p_list);
     bool db = stats_db_ready() && p_count >= 0;
     int n = db ? p_count : 1;
     for (int i = 0; i < n; i++) {
         stats_player_t ram = {.id = store_player_id()};
-        if (!db) snprintf(ram.name, sizeof(ram.name), "%s", store_player_name());
+        if (!db) {
+            snprintf(ram.name, sizeof(ram.name), "%s", store_player_name());
+        }
         const stats_player_t *pl = db ? &p_players[i] : &ram;
         bool cur = !db || pl->id == store_player_id();
 
@@ -461,16 +512,19 @@ void render_players(void)
         lv_label_set_text(nm, pl->name);
         lv_obj_align(nm, LV_ALIGN_LEFT_MID, 58, -12);
         lv_obj_t *sub = make_label(r, &lv_font_montserrat_14, cur ? C_ACCENT : C_MUTED);
-        if (cur && db) lv_label_set_text_fmt(sub, "Playing now   -   %u solved, %lu solves", (unsigned)pl->solved,
-                                            (unsigned long)pl->solves);
-        else if (cur) lv_label_set_text(sub, "Playing now");
-        else lv_label_set_text_fmt(sub, "%u solved, %lu solves   -   tap to play", (unsigned)pl->solved,
-                                   (unsigned long)pl->solves);
+        if (cur && db)
+            lv_label_set_text_fmt(sub, "Playing now   -   %u solved, %lu solves", (unsigned)pl->solved,
+                                  (unsigned long)pl->solves);
+        else if (cur) {
+            lv_label_set_text(sub, "Playing now");
+        } else
+            lv_label_set_text_fmt(sub, "%u solved, %lu solves   -   tap to play", (unsigned)pl->solved,
+                                  (unsigned long)pl->solves);
         lv_obj_align(sub, LV_ALIGN_LEFT_MID, 58, 16);
     }
     lv_label_set_text(p_note, stats_db_ready()
-        ? "Statistics and the game in progress are kept per player in sudoku.db."
-        : "No sudoku.db: insert a FAT32 microSD card before switching on to keep players.");
+                      ? "Statistics and the game in progress are kept per player in sudoku.db."
+                      : "No sudoku.db: insert a FAT32 microSD card before switching on to keep players.");
 }
 
 void build_profile(void)

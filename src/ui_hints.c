@@ -33,16 +33,21 @@ static bool      g_layout_left;         /* ... and on which side the pad is (Lef
  */
 static void unit_name(int u, char *buf, size_t n)
 {
-    if (u < 9) snprintf(buf, n, "row %d", u + 1);
-    else if (u < 18) snprintf(buf, n, "column %d", u - 9 + 1);
-    else if (u < 27) snprintf(buf, n, "%s %d", game_geo()->variant == VAR_JIGSAW ? "region" : "box", u - 18 + 1);
-    else if (u < UNIT_WINDOW) snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");
-    else if (u < UNIT_GROUP) {                      /* Hyper windows */
+    if (u < 9) {
+        snprintf(buf, n, "row %d", u + 1);
+    } else if (u < 18) {
+        snprintf(buf, n, "column %d", u - 9 + 1);
+    } else if (u < 27) {
+        snprintf(buf, n, "%s %d", game_geo()->variant == VAR_JIGSAW ? "region" : "box", u - 18 + 1);
+    } else if (u < UNIT_WINDOW) {
+        snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");
+    } else if (u < UNIT_GROUP) {                    /* Hyper windows */
         static const char *const W[4] = {"top-left", "top-right", "bottom-left", "bottom-right"};
         snprintf(buf, n, "the %s window", W[(u - UNIT_WINDOW) & 3]);
     } else if (u < UNIT_ASTERISK) {                 /* Disjoint groups: by the place in the box */
         static const char *const SPOT[9] = {"top-left", "top", "top-right", "left", "centre", "right",
-                                         "bottom-left", "bottom", "bottom-right"};
+                                            "bottom-left", "bottom", "bottom-right"
+                                           };
         snprintf(buf, n, "the %s cells of the boxes", SPOT[(u - UNIT_GROUP) % 9]);
     } else {
         snprintf(buf, n, "the asterisk");
@@ -52,16 +57,33 @@ static void unit_name(int u, char *buf, size_t n)
 /* "row, column or box" (and diagonal, window, or region for a Jigsaw) */
 static const char *units_word(void)
 {
-    if (game_geo()->diag) return "row, column, box or diagonal";
-    if (game_geo()->windows) return "row, column, box or window";
-    if (game_geo()->variant == VAR_JIGSAW) return "row, column or region";
-    if (game_geo()->ncages) return "row, column, box or cage";
-    if (game_geo()->variant == VAR_KNIGHT) return "row, column, box or a knight's move away";
-    if (game_geo()->variant == VAR_KING) return "row, column, box or a touching cell";
-    if (game_geo()->variant == VAR_DISJOINT) return "row, column, box or group";
-    if (game_geo()->variant == VAR_ASTERISK) return "row, column, box or the asterisk";
-    if (game_geo()->nthermos) return game_geo()->line_kind == LINE_THERMO ? "row, column or box (or the thermometer)"
-                                     : "row, column or box (or the line)";
+    if (game_geo()->diag) {
+        return "row, column, box or diagonal";
+    }
+    if (game_geo()->windows) {
+        return "row, column, box or window";
+    }
+    if (game_geo()->variant == VAR_JIGSAW) {
+        return "row, column or region";
+    }
+    if (game_geo()->ncages) {
+        return "row, column, box or cage";
+    }
+    if (game_geo()->variant == VAR_KNIGHT) {
+        return "row, column, box or a knight's move away";
+    }
+    if (game_geo()->variant == VAR_KING) {
+        return "row, column, box or a touching cell";
+    }
+    if (game_geo()->variant == VAR_DISJOINT) {
+        return "row, column, box or group";
+    }
+    if (game_geo()->variant == VAR_ASTERISK) {
+        return "row, column, box or the asterisk";
+    }
+    if (game_geo()->nthermos)
+        return game_geo()->line_kind == LINE_THERMO ? "row, column or box (or the thermometer)"
+               : "row, column or box (or the line)";
     return "row, column or box";
 }
 
@@ -69,12 +91,18 @@ static const char *units_word(void)
 static void digit_list(int mask, const char *last_word, char *buf, size_t n)
 {
     int ds[9], k = 0;
-    for (int d = 1; d <= 9; d++) if (mask >> d & 1) ds[k++] = d;
+    for (int d = 1; d <= 9; d++) {
+        if (mask >> d & 1) {
+            ds[k++] = d;
+        }
+    }
     size_t len = 0;
     buf[0] = 0;
     for (int i = 0; i < k; i++) {
         len += snprintf(buf + len, n - len, "%s%d", i == 0 ? "" : (i == k - 1 ? " " : ", "), ds[i]);
-        if (i == k - 2 && len < n) len += snprintf(buf + len, n - len, " %s", last_word);
+        if (i == k - 2 && len < n) {
+            len += snprintf(buf + len, n - len, " %s", last_word);
+        }
     }
 }
 
@@ -82,7 +110,9 @@ static void mark_unit(int u, uint8_t v)
 {
     for (int k = 0; k < game_geo()->n; k++) {
         int c = sudoku_unit_cell(game_geo(), u, k);
-        if (c >= 0 && h_mark[c] < v) h_mark[c] = v;
+        if (c >= 0 && h_mark[c] < v) {
+            h_mark[c] = v;
+        }
     }
 }
 
@@ -95,7 +125,9 @@ bool hint_nudge(void)
 
 void hint_drop(void)
 {
-    if (!hint_step()) return;
+    if (!hint_step()) {
+        return;
+    }
     hint_set_step(0);
     memset(h_mark, 0, sizeof(h_mark));
     lv_obj_set_hidden(hint_card(), true);
@@ -110,8 +142,12 @@ void hint_render(void)
     memset(h_mark, 0, sizeof(h_mark));
 
     /* where to look: the technique's area if one is needed, else the single's */
-    if (h->kind == STEP_WRONG || h->kind == STEP_NAKED_SINGLE || h->kind == STEP_NONE) h_mark[h->cell] = 1;
-    if (h->kind == STEP_HIDDEN_SINGLE && !t->kind) mark_unit(h->unit, 1);
+    if (h->kind == STEP_WRONG || h->kind == STEP_NAKED_SINGLE || h->kind == STEP_NONE) {
+        h_mark[h->cell] = 1;
+    }
+    if (h->kind == STEP_HIDDEN_SINGLE && !t->kind) {
+        mark_unit(h->unit, 1);
+    }
     if (t->kind == TECH_SANDWICH) {                 /* Sandwich: the row or column */
         mark_unit(t->unit, 1);
         unit_name(t->unit, u1, sizeof(u1));
@@ -122,7 +158,9 @@ void hint_render(void)
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
-            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
         }
         if (t->kind == TECH_SKY && k >= 0 && k < 18) {
             mark_unit(k, 1);
@@ -131,18 +169,24 @@ void hint_render(void)
                      "be filled, only those leave row %d, column %d %s. ", u1, game_geo()->sky[k], c / 9 + 1, c % 9 + 1,
                      digs);
         } else if (k >= 0 && k < game_geo()->nlk) {
-            for (int i = 0; i < game_geo()->lk_n[k]; i++) h_mark[game_geo()->lk_cell[k][i]] = 1;
+            for (int i = 0; i < game_geo()->lk_n[k]; i++) {
+                h_mark[game_geo()->lk_cell[k][i]] = 1;
+            }
             snprintf(u1, sizeof(u1), "this diagonal");
             snprintf(tech, sizeof(tech), "This diagonal adds up to %d, so row %d, column %d can only be %s. ",
                      game_geo()->lk_sum[k], c / 9 + 1, c % 9 + 1, digs);
         }
     } else if (t->kind == TECH_LINE) {              /* Arrow, Renban, Whispers: the line */
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
-        for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) h_mark[game_geo()->thermo_cell[k][i]] = 1;
+        for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) {
+            h_mark[game_geo()->thermo_cell[k][i]] = 1;
+        }
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
-            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
         }
         int lk = game_geo()->line_kind;
         snprintf(u1, sizeof(u1), "this %s", lk == LINE_ARROW ? "arrow" : "line");
@@ -153,13 +197,17 @@ void hint_render(void)
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
         int k = t->unit;
-        for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) h_mark[game_geo()->thermo_cell[k][i]] = 1;
+        for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) {
+            h_mark[game_geo()->thermo_cell[k][i]] = 1;
+        }
         int c = t->cell1 >= 0 ? t->cell1 : 0;
         snprintf(u1, sizeof(u1), "this thermometer");
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
-            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
         }
         snprintf(tech, sizeof(tech), "Along the thermometer the digits rise from the bulb, so row %d, column %d can "
                  "only be %s. ", c / 9 + 1, c % 9 + 1, digs);
@@ -167,16 +215,26 @@ void hint_render(void)
         int c = t->unit;
         if (c >= 0 && c < 81) {
             h_mark[c] = 1;
-            if (c % 9 > 0) h_mark[c - 1] = 1;
-            if (c % 9 < 8) h_mark[c + 1] = 1;
-            if (c > 8) h_mark[c - 9] = 1;
-            if (c < 72) h_mark[c + 9] = 1;
+            if (c % 9 > 0) {
+                h_mark[c - 1] = 1;
+            }
+            if (c % 9 < 8) {
+                h_mark[c + 1] = 1;
+            }
+            if (c > 8) {
+                h_mark[c - 9] = 1;
+            }
+            if (c < 72) {
+                h_mark[c + 9] = 1;
+            }
         }
         snprintf(u1, sizeof(u1), "row %d, column %d", c / 9 + 1, c % 9 + 1);
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
-            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
         }
         if (game_geo()->variant == VAR_NONCONSEC)
             snprintf(tech, sizeof(tech), "Its neighbours can't be 1 apart from row %d, column %d, which leaves it "
@@ -189,22 +247,34 @@ void hint_render(void)
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
-            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
         }
         snprintf(u1, sizeof(u1), "row %d, column %d", c / 9 + 1, c % 9 + 1);
         if (t->kind == TECH_QUAD && t->unit2 >= 0 && t->unit2 < game_geo()->nquads) {
             int at = game_geo()->quad_at[t->unit2];
             h_mark[at] = h_mark[at + 1] = h_mark[at + 9] = h_mark[at + 10] = 1;
             char need[8] = "";
-            for (int k = 0; k < game_geo()->quad_n[t->unit2]; k++) need[k] = (char)('0' + game_geo()->quad_dig[t->unit2][k]);
+            for (int k = 0; k < game_geo()->quad_n[t->unit2]; k++) {
+                need[k] = (char)('0' + game_geo()->quad_dig[t->unit2][k]);
+            }
             snprintf(tech, sizeof(tech), "The circle with %s needs those digits among its four cells, which leaves "
                      "row %d, column %d only %s. ", need, c / 9 + 1, c % 9 + 1, digs);
         } else if (c >= 0 && c < 81) {
             h_mark[c] = 1;
-            if (c % 9 > 0) h_mark[c - 1] = 1;
-            if (c % 9 < 8) h_mark[c + 1] = 1;
-            if (c > 8) h_mark[c - 9] = 1;
-            if (c < 72) h_mark[c + 9] = 1;
+            if (c % 9 > 0) {
+                h_mark[c - 1] = 1;
+            }
+            if (c % 9 < 8) {
+                h_mark[c + 1] = 1;
+            }
+            if (c > 8) {
+                h_mark[c - 9] = 1;
+            }
+            if (c < 72) {
+                h_mark[c + 9] = 1;
+            }
             int ek = game_geo()->edge_kind;
             snprintf(tech, sizeof(tech), "%s around row %d, column %d%s leave it only %s. ",
                      ek == EDGE_KROPKI ? "The dots" : ek == EDGE_XV ? "The X and V marks" : "The signs",
@@ -212,20 +282,26 @@ void hint_render(void)
         }
     } else if (t->kind == TECH_CAGE) {              /* Killer: the cage's cells */
         int k = t->unit;
-        for (int i = 0; k >= 0 && k < game_geo()->ncages && i < game_geo()->cage_n[k]; i++) h_mark[game_geo()->cage_cell[k][i]] = 1;
+        for (int i = 0; k >= 0 && k < game_geo()->ncages && i < game_geo()->cage_n[k]; i++) {
+            h_mark[game_geo()->cage_cell[k][i]] = 1;
+        }
         int c0 = k >= 0 && k < game_geo()->ncages ? game_geo()->cage_cell[k][0] : 0;
         snprintf(u1, sizeof(u1), "the %d cage", k >= 0 && k < game_geo()->ncages ? game_geo()->cage_sum[k] : 0);
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
-            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
         }
         snprintf(tech, sizeof(tech), "The cage at row %d, column %d adds up to %d: with what's in it and around "
                  "it, its empty cells can only be %s. ", c0 / 9 + 1, c0 % 9 + 1,
                  k >= 0 && k < game_geo()->ncages ? game_geo()->cage_sum[k] : 0, digs);
     } else if (t->kind == TECH_NAKED_TRIPLE || t->kind == TECH_X_WING || t->kind == TECH_SWORDFISH ||
                t->kind == TECH_XY_WING) {
-        for (int i = 0; i < t->ncells; i++) h_mark[t->cells[i]] = 1;   /* the cells that make the pattern */
+        for (int i = 0; i < t->ncells; i++) {
+            h_mark[t->cells[i]] = 1;    /* the cells that make the pattern */
+        }
         char digs[24];
         if (t->kind == TECH_NAKED_TRIPLE) {
             unit_name(t->unit, u1, sizeof(u1));
@@ -251,7 +327,9 @@ void hint_render(void)
                                lines[i] % 9 + 1);
             }
             for (int j = 0, k = 0; j < 9; j++) {
-                if (!(t->digit2 >> j & 1)) continue;
+                if (!(t->digit2 >> j & 1)) {
+                    continue;
+                }
                 lc += snprintf(cl + lc, sizeof(cl) - lc, "%s%d", k == 0 ? "" : (k == nb - 1 ? " and " : ", "), j + 1);
                 k++;
             }
@@ -291,19 +369,23 @@ void hint_render(void)
             snprintf(text, sizeof(text), "Something's not right: check the highlighted cell.");
             break;
         case STEP_HIDDEN_SINGLE:
-            if (t->kind) snprintf(text, sizeof(text), "Look at %s: it narrows down where a digit can go.", u1);
-            else {
+            if (t->kind) {
+                snprintf(text, sizeof(text), "Look at %s: it narrows down where a digit can go.", u1);
+            } else {
                 unit_name(h->unit, un, sizeof(un));
                 snprintf(text, sizeof(text), "Look at %s: one digit has only one place left there.", un);
             }
             break;
         case STEP_NAKED_SINGLE:
-            if (t->kind) snprintf(text, sizeof(text), "Look at %s, then at the highlighted cell.", u1);
-            else snprintf(text, sizeof(text), "Look at the highlighted cell: only one digit fits.");
+            if (t->kind) {
+                snprintf(text, sizeof(text), "Look at %s, then at the highlighted cell.", u1);
+            } else {
+                snprintf(text, sizeof(text), "Look at the highlighted cell: only one digit fits.");
+            }
             break;
         default:
             snprintf(text, sizeof(text), hint_nudge() ? "No simple step here: this needs advanced techniques."
-                                                       : "No simple step here: this needs advanced techniques. More shows one cell.");
+                     : "No simple step here: this needs advanced techniques. More shows one cell.");
             break;
         }
         lv_label_set_text(lv_obj_get_child(hint_act(), 0), "More");
@@ -340,11 +422,15 @@ void hint_render(void)
      * cell there, then at the top (growing downwards) */
     lv_obj_update_layout(hint_text());
     int32_t ch = lv_obj_get_height(hint_text()) + 28;
-    if (ch < 92) ch = 92;
+    if (ch < 92) {
+        ch = 92;
+    }
     lv_obj_set_height(hint_card(), ch);
     bool covered = false;
     for (int i = 0; i < 81 && !covered; i++) {
-        if (!h_mark[i] || !game_cells()[i]) continue;
+        if (!h_mark[i] || !game_cells()[i]) {
+            continue;
+        }
         lv_area_t co;
         lv_obj_get_coords(game_cells()[i], &co);
         covered = co.y2 > SCR_W - 4 - ch;
@@ -357,7 +443,9 @@ void hint_render(void)
 static void restart_confirm_cb(lv_event_t *e)
 {
     lv_obj_t *mbox = (lv_obj_t *)lv_event_get_user_data(e);
-    if (store_saved_game()->id == game_id()) store_clear_game();
+    if (store_saved_game()->id == game_id()) {
+        store_clear_game();
+    }
     reset_game();
     lv_msgbox_close_async(mbox);
 }
@@ -372,7 +460,9 @@ lv_obj_t *make_msgbox(const char *title, const char *text)
     lv_obj_t *m = lv_msgbox_create(NULL);
     lv_msgbox_add_title(m, title);
     /* left-aligned, wrapped; NULL: the caller fills the content */
-    if (text) make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT, text);
+    if (text) {
+        make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT, text);
+    }
     lv_obj_set_width(m, 520);
     lv_obj_set_style_text_font(m, &lv_font_montserrat_20, 0);
     return m;
@@ -442,7 +532,9 @@ void tick_cb(lv_timer_t *t)
     if (running) {
         game_set_elapsed_ms(game_elapsed_ms() + (now - game_last_tick()));
         update_timer_label();
-        if (game_attack() && attack_used_ms() + game_elapsed_ms() >= ATK_MS) atk_finish();
+        if (game_attack() && attack_used_ms() + game_elapsed_ms() >= ATK_MS) {
+            atk_finish();
+        }
     }
     game_set_last_tick(now);
 }
@@ -460,7 +552,9 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     ld.dash_gap = 3;
     for (int i = 0; i < 81; i++) {
         int k = geo->cage_of[i];
-        if (k == CAGE_NONE) continue;
+        if (k == CAGE_NONE) {
+            continue;
+        }
         lv_area_t a;
         lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
         int r = i / 9, c = i % 9;
@@ -475,7 +569,9 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
             ld.p1.x = label ? a.x1 + in + 18 : x1;      /* room for the sum */
             ld.p1.y = ld.p2.y = a.y1 + in;
             ld.p2.x = x2;
-            if (ld.p1.x < ld.p2.x) lv_draw_line(layer, &ld);
+            if (ld.p1.x < ld.p2.x) {
+                lv_draw_line(layer, &ld);
+            }
         }
         if (!down) {
             ld.p1.x = x1;
@@ -487,7 +583,9 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
             ld.p1.x = ld.p2.x = a.x1 + in;
             ld.p1.y = label ? a.y1 + in + 13 : y1;
             ld.p2.y = y2;
-            if (ld.p1.y < ld.p2.y) lv_draw_line(layer, &ld);
+            if (ld.p1.y < ld.p2.y) {
+                lv_draw_line(layer, &ld);
+            }
         }
         if (!right) {
             ld.p1.x = ld.p2.x = a.x2 - in;
@@ -531,7 +629,9 @@ static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
             lv_area_t r = {.x1 = a.x1 + 5, .y1 = a.y1 + 5, .x2 = a.x2 - 5, .y2 = a.y2 - 5};
             lv_draw_rect(layer, &d, &r);
         }
-        if (!geo->consec_on) continue;
+        if (!geo->consec_on) {
+            continue;
+        }
         lv_draw_rect_dsc_init(&d);
         d.bg_color = C_ORANGE;
         d.bg_opa = LV_OPA_COVER;
@@ -592,12 +692,19 @@ void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int c
         l.round_start = l.round_end = 1;
         int s = m == MARK_LESS ? -1 : 1;            /* the point toward the smaller: left / up for LESS */
         if (!down) {
-            l.p1.x = cx - 4 * s; l.p1.y = cy - 7; l.p2.x = cx + 4 * s; l.p2.y = cy;
+            l.p1.x = cx - 4 * s;
+            l.p1.y = cy - 7;
+            l.p2.x = cx + 4 * s;
+            l.p2.y = cy;
             lv_draw_line(layer, &l);
-            l.p1.x = cx - 4 * s; l.p1.y = cy + 7;
+            l.p1.x = cx - 4 * s;
+            l.p1.y = cy + 7;
             lv_draw_line(layer, &l);
         } else {
-            l.p1.x = cx - 7; l.p1.y = cy - 4 * s; l.p2.x = cx; l.p2.y = cy + 4 * s;
+            l.p1.x = cx - 7;
+            l.p1.y = cy - 4 * s;
+            l.p2.x = cx;
+            l.p2.y = cy + 4 * s;
             lv_draw_line(layer, &l);
             l.p1.x = cx + 7;
             lv_draw_line(layer, &l);
@@ -621,7 +728,9 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
     char txt[8];
     int p = 0;
     for (int k = 0; k < n && k < 4; k++) {
-        if (k == 2) txt[p++] = '\n';
+        if (k == 2) {
+            txt[p++] = '\n';
+        }
         txt[p++] = (char)('0' + dig[k]);
     }
     txt[p] = 0;
@@ -643,7 +752,9 @@ static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     for (int i = 0; i < 81; i++) {
         for (int k = 0; k < 2; k++) {               /* the line to the right, the one below */
             int m = k ? EDGE_DOWN(geo->edge[i]) : EDGE_RIGHT(geo->edge[i]), o = k ? i + 9 : i + 1;
-            if (!m || o > 80 || (!k && i % 9 == 8)) continue;
+            if (!m || o > 80 || (!k && i % 9 == 8)) {
+                continue;
+            }
             lv_area_t a, b;
             lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
             lv_obj_get_coords(lv_obj_get_child(grid, 9 + o), &b);
@@ -682,7 +793,10 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         if (n > 1) {                                /* the shaft starts at the circle's edge */
             int dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y, r = cs * 4 / 10;
             int len = (int)sqrtf((float)(dx * dx + dy * dy));
-            if (len) { start.x = pts[0].x + dx * r / len; start.y = pts[0].y + dy * r / len; }
+            if (len) {
+                start.x = pts[0].x + dx * r / len;
+                start.y = pts[0].y + dy * r / len;
+            }
         }
         break;
     case LINE_RENBAN:
@@ -760,12 +874,24 @@ void board_regions_draw_cb(lv_event_t *e)
 {
     lv_obj_t *grid = lv_event_get_current_target_obj(e);
     const sudoku_geom_t *geo = lv_obj_get_user_data(grid);
-    if (geo && geo->nthermos) board_thermos_draw(grid, geo, lv_event_get_layer(e));
-    if (geo && geo->ncages) board_cages_draw(grid, geo, lv_event_get_layer(e));
-    if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) board_marks_draw(grid, geo, lv_event_get_layer(e));
-    if (geo && geo->edge_kind) board_edges_draw(grid, geo, lv_event_get_layer(e));
-    if (geo && geo->nquads) board_quads_draw(grid, geo, lv_event_get_layer(e));
-    if (!geo || geo->variant != VAR_JIGSAW) return;
+    if (geo && geo->nthermos) {
+        board_thermos_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (geo && geo->ncages) {
+        board_cages_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) {
+        board_marks_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (geo && geo->edge_kind) {
+        board_edges_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (geo && geo->nquads) {
+        board_quads_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (!geo || geo->variant != VAR_JIGSAW) {
+        return;
+    }
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_draw_rect_dsc_t d;
     lv_draw_rect_dsc_init(&d);
@@ -776,12 +902,12 @@ void board_regions_draw_cb(lv_event_t *e)
         lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
         if (i % 9 < 8 && geo->region[i] != geo->region[i + 1]) {          /* border on the right */
             lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 1), &b);
-            r = (lv_area_t){.x1 = a.x2 - 1, .x2 = b.x1 + 1, .y1 = a.y1 - LINE_THIN, .y2 = a.y2 + LINE_THIN};
+            r = (lv_area_t) {.x1 = a.x2 - 1, .x2 = b.x1 + 1, .y1 = a.y1 - LINE_THIN, .y2 = a.y2 + LINE_THIN};
             lv_draw_rect(layer, &d, &r);
         }
         if (i / 9 < 8 && geo->region[i] != geo->region[i + 9]) {          /* border below */
             lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 9), &b);
-            r = (lv_area_t){.x1 = a.x1 - LINE_THIN, .x2 = a.x2 + LINE_THIN, .y1 = a.y2 - 1, .y2 = b.y1 + 1};
+            r = (lv_area_t) {.x1 = a.x1 - LINE_THIN, .x2 = a.x2 + LINE_THIN, .y1 = a.y2 - 1, .y2 = b.y1 + 1};
             lv_draw_rect(layer, &d, &r);
         }
     }
@@ -797,12 +923,18 @@ void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len)
     l.width = 2;
     l.round_start = l.round_end = 1;
     int ex = x + dx * len, ey = y + dy * len, h = len / 2 + 1;
-    l.p1.x = x; l.p1.y = y; l.p2.x = ex; l.p2.y = ey;
+    l.p1.x = x;
+    l.p1.y = y;
+    l.p2.x = ex;
+    l.p2.y = ey;
     lv_draw_line(layer, &l);
-    l.p1.x = ex; l.p1.y = ey;
-    l.p2.x = ex - dx * h; l.p2.y = ey;
+    l.p1.x = ex;
+    l.p1.y = ey;
+    l.p2.x = ex - dx * h;
+    l.p2.y = ey;
     lv_draw_line(layer, &l);
-    l.p2.x = ex; l.p2.y = ey - dy * h;
+    l.p2.x = ex;
+    l.p2.y = ey - dy * h;
     lv_draw_line(layer, &l);
 }
 
@@ -811,7 +943,9 @@ static void lk_clue_draw_cb(lv_event_t *e)
 {
     lv_obj_t *l = lv_event_get_current_target_obj(e);
     int dir = (int)(intptr_t)lv_obj_get_user_data(l) - 1;
-    if (dir < 0) return;
+    if (dir < 0) {
+        return;
+    }
     lv_area_t a;
     lv_obj_get_coords(l, &a);
     int cx = (a.x1 + a.x2) / 2, cy = (a.y1 + a.y2) / 2;
@@ -826,7 +960,9 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
 {
     lv_obj_set_user_data(grid, (void *)geo);
     const bool clued = geo->sandwich || geo->skyscraper || geo->nlk;   /* clues outside the grid */
-    for (int i = 0; clues && i < BOARD_CLUES; i++) lv_obj_set_hidden(clues[i], true);
+    for (int i = 0; clues && i < BOARD_CLUES; i++) {
+        lv_obj_set_hidden(clues[i], true);
+    }
     if (geo->variant == VAR_JIGSAW) {
         /* evenly spaced cells on the thin-line colour in a thick frame; the
          * region borders are drawn over them (board_regions_draw_cb) */
@@ -837,7 +973,9 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
         lv_obj_set_style_bg_color(grid, C_GRID_THIN, 0);
         lv_obj_set_style_border_color(grid, C_GRID_THICK, 0);
         lv_obj_set_style_border_width(grid, LINE_THICK, 0);
-        for (int b = 0; b < 9; b++) lv_obj_set_hidden(boxes[b], true);
+        for (int b = 0; b < 9; b++) {
+            lv_obj_set_hidden(boxes[b], true);
+        }
         for (int i = 0; i < 81; i++) {
             lv_obj_set_hidden(cells[i], false);
             lv_obj_set_pos(cells[i], LINE_THICK + (i % 9) * (cs + LINE_THIN), LINE_THICK + (i / 9) * (cs + LINE_THIN));
@@ -867,40 +1005,52 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
         lv_obj_set_style_text_font(clues[i], &lv_font_montserrat_20, 0);
         lv_label_set_text_fmt(clues[i], "%d", v);
         lv_obj_set_size(clues[i], band - 6, 24);
-        if (i < 9) lv_obj_set_pos(clues[i], gx - band, gy + mid - 12);
-        else lv_obj_set_pos(clues[i], gx + mid - (band - 6) / 2, gy - band + 4);
+        if (i < 9) {
+            lv_obj_set_pos(clues[i], gx - band, gy + mid - 12);
+        } else {
+            lv_obj_set_pos(clues[i], gx + mid - (band - 6) / 2, gy - band + 4);
+        }
         lv_obj_set_hidden(clues[i], geo->skyscraper && !v);         /* (a Skyscraper line without a clue) */
     }
     for (int k = 0; geo->nlk && clues && k < geo->nlk; k++) {   /* Little Killer: a sum on the line before its diagonal */
         int first = geo->lk_cell[k][0], top = geo->lk_from_top[k], i = top ? first % 9 : first / 9;
         int spot = i + (geo->lk_dir[k] == LK_DOWN_RIGHT ? 0 : 1);   /* the line before / after that column or row */
         int at = spot < 9 ? LINE_THICK + (spot / 3) * (box_w + LINE_THICK) + (spot % 3) * (cs + LINE_THIN) - 1
-                          : LINE_THICK + 2 * (box_w + LINE_THICK) + box_w + 1;
+                 : LINE_THICK + 2 * (box_w + LINE_THICK) + box_w + 1;
         lv_obj_t *l = clues[(top ? 10 : 0) + spot];   /* (one label per place) */
         bool has_arrow = false;                                     /* (the arrow: drawn by the label, set up once) */
         for (uint32_t k2 = 0; k2 < lv_obj_get_event_count(l); k2++) {
             has_arrow |= lv_event_dsc_get_cb(lv_obj_get_event_dsc(l, k2)) == lk_clue_draw_cb;
         }
-        if (!has_arrow) lv_obj_add_event_cb(l, lk_clue_draw_cb, LV_EVENT_DRAW_POST, NULL);
+        if (!has_arrow) {
+            lv_obj_add_event_cb(l, lk_clue_draw_cb, LV_EVENT_DRAW_POST, NULL);
+        }
         lv_obj_set_user_data(l, (void *)(intptr_t)(1 + geo->lk_dir[k]));
         lv_obj_set_style_text_font(l, &lv_font_montserrat_16, 0);
         lv_label_set_text_fmt(l, "%d", geo->lk_sum[k]);
         lv_obj_set_size(l, band - 4, 20);
-        if (top) lv_obj_set_pos(l, gx + at - (band - 4) / 2 - (geo->lk_dir[k] == LK_DOWN_RIGHT ? 6 : -6), gy - band + 2);
-        else lv_obj_set_pos(l, gx - band + 1, gy + at - 10 - (geo->lk_dir[k] == LK_DOWN_RIGHT ? 6 : -6));
+        if (top) {
+            lv_obj_set_pos(l, gx + at - (band - 4) / 2 - (geo->lk_dir[k] == LK_DOWN_RIGHT ? 6 : -6), gy - band + 2);
+        } else {
+            lv_obj_set_pos(l, gx - band + 1, gy + at - 10 - (geo->lk_dir[k] == LK_DOWN_RIGHT ? 6 : -6));
+        }
         lv_obj_set_hidden(l, false);
     }
     for (int b = 0; b < 9; b++) {
         bool on = b < across * down;
         lv_obj_set_hidden(boxes[b], !on);
-        if (!on) continue;
+        if (!on) {
+            continue;
+        }
         lv_obj_set_pos(boxes[b], LINE_THICK + (b % across) * (box_w + LINE_THICK),
                        LINE_THICK + (b / across) * (box_h + LINE_THICK));
         lv_obj_set_size(boxes[b], box_w, box_h);
     }
     for (int i = 0; i < 81; i++) {
         lv_obj_set_hidden(cells[i], !geo->used[i]);
-        if (!geo->used[i]) continue;
+        if (!geo->used[i]) {
+            continue;
+        }
         int r = i / 9, c = i % 9;
         lv_obj_set_pos(cells[i], LINE_THICK + (c / bw) * (box_w + LINE_THICK) + (c % bw) * (cs + LINE_THIN),
                        LINE_THICK + (r / bh) * (box_h + LINE_THICK) + (r % bh) * (cs + LINE_THIN));
@@ -917,13 +1067,15 @@ void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *box
 /* the game screen's board and number pad (1..n, as tall as the board) for g_var */
 void game_layout(void)
 {
-    if (!game_geo()) game_set_geo(sudoku_geom(game_var()));
+    if (!game_geo()) {
+        game_set_geo(sudoku_geom(game_var()));
+    }
     const bool left = store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
     if (game_layout_var() == game_var() && g_layout_left == left && game_var() != VAR_JIGSAW && game_var() != VAR_KILLER &&
-        game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH &&
-        game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD &&
-        game_var() != VAR_ARROW && game_var() != VAR_RENBAN && game_var() != VAR_WHISPER &&
-        game_var() != VAR_SKY && game_var() != VAR_LK) {
+            game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH &&
+            game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD &&
+            game_var() != VAR_ARROW && game_var() != VAR_RENBAN && game_var() != VAR_WHISPER &&
+            game_var() != VAR_SKY && game_var() != VAR_LK) {
         lv_obj_invalidate(game_grid());
         return;
     }
@@ -933,7 +1085,9 @@ void game_layout(void)
     const int board_x = left ? SCR_W - 8 - GAME_GRID_SIZE : GRID_X, pad_x = left ? 8 : GAME_PAD_X;
     board_layout_at(game_geo(), game_grid(), game_boxes(), game_cells(), game_clues(), board_x, GRID_Y, GAME_GRID_SIZE);
     for (int i = 0; i < 81; i++) {                  /* (4x4: big digits) */
-        if (game_cell_lbl()[i]) lv_obj_set_style_text_font(game_cell_lbl()[i], DIGIT_FONT_N(game_geo()->n), 0);
+        if (game_cell_lbl()[i]) {
+            lv_obj_set_style_text_font(game_cell_lbl()[i], DIGIT_FONT_N(game_geo()->n), 0);
+        }
     }
     lv_obj_set_x(game_pause_ovl(), board_x);
     const int n = game_geo()->n, span = GAME_GRID_SIZE - 6;         /* the pad as tall as the board */
@@ -941,7 +1095,9 @@ void game_layout(void)
     for (int d = 1; d <= 9; d++) {
         lv_obj_t *b = game_pad()[d - 1];
         lv_obj_set_hidden(b, d > n);
-        if (d > n) continue;
+        if (d > n) {
+            continue;
+        }
         lv_obj_set_pos(b, pad_x, GRID_Y + 1 + (d - 1) * (h + PAD_GAP) + (span - n * h - (n - 1) * PAD_GAP) / 2);
         lv_obj_set_size(b, GAME_PAD_W, h);
     }
@@ -952,28 +1108,52 @@ static void tour_area(int step, lv_area_t *a)
 {
     lv_obj_t *o[4] = {NULL};
     switch (step) {
-    case 0: o[0] = game_grid(); break;
-    case 1: o[0] = game_pad()[0]; o[1] = game_pad()[8]; break;
-    case 2: o[0] = game_undo_btn(); o[1] = game_fill_btn(); break;
-    case 3: o[0] = game_hint_btn(); break;
-    case 4: o[0] = game_bulb_btn(); break;                       /* the ⋮ menu */
-    default: o[0] = game_timer_btn(); break;
+    case 0:
+        o[0] = game_grid();
+        break;
+    case 1:
+        o[0] = game_pad()[0];
+        o[1] = game_pad()[8];
+        break;
+    case 2:
+        o[0] = game_undo_btn();
+        o[1] = game_fill_btn();
+        break;
+    case 3:
+        o[0] = game_hint_btn();
+        break;
+    case 4:
+        o[0] = game_bulb_btn();
+        break;                       /* the ⋮ menu */
+    default:
+        o[0] = game_timer_btn();
+        break;
     }
     lv_obj_get_coords(o[0], a);
     for (int i = 1; i < 4 && o[i]; i++) {
         lv_area_t b;
         lv_obj_get_coords(o[i], &b);
-        if (b.x1 < a->x1) a->x1 = b.x1;
-        if (b.y1 < a->y1) a->y1 = b.y1;
-        if (b.x2 > a->x2) a->x2 = b.x2;
-        if (b.y2 > a->y2) a->y2 = b.y2;
+        if (b.x1 < a->x1) {
+            a->x1 = b.x1;
+        }
+        if (b.y1 < a->y1) {
+            a->y1 = b.y1;
+        }
+        if (b.x2 > a->x2) {
+            a->x2 = b.x2;
+        }
+        if (b.y2 > a->y2) {
+            a->y2 = b.y2;
+        }
     }
     lv_area_increase(a, 4, 4);
 }
 
 static void tour_end(void)
 {
-    if (!tour_ovl) return;
+    if (!tour_ovl) {
+        return;
+    }
     lv_obj_delete(tour_ovl);
     tour_ovl = NULL;
     stats_db_set_seen("tour", true);
@@ -982,8 +1162,11 @@ static void tour_end(void)
 
 static void tour_next_cb(lv_event_t *e)
 {
-    if (tour_step + 1 >= TOUR_STEPS) tour_end();
-    else tour_show(tour_step + 1);
+    if (tour_step + 1 >= TOUR_STEPS) {
+        tour_end();
+    } else {
+        tour_show(tour_step + 1);
+    }
 }
 
 static void tour_skip_cb(lv_event_t *e)
@@ -993,7 +1176,9 @@ static void tour_skip_cb(lv_event_t *e)
 
 static void tour_dim(int x1, int y1, int x2, int y2)
 {
-    if (x2 <= x1 || y2 <= y1) return;
+    if (x2 <= x1 || y2 <= y1) {
+        return;
+    }
     lv_obj_t *r = lv_obj_create(tour_ovl);
     lv_obj_remove_style_all(r);
     lv_obj_set_pos(r, x1, y1);
@@ -1006,7 +1191,8 @@ static void tour_dim(int x1, int y1, int x2, int y2)
 static void tour_show(int step)
 {
     static const char *const TITLE[TOUR_STEPS] = {"The board", "The number pad", "Tools", "Hint", "The top bar",
-                                                  "The timer"};
+                                                  "The timer"
+                                                 };
     static const char *const TEXT[TOUR_STEPS] = {
         "Tap a cell, then a digit to put it there. Hold a cell to paint it a colour (in Killer: to see what its "
         "cage can hold).",
@@ -1058,7 +1244,9 @@ static void tour_show(int step)
     lv_obj_t *t = make_label(card, &lv_font_montserrat_22, C_TEXT);
     lv_label_set_text_fmt(t, "%s", TITLE[step]);
     const char *text = TEXT[step];
-    if (step == 3 && store_hint_nudge()) text = "Shows where to look next (Settings > Game > Hints: Nudge only).";
+    if (step == 3 && store_hint_nudge()) {
+        text = "Shows where to look next (Settings > Game > Hints: Nudge only).";
+    }
     lv_obj_t *x = make_wrap_text(card, &lv_font_montserrat_18, C_TEXT, text);
     lv_obj_set_width(x, LV_PCT(100));
     lv_obj_t *row = lv_obj_create(card);
@@ -1079,21 +1267,30 @@ static void tour_show(int step)
     }
     lv_obj_update_layout(card);
     int h = lv_obj_get_height(card), y;
-    if (a.y1 >= h + 16) y = a.y1 - h - 10;          /* above the target, or below it, or over its lower part */
-    else if (SCR_W - a.y2 >= h + 16) y = a.y2 + 10;
-    else y = SCR_W - h - 80;
+    if (a.y1 >= h + 16) {
+        y = a.y1 - h - 10;    /* above the target, or below it, or over its lower part */
+    } else if (SCR_W - a.y2 >= h + 16) {
+        y = a.y2 + 10;
+    } else {
+        y = SCR_W - h - 80;
+    }
     lv_obj_set_pos(card, (SCR_W - 560) / 2, y);
 }
 
 static void tour_check_cb(lv_timer_t *t)
 {
-    if (tour_ovl || lv_screen_active() != screen_game() || game_practice() >= 0 || game_attack() || game_solved() || !stats_db_ready())
+    if (tour_ovl || lv_screen_active() != screen_game() || game_practice() >= 0 || game_attack() || game_solved() || !stats_db_ready()) {
         return;
+    }
     lv_obj_t *top = lv_layer_top();                 /* the rules card, a notice: another time */
     for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
-        if (!lv_obj_is_hidden(lv_obj_get_child(top, (int32_t)i))) return;
+        if (!lv_obj_is_hidden(lv_obj_get_child(top, (int32_t)i))) {
+            return;
+        }
     }
-    if (stats_db_seen("tour")) return;
+    if (stats_db_seen("tour")) {
+        return;
+    }
     hint_drop();
     tour_show(0);
 }
@@ -1109,7 +1306,9 @@ void mark_started(void)
     time_t now = time(NULL);
     game_set_start_stamp(CLOCK_VALID(now) ? (int64_t)now : 0);
     game_set_started_tick(lv_tick_get());
-    if (!game_started_tick()) game_set_started_tick(1);
+    if (!game_started_tick()) {
+        game_set_started_tick(1);
+    }
 }
 
 /* ---- accessors: the other UI files reach this file's state through these */

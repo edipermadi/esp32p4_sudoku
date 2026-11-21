@@ -89,7 +89,9 @@ static lv_timer_t *fw_timer;                        /* the card's wait, then fol
 /* the Firmware update row: what's running, and what update.bin is */
 static void fw_row_update(void)
 {
-    if (!st_fw_hint) return;
+    if (!st_fw_hint) {
+        return;
+    }
     char run_id[9], new_id[9];
     fw_build_id(esp_app_get_description(), run_id);
     esp_app_desc_t d;
@@ -116,7 +118,9 @@ static void fb_keep_cb(lv_timer_t *t) { lv_display_trigger_activity(NULL); }
 
 void sudoku_ui_flash_busy(const char *title, const char *text)
 {
-    if (fb_ovl) return;
+    if (fb_ovl) {
+        return;
+    }
     fb_ovl = lv_obj_create(lv_layer_top());          /* nothing else meanwhile */
     lv_obj_remove_style_all(fb_ovl);
     lv_obj_set_size(fb_ovl, LV_PCT(100), LV_PCT(100));
@@ -146,7 +150,9 @@ void sudoku_ui_flash_busy(const char *title, const char *text)
 
 void sudoku_ui_flash_dark(void)
 {
-    if (fb_dark) return;
+    if (fb_dark) {
+        return;
+    }
     fb_dark = true;
     lv_refr_now(NULL);
     bsp_display_brightness_set(0);
@@ -155,11 +161,17 @@ void sudoku_ui_flash_dark(void)
 
 void sudoku_ui_flash_done(void)
 {
-    if (fb_ovl) lv_obj_delete(fb_ovl);
+    if (fb_ovl) {
+        lv_obj_delete(fb_ovl);
+    }
     fb_ovl = NULL;
-    if (fb_keep) lv_timer_delete(fb_keep);
+    if (fb_keep) {
+        lv_timer_delete(fb_keep);
+    }
     fb_keep = NULL;
-    if (!fb_dark) return;
+    if (!fb_dark) {
+        return;
+    }
     fb_dark = false;
     lv_refr_now(NULL);                              /* (drawn without the card before the light comes on) */
     bsp_display_sleep(false);
@@ -169,7 +181,9 @@ void sudoku_ui_flash_done(void)
 static void fw_poll_cb(lv_timer_t *t)
 {
     fw_state_t st = fw_update_state();
-    if (st == FW_WRITING) return;
+    if (st == FW_WRITING) {
+        return;
+    }
     lv_timer_delete(fw_timer);
     fw_timer = NULL;
     if (st == FW_FAILED) {
@@ -199,7 +213,9 @@ static void fw_go_cb(lv_event_t *e)
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
     esp_app_desc_t d;
     uint32_t size;
-    if (fw_timer || !fw_file_desc(&d, &size)) return;
+    if (fw_timer || !fw_file_desc(&d, &size)) {
+        return;
+    }
     char text[160];
     snprintf(text, sizeof(text), "The screen goes dark while the firmware is written (about %u seconds), then "
              "the board restarts into it by itself.", (unsigned)(size / (100 * 1024)) + 5);
@@ -311,7 +327,9 @@ static lv_obj_t *settings_dropdown(lv_obj_t *row, const char *options, uint32_t 
 static void sleep_dd_cb(lv_event_t *e)
 {
     uint32_t sel = lv_dropdown_get_selected(st_sleep_dd);
-    if (sel >= SLEEP_COUNT) return;
+    if (sel >= SLEEP_COUNT) {
+        return;
+    }
     s_sleep_min = SLEEP_MIN[sel];
     store_set_screen_timeout_min(s_sleep_min);
 }
@@ -320,7 +338,9 @@ static lv_obj_t  *s_sd_busy;          /* "Formatting..." box */
 
 static void sd_btn_text(const char *t, bool enabled)
 {
-    if (!st_sd_btn) return;
+    if (!st_sd_btn) {
+        return;
+    }
     lv_label_set_text(lv_obj_get_child(st_sd_btn, 0), t);
     lv_obj_set_state(st_sd_btn, LV_STATE_DISABLED, !enabled);
 }
@@ -343,11 +363,15 @@ static void sd_format_cancel_cb(lv_event_t *e)
 
 static void sd_format_cb(lv_event_t *e)
 {
-    if (sd_state() != SD_IDLE) return;
+    if (sd_state() != SD_IDLE) {
+        return;
+    }
     if (sd_present()) {
         sd_set_state(SD_FOUND);                    /* found at boot: straight to the question */
     } else if (!wifi_mgr_radio_started()) {
-        if (sd_run(SD_JOB_PROBE)) sd_btn_text("Checking...", false);
+        if (sd_run(SD_JOB_PROBE)) {
+            sd_btn_text("Checking...", false);
+        }
     } else {
         sudoku_ui_notice("No microSD card was found at start-up. Insert the card and restart the board "
                          "(Wi-Fi shares the card's controller, so it can't be detected while Wi-Fi runs).", 8000);
@@ -358,7 +382,9 @@ void sd_poll_cb(lv_timer_t *t)
 {
     /* sudoku.db results */
     static stats_view_t *view;                             /* PSRAM */
-    if (!view) view = heap_caps_malloc(sizeof(*view), MALLOC_CAP_SPIRAM);
+    if (!view) {
+        view = heap_caps_malloc(sizeof(*view), MALLOC_CAP_SPIRAM);
+    }
     if (view && stats_db_take_view(view) && view->level == stats_sel() - 1) {
         stats_take_view(view);
     }
@@ -368,12 +394,18 @@ void sd_poll_cb(lv_timer_t *t)
         store_reset_stats();                               /* sudoku.db -> RAM copy (this player's) */
         store_merge_stats(c_best, c_fewest, c_solves);
         lv_obj_t *act = lv_screen_active();
-        if (act == scr_home) refresh_home();
-        else if (act == scr_list) refresh_list();
-        else if (act == scr_stats) refresh_stats();
+        if (act == scr_home) {
+            refresh_home();
+        } else if (act == scr_list) {
+            refresh_list();
+        } else if (act == scr_stats) {
+            refresh_stats();
+        }
     }
 
-    if (u_ovl && (usb_msc_ejected() || usb_msc_unplugged())) usb_finish();   /* eject, or cable out */
+    if (u_ovl && (usb_msc_ejected() || usb_msc_unplugged())) {
+        usb_finish();    /* eject, or cable out */
+    }
     static store_prefs_t prefs;
     if (u_reloading && stats_db_take_prefs(&prefs)) {
         /* sudoku.db is back (perhaps a restored copy, or rebuilt): take everything from it */
@@ -381,8 +413,12 @@ void sd_poll_cb(lv_timer_t *t)
         store_apply_prefs(&prefs);
         apply_loaded_prefs();
     }
-    if (scr_history) history_poll();
-    if (screen_plays()) plays_poll();
+    if (scr_history) {
+        history_poll();
+    }
+    if (screen_plays()) {
+        plays_poll();
+    }
     if (stats_db_take_imports_changed()) {                 /* new collections: Puzzles' column and pane again */
         list_fill_colls();                                 /* (reloads them; not a rebuild of every screen:
                                                               two copies of them all left internal RAM to the
@@ -407,9 +443,14 @@ void sd_poll_cb(lv_timer_t *t)
         }
         refresh_home();
         render_players();
-        if (lv_screen_active() == screen_trophy()) tr_ask();          /* now this player's */
-        if (lv_screen_active() == scr_stats) refresh_stats();   /* now this player's */
-        else stats_player_dd_update();
+        if (lv_screen_active() == screen_trophy()) {
+            tr_ask();    /* now this player's */
+        }
+        if (lv_screen_active() == scr_stats) {
+            refresh_stats();    /* now this player's */
+        } else {
+            stats_player_dd_update();
+        }
     }
     static stats_player_t list[STATS_MAX_PLAYERS];
     int n = stats_db_take_players(list);
@@ -418,10 +459,14 @@ void sd_poll_cb(lv_timer_t *t)
         stats_player_dd_update();
     }
     char msg[96];
-    if (stats_db_take_message(msg, sizeof(msg))) sudoku_ui_notice(msg, 4000);
+    if (stats_db_take_message(msg, sizeof(msg))) {
+        sudoku_ui_notice(msg, 4000);
+    }
 
     sd_state_t st = sd_state();
-    if (st == s_sd_seen) return;
+    if (st == s_sd_seen) {
+        return;
+    }
     s_sd_seen = st;
     char sz[24], text[320];
     switch (st) {
@@ -456,17 +501,21 @@ void sd_poll_cb(lv_timer_t *t)
         if (st == SD_DONE) {
             store_reset_stats();                   /* match the new, empty sudoku.db */
             lv_obj_t *act = lv_screen_active();
-            if (act == scr_home) refresh_home();
-            else if (act == scr_list) refresh_list();
-            else if (act == scr_stats) refresh_stats();
+            if (act == scr_home) {
+                refresh_home();
+            } else if (act == scr_list) {
+                refresh_list();
+            } else if (act == scr_stats) {
+                refresh_stats();
+            }
             fmt_gb(sz, sizeof(sz), sd_bytes());
             snprintf(text, sizeof(text), "microSD card formatted: FAT32, one %s partition. New sudoku.db "
-                                         "with your current settings; statistics start fresh.", sz);
+                     "with your current settings; statistics start fresh.", sz);
         } else if (sd_last_error() == ESP_ERR_TIMEOUT || sd_last_error() == ESP_ERR_INVALID_CRC ||
                    sd_last_error() == ESP_ERR_INVALID_RESPONSE) {
             sd_forget();
             snprintf(text, sizeof(text), "The microSD card isn't answering. If it was swapped, restart the "
-                                         "board with the card inserted.");
+                     "board with the card inserted.");
         } else if (sd_last_error() == ESP_ERR_INVALID_SIZE) {
             snprintf(text, sizeof(text), "Format failed: the card is too small for FAT32.");
         } else {
@@ -523,9 +572,9 @@ static void factory_reset_confirm_cb(lv_event_t *e)
 static void factory_reset_cb(lv_event_t *e)
 {
     lv_obj_t *m = make_msgbox("Factory reset?",
-        "Settings go back to the defaults and the Wi-Fi network is forgotten. sudoku.db is erased: "
-        "all players, statistics, solve history and games in progress. A new, empty sudoku.db is "
-        "made. This can't be undone; to keep a copy, back up sudoku.db first (USB drive).");
+                              "Settings go back to the defaults and the Wi-Fi network is forgotten. sudoku.db is erased: "
+                              "all players, statistics, solve history and games in progress. A new, empty sudoku.db is "
+                              "made. This can't be undone; to keep a copy, back up sudoku.db first (USB drive).");
     lv_obj_set_width(m, 600);
     msgbox_button(m, "Cancel", mbox_close_cb, false);
     msgbox_button(m, "Reset", factory_reset_confirm_cb, true);
@@ -552,8 +601,8 @@ static void power_off_confirm_cb(lv_event_t *e)
 void power_off_cb(lv_event_t *e)
 {
     lv_obj_t *m = make_msgbox("Turn off?",
-        "The screen, sound and Wi-Fi turn off and the board goes into deep sleep. "
-        "Your game in progress is kept. Press the RESET button on the board to turn it back on.");
+                              "The screen, sound and Wi-Fi turn off and the board goes into deep sleep. "
+                              "Your game in progress is kept. Press the RESET button on the board to turn it back on.");
     msgbox_button(m, "Cancel", mbox_close_cb, false);
     msgbox_button(m, LV_SYMBOL_POWER "  Turn off", power_off_confirm_cb, true);
     lv_obj_set_style_bg_color(lv_obj_get_child(lv_msgbox_get_footer(m), -1), C_RED, 0);
@@ -563,7 +612,9 @@ void power_off_cb(lv_event_t *e)
 
 void usb_finish(void)
 {
-    if (!u_ovl) return;
+    if (!u_ovl) {
+        return;
+    }
     usb_drive_return();                            /* the computer lets go; sudoku.db reopened */
     lv_obj_delete_async(u_ovl);
     u_ovl = NULL;
@@ -574,13 +625,17 @@ void usb_finish(void)
 /* Connect only works with a computer on the OTG port: grey it out otherwise */
 void usb_btn_update(void)
 {
-    if (!st_usb_btn) return;
+    if (!st_usb_btn) {
+        return;
+    }
     bool host = usb_msc_host_connected();
     lv_obj_set_state(st_usb_btn, LV_STATE_DISABLED, !(sd_present() && host));
     const char *hint = !sd_present() ? "No microSD card"
-                     : host ? "Back up or restore sudoku.db on a computer"
-                     : "Plug the USB OTG port (not UART) into a computer";
-    if (strcmp(lv_label_get_text(st_usb_hint), hint) != 0) lv_label_set_text(st_usb_hint, hint);
+                       : host ? "Back up or restore sudoku.db on a computer"
+                       : "Plug the USB OTG port (not UART) into a computer";
+    if (strcmp(lv_label_get_text(st_usb_hint), hint) != 0) {
+        lv_label_set_text(st_usb_hint, hint);
+    }
 }
 
 static void usb_done_cb(lv_event_t *e)
@@ -594,8 +649,12 @@ static void usb_connect_cb(lv_event_t *e)
         sudoku_ui_notice("No microSD card. Insert one before switching on.", 4000);
         return;
     }
-    if (sd_state() != SD_IDLE) return;             /* formatting */
-    if (!usb_msc_host_connected()) return;         /* greyed out anyway (see usb_btn_update) */
+    if (sd_state() != SD_IDLE) {
+        return;    /* formatting */
+    }
+    if (!usb_msc_host_connected()) {
+        return;    /* greyed out anyway (see usb_btn_update) */
+    }
     if (usb_drive_lend() != ESP_OK) {              /* sudoku.db closed, the card to the computer */
         sudoku_ui_notice("Couldn't start the USB drive.", 4000);
         return;
@@ -618,15 +677,15 @@ static void usb_connect_cb(lv_event_t *e)
     lv_label_set_long_mode(txt, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_align(txt, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(txt, "The microSD card is now a drive on the computer connected to the board's "
-                           "USB OTG port.\n\nCopy sudoku.db to back it up, or put a backup in its place "
-                           "to restore it.");
+                      "USB OTG port.\n\nCopy sudoku.db to back it up, or put a backup in its place "
+                      "to restore it.");
     lv_obj_t *hint = make_label(u_ovl, &lv_font_montserrat_16, C_MUTED);
     lv_obj_set_width(hint, LV_PCT(100));
     lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(hint, "Eject the drive on the computer when you're done; the game takes the card "
-                            "back by itself, also if the USB cable is unplugged. Done does the same, but "
-                            "only tap it once copying has finished.");
+                      "back by itself, also if the USB cable is unplugged. Done does the same, but "
+                      "only tap it once copying has finished.");
     lv_obj_t *d = make_btn(u_ovl, 0, 0, 220, 60, "Done", &lv_font_montserrat_20, usb_done_cb, NULL);
     lv_obj_set_style_bg_color(d, C_ACCENT, 0);
     lv_obj_set_style_text_color(lv_obj_get_child(d, 0), lv_color_white(), 0);
@@ -635,7 +694,9 @@ static void usb_connect_cb(lv_event_t *e)
 void st_select_tab(int tab)
 {
     st_tab = tab;
-    if (tab == ST_DATA) fw_row_update();            /* (a new update.bin since: copied over USB)  */
+    if (tab == ST_DATA) {
+        fw_row_update();    /* (a new update.bin since: copied over USB)  */
+    }
     for (int i = 0; i < ST_TABS; i++) {
         lv_obj_set_state(st_tab_btn[i], LV_STATE_CHECKED, i == tab);
         lv_obj_set_style_text_color(lv_obj_get_child(st_tab_btn[i], 0), i == tab ? lv_color_white() : C_TEXT, 0);
@@ -677,15 +738,21 @@ void night_check(lv_timer_t *t)
     waited = 0;
     s_night = want;
     bool dark = want || store_dark_mode();
-    if (dark != s_dark) apply_theme(dark);
-    if (!ui_saver()) bsp_display_brightness_set(effective_brightness());   /* (off stays off) */
+    if (dark != s_dark) {
+        apply_theme(dark);
+    }
+    if (!ui_saver()) {
+        bsp_display_brightness_set(effective_brightness());    /* (off stays off) */
+    }
     printf("night mode: %s\n", want ? "on" : "off");
 }
 
 /* an open dropdown list (time zone) doesn't stay up over another screen */
 static void st_close_lists_cb(lv_event_t *e)
 {
-    if (st_tz_dd) lv_dropdown_close(st_tz_dd);
+    if (st_tz_dd) {
+        lv_dropdown_close(st_tz_dd);
+    }
 }
 
 static void hint_mode_dd_cb(lv_event_t *e)
@@ -707,8 +774,12 @@ void big_digits_dd_cb(lv_event_t *e)
 {
     store_set_big_digits(lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1);
     for (int i = 0; i < 81; i++) {                  /* the game's board now (Replay: when it opens) */
-        if (game_cell_lbl()[i]) lv_obj_set_style_text_font(game_cell_lbl()[i], DIGIT_FONT_N(game_geo() ? game_geo()->n : 9), 0);
-        if (game_cells()[i]) lv_obj_invalidate(game_cells()[i]);   /* (the pencil marks too) */
+        if (game_cell_lbl()[i]) {
+            lv_obj_set_style_text_font(game_cell_lbl()[i], DIGIT_FONT_N(game_geo() ? game_geo()->n : 9), 0);
+        }
+        if (game_cells()[i]) {
+            lv_obj_invalidate(game_cells()[i]);    /* (the pencil marks too) */
+        }
     }
 }
 
@@ -769,7 +840,8 @@ void build_settings(void)
     /* the tabs, under the title (Network first, and the one Settings opens on) */
     static const char *const TABS[ST_TABS] = {LV_SYMBOL_WIFI "  Network", LV_SYMBOL_IMAGE "  Display",
                                               LV_SYMBOL_VOLUME_MAX "  Sound", LV_SYMBOL_EDIT "  Game",
-                                              LV_SYMBOL_SD_CARD "  Data"};
+                                              LV_SYMBOL_SD_CARD "  Data"
+                                             };
     const int gap = 8, tw = (SCR_W - 24 - (ST_TABS - 1) * gap) / ST_TABS;
     for (int i = 0; i < ST_TABS; i++) {
         st_tab_btn[i] = make_btn(scr_settings, 12 + i * (tw + gap), ST_TAB_Y, tw, ST_TAB_H, TABS[i],
@@ -804,7 +876,9 @@ void build_settings(void)
 
     r = settings_row(col, "Screen off after", "Without a touch. The game pauses; tap to wake.");
     uint32_t sel = 0;
-    while (sel < SLEEP_COUNT - 1 && SLEEP_MIN[sel] != s_sleep_min) sel++;
+    while (sel < SLEEP_COUNT - 1 && SLEEP_MIN[sel] != s_sleep_min) {
+        sel++;
+    }
     st_sleep_dd = settings_dropdown(r, SLEEP_OPTIONS, sel, 150, sleep_dd_cb);
 
     r = settings_row(col, "Lock screen", "After the screen timeout: swipe up, or a PIN");
@@ -827,7 +901,9 @@ void build_settings(void)
     static char hours[24 * 6];                      /* "00:00\n01:00\n...23:00" */
     if (!hours[0]) {
         size_t len = 0;
-        for (int h = 0; h < 24; h++) len += snprintf(hours + len, sizeof(hours) - len, "%s%02d:00", h ? "\n" : "", h);
+        for (int h = 0; h < 24; h++) {
+            len += snprintf(hours + len, sizeof(hours) - len, "%s%02d:00", h ? "\n" : "", h);
+        }
     }
     r = settings_row(col, "Night hours", "From - to, local time");
     st_night_to = settings_dropdown(r, hours, store_night_end(), 110, night_hours_cb);
@@ -932,7 +1008,9 @@ void build_settings(void)
     lv_obj_set_style_bg_color(st_sd_btn, C_CARD2, 0);
     lv_obj_set_style_bg_opa(st_sd_btn, LV_OPA_50, LV_STATE_DISABLED);
     lv_obj_align(st_sd_btn, LV_ALIGN_RIGHT_MID, 0, 0);
-    if (sd_state() == SD_FORMATTING) sd_btn_text("Formatting...", false);
+    if (sd_state() == SD_FORMATTING) {
+        sd_btn_text("Formatting...", false);
+    }
 
 
     r = settings_row(col, "USB drive", "");
@@ -1030,8 +1108,12 @@ static void night_bright_cb(lv_event_t *e)
 {
     int v = lv_slider_get_value(lv_event_get_target_obj(e));
     lv_label_set_text_fmt(st_night_bright_lbl, "%d%%", v);
-    if (s_night) bsp_display_brightness_set(v < store_brightness() ? v : store_brightness());   /* see it now */
-    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_night_brightness((uint8_t)v);
+    if (s_night) {
+        bsp_display_brightness_set(v < store_brightness() ? v : store_brightness());    /* see it now */
+    }
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
+        store_set_night_brightness((uint8_t)v);
+    }
 }
 
 static void saver_clock_sw_cb(lv_event_t *e)
@@ -1049,17 +1131,25 @@ static void wifi_open_cb(lv_event_t *e)
 static const char *tz_dropdown_options(void)
 {
     static char *opts;
-    if (opts) return opts;
+    if (opts) {
+        return opts;
+    }
     size_t n = 0;
-    for (int i = 0; i < tz_count(); i++) n += strlen(tz_get(i)->name) + 16;
+    for (int i = 0; i < tz_count(); i++) {
+        n += strlen(tz_get(i)->name) + 16;
+    }
     opts = (char *)malloc(n);
-    if (!opts) return "UTC";
+    if (!opts) {
+        return "UTC";
+    }
     char *p = opts;
     for (int i = 0; i < tz_count(); i++) {
         const tz_entry_t *z = tz_get(i);
         const char *sp = strstr(z->label, "  ");          /* label: "UTC+4  Dubai" */
         int off_len = sp ? (int)(sp - z->label) : 0;
-        if (strcmp(z->name, "UTC") == 0) off_len = 0;
+        if (strcmp(z->name, "UTC") == 0) {
+            off_len = 0;
+        }
         p += sprintf(p, "%s%s%.*s%s", z->name, off_len ? "  " : "", off_len, z->label,
                      i < tz_count() - 1 ? "\n" : "");
     }
@@ -1093,7 +1183,9 @@ static void sound_sw_cb(lv_event_t *e)
     bool on = lv_obj_has_state(st_sound_sw, LV_STATE_CHECKED);
     sfx_set_enabled(on);
     store_set_sound_enabled(on);
-    if (on) sfx_play(SFX_TOUCH);   /* the tick for this press was skipped while muted */
+    if (on) {
+        sfx_play(SFX_TOUCH);    /* the tick for this press was skipped while muted */
+    }
 }
 
 /* brightness and volume: applied while the slider moves, saved when it's let go */
@@ -1103,7 +1195,9 @@ static void bright_sl_cb(lv_event_t *e)
     int nb = store_night_brightness();
     bsp_display_brightness_set(s_night && store_night_mode() && nb < v ? nb : v);   /* (at night: at most that) */
     lv_label_set_text_fmt(st_bright_lbl, "%d%%", v);
-    if (lv_event_get_code(e) == LV_EVENT_RELEASED) store_set_brightness((uint8_t)v);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
+        store_set_brightness((uint8_t)v);
+    }
 }
 
 static void vol_sl_cb(lv_event_t *e)
@@ -1178,34 +1272,62 @@ void apply_theme(bool dark)
     refresh_home();
     refresh_stats();
     lv_obj_t *to = act && act == old_game     ? scr_game
-                 : act && act == old_stats    ? scr_stats
-                 : act && act == old_wifi     ? scr_wifi
-                 : act && act == old_sysmon   ? scr_sysmon
-                 : act && act == old_files    ? scr_files
-                 : act && act == old_profile  ? scr_profile
-                 : act && act == old_history  ? scr_history
-                 : act && act == old_plays    ? screen_plays()
-                 : act && act == old_trophy   ? screen_trophy()
-                 : act && act == old_list     ? scr_list
-                 : act && act == old_settings ? scr_settings
-                 : scr_home;
+                   : act && act == old_stats    ? scr_stats
+                   : act && act == old_wifi     ? scr_wifi
+                   : act && act == old_sysmon   ? scr_sysmon
+                   : act && act == old_files    ? scr_files
+                   : act && act == old_profile  ? scr_profile
+                   : act && act == old_history  ? scr_history
+                   : act && act == old_plays    ? screen_plays()
+                   : act && act == old_trophy   ? screen_trophy()
+                   : act && act == old_list     ? scr_list
+                   : act && act == old_settings ? scr_settings
+                   : scr_home;
     lv_screen_load(to);
-    if (to == screen_plays()) plays_ask(plays_offset());         /* fill the rebuilt list */
-    if (to == screen_trophy()) tr_ask();
+    if (to == screen_plays()) {
+        plays_ask(plays_offset());    /* fill the rebuilt list */
+    }
+    if (to == screen_trophy()) {
+        tr_ask();
+    }
 
     /* the old screens may be running this very event: delete them later */
-    if (old_home) lv_obj_delete_async(old_home);
-    if (old_list) lv_obj_delete_async(old_list);
-    if (old_settings) lv_obj_delete_async(old_settings);
-    if (old_stats) lv_obj_delete_async(old_stats);
-    if (old_wifi) lv_obj_delete_async(old_wifi);
-    if (old_sysmon) lv_obj_delete_async(old_sysmon);
-    if (old_files) lv_obj_delete_async(old_files);
-    if (old_profile) lv_obj_delete_async(old_profile);
-    if (old_history) lv_obj_delete_async(old_history);
-    if (old_plays) lv_obj_delete_async(old_plays);
-    if (old_trophy) lv_obj_delete_async(old_trophy);
-    if (old_game) lv_obj_delete_async(old_game);
+    if (old_home) {
+        lv_obj_delete_async(old_home);
+    }
+    if (old_list) {
+        lv_obj_delete_async(old_list);
+    }
+    if (old_settings) {
+        lv_obj_delete_async(old_settings);
+    }
+    if (old_stats) {
+        lv_obj_delete_async(old_stats);
+    }
+    if (old_wifi) {
+        lv_obj_delete_async(old_wifi);
+    }
+    if (old_sysmon) {
+        lv_obj_delete_async(old_sysmon);
+    }
+    if (old_files) {
+        lv_obj_delete_async(old_files);
+    }
+    if (old_profile) {
+        lv_obj_delete_async(old_profile);
+    }
+    if (old_history) {
+        lv_obj_delete_async(old_history);
+    }
+    if (old_plays) {
+        lv_obj_delete_async(old_plays);
+    }
+    if (old_trophy) {
+        lv_obj_delete_async(old_trophy);
+    }
+    if (old_game) {
+        lv_obj_delete_async(old_game);
+    }
 }
 
 static void theme_sw_cb(lv_event_t *e)
@@ -1246,8 +1368,14 @@ lv_obj_t *settings_sd_hint(void) { return st_sd_hint; }
  * lent to a computer (USB drive); NULL when none (devctl genbench) */
 const char *settings_card_busy(void)
 {
-    if (fw_timer) return "a firmware update is being written";
-    if (sd_state() == SD_PROBING || sd_state() == SD_FORMATTING) return "the microSD card is being set up or formatted";
-    if (u_ovl) return "the card is lent to a computer (USB drive)";
+    if (fw_timer) {
+        return "a firmware update is being written";
+    }
+    if (sd_state() == SD_PROBING || sd_state() == SD_FORMATTING) {
+        return "the microSD card is being set up or formatted";
+    }
+    if (u_ovl) {
+        return "the card is lent to a computer (USB drive)";
+    }
     return NULL;
 }

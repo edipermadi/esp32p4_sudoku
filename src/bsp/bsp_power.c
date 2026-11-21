@@ -18,7 +18,7 @@ static void drive_and_hold(int gpio, int level)
     gpio_hold_dis((gpio_num_t)gpio);
     gpio_set_level((gpio_num_t)gpio, level);
     gpio_config_t cfg = {
-        .pin_bit_mask = 1ULL << gpio,
+        .pin_bit_mask = (1ULL << gpio),   /* (in parentheses: astyle 3.1 misaligns the next lines otherwise) */
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = level ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
         .pull_down_en = level ? GPIO_PULLDOWN_DISABLE : GPIO_PULLDOWN_ENABLE,
@@ -54,15 +54,21 @@ static uint32_t s_full_mhz;
 
 void bsp_power_save(bool on)
 {
-    if (on == s_saving) return;
+    if (on == s_saving) {
+        return;
+    }
     s_saving = on;
     if (on) {
         bsp_display_brightness_set(0);
         bsp_display_sleep(true);
         s_full_mhz = getCpuFrequencyMhz();
-        if (!setCpuFrequencyMhz(BSP_SAVE_CPU_MHZ)) printf("power save: CPU stays at %u MHz\n", (unsigned)s_full_mhz);
+        if (!setCpuFrequencyMhz(BSP_SAVE_CPU_MHZ)) {
+            printf("power save: CPU stays at %u MHz\n", (unsigned)s_full_mhz);
+        }
     } else {
-        if (s_full_mhz && getCpuFrequencyMhz() != s_full_mhz) setCpuFrequencyMhz(s_full_mhz);
+        if (s_full_mhz && getCpuFrequencyMhz() != s_full_mhz) {
+            setCpuFrequencyMhz(s_full_mhz);
+        }
         bsp_display_sleep(false);
     }
 }
@@ -71,6 +77,8 @@ bool bsp_power_saving(void) { return s_saving; }
 
 void bsp_power_cpu_full(bool on)
 {
-    if (!s_saving || !s_full_mhz) return;
+    if (!s_saving || !s_full_mhz) {
+        return;
+    }
     setCpuFrequencyMhz(on ? s_full_mhz : BSP_SAVE_CPU_MHZ);
 }

@@ -57,7 +57,9 @@ static inline int moves_unpack(const uint8_t *in, int bytes, game_move_t *out, i
         m->cell = in[4];
         m->digit = in[5] & 0x0F;
         m->kind = in[5] >> 4;
-        if (m->cell > 80 || m->digit > 9 || m->kind > MOVE_REDO) break;
+        if (m->cell > 80 || m->digit > 9 || m->kind > MOVE_REDO) {
+            break;
+        }
     }
     return n;
 }

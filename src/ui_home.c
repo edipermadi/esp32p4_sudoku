@@ -73,7 +73,9 @@ static void week_row(lv_obj_t *parent, const char *name, const char *a, const ch
 
 static void week_cb(lv_event_t *e)
 {
-    if (!h_week_ok) return;
+    if (!h_week_ok) {
+        return;
+    }
     const stats_weeksum_t *w = &h_week;
     lv_obj_t *m = make_msgbox(SYMBOL_CALENDAR "  This week", NULL);
     lv_obj_set_width(m, 600);
@@ -82,24 +84,38 @@ static void week_cb(lv_event_t *e)
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     char a[24], b[24];
     week_row(c, "", "This week", "Last week", true);
-    snprintf(a, sizeof(a), "%d", w->n[0]); snprintf(b, sizeof(b), "%d", w->n[1]);
+    snprintf(a, sizeof(a), "%d", w->n[0]);
+    snprintf(b, sizeof(b), "%d", w->n[1]);
     week_row(c, "Solved", a, b, false);
     for (int k = 0; k < 2; k++) {
         char *o = k ? b : a;
-        if (w->n[k]) fmt_time(o, 24, w->best[k]); else snprintf(o, 24, "-");
+        if (w->n[k]) {
+            fmt_time(o, 24, w->best[k]);
+        } else {
+            snprintf(o, 24, "-");
+        }
     }
     week_row(c, "Fastest", a, b, false);
     for (int k = 0; k < 2; k++) {
         char *o = k ? b : a;
-        if (w->n[k]) fmt_time(o, 24, w->avg[k]); else snprintf(o, 24, "-");
+        if (w->n[k]) {
+            fmt_time(o, 24, w->avg[k]);
+        } else {
+            snprintf(o, 24, "-");
+        }
     }
     week_row(c, "Average time", a, b, false);
     for (int k = 0; k < 2; k++) {
         char *o = k ? b : a;
-        if (w->n[k]) snprintf(o, 24, "%u.%u", w->mist10[k] / 10, w->mist10[k] % 10); else snprintf(o, 24, "-");
+        if (w->n[k]) {
+            snprintf(o, 24, "%u.%u", w->mist10[k] / 10, w->mist10[k] % 10);
+        } else {
+            snprintf(o, 24, "-");
+        }
     }
     week_row(c, "Mistakes per puzzle", a, b, false);
-    snprintf(a, sizeof(a), "%lu", (unsigned long)w->hints[0]); snprintf(b, sizeof(b), "%lu", (unsigned long)w->hints[1]);
+    snprintf(a, sizeof(a), "%lu", (unsigned long)w->hints[0]);
+    snprintf(b, sizeof(b), "%lu", (unsigned long)w->hints[1]);
     week_row(c, "Hints", a, b, false);
     char verdict[128] = "";
     if (w->n[0] && w->n[1]) {
@@ -124,18 +140,24 @@ static void week_cb(lv_event_t *e)
  * when there isn't one yet), else the person icon */
 void home_player_update(void)
 {
-    if (!h_player_title) return;
+    if (!h_player_title) {
+        return;
+    }
     static bool asked;
     int av = 0;
     for (int i = 0; i < players_count(); i++) {
-        if (players_all()[i].id == store_player_id() && players_all()[i].avatar <= AVATAR_COUNT) av = players_all()[i].avatar;
+        if (players_all()[i].id == store_player_id() && players_all()[i].avatar <= AVATAR_COUNT) {
+            av = players_all()[i].avatar;
+        }
     }
     if (players_count() < 0 && !asked && stats_db_ready()) {
         asked = true;
         stats_db_list_players();                    /* (render_players calls back here when it comes) */
     }
     lv_obj_set_hidden(h_player_avatar, !av);
-    if (av) lv_image_set_src(h_player_avatar, avatar_image(av - 1));
+    if (av) {
+        lv_image_set_src(h_player_avatar, avatar_image(av - 1));
+    }
     lv_label_set_text(h_player_title, av ? "Players" : SYMBOL_USER "  Players");
 }
 
@@ -147,7 +169,9 @@ void refresh_home(void)
     }
     h_total_n = total;
     home_total_text();
-    if (stats_db_ready() && time(NULL) > 1700000000) stats_db_query_weeksum();   /* (clock_cb picks it up) */
+    if (stats_db_ready() && time(NULL) > 1700000000) {
+        stats_db_query_weeksum();    /* (clock_cb picks it up) */
+    }
     lv_label_set_text_fmt(h_player, "Playing as %s", store_player_name());
     home_player_update();
 
@@ -157,7 +181,9 @@ void refresh_home(void)
     uint16_t last = s->id != STORE_NO_GAME ? s->id : (s_ngames ? s_games[0].puzzle : STORE_NO_GAME);
     uint32_t ms = s->id != STORE_NO_GAME ? s->elapsed_ms : (s_ngames ? s_games[0].elapsed_ms : 0);
     int others = 0;
-    for (int i = 0; i < s_ngames; i++) others += s_games[i].puzzle != last;
+    for (int i = 0; i < s_ngames; i++) {
+        others += s_games[i].puzzle != last;
+    }
     /* Continue stays in its place: greyed out (like Daily puzzle without the clock) when
      * there is nothing to continue, so the menu doesn't shift around */
     bool any = last != STORE_NO_GAME;
@@ -169,13 +195,18 @@ void refresh_home(void)
         char name[40], t[16];
         puzzle_name(last, name, sizeof(name));
         fmt_time(t, sizeof(t), ms / 1000);
-        if (others) lv_label_set_text_fmt(h_continue_sub, "%s  -  %s   (+%d more)", name, t, others);
-        else lv_label_set_text_fmt(h_continue_sub, "%s  -  %s", name, t);
+        if (others) {
+            lv_label_set_text_fmt(h_continue_sub, "%s  -  %s   (+%d more)", name, t, others);
+        } else {
+            lv_label_set_text_fmt(h_continue_sub, "%s  -  %s", name, t);
+        }
     } else {
         lv_label_set_text(h_continue_sub, "No game in progress");
     }
     daily_btn_update();
-    if (stats_db_ready()) stats_db_query_achievements();   /* the Trophies line (trophy_poll) */
+    if (stats_db_ready()) {
+        stats_db_query_achievements();    /* the Trophies line (trophy_poll) */
+    }
     home_layout();
 }
 
@@ -206,7 +237,9 @@ void st_wifi_update(void)
     wifi_mgr_get_status(&ws);
     bool connected = ws.state == WIFI_ST_CONNECTED;
     const char *w = connected && !st_wifi_reveal ? "Connected  ******" : wifi_ui_summary();
-    if (strcmp(lv_label_get_text(settings_wifi_lbl()), w) != 0) lv_label_set_text(settings_wifi_lbl(), w);
+    if (strcmp(lv_label_get_text(settings_wifi_lbl()), w) != 0) {
+        lv_label_set_text(settings_wifi_lbl(), w);
+    }
     lv_obj_set_hidden(settings_wifi_eye(), !connected);
     lv_label_set_text(lv_obj_get_child(settings_wifi_eye(), 0), st_wifi_reveal ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
 }
@@ -240,11 +273,15 @@ void clock_cb(lv_timer_t *t)
         st_wifi_update();
         char sd[64];
         stats_db_status(sd, sizeof(sd));
-        if (strcmp(lv_label_get_text(settings_sd_hint()), sd) != 0) lv_label_set_text(settings_sd_hint(), sd);
+        if (strcmp(lv_label_get_text(settings_sd_hint()), sd) != 0) {
+            lv_label_set_text(settings_sd_hint(), sd);
+        }
         usb_btn_update();
         return;
     }
-    if (act != screen_home()) return;
+    if (act != screen_home()) {
+        return;
+    }
 
     char c[8], d[64];
     time_t now = time(NULL);
@@ -261,7 +298,9 @@ void clock_cb(lv_timer_t *t)
     if (strcmp(key, daily_key) != 0) {
         strcpy(daily_key, key);
         daily_btn_update();
-        if (valid && stats_db_ready()) stats_db_query_weeksum();   /* the clock is set, or a new day */
+        if (valid && stats_db_ready()) {
+            stats_db_query_weeksum();    /* the clock is set, or a new day */
+        }
     }
     if (stats_db_take_weeksum(&h_week)) {
         h_week_ok = valid;
@@ -277,7 +316,7 @@ void clock_cb(lv_timer_t *t)
         wifi_mgr_get_status(&ws);
         c[0] = 0;
         snprintf(d, sizeof(d), "%s", ws.state == WIFI_ST_CONNECTED ? "Getting the time..."
-                                   : "Connect Wi-Fi in Settings to show the time");
+                 : "Connect Wi-Fi in Settings to show the time");
     }
     if (strcmp(c, last_clock) != 0 || lv_obj_is_hidden(h_clock) == valid) {
         strcpy(last_clock, c);
@@ -296,7 +335,9 @@ static bool resume_game(uint16_t id)
 {
     if (store_saved_game()->id != id) {
         saved_game_t g;
-        if (!stats_db_ready() || !stats_db_load_game(id, &g)) return false;
+        if (!stats_db_ready() || !stats_db_load_game(id, &g)) {
+            return false;
+        }
         store_set_game(&g);                              /* the one being played now */
         store_load_game_moves();
     }
@@ -309,7 +350,9 @@ static lv_obj_t *ug_box;
 
 static void ug_close(void)
 {
-    if (ug_box) lv_msgbox_close_async(ug_box);
+    if (ug_box) {
+        lv_msgbox_close_async(ug_box);
+    }
     ug_box = NULL;
 }
 
@@ -322,22 +365,31 @@ static void ug_resume_cb(lv_event_t *e)
 {
     uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
     ug_close();
-    if (!resume_game(id)) sudoku_ui_notice("That game isn't in sudoku.db any more.", 3000);
+    if (!resume_game(id)) {
+        sudoku_ui_notice("That game isn't in sudoku.db any more.", 3000);
+    }
 }
 
 static void ug_discard_cb(lv_event_t *e)
 {
     uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
-    if (store_saved_game()->id == id) store_clear_game();
-    else stats_db_clear_game(id);
-    if (game_id() == id && !game_solved()) game_set_id(STORE_NO_GAME);   /* the game screen held it */
+    if (store_saved_game()->id == id) {
+        store_clear_game();
+    } else {
+        stats_db_clear_game(id);
+    }
+    if (game_id() == id && !game_solved()) {
+        game_set_id(STORE_NO_GAME);    /* the game screen held it */
+    }
     char name[40], msg[80];
     puzzle_name(id, name, sizeof(name));
     snprintf(msg, sizeof(msg), "Discarded %s.", name);
     sudoku_ui_notice(msg, 2500);
     ug_close();
     refresh_home();
-    if (s_ngames > 1) ug_open();                         /* the rest */
+    if (s_ngames > 1) {
+        ug_open();    /* the rest */
+    }
 }
 
 static void ug_open(void)
@@ -364,7 +416,7 @@ static void ug_open(void)
         }
         int var = VAR_CLASSIC;
         int cells = puzzle_is_generated(r->puzzle) && gen_lookup(r->puzzle, NULL, &var, NULL)
-                        ? (var == VAR_MINI ? 36 : var == VAR_KIDS ? 16 : 81) : 81;
+                    ? (var == VAR_MINI ? 36 : var == VAR_KIDS ? 16 : 81) : 81;
         snprintf(line, sizeof(line), "%s   -   %d / %d filled%s", t, r->filled, cells, when);
         lv_obj_t *n = make_label(row, &lv_font_montserrat_18, C_TEXT);
         lv_label_set_text(n, name);
@@ -389,8 +441,10 @@ static void continue_cb(lv_event_t *e)
         return;
     }
     uint16_t id = store_saved_game()->id != STORE_NO_GAME ? store_saved_game()->id
-                                                          : (s_ngames ? s_games[0].puzzle : STORE_NO_GAME);
-    if (id != STORE_NO_GAME && !resume_game(id)) sudoku_ui_notice("That game isn't in sudoku.db any more.", 3000);
+                  : (s_ngames ? s_games[0].puzzle : STORE_NO_GAME);
+    if (id != STORE_NO_GAME && !resume_game(id)) {
+        sudoku_ui_notice("That game isn't in sudoku.db any more.", 3000);
+    }
 }
 
 static void discard_confirm_cb(lv_event_t *e)
@@ -410,14 +464,18 @@ void open_puzzle(uint16_t id)
 {
     const saved_game_t *s = store_saved_game();
     if (s->id == STORE_NO_GAME || s->id == id) {
-        if (s->id != id && stats_db_ready() && resume_game(id)) return;   /* an unfinished game in sudoku.db */
+        if (s->id != id && stats_db_ready() && resume_game(id)) {
+            return;    /* an unfinished game in sudoku.db */
+        }
         start_game(id, s->id == id);
         return;
     }
     if (stats_db_ready()) {
         /* sudoku.db keeps several unfinished games: the current one is saved,
          * this one is resumed if it was started before, else begun */
-        if (!resume_game(id)) start_game(id, false);
+        if (!resume_game(id)) {
+            start_game(id, false);
+        }
         return;
     }
     /* without a card there's one slot: resume or discard the game in it */
@@ -597,7 +655,9 @@ void games_refresh(void)
 
 static void stats_cb(lv_event_t *e)
 {
-    if (stats_db_ready()) stats_db_list_players();   /* fresh list for the player dropdown */
+    if (stats_db_ready()) {
+        stats_db_list_players();    /* fresh list for the player dropdown */
+    }
     refresh_stats();
     lv_screen_load(screen_stats());
 }
@@ -611,7 +671,9 @@ static void plays_cb(lv_event_t *e)
 static void profile_cb(lv_event_t *e)
 {
     render_players();
-    if (stats_db_ready()) stats_db_list_players();      /* fresh counts; drawn when they arrive */
+    if (stats_db_ready()) {
+        stats_db_list_players();    /* fresh counts; drawn when they arrive */
+    }
     lv_screen_load(screen_profile());
 }
 

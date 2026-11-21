@@ -61,20 +61,27 @@ static bool map_avatars(void)
 {
     const esp_partition_t *p = partition();
     av_header_t h;
-    if (!p || p->size < AV_HEADER + AV_BYTES || esp_partition_read(p, 0, &h, sizeof(h)) != ESP_OK || !header_ok(&h))
+    if (!p || p->size < AV_HEADER + AV_BYTES || esp_partition_read(p, 0, &h, sizeof(h)) != ESP_OK || !header_ok(&h)) {
         return false;
+    }
     const void *ptr;
-    if (esp_partition_mmap(p, 0, AV_HEADER + AV_BYTES, ESP_PARTITION_MMAP_DATA, &ptr, &s_map) != ESP_OK) return false;
+    if (esp_partition_mmap(p, 0, AV_HEADER + AV_BYTES, ESP_PARTITION_MMAP_DATA, &ptr, &s_map) != ESP_OK) {
+        return false;
+    }
     s_pixels = (const uint8_t *)ptr + AV_HEADER;
     return true;
 }
 
 bool avatars_init(void)
 {
-    if (s_dsc) return s_pixels != NULL;
+    if (s_dsc) {
+        return s_pixels != NULL;
+    }
     s_dsc = heap_caps_calloc(AVATAR_COUNT, sizeof(*s_dsc), MALLOC_CAP_SPIRAM);
     s_blank = heap_caps_calloc(1, AV_ONE, MALLOC_CAP_SPIRAM);
-    if (!s_dsc || !s_blank) abort();                /* at start-up, with megabytes free */
+    if (!s_dsc || !s_blank) {
+        abort();    /* at start-up, with megabytes free */
+    }
     for (int i = 0; i < AVATAR_COUNT; i++) {
         s_dsc[i].header.magic = LV_IMAGE_HEADER_MAGIC;
         s_dsc[i].header.cf = LV_COLOR_FORMAT_RGB565A8;
@@ -84,14 +91,19 @@ bool avatars_init(void)
     }
     bool ok = map_avatars();
     point_images();
-    if (ok) printf("avatars: %d from the flash's avatars partition\n", AVATAR_COUNT);
-    else printf("avatars: not in flash (partition missing or another set): blank; avatars.bin on the card installs them\n");
+    if (ok) {
+        printf("avatars: %d from the flash's avatars partition\n", AVATAR_COUNT);
+    } else {
+        printf("avatars: not in flash (partition missing or another set): blank; avatars.bin on the card installs them\n");
+    }
     return ok;
 }
 
 const lv_image_dsc_t *avatar_image(int i)
 {
-    if (!s_dsc) avatars_init();
+    if (!s_dsc) {
+        avatars_init();
+    }
     return &s_dsc[i < 0 || i >= AVATAR_COUNT ? 0 : i];
 }
 
@@ -117,7 +129,9 @@ static void install_task(void *arg)
         crc = esp_rom_crc32_le(crc, buf, n);
         at += n;
         s_done = at;
-        if (!(at % (1024 * 1024))) printf("avatars: %u MB written\n", (unsigned)(at >> 20));
+        if (!(at % (1024 * 1024))) {
+            printf("avatars: %u MB written\n", (unsigned)(at >> 20));
+        }
     }
     ok = ok && crc == AVATAR_CRC;                   /* the file's pixels are the ones expected */
     if (ok) {                                       /* and they're in flash as they were read */
@@ -129,7 +143,9 @@ static void install_task(void *arg)
         }
         ok = ok && crc == AVATAR_CRC && esp_partition_write(p, 0, &h, sizeof(h)) == ESP_OK;
     }
-    if (f) fclose(f);
+    if (f) {
+        fclose(f);
+    }
     heap_caps_free(buf);
     printf("avatars: install %s\n", ok ? "done" : "failed (the file isn't this firmware's avatars.bin?)");
     s_install = ok ? 2 : 3;
@@ -138,17 +154,23 @@ static void install_task(void *arg)
 
 bool avatars_installable(void)
 {
-    if (s_pixels || s_install == 1 || !partition()) return false;
+    if (s_pixels || s_install == 1 || !partition()) {
+        return false;
+    }
     FILE *f = fopen(AV_FILE, "rb");
     av_header_t h;
     bool ok = f && fread(&h, 1, sizeof(h), f) == sizeof(h) && header_ok(&h);
-    if (f) fclose(f);
+    if (f) {
+        fclose(f);
+    }
     return ok;
 }
 
 bool avatars_install(void)
 {
-    if (!avatars_installable()) return false;
+    if (!avatars_installable()) {
+        return false;
+    }
     s_install = 1;
     s_done = 0;
     if (xTaskCreatePinnedToCore(install_task, "avatars", 4096, NULL, 1, NULL, 0) != pdPASS) {
@@ -160,11 +182,17 @@ bool avatars_install(void)
 
 int avatars_install_poll(uint32_t *done, uint32_t *total)
 {
-    if (done) *done = s_done;
-    if (total) *total = AV_BYTES;
+    if (done) {
+        *done = s_done;
+    }
+    if (total) {
+        *total = AV_BYTES;
+    }
     if (s_install == 2) {                           /* written and checked: use it */
         s_install = 0;
-        if (!map_avatars()) return 3;
+        if (!map_avatars()) {
+            return 3;
+        }
         point_images();
         return 2;
     }

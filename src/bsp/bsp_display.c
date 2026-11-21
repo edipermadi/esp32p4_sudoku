@@ -122,7 +122,7 @@ bsp_panel_kind_t bsp_display_panel_kind(void) { return s_panel_kind; }
 static void panel_hw_reset(void)
 {
     gpio_config_t cfg = {
-        .pin_bit_mask = 1ULL << BSP_LCD_RST_GPIO,
+        .pin_bit_mask = (1ULL << BSP_LCD_RST_GPIO),
         .mode = GPIO_MODE_OUTPUT,
     };
     gpio_config(&cfg);
@@ -153,7 +153,7 @@ static bsp_panel_kind_t panel_probe(esp_lcd_panel_io_handle_t io)
     uint8_t jd[2] = {0};
     esp_lcd_panel_io_rx_param(io, 0x8D, &jd[0], 1);
     esp_lcd_panel_io_rx_param(io, 0x8E, &jd[1], 1);
-    esp_lcd_panel_io_tx_param(io, 0xE0, (uint8_t[]){0x00}, 1);   /* back to page 0 */
+    esp_lcd_panel_io_tx_param(io, 0xE0, (uint8_t[]) {0x00}, 1);  /* back to page 0 */
     ESP_LOGI(TAG, "JD9365 ID: %02X %02X", jd[0], jd[1]);
     if (jd[0] == 0x93 && jd[1] == 0x65) {
         return BSP_PANEL_JD9365;
@@ -255,16 +255,16 @@ esp_err_t bsp_display_new(esp_lcd_panel_handle_t *ret_panel)
      *    esp_lcd_jd9365 drivers, then start the video stream. */
     if (s_panel_kind == BSP_PANEL_JD9365) {
         ESP_LOGI(TAG, "Initialising JD9365DA");
-        esp_lcd_panel_io_tx_param(io, 0xE0, (uint8_t[]){0x00}, 1);              /* page 0 */
-        esp_lcd_panel_io_tx_param(io, LCD_CMD_MADCTL, (uint8_t[]){0x00}, 1);
-        esp_lcd_panel_io_tx_param(io, LCD_CMD_COLMOD, (uint8_t[]){0x55}, 1);    /* 16 bpp */
-        esp_lcd_panel_io_tx_param(io, 0x80, (uint8_t[]){0x01}, 1);              /* 2 lanes */
+        esp_lcd_panel_io_tx_param(io, 0xE0, (uint8_t[]) {0x00}, 1);             /* page 0 */
+        esp_lcd_panel_io_tx_param(io, LCD_CMD_MADCTL, (uint8_t[]) {0x00}, 1);
+        esp_lcd_panel_io_tx_param(io, LCD_CMD_COLMOD, (uint8_t[]) {0x55}, 1);   /* 16 bpp */
+        esp_lcd_panel_io_tx_param(io, 0x80, (uint8_t[]) {0x01}, 1);             /* 2 lanes */
         ESP_RETURN_ON_ERROR(send_init_cmds(io, jd9365_init_cmds,
                                            sizeof(jd9365_init_cmds) / sizeof(jd9365_init_cmds[0])),
                             TAG, "JD9365 init failed");
     } else {
         ESP_LOGI(TAG, "Initialising ST7703");
-        esp_lcd_panel_io_tx_param(io, LCD_CMD_MADCTL, (uint8_t[]){0x00}, 1);
+        esp_lcd_panel_io_tx_param(io, LCD_CMD_MADCTL, (uint8_t[]) {0x00}, 1);
         ESP_RETURN_ON_ERROR(send_init_cmds(io, st7703_init_cmds,
                                            sizeof(st7703_init_cmds) / sizeof(st7703_init_cmds[0])),
                             TAG, "ST7703 init failed");
@@ -283,7 +283,9 @@ esp_err_t bsp_display_new(esp_lcd_panel_handle_t *ret_panel)
  * init tables do (sleep-out: 120 ms on the JD9365, 250 ms on the ST7703). */
 void bsp_display_sleep(bool sleep)
 {
-    if (!s_io) return;
+    if (!s_io) {
+        return;
+    }
     if (sleep) {
         esp_lcd_panel_io_tx_param(s_io, LCD_CMD_DISPOFF, NULL, 0);
         esp_lcd_panel_io_tx_param(s_io, LCD_CMD_SLPIN, NULL, 0);

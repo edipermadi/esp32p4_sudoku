@@ -135,7 +135,9 @@ static void render_month(const stats_month_t *m)
     memcpy(hz_count, m->count, sizeof(hz_count));
     int n = 0;
     for (int d = 1; d <= 31; d++) {
-        if (!m->count[d - 1]) continue;
+        if (!m->count[d - 1]) {
+            continue;
+        }
         hz_marked[n].year = m->year;
         hz_marked[n].month = m->month;
         hz_marked[n].day = d;
@@ -151,14 +153,22 @@ static void history_cal_draw_cb(lv_event_t *e)
 {
     lv_draw_task_t *t = lv_event_get_draw_task(e);
     lv_draw_task_type_t type = lv_draw_task_get_type(t);
-    if (type != LV_DRAW_TASK_TYPE_LABEL && type != LV_DRAW_TASK_TYPE_FILL) return;
+    if (type != LV_DRAW_TASK_TYPE_LABEL && type != LV_DRAW_TASK_TYPE_FILL) {
+        return;
+    }
     lv_draw_dsc_base_t *base = (lv_draw_dsc_base_t *)lv_draw_task_get_draw_dsc(t);
-    if (base->part != LV_PART_ITEMS) return;
+    if (base->part != LV_PART_ITEMS) {
+        return;
+    }
     lv_obj_t *bm = lv_event_get_current_target_obj(e);
     uint32_t id = base->id1;
-    if (id < 7 || lv_buttonmatrix_has_button_ctrl(bm, id, LV_BUTTONMATRIX_CTRL_DISABLED)) return;  /* names, other months */
+    if (id < 7 || lv_buttonmatrix_has_button_ctrl(bm, id, LV_BUTTONMATRIX_CTRL_DISABLED)) {
+        return;    /* names, other months */
+    }
     int day = atoi(lv_buttonmatrix_get_button_text(bm, id));
-    if (day < 1 || day > 31) return;
+    if (day < 1 || day > 31) {
+        return;
+    }
 
     const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
     bool selected = hz_sel.year == sh->year && hz_sel.month == sh->month && hz_sel.day == day;
@@ -170,14 +180,23 @@ static void history_cal_draw_cb(lv_event_t *e)
         }
         return;
     }
-    if (selected) lv_draw_task_get_label_dsc(t)->color = lv_color_white();
+    if (selected) {
+        lv_draw_task_get_label_dsc(t)->color = lv_color_white();
+    }
 
-    if (!lv_buttonmatrix_has_button_ctrl(bm, id, LV_BUTTONMATRIX_CTRL_CUSTOM_2)) return;  /* highlighted */
-    if (!hz_count[day - 1]) return;
+    if (!lv_buttonmatrix_has_button_ctrl(bm, id, LV_BUTTONMATRIX_CTRL_CUSTOM_2)) {
+        return;    /* highlighted */
+    }
+    if (!hz_count[day - 1]) {
+        return;
+    }
 
     char txt[4];
-    if (hz_count[day - 1] > 99) snprintf(txt, sizeof(txt), "99");
-    else snprintf(txt, sizeof(txt), "%u", (unsigned)hz_count[day - 1]);
+    if (hz_count[day - 1] > 99) {
+        snprintf(txt, sizeof(txt), "99");
+    } else {
+        snprintf(txt, sizeof(txt), "%u", (unsigned)hz_count[day - 1]);
+    }
     lv_area_t a;                                    /* the day number's text area */
     lv_draw_task_get_area(t, &a);
     int w = txt[1] ? 24 : 18, h = 18;
@@ -211,10 +230,14 @@ static void history_ask_month(int year, int month)
 static void history_day_cb(lv_event_t *e)
 {
     lv_calendar_date_t d;
-    if (lv_calendar_get_pressed_date(hz_cal, &d) != LV_RESULT_OK || !d.year) return;
+    if (lv_calendar_get_pressed_date(hz_cal, &d) != LV_RESULT_OK || !d.year) {
+        return;
+    }
     hz_sel = d;
     lv_obj_invalidate(lv_calendar_get_btnmatrix(hz_cal));
-    if (!stats_db_ready()) return;
+    if (!stats_db_ready()) {
+        return;
+    }
     stats_db_query_day(d.year, d.month, d.day);
 }
 
@@ -260,13 +283,19 @@ void history_poll(void)
             hz_month = m.month;
         }
         hz_latest_pending = false;
-        if (m.year == hz_year && m.month == hz_month) render_month(&m);
+        if (m.year == hz_year && m.month == hz_month) {
+            render_month(&m);
+        }
     }
     static stats_day_t d;
-    if (stats_db_take_day(&d)) render_day(&d);
+    if (stats_db_take_day(&d)) {
+        render_day(&d);
+    }
     if (lv_screen_active() == screen_history() && stats_db_ready() && !hz_latest_pending) {
         const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
-        if (sh->year != hz_year || sh->month != hz_month) history_ask_month(sh->year, sh->month);
+        if (sh->year != hz_year || sh->month != hz_month) {
+            history_ask_month(sh->year, sh->month);
+        }
     }
 }
 
@@ -292,7 +321,9 @@ void build_history(void)
     lv_obj_set_send_draw_task_events(bm, true);
     lv_obj_add_event_cb(bm, history_cal_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
     lv_obj_add_event_cb(hz_cal, history_day_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    if (hz_year) lv_calendar_set_month_shown(hz_cal, hz_year, hz_month);   /* theme rebuild */
+    if (hz_year) {
+        lv_calendar_set_month_shown(hz_cal, hz_year, hz_month);    /* theme rebuild */
+    }
 
     hz_title = make_label(screen_history(), &lv_font_montserrat_20, C_TEXT);
     lv_obj_set_pos(hz_title, 16, 462);
@@ -329,7 +360,9 @@ static void plays_hint(const char *text)
 static void plays_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) return;
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) {
+        return;
+    }
     replay_set_want_export(false);
     stats_db_query_replay(pl_row_solve[i]);
 }
@@ -337,7 +370,9 @@ static void plays_row_cb(lv_event_t *e)
 static void plays_export_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) return;
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) {
+        return;
+    }
     replay_set_want_export(true);
     stats_db_query_replay(pl_row_solve[i]);
 }
@@ -437,8 +472,12 @@ static void plays_page_cb(lv_event_t *e)
 void plays_poll(void)
 {
     static stats_plays_t *p;
-    if (!p) p = heap_caps_malloc(sizeof(*p), MALLOC_CAP_SPIRAM);
-    if (p && stats_db_take_plays(p)) render_plays(p);
+    if (!p) {
+        p = heap_caps_malloc(sizeof(*p), MALLOC_CAP_SPIRAM);
+    }
+    if (p && stats_db_take_plays(p)) {
+        render_plays(p);
+    }
 }
 
 void build_plays(void)
@@ -474,7 +513,9 @@ void build_plays(void)
 static void history_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) return;
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) {
+        return;
+    }
     replay_set_want_export(false);
     stats_db_query_replay(hz_row_solve[i]);
 }

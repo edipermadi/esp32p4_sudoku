@@ -71,9 +71,15 @@ static volatile int32_t s_seek = -1;
 int media_view_kind(const char *name)
 {
     const char *dot = strrchr(name, '.');
-    if (!dot) return MEDIA_NONE;
-    if (!strcasecmp(dot, ".jpg") || !strcasecmp(dot, ".jpeg")) return MEDIA_IMAGE;
-    if (!strcasecmp(dot, ".mp4") || !strcasecmp(dot, ".m4v")) return MEDIA_VIDEO;
+    if (!dot) {
+        return MEDIA_NONE;
+    }
+    if (!strcasecmp(dot, ".jpg") || !strcasecmp(dot, ".jpeg")) {
+        return MEDIA_IMAGE;
+    }
+    if (!strcasecmp(dot, ".mp4") || !strcasecmp(dot, ".m4v")) {
+        return MEDIA_VIDEO;
+    }
     return MEDIA_NONE;
 }
 
@@ -96,7 +102,9 @@ static void set_msg(const char *fmt, ...)
 /* waits until the page has taken the last picture handed over; false: stop */
 static bool wait_free(void)
 {
-    while (s_pending >= 0 && !s_stop) vTaskDelay(1);
+    while (s_pending >= 0 && !s_stop) {
+        vTaskDelay(1);
+    }
     return !s_stop;
 }
 
@@ -126,15 +134,21 @@ static void fit(int w, int h, int *dw, int *dh)
         *dh = SCR;
         *dw = (int)((int64_t)w * SCR / h);
     }
-    if (*dw < 1) *dw = 1;
-    if (*dh < 1) *dh = 1;
+    if (*dw < 1) {
+        *dw = 1;
+    }
+    if (*dh < 1) {
+        *dh = 1;
+    }
 }
 
 static uint16_t s_xmap[SCR];
 
 static void make_xmap(int sw, int dw)            /* each output column's source column (centres) */
 {
-    for (int x = 0; x < dw; x++) s_xmap[x] = (uint16_t)(((int64_t)x * 2 + 1) * sw / (2 * dw));
+    for (int x = 0; x < dw; x++) {
+        s_xmap[x] = (uint16_t)(((int64_t)x * 2 + 1) * sw / (2 * dw));
+    }
 }
 
 static inline int src_row(int y, int sh, int dh)
@@ -173,7 +187,9 @@ static void do_jpeg(const char *path)
     }
     fclose(f);
     f = NULL;
-    if (s_stop) goto done;
+    if (s_stop) {
+        goto done;
+    }
 
     jpeg_decode_picture_info_t info;
     if (jpeg_decoder_get_info(in, (uint32_t)size, &info) != ESP_OK || !info.width || !info.height) {
@@ -210,25 +226,42 @@ static void do_jpeg(const char *path)
     }
     if (got >= 2 * ah) {                           /* the row length the engine used */
         uint32_t stride = got / 2 / ah;
-        if (stride >= info.width) aw = stride;
+        if (stride >= info.width) {
+            aw = stride;
+        }
     }
     int dw, dh;
     fit((int)info.width, (int)info.height, &dw, &dh);
-    if (!wait_free()) goto done;
+    if (!wait_free()) {
+        goto done;
+    }
     uint16_t *dst = back_buf();
     make_xmap((int)info.width, dw);
     for (int y = 0; y < dh; y++) {
         const uint16_t *row = out + (size_t)src_row(y, (int)info.height, dh) * aw;
         uint16_t *o = dst + (size_t)y * dw;
-        if (dw == (int)info.width) memcpy(o, row, (size_t)dw * 2);
-        else for (int x = 0; x < dw; x++) o[x] = row[s_xmap[x]];
+        if (dw == (int)info.width) {
+            memcpy(o, row, (size_t)dw * 2);
+        } else {
+            for (int x = 0; x < dw; x++) {
+                o[x] = row[s_xmap[x]];
+            }
+        }
     }
     publish(dw, dh);
 done:
-    if (f) fclose(f);
-    if (dec) jpeg_del_decoder_engine(dec);
-    if (out) heap_caps_free(out);
-    if (in) heap_caps_free(in);
+    if (f) {
+        fclose(f);
+    }
+    if (dec) {
+        jpeg_del_decoder_engine(dec);
+    }
+    if (out) {
+        heap_caps_free(out);
+    }
+    if (in) {
+        heap_caps_free(in);
+    }
 }
 
 /* ------------------------------------------------------------- H.264 */
@@ -246,7 +279,9 @@ static uint16_t c_r[1024], c_g[1024], c_b[1024];
 
 static void yuv_tables(void)
 {
-    if (t_y[255]) return;
+    if (t_y[255]) {
+        return;
+    }
     for (int i = 0; i < 1024; i++) {
         int v = clamp8(i - CLIP_OFF);
         c_r[i] = (uint16_t)((v & 0xF8) << 8);
@@ -276,7 +311,9 @@ static void i420_to_565(const uint8_t *yp, int W, int H, int vw, int vh, uint16_
          * four pixels, two pixels per 32-bit write. 130 -> ~40 ms a 720x720 frame;
          * the planes are in PSRAM, so fewer, wider accesses are what counts */
         for (int y = 0; y < dh; y += 2) {
-            if (chg && since >= 0 && (int32_t)chg[y / 2] <= since) continue;   /* as it is in dst */
+            if (chg && since >= 0 && (int32_t)chg[y / 2] <= since) {
+                continue;    /* as it is in dst */
+            }
             const uint8_t *y0 = yp + (size_t)y * W, *y1 = y0 + W;
             const uint8_t *ur = up + (size_t)(y / 2) * (W / 2), *vr = vp + (size_t)(y / 2) * (W / 2);
             uint32_t *o0 = (uint32_t *)(dst + (size_t)y * dw), *o1 = (uint32_t *)(dst + (size_t)(y + 1) * dw);
@@ -314,9 +351,15 @@ static bool feed(esp_h264_dec_handle_t dec, uint8_t *buf, size_t len, uint8_t **
     while (in.raw_data.len) {
         esp_h264_dec_out_frame_t out;
         memset(&out, 0, sizeof(out));
-        if (esp_h264_dec_process(dec, &in, &out) != ESP_H264_ERR_OK) return false;
-        if (out.out_size) *frame = out.outbuf;
-        if (!in.consume) break;
+        if (esp_h264_dec_process(dec, &in, &out) != ESP_H264_ERR_OK) {
+            return false;
+        }
+        if (out.out_size) {
+            *frame = out.outbuf;
+        }
+        if (!in.consume) {
+            break;
+        }
         in.raw_data.buffer += in.consume;
         in.raw_data.len -= in.consume;
     }
@@ -360,7 +403,9 @@ static void converter(void *arg)
     uint32_t seq = 0;
     bool prev_ok = false;
     while (!s_cv_quit) {
-        if (xSemaphoreTake(s_cv_go, pdMS_TO_TICKS(20)) != pdTRUE) continue;
+        if (xSemaphoreTake(s_cv_go, pdMS_TO_TICKS(20)) != pdTRUE) {
+            continue;
+        }
         cv_job_t j = s_cv;
         seq++;
         if (j.prev) {                   /* which pairs of rows changed (a replay: few) */
@@ -369,13 +414,15 @@ static void converter(void *arg)
             const size_t W = (size_t)j.W, ys = W * j.H, cs = (W / 2) * (j.H / 2);
             if (!prev_ok) {
                 memcpy(pv, fr, ys + 2 * cs);
-                for (int r = 0; r < j.H / 2; r++) j.chg[r] = seq;
+                for (int r = 0; r < j.H / 2; r++) {
+                    j.chg[r] = seq;
+                }
                 prev_ok = true;
             } else {
                 for (int r = 0; r < j.vh / 2; r++) {
                     const size_t yo = 2 * r * W, co = r * (W / 2);
                     if (memcmp(fr + yo, pv + yo, 2 * W) || memcmp(fr + ys + co, pv + ys + co, W / 2) ||
-                        memcmp(fr + ys + cs + co, pv + ys + cs + co, W / 2)) {
+                            memcmp(fr + ys + cs + co, pv + ys + cs + co, W / 2)) {
                         memcpy(pv + yo, fr + yo, 2 * W);
                         memcpy(pv + ys + co, fr + ys + co, W / 2);
                         memcpy(pv + ys + cs + co, fr + ys + cs + co, W / 2);
@@ -394,9 +441,13 @@ static void converter(void *arg)
         xSemaphoreGive(s_cv_done);      /* the decoder may reuse src now */
         if (j.due) {
             int64_t wait = j.due - esp_timer_get_time();
-            if (wait > 2000) vTaskDelay(pdMS_TO_TICKS(wait / 1000));
+            if (wait > 2000) {
+                vTaskDelay(pdMS_TO_TICKS(wait / 1000));
+            }
         }
-        if (s_stop) continue;
+        if (s_stop) {
+            continue;
+        }
         publish(j.dw, j.dh);
         s_v_pos = j.pos;
         s_v_pos_ms = j.pos_ms;
@@ -409,7 +460,9 @@ static void converter(void *arg)
 static bool cv_wait_done(void)
 {
     while (xSemaphoreTake(s_cv_done, pdMS_TO_TICKS(20)) != pdTRUE) {
-        if (s_stop) return false;
+        if (s_stop) {
+            return false;
+        }
     }
     return true;
 }
@@ -456,8 +509,12 @@ static void do_video(const char *path)
         set_msg("The video decoder didn't start.");
         goto done;
     }
-    if (!s_cv_go) s_cv_go = xSemaphoreCreateBinary();
-    if (!s_cv_done) s_cv_done = xSemaphoreCreateBinary();
+    if (!s_cv_go) {
+        s_cv_go = xSemaphoreCreateBinary();
+    }
+    if (!s_cv_done) {
+        s_cv_done = xSemaphoreCreateBinary();
+    }
     if (!s_cv_go || !s_cv_done) {
         set_msg("Out of memory.");
         goto done;
@@ -498,7 +555,9 @@ static void do_video(const char *path)
         int32_t sk = s_seek;
         if (sk >= 0) {
             s_seek = -1;
-            if ((uint32_t)sk >= m.n) sk = (int32_t)m.n - 1;
+            if ((uint32_t)sk >= m.n) {
+                sk = (int32_t)m.n - 1;
+            }
             i = mp4r_key_before(&m, (uint32_t)sk);
             target = sk;
             s_ended = false;
@@ -523,7 +582,9 @@ static void do_video(const char *path)
         /* the decode writes into a buffer other than the last one out: safe unless
          * the converter reads an older one */
         if (busy && (sync || handed != last_out)) {
-            if (!cv_wait_done()) break;
+            if (!cv_wait_done()) {
+                break;
+            }
             busy = false;
         }
         if (!feed(dec, inb, len, &fr)) {
@@ -546,7 +607,9 @@ static void do_video(const char *path)
             if (!res_known) {
                 esp_h264_dec_param_sw_handle_t ph;
                 esp_h264_resolution_t res = {0};
-                if (esp_h264_dec_sw_get_param_hd(dec, &ph) == ESP_H264_ERR_OK) esp_h264_dec_get_resolution(ph, &res);
+                if (esp_h264_dec_sw_get_param_hd(dec, &ph) == ESP_H264_ERR_OK) {
+                    esp_h264_dec_get_resolution(ph, &res);
+                }
                 W = res.width ? res.width : m.width;
                 H = res.height ? res.height : m.height;
                 vw = m.width && m.width <= W ? m.width : W;
@@ -591,10 +654,12 @@ static void do_video(const char *path)
             } else {
                 skipped = 0;
                 if (busy) {                         /* one frame at a time */
-                    if (!cv_wait_done()) break;
+                    if (!cv_wait_done()) {
+                        break;
+                    }
                     busy = false;
                 }
-                s_cv = (cv_job_t){
+                s_cv = (cv_job_t) {
                     .src = fr, .prev = prev, .chg = chg, .W = W, .H = H, .vw = vw, .vh = vh, .dw = dw, .dh = dh,
                     .pos = i, .pos_ms = (uint32_t)((uint64_t)m.time[i] * 1000 / m.timescale), .due = due,
                 };
@@ -613,7 +678,9 @@ static void do_video(const char *path)
 done:
     if (cv) {                                       /* the converter ends before prev goes */
         s_cv_quit = true;
-        while (s_cv_alive) vTaskDelay(1);
+        while (s_cv_alive) {
+            vTaskDelay(1);
+        }
     }
     if (dec) {
         esp_h264_dec_close(dec);
@@ -622,14 +689,19 @@ done:
     free(inb);
     heap_caps_free(prev);
     free(chg);
-    if (opened) mp4r_free(&m);
+    if (opened) {
+        mp4r_free(&m);
+    }
     fclose(f);
 }
 
 static void worker(void *arg)
 {
-    if (s_job_kind == MEDIA_IMAGE) do_jpeg(s_job_path);
-    else do_video(s_job_path);
+    if (s_job_kind == MEDIA_IMAGE) {
+        do_jpeg(s_job_path);
+    } else {
+        do_video(s_job_path);
+    }
     s_running = false;
     vTaskDelete(NULL);
 }
@@ -685,7 +757,9 @@ static void start_job(int idx)
 
 static void request(int idx)
 {
-    if (idx < 0 || idx >= s_n) return;
+    if (idx < 0 || idx >= s_n) {
+        return;
+    }
     lv_image_set_src(s_img, NULL);
     if (s_running) {                                /* the last one first stops */
         s_stop = true;
@@ -701,7 +775,9 @@ static void request(int idx)
 
 static void go(int step)
 {
-    if (s_n < 2) return;
+    if (s_n < 2) {
+        return;
+    }
     request((s_idx + step + s_n) % s_n);
 }
 
@@ -724,7 +800,9 @@ static void poll(lv_timer_t *t)
         lv_obj_invalidate(s_img);
         s_front = k;
         s_pending = -1;
-        if (s_msg_seen == s_msg_seq) show_status("");
+        if (s_msg_seen == s_msg_seq) {
+            show_status("");
+        }
     }
     if (s_msg_seen != s_msg_seq) {
         s_msg_seen = s_msg_seq;
@@ -766,7 +844,9 @@ static void on_play(lv_event_t *e)
 
 static void on_slider(lv_event_t *e)
 {
-    if (lv_event_get_code(e) == LV_EVENT_RELEASED) s_seek = lv_slider_get_value(s_slider);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
+        s_seek = lv_slider_get_value(s_slider);
+    }
 }
 
 /* Swipes by hand (from where the finger went down and came up): LVGL's own
@@ -779,7 +859,9 @@ static void on_root(lv_event_t *e)
     lv_indev_t *indev = lv_indev_active();
     if (code == LV_EVENT_PRESSED) {
         s_gest = false;
-        if (indev) lv_indev_get_point(indev, &s_down);
+        if (indev) {
+            lv_indev_get_point(indev, &s_down);
+        }
     } else if (code == LV_EVENT_RELEASED && indev) {
         lv_point_t p;
         lv_indev_get_point(indev, &p);
@@ -839,10 +921,14 @@ static lv_obj_t *btn(lv_obj_t *parent, int w, int h, const char *sym, lv_event_c
 
 void media_view_open(lv_obj_t *parent, const char *dir, const char *const *names, int count, int index)
 {
-    if (count <= 0 || index < 0 || index >= count) return;
+    if (count <= 0 || index < 0 || index >= count) {
+        return;
+    }
     media_view_close();
     for (int k = 0; k < 2; k++) {
-        if (!s_buf[k]) s_buf[k] = heap_caps_aligned_alloc(64, BUF_BYTES, MALLOC_CAP_SPIRAM);
+        if (!s_buf[k]) {
+            s_buf[k] = heap_caps_aligned_alloc(64, BUF_BYTES, MALLOC_CAP_SPIRAM);
+        }
         memset(&s_dsc[k], 0, sizeof(s_dsc[k]));
         s_dsc[k].header.magic = LV_IMAGE_HEADER_MAGIC;
         s_dsc[k].header.cf = LV_COLOR_FORMAT_RGB565;
@@ -855,7 +941,9 @@ void media_view_open(lv_obj_t *parent, const char *dir, const char *const *names
         printf("media: no memory for the viewer\n");
         return;
     }
-    for (int i = 0; i < count; i++) strlcpy(s_names[i], names[i], NAME_B);
+    for (int i = 0; i < count; i++) {
+        strlcpy(s_names[i], names[i], NAME_B);
+    }
     s_n = count;
     strlcpy(s_dir, dir, sizeof(s_dir));
     s_bars = true;
@@ -920,10 +1008,14 @@ void media_view_open(lv_obj_t *parent, const char *dir, const char *const *names
 
 void media_view_close(void)
 {
-    if (!s_root) return;
+    if (!s_root) {
+        return;
+    }
     s_stop = true;                                  /* the worker ends on its own */
     s_want = -1;
-    if (s_timer) lv_timer_delete(s_timer);
+    if (s_timer) {
+        lv_timer_delete(s_timer);
+    }
     s_timer = NULL;
     lv_obj_delete(s_root);
     s_root = NULL;

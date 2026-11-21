@@ -25,16 +25,22 @@ static char fw_err[96];
 bool fw_file_desc(esp_app_desc_t *d, uint32_t *size)
 {
     struct stat st;
-    if (stat(FW_FILE, &st) != 0 || st.st_size < (off_t)(sizeof(esp_image_header_t) + 256)) return false;
+    if (stat(FW_FILE, &st) != 0 || st.st_size < (off_t)(sizeof(esp_image_header_t) + 256)) {
+        return false;
+    }
     FILE *f = fopen(FW_FILE, "rb");
-    if (!f) return false;
+    if (!f) {
+        return false;
+    }
     esp_image_header_t h;
     bool ok = fread(&h, sizeof(h), 1, f) == 1 && h.magic == ESP_IMAGE_HEADER_MAGIC && h.chip_id == ESP_CHIP_ID_ESP32P4;
     /* the app description is the start of the first segment */
     ok = ok && fseek(f, sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t), SEEK_SET) == 0 &&
          fread(d, sizeof(*d), 1, f) == 1 && d->magic_word == ESP_APP_DESC_MAGIC_WORD;
     fclose(f);
-    if (ok && size) *size = (uint32_t)st.st_size;
+    if (ok && size) {
+        *size = (uint32_t)st.st_size;
+    }
     return ok;
 }
 
@@ -42,7 +48,9 @@ bool fw_file_desc(esp_app_desc_t *d, uint32_t *size)
  * every sketch build, so the ELF's hash tells builds apart.) */
 void fw_build_id(const esp_app_desc_t *d, char out[9])
 {
-    for (int i = 0; i < 4; i++) snprintf(out + 2 * i, 3, "%02x", d->app_elf_sha256[i]);
+    for (int i = 0; i < 4; i++) {
+        snprintf(out + 2 * i, 3, "%02x", d->app_elf_sha256[i]);
+    }
 }
 
 static void fw_task(void *arg)
@@ -53,19 +61,29 @@ static void fw_task(void *arg)
     esp_ota_handle_t h = 0;
     uint32_t done = 0;
     esp_err_t err = !buf ? ESP_ERR_NO_MEM : !part ? ESP_ERR_NOT_FOUND : !f ? ESP_ERR_INVALID_STATE : ESP_OK;
-    if (err == ESP_OK) err = esp_ota_begin(part, fw_size, &h);   /* erases what the image needs, all at once */
+    if (err == ESP_OK) {
+        err = esp_ota_begin(part, fw_size, &h);    /* erases what the image needs, all at once */
+    }
     while (err == ESP_OK) {
         size_t n = fread(buf, 1, FW_CHUNK, f);
-        if (!n) break;
+        if (!n) {
+            break;
+        }
         err = esp_ota_write(h, buf, n);
         done += (uint32_t)n;
     }
-    if (f) fclose(f);
+    if (f) {
+        fclose(f);
+    }
     if (h) {
         esp_err_t end = esp_ota_end(h);             /* the whole image checked (format, chip, hash) */
-        if (err == ESP_OK) err = end;
+        if (err == ESP_OK) {
+            err = end;
+        }
     }
-    if (err == ESP_OK) err = esp_ota_set_boot_partition(part);
+    if (err == ESP_OK) {
+        err = esp_ota_set_boot_partition(part);
+    }
     if (err == ESP_OK) {
         remove(FW_DONE);
         rename(FW_FILE, FW_DONE);                   /* not again at the next look */
@@ -81,7 +99,9 @@ static void fw_task(void *arg)
 
 bool fw_update_start(uint32_t size)
 {
-    if (fw_state == FW_WRITING) return false;
+    if (fw_state == FW_WRITING) {
+        return false;
+    }
     fw_size = size;
     fw_err[0] = 0;
     fw_state = FW_WRITING;
@@ -139,9 +159,13 @@ static void sd_task(void *arg)
     case SD_JOB_FORMAT:
         stats_db_suspend();                        /* close sudoku.db, unmount */
         err = bsp_sdcard_check();                  /* still the card found earlier? */
-        if (err == ESP_OK) err = bsp_sdcard_format_fat32();
+        if (err == ESP_OK) {
+            err = bsp_sdcard_format_fat32();
+        }
         s_sd_err = err;
-        if (err == ESP_OK) stats_db_start_fresh(); /* new sudoku.db: current settings, no statistics */
+        if (err == ESP_OK) {
+            stats_db_start_fresh();    /* new sudoku.db: current settings, no statistics */
+        }
         s_sd_state = err == ESP_OK ? SD_DONE : SD_FAILED;
         break;
     }
@@ -180,7 +204,9 @@ bool device_factory_reset(void)
     wifi_mgr_forget();                             /* network gone (Wi-Fi's NVS keys) */
     wifi_mgr_set_enabled(false);
     store_factory_reset();                         /* defaults, no stats, old NVS keys erased */
-    if (!stats_db_ready()) return false;
+    if (!stats_db_ready()) {
+        return false;
+    }
     stats_db_factory_reset();                      /* sudoku.db deleted and made again */
     return true;
 }
@@ -198,7 +224,9 @@ esp_err_t usb_drive_lend(void)
 {
     stats_db_suspend();                            /* save, close sudoku.db, unmount: the card is free */
     esp_err_t err = usb_msc_set_enabled(true);
-    if (err != ESP_OK) stats_db_start();
+    if (err != ESP_OK) {
+        stats_db_start();
+    }
     return err;
 }
 

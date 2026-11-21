@@ -30,12 +30,17 @@ struct mp4w {
 
 static void put32(uint8_t *p, uint32_t v)
 {
-    p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v;
+    p[0] = v >> 24;
+    p[1] = v >> 16;
+    p[2] = v >> 8;
+    p[3] = v;
 }
 
 static void wr(mp4w_t *w, const void *data, size_t n)
 {
-    if (w->failed) return;
+    if (w->failed) {
+        return;
+    }
     if (fwrite(data, 1, n, w->f) != n) {
         w->failed = true;
         printf("mp4w: write of %u bytes at %u failed\n", (unsigned)n, (unsigned)w->pos);
@@ -80,13 +85,17 @@ static size_t b_fullbox(buf_t *b, const char *type, uint8_t version, uint32_t fl
 }
 static void b_end(buf_t *b, size_t at)
 {
-    if (!b->oom) put32(b->p + at, (uint32_t)(b->len - at));
+    if (!b->oom) {
+        put32(b->p + at, (uint32_t)(b->len - at));
+    }
 }
 
 static void b_matrix(buf_t *b)
 {
     static const uint32_t m[9] = {0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000};
-    for (int i = 0; i < 9; i++) b_u32(b, m[i]);
+    for (int i = 0; i < 9; i++) {
+        b_u32(b, m[i]);
+    }
 }
 
 /* ---------------------------------------------------------------- API */
@@ -94,7 +103,9 @@ static void b_matrix(buf_t *b)
 mp4w_t *mp4w_open(const char *path, int width, int height, int fps, int max_frames)
 {
     mp4w_t *w = calloc(1, sizeof(*w));
-    if (!w) return NULL;
+    if (!w) {
+        return NULL;
+    }
     snprintf(w->path, sizeof(w->path), "%s", path);
     w->width = width;
     w->height = height;
@@ -104,7 +115,9 @@ mp4w_t *mp4w_open(const char *path, int width, int height, int fps, int max_fram
     w->keys = BIG_ALLOC(sizeof(uint32_t) * max_frames);
     w->f = fopen(path, "wb");
     if (!w->sizes || !w->keys || !w->f) {
-        if (w->f) fclose(w->f);
+        if (w->f) {
+            fclose(w->f);
+        }
         free(w->sizes);
         free(w->keys);
         free(w);
@@ -130,11 +143,19 @@ uint32_t mp4w_size(const mp4w_t *w)
  * code) and length, or NULL at the end */
 static const uint8_t *next_nal(const uint8_t *p, const uint8_t *end, size_t *len)
 {
-    while (p + 3 <= end && !(p[0] == 0 && p[1] == 0 && p[2] == 1)) p++;
-    if (p + 3 > end) return NULL;
+    while (p + 3 <= end && !(p[0] == 0 && p[1] == 0 && p[2] == 1)) {
+        p++;
+    }
+    if (p + 3 > end) {
+        return NULL;
+    }
     const uint8_t *s = p + 3, *q = s;
-    while (q + 3 <= end && !(q[0] == 0 && q[1] == 0 && (q[2] == 1 || (q[2] == 0 && q + 4 <= end && q[3] == 1)))) q++;
-    if (q + 3 > end) q = end;
+    while (q + 3 <= end && !(q[0] == 0 && q[1] == 0 && (q[2] == 1 || (q[2] == 0 && q + 4 <= end && q[3] == 1)))) {
+        q++;
+    }
+    if (q + 3 > end) {
+        q = end;
+    }
     *len = (size_t)(q - s);
     return s;
 }
@@ -150,17 +171,25 @@ bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key)
     uint32_t sample = 0;
     while ((nal = next_nal(p, end, &nlen)) != NULL) {
         p = nal + nlen;
-        if (!nlen) continue;
+        if (!nlen) {
+            continue;
+        }
         int type = nal[0] & 0x1F;
         if (type == 7) {                                 /* SPS: into avcC (first one) */
-            if (!w->sps_len && nlen <= sizeof(w->sps)) memcpy(w->sps, nal, w->sps_len = (int)nlen);
+            if (!w->sps_len && nlen <= sizeof(w->sps)) {
+                memcpy(w->sps, nal, w->sps_len = (int)nlen);
+            }
             continue;
         }
         if (type == 8) {                                 /* PPS */
-            if (!w->pps_len && nlen <= sizeof(w->pps)) memcpy(w->pps, nal, w->pps_len = (int)nlen);
+            if (!w->pps_len && nlen <= sizeof(w->pps)) {
+                memcpy(w->pps, nal, w->pps_len = (int)nlen);
+            }
             continue;
         }
-        if (type == 9) continue;                         /* access unit delimiter: not in MP4 */
+        if (type == 9) {
+            continue;    /* access unit delimiter: not in MP4 */
+        }
         uint8_t l[4];
         put32(l, (uint32_t)nlen);
         wr(w, l, 4);
@@ -174,7 +203,9 @@ bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key)
         return false;
     }
     w->sizes[w->n++] = sample;
-    if (key) w->keys[w->nkeys++] = (uint32_t)w->n;
+    if (key) {
+        w->keys[w->nkeys++] = (uint32_t)w->n;
+    }
     return !w->failed;
 }
 
@@ -187,7 +218,9 @@ static void free_writer(mp4w_t *w)
 
 void mp4w_abort(mp4w_t *w)
 {
-    if (!w) return;
+    if (!w) {
+        return;
+    }
     fclose(w->f);
     remove(w->path);
     free_writer(w);
@@ -195,9 +228,13 @@ void mp4w_abort(mp4w_t *w)
 
 bool mp4w_close(mp4w_t *w)
 {
-    if (!w) return false;
+    if (!w) {
+        return false;
+    }
     bool ok = !w->failed && w->n > 0 && w->sps_len > 3 && w->pps_len > 0;
-    if (!ok) printf("mp4w: can't finish: failed=%d frames=%d sps=%d pps=%d\n", w->failed, w->n, w->sps_len, w->pps_len);
+    if (!ok) {
+        printf("mp4w: can't finish: failed=%d frames=%d sps=%d pps=%d\n", w->failed, w->n, w->sps_len, w->pps_len);
+    }
     if (ok) {
         /* mdat size */
         uint8_t sz[4];
@@ -218,9 +255,12 @@ bool mp4w_close(mp4w_t *w)
 
         size_t moov = b_box(&b, "moov");
         size_t mvhd = b_fullbox(&b, "mvhd", 0, 0);
-        b_u32(&b, 0); b_u32(&b, 0);                     /* creation, modification */
-        b_u32(&b, 1000); b_u32(&b, dur_ms);             /* timescale, duration */
-        b_u32(&b, 0x00010000); b_u16(&b, 0x0100);       /* rate 1.0, volume 1.0 */
+        b_u32(&b, 0);
+        b_u32(&b, 0);                     /* creation, modification */
+        b_u32(&b, 1000);
+        b_u32(&b, dur_ms);             /* timescale, duration */
+        b_u32(&b, 0x00010000);
+        b_u16(&b, 0x0100);       /* rate 1.0, volume 1.0 */
         b_zero(&b, 10);
         b_matrix(&b);
         b_zero(&b, 24);                                 /* pre_defined */
@@ -229,23 +269,34 @@ bool mp4w_close(mp4w_t *w)
 
         size_t trak = b_box(&b, "trak");
         size_t tkhd = b_fullbox(&b, "tkhd", 0, 3);      /* enabled, in movie */
-        b_u32(&b, 0); b_u32(&b, 0);
-        b_u32(&b, 1); b_u32(&b, 0);                     /* track ID, reserved */
+        b_u32(&b, 0);
+        b_u32(&b, 0);
+        b_u32(&b, 1);
+        b_u32(&b, 0);                     /* track ID, reserved */
         b_u32(&b, dur_ms);
         b_zero(&b, 8);
-        b_u16(&b, 0); b_u16(&b, 0); b_u16(&b, 0); b_u16(&b, 0);   /* layer, group, volume, reserved */
+        b_u16(&b, 0);
+        b_u16(&b, 0);
+        b_u16(&b, 0);
+        b_u16(&b, 0);   /* layer, group, volume, reserved */
         b_matrix(&b);
-        b_u32(&b, (uint32_t)w->width << 16); b_u32(&b, (uint32_t)w->height << 16);
+        b_u32(&b, (uint32_t)w->width << 16);
+        b_u32(&b, (uint32_t)w->height << 16);
         b_end(&b, tkhd);
 
         size_t mdia = b_box(&b, "mdia");
         size_t mdhd = b_fullbox(&b, "mdhd", 0, 0);
-        b_u32(&b, 0); b_u32(&b, 0);
-        b_u32(&b, ts); b_u32(&b, dur);
-        b_u16(&b, 0x55C4); b_u16(&b, 0);                /* language "und" */
+        b_u32(&b, 0);
+        b_u32(&b, 0);
+        b_u32(&b, ts);
+        b_u32(&b, dur);
+        b_u16(&b, 0x55C4);
+        b_u16(&b, 0);                /* language "und" */
         b_end(&b, mdhd);
         size_t hdlr = b_fullbox(&b, "hdlr", 0, 0);
-        b_u32(&b, 0); b_put(&b, "vide", 4); b_zero(&b, 12);
+        b_u32(&b, 0);
+        b_put(&b, "vide", 4);
+        b_zero(&b, 12);
         b_put(&b, "VideoHandler", 13);
         b_end(&b, hdlr);
 
@@ -265,39 +316,61 @@ bool mp4w_close(mp4w_t *w)
         size_t stsd = b_fullbox(&b, "stsd", 0, 0);
         b_u32(&b, 1);
         size_t avc1 = b_box(&b, "avc1");
-        b_zero(&b, 6); b_u16(&b, 1);                    /* data reference index */
+        b_zero(&b, 6);
+        b_u16(&b, 1);                    /* data reference index */
         b_zero(&b, 16);
-        b_u16(&b, (uint16_t)w->width); b_u16(&b, (uint16_t)w->height);
-        b_u32(&b, 0x00480000); b_u32(&b, 0x00480000);   /* 72 dpi */
-        b_u32(&b, 0); b_u16(&b, 1);                     /* frame count */
+        b_u16(&b, (uint16_t)w->width);
+        b_u16(&b, (uint16_t)w->height);
+        b_u32(&b, 0x00480000);
+        b_u32(&b, 0x00480000);   /* 72 dpi */
+        b_u32(&b, 0);
+        b_u16(&b, 1);                     /* frame count */
         b_zero(&b, 32);                                 /* compressor name */
-        b_u16(&b, 0x0018); b_u16(&b, 0xFFFF);           /* depth, pre_defined */
+        b_u16(&b, 0x0018);
+        b_u16(&b, 0xFFFF);           /* depth, pre_defined */
         size_t avcc = b_box(&b, "avcC");
         b_u8(&b, 1);
-        b_u8(&b, w->sps[1]); b_u8(&b, w->sps[2]); b_u8(&b, w->sps[3]);   /* profile, compat, level */
+        b_u8(&b, w->sps[1]);
+        b_u8(&b, w->sps[2]);
+        b_u8(&b, w->sps[3]);   /* profile, compat, level */
         b_u8(&b, 0xFF);                                 /* 4-byte NAL lengths */
-        b_u8(&b, 0xE1); b_u16(&b, (uint16_t)w->sps_len); b_put(&b, w->sps, w->sps_len);
-        b_u8(&b, 1); b_u16(&b, (uint16_t)w->pps_len); b_put(&b, w->pps, w->pps_len);
+        b_u8(&b, 0xE1);
+        b_u16(&b, (uint16_t)w->sps_len);
+        b_put(&b, w->sps, w->sps_len);
+        b_u8(&b, 1);
+        b_u16(&b, (uint16_t)w->pps_len);
+        b_put(&b, w->pps, w->pps_len);
         b_end(&b, avcc);
         b_end(&b, avc1);
         b_end(&b, stsd);
 
         size_t stts = b_fullbox(&b, "stts", 0, 0);
-        b_u32(&b, 1); b_u32(&b, (uint32_t)w->n); b_u32(&b, TIMESCALE_PER_FRAME);
+        b_u32(&b, 1);
+        b_u32(&b, (uint32_t)w->n);
+        b_u32(&b, TIMESCALE_PER_FRAME);
         b_end(&b, stts);
         size_t stss = b_fullbox(&b, "stss", 0, 0);
         b_u32(&b, (uint32_t)w->nkeys);
-        for (int i = 0; i < w->nkeys; i++) b_u32(&b, w->keys[i]);
+        for (int i = 0; i < w->nkeys; i++) {
+            b_u32(&b, w->keys[i]);
+        }
         b_end(&b, stss);
         size_t stsc = b_fullbox(&b, "stsc", 0, 0);
-        b_u32(&b, 1); b_u32(&b, 1); b_u32(&b, (uint32_t)w->n); b_u32(&b, 1);   /* one chunk */
+        b_u32(&b, 1);
+        b_u32(&b, 1);
+        b_u32(&b, (uint32_t)w->n);
+        b_u32(&b, 1);   /* one chunk */
         b_end(&b, stsc);
         size_t stsz = b_fullbox(&b, "stsz", 0, 0);
-        b_u32(&b, 0); b_u32(&b, (uint32_t)w->n);
-        for (int i = 0; i < w->n; i++) b_u32(&b, w->sizes[i]);
+        b_u32(&b, 0);
+        b_u32(&b, (uint32_t)w->n);
+        for (int i = 0; i < w->n; i++) {
+            b_u32(&b, w->sizes[i]);
+        }
         b_end(&b, stsz);
         size_t stco = b_fullbox(&b, "stco", 0, 0);
-        b_u32(&b, 1); b_u32(&b, w->mdat_pos + 8);       /* the chunk starts right after mdat's header */
+        b_u32(&b, 1);
+        b_u32(&b, w->mdat_pos + 8);       /* the chunk starts right after mdat's header */
         b_end(&b, stco);
         b_end(&b, stbl);
         b_end(&b, minf);
@@ -305,12 +378,18 @@ bool mp4w_close(mp4w_t *w)
         b_end(&b, trak);
         b_end(&b, moov);
         ok = !b.oom;
-        if (ok) wr(w, b.p, b.len);
+        if (ok) {
+            wr(w, b.p, b.len);
+        }
         ok = ok && !w->failed;
     }
     free(b.p);
-    if (fclose(w->f) != 0) ok = false;
-    if (!ok) remove(w->path);
+    if (fclose(w->f) != 0) {
+        ok = false;
+    }
+    if (!ok) {
+        remove(w->path);
+    }
     free_writer(w);
     return ok;
 }

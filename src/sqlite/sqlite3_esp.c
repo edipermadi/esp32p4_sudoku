@@ -75,7 +75,9 @@ typedef struct {
 static int esp_close(sqlite3_file *f)
 {
     esp_file_t *p = (esp_file_t *)f;
-    if (p->fd >= 0) close(p->fd);
+    if (p->fd >= 0) {
+        close(p->fd);
+    }
     p->fd = -1;
     if (p->delete_path) {
         unlink(p->delete_path);
@@ -92,17 +94,25 @@ static int esp_read(sqlite3_file *f, void *buf, int amt, sqlite3_int64 ofst)
      * f_lseek() beyond EOF grows the file (SQLite reads offset 24 of a new,
      * empty database, which would leave 24 zero bytes behind). */
     struct stat st;
-    if (fstat(p->fd, &st) != 0) return SQLITE_IOERR_READ;
+    if (fstat(p->fd, &st) != 0) {
+        return SQLITE_IOERR_READ;
+    }
     if (ofst >= st.st_size) {
         memset(buf, 0, amt);
         return SQLITE_IOERR_SHORT_READ;
     }
-    if (lseek(p->fd, (off_t)ofst, SEEK_SET) != (off_t)ofst) return SQLITE_IOERR_READ;
+    if (lseek(p->fd, (off_t)ofst, SEEK_SET) != (off_t)ofst) {
+        return SQLITE_IOERR_READ;
+    }
     int got = 0;
     while (got < amt) {
         ssize_t n = read(p->fd, (char *)buf + got, amt - got);
-        if (n < 0) return SQLITE_IOERR_READ;
-        if (n == 0) break;
+        if (n < 0) {
+            return SQLITE_IOERR_READ;
+        }
+        if (n == 0) {
+            break;
+        }
         got += (int)n;
     }
     if (got < amt) {
@@ -115,11 +125,15 @@ static int esp_read(sqlite3_file *f, void *buf, int amt, sqlite3_int64 ofst)
 static int esp_write(sqlite3_file *f, const void *buf, int amt, sqlite3_int64 ofst)
 {
     esp_file_t *p = (esp_file_t *)f;
-    if (lseek(p->fd, (off_t)ofst, SEEK_SET) != (off_t)ofst) return SQLITE_IOERR_WRITE;   /* may extend: fine */
+    if (lseek(p->fd, (off_t)ofst, SEEK_SET) != (off_t)ofst) {
+        return SQLITE_IOERR_WRITE;    /* may extend: fine */
+    }
     int put = 0;
     while (put < amt) {
         ssize_t n = write(p->fd, (const char *)buf + put, amt - put);
-        if (n <= 0) return n == 0 ? SQLITE_FULL : SQLITE_IOERR_WRITE;
+        if (n <= 0) {
+            return n == 0 ? SQLITE_FULL : SQLITE_IOERR_WRITE;
+        }
         put += (int)n;
     }
     return SQLITE_OK;
@@ -141,7 +155,9 @@ static int esp_file_size(sqlite3_file *f, sqlite3_int64 *size)
 {
     esp_file_t *p = (esp_file_t *)f;
     struct stat st;
-    if (fstat(p->fd, &st) != 0) return SQLITE_IOERR_FSTAT;
+    if (fstat(p->fd, &st) != 0) {
+        return SQLITE_IOERR_FSTAT;
+    }
     *size = st.st_size;
     return SQLITE_OK;
 }
@@ -175,21 +191,31 @@ static int esp_open(sqlite3_vfs *vfs, sqlite3_filename name, sqlite3_file *f, in
         flags |= SQLITE_OPEN_DELETEONCLOSE | SQLITE_OPEN_CREATE;
     }
     int oflags = (flags & SQLITE_OPEN_READWRITE) ? O_RDWR : O_RDONLY;
-    if (flags & SQLITE_OPEN_CREATE) oflags |= O_CREAT;
-    if (flags & SQLITE_OPEN_EXCLUSIVE) oflags |= O_EXCL;
+    if (flags & SQLITE_OPEN_CREATE) {
+        oflags |= O_CREAT;
+    }
+    if (flags & SQLITE_OPEN_EXCLUSIVE) {
+        oflags |= O_EXCL;
+    }
     p->fd = open(name, oflags, 0644);
-    if (p->fd < 0) return SQLITE_CANTOPEN;
+    if (p->fd < 0) {
+        return SQLITE_CANTOPEN;
+    }
     if (flags & SQLITE_OPEN_DELETEONCLOSE) {
         p->delete_path = sqlite3_mprintf("%s", name);
     }
-    if (out_flags) *out_flags = flags;
+    if (out_flags) {
+        *out_flags = flags;
+    }
     p->base.pMethods = &esp_io;
     return SQLITE_OK;
 }
 
 static int esp_delete(sqlite3_vfs *vfs, const char *name, int sync_dir)
 {
-    if (unlink(name) == 0) return SQLITE_OK;
+    if (unlink(name) == 0) {
+        return SQLITE_OK;
+    }
     struct stat st;
     return stat(name, &st) != 0 ? SQLITE_IOERR_DELETE_NOENT : SQLITE_IOERR_DELETE;
 }

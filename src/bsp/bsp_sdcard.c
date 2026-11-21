@@ -30,7 +30,9 @@ static char s_drv[3];
 
 esp_err_t bsp_sdcard_host_init(void)
 {
-    if (s_host_ok) return ESP_OK;
+    if (s_host_ok) {
+        return ESP_OK;
+    }
     if (!s_ldo) {
         esp_ldo_channel_config_t ldo_cfg = {
             .chan_id = BSP_SD_LDO_CHAN,
@@ -39,7 +41,9 @@ esp_err_t bsp_sdcard_host_init(void)
         ESP_RETURN_ON_ERROR(esp_ldo_acquire_channel(&ldo_cfg, &s_ldo), TAG, "LDO VO4 acquire failed");
     }
     esp_err_t err = sdmmc_host_init();
-    if (err == ESP_ERR_INVALID_STATE) err = ESP_OK;     /* already up (ESP-Hosted got there first) */
+    if (err == ESP_ERR_INVALID_STATE) {
+        err = ESP_OK;    /* already up (ESP-Hosted got there first) */
+    }
     ESP_RETURN_ON_ERROR(err, TAG, "SDMMC host init failed");
     s_host_ok = true;
     return ESP_OK;
@@ -64,7 +68,9 @@ esp_err_t bsp_sdcard_probe(uint64_t *bytes, char *name)
         return err;
     }
     s_ready = true;
-    if (bytes) *bytes = (uint64_t)s_card.csd.capacity * s_card.csd.sector_size;
+    if (bytes) {
+        *bytes = (uint64_t)s_card.csd.capacity * s_card.csd.sector_size;
+    }
     if (name) {
         memcpy(name, s_card.cid.name, 7);
         name[7] = 0;
@@ -76,19 +82,25 @@ esp_err_t bsp_sdcard_probe(uint64_t *bytes, char *name)
 
 esp_err_t bsp_sdcard_check(void)
 {
-    if (!s_ready) return ESP_ERR_INVALID_STATE;
+    if (!s_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
     return sdmmc_get_status(&s_card);
 }
 
 esp_err_t bsp_sdcard_read(void *buf, uint32_t sector, uint32_t count)
 {
-    if (!s_ready) return ESP_ERR_INVALID_STATE;
+    if (!s_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
     return sdmmc_read_sectors(&s_card, buf, sector, count);
 }
 
 esp_err_t bsp_sdcard_write(const void *buf, uint32_t sector, uint32_t count)
 {
-    if (!s_ready) return ESP_ERR_INVALID_STATE;
+    if (!s_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
     return sdmmc_write_sectors(&s_card, buf, sector, count);
 }
 
@@ -153,7 +165,9 @@ static esp_err_t register_drive(void)
 esp_err_t bsp_sdcard_mount(void)
 {
     ESP_RETURN_ON_FALSE(s_ready, ESP_ERR_INVALID_STATE, TAG, "no card");
-    if (s_fs) return ESP_OK;
+    if (s_fs) {
+        return ESP_OK;
+    }
     ESP_RETURN_ON_ERROR(register_drive(), TAG, "drive");
     esp_vfs_fat_conf_t conf = {
         .base_path = BSP_SD_MOUNT_POINT,
@@ -174,7 +188,9 @@ esp_err_t bsp_sdcard_mount(void)
 
 void bsp_sdcard_unmount(void)
 {
-    if (!s_fs) return;
+    if (!s_fs) {
+        return;
+    }
     f_mount(NULL, s_drv, 0);
     esp_vfs_fat_unregister_path(BSP_SD_MOUNT_POINT);
     s_fs = NULL;

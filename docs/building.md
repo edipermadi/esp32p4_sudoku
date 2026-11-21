@@ -35,6 +35,19 @@
 
    They stay through uploads and firmware updates. Only "Erase All Flash" or a newer avatar set (`tools/gen_avatars.py` changes `AVATAR_CRC`) needs them again. The release files and the web flasher write them already.
 
+## With make
+
+The `Makefile` at the top runs the same commands (arduino-cli from `PATH`, else the one inside the Arduino IDE; override with `ARDUINO_CLI=...`):
+
+| Command | Does |
+|---|---|
+| `make` | builds into `build/` with the FQBN above, and checks the app fits its slot in `partitions.csv` |
+| `make upload PORT=/dev/ttyACM0` | builds, then flashes over the UART port |
+| `make avatars PORT=/dev/ttyACM0` | flashes `extras/avatars.bin` into its partition (once per board) |
+| `make release VERSION=v1.2.3` | the release files into `dist/` (`tools/package_release.sh`) |
+| `make site` | the web flasher and docs site into `site/` |
+| `make clean` | removes `build/`, `dist/` and `site/` |
+
 ## The flash layout
 
 `partitions.csv` in the sketch folder replaces the core's table when **Partition Scheme** is **Custom**. Only the first 16 MiB of the 32 MB flash is used, because the esp32 core's prebuilt bootloader and ESP-IDF address flash with 24 bits. Anything above 0x1000000 can't be mapped, and an app there fails its check, which is why a 12.5 MB second slot never worked for updates.

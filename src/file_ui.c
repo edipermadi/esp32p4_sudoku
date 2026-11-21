@@ -95,9 +95,14 @@ static bool trash_encode(const char *rel, char *out, size_t n)
     for (const char *p = rel; *p; p++) {
         const char *put = *p == '/' ? "%2F" : (*p == '%' ? "%25" : NULL);
         size_t need = put ? 3 : 1;
-        if (k + need >= n || k + need > 240) return false;   /* (room for a "99~" in front) */
-        if (put) memcpy(out + k, put, 3);
-        else out[k] = *p;
+        if (k + need >= n || k + need > 240) {
+            return false;    /* (room for a "99~" in front) */
+        }
+        if (put) {
+            memcpy(out + k, put, 3);
+        } else {
+            out[k] = *p;
+        }
         k += need;
     }
     out[k] = 0;
@@ -108,13 +113,23 @@ static bool trash_encode(const char *rel, char *out, size_t n)
 static void trash_decode(const char *name, char *out, size_t n)
 {
     const char *p = name;
-    while (*p >= '0' && *p <= '9') p++;
-    if (p != name && *p == '~') name = p + 1;      /* a "2~" added for a taken name */
+    while (*p >= '0' && *p <= '9') {
+        p++;
+    }
+    if (p != name && *p == '~') {
+        name = p + 1;    /* a "2~" added for a taken name */
+    }
     size_t k = 0;
     for (p = name; *p && k + 1 < n; p++) {
-        if (p[0] == '%' && p[1] == '2' && (p[2] == 'F' || p[2] == 'f')) { out[k++] = '/'; p += 2; }
-        else if (p[0] == '%' && p[1] == '2' && p[2] == '5') { out[k++] = '%'; p += 2; }
-        else out[k++] = *p;
+        if (p[0] == '%' && p[1] == '2' && (p[2] == 'F' || p[2] == 'f')) {
+            out[k++] = '/';
+            p += 2;
+        } else if (p[0] == '%' && p[1] == '2' && p[2] == '5') {
+            out[k++] = '%';
+            p += 2;
+        } else {
+            out[k++] = *p;
+        }
     }
     out[k] = 0;
 }
@@ -123,15 +138,23 @@ static void trash_decode(const char *name, char *out, size_t n)
 static int rm_rf(const char *path)
 {
     struct stat st;
-    if (stat(path, &st) != 0) return -1;
-    if (!S_ISDIR(st.st_mode)) return unlink(path);
+    if (stat(path, &st) != 0) {
+        return -1;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        return unlink(path);
+    }
     DIR *d = opendir(path);
     if (d) {
         struct dirent *de;
         while ((de = readdir(d)) != NULL) {
-            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) {
+                continue;
+            }
             char *child = malloc(strlen(path) + strlen(de->d_name) + 2);
-            if (!child) break;
+            if (!child) {
+                break;
+            }
             sprintf(child, "%s/%s", path, de->d_name);
             rm_rf(child);
             free(child);
@@ -145,22 +168,35 @@ static void job_task(void *arg)
 {
     int n = 0, failed = 0;
     if (s_job_path[0]) {                           /* one item */
-        if (rm_rf(s_job_path) == 0) n++; else failed++;
+        if (rm_rf(s_job_path) == 0) {
+            n++;
+        } else {
+            failed++;
+        }
     } else {                                        /* Empty: everything in the bin */
         DIR *d = opendir(TRASH_DIR);
         if (d) {
             struct dirent *de;
             static char p[PATH_MAX_B + NAME_MAX_B];
             while ((de = readdir(d)) != NULL) {
-                if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+                if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) {
+                    continue;
+                }
                 snprintf(p, sizeof(p), "%s/%s", TRASH_DIR, de->d_name);
-                if (rm_rf(p) == 0) n++; else failed++;
+                if (rm_rf(p) == 0) {
+                    n++;
+                } else {
+                    failed++;
+                }
             }
             closedir(d);
         }
     }
-    if (failed) snprintf(s_job_msg, sizeof(s_job_msg), "Deleted %d; %d couldn't be.", n, failed);
-    else s_job_msg[0] = 0;
+    if (failed) {
+        snprintf(s_job_msg, sizeof(s_job_msg), "Deleted %d; %d couldn't be.", n, failed);
+    } else {
+        s_job_msg[0] = 0;
+    }
     printf("files: deleted for good: %d (%d failed)\n", n, failed);
     s_job_done = true;
     s_job_busy = false;
@@ -169,18 +205,26 @@ static void job_task(void *arg)
 
 static void job_start(const char *path)
 {
-    if (s_job_busy) return;
+    if (s_job_busy) {
+        return;
+    }
     strlcpy(s_job_path, path ? path : "", sizeof(s_job_path));
     s_job_busy = true;
     lv_label_set_text(s_count_lbl, "Deleting...");
-    if (xTaskCreatePinnedToCore(job_task, "files_rm", 8192, NULL, 2, NULL, 0) != pdPASS) s_job_busy = false;
+    if (xTaskCreatePinnedToCore(job_task, "files_rm", 8192, NULL, 2, NULL, 0) != pdPASS) {
+        s_job_busy = false;
+    }
 }
 
 static bool is_protected_name(const char *name)
 {
-    if (!at_root()) return false;
+    if (!at_root()) {
+        return false;
+    }
     for (size_t i = 0; i < sizeof(PROTECTED) / sizeof(PROTECTED[0]); i++) {
-        if (strcasecmp(name, PROTECTED[i]) == 0) return true;   /* FAT ignores case */
+        if (strcasecmp(name, PROTECTED[i]) == 0) {
+            return true;    /* FAT ignores case */
+        }
     }
     return false;
 }
@@ -246,7 +290,9 @@ static lv_obj_t *pill_btn(lv_obj_t *parent, const char *txt, lv_color_t bg, lv_c
 static int entry_cmp(const void *a, const void *b)
 {
     const entry_t *x = a, *y = b;
-    if (x->dir != y->dir) return x->dir ? -1 : 1;  /* folders first */
+    if (x->dir != y->dir) {
+        return x->dir ? -1 : 1;    /* folders first */
+    }
     return strcasecmp(x->name, y->name);
 }
 
@@ -261,7 +307,9 @@ static void scan_task(void *arg)
         struct dirent *de;
         char full[PATH_MAX_B + NAME_MAX_B];
         while ((de = readdir(d)) != NULL) {
-            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) {
+                continue;
+            }
             if (n >= MAX_ENTRIES) {
                 more = true;
                 break;
@@ -292,7 +340,9 @@ static void scan_task(void *arg)
 
 static void rescan(void)
 {
-    if (s_busy || !s_ent) return;
+    if (s_busy || !s_ent) {
+        return;
+    }
     strlcpy(s_scan_path, s_path, sizeof(s_scan_path));
     s_busy = true;
     s_done = false;
@@ -306,7 +356,9 @@ static void rescan(void)
 /* ------------------------------------------------------------- dialogs */
 static void dlg_close(void)
 {
-    if (!s_dlg) return;
+    if (!s_dlg) {
+        return;
+    }
     lv_obj_set_hidden(s_dlg, true);
     lv_textarea_set_text(s_ta, "");
     s_dlg_idx = -1;
@@ -322,25 +374,40 @@ static void dlg_error(const char *msg)
 static const char *bad_name(const char *name, const char *old)
 {
     size_t len = strlen(name);
-    if (len == 0) return "Type a name.";
-    if (len >= NAME_MAX_B) return "That name is too long.";
-    if (!strcmp(name, ".") || !strcmp(name, "..")) return "That name can't be used.";
-    if (strpbrk(name, "\\/:*?\"<>|")) return "A name can't have \\ / : * ? \" < > |";
-    if (name[0] == ' ' || name[len - 1] == ' ' || name[len - 1] == '.')
+    if (len == 0) {
+        return "Type a name.";
+    }
+    if (len >= NAME_MAX_B) {
+        return "That name is too long.";
+    }
+    if (!strcmp(name, ".") || !strcmp(name, "..")) {
+        return "That name can't be used.";
+    }
+    if (strpbrk(name, "\\/:*?\"<>|")) {
+        return "A name can't have \\ / : * ? \" < > |";
+    }
+    if (name[0] == ' ' || name[len - 1] == ' ' || name[len - 1] == '.') {
         return "A name can't start with a space or end with a space or a dot.";
-    if (is_protected_name(name)) return "That name belongs to the game's database.";
+    }
+    if (is_protected_name(name)) {
+        return "That name belongs to the game's database.";
+    }
     if (strcasecmp(name, old) != 0) {             /* (only the case changes: the same file) */
         char full[PATH_MAX_B + NAME_MAX_B];
         struct stat st;
         snprintf(full, sizeof(full), "%s/%s", s_path, name);
-        if (stat(full, &st) == 0) return "Something here already has that name.";
+        if (stat(full, &st) == 0) {
+            return "Something here already has that name.";
+        }
     }
     return "";
 }
 
 static void do_rename(void)
 {
-    if (s_dlg_idx < 0 || s_dlg_idx >= s_n) return;
+    if (s_dlg_idx < 0 || s_dlg_idx >= s_n) {
+        return;
+    }
     const char *old = s_ent[s_dlg_idx].name;
     const char *name = lv_textarea_get_text(s_ta);
     if (strcmp(name, old) == 0) {                   /* unchanged */
@@ -369,7 +436,9 @@ static void do_rename(void)
 /* moves the entry into the Recycle bin */
 static void do_trash(void)
 {
-    if (s_dlg_idx < 0 || s_dlg_idx >= s_n) return;
+    if (s_dlg_idx < 0 || s_dlg_idx >= s_n) {
+        return;
+    }
     const entry_t *e = &s_ent[s_dlg_idx];
     if (is_protected_name(e->name) || (at_root() && !strcmp(e->name, TRASH_NAME))) {   /* (no button) */
         dlg_close();
@@ -377,7 +446,9 @@ static void do_trash(void)
     }
     char rel[PATH_MAX_B + NAME_MAX_B], enc[NAME_MAX_B], from[PATH_MAX_B + NAME_MAX_B], to[PATH_MAX_B + NAME_MAX_B];
     snprintf(rel, sizeof(rel), "%s/%s", s_path + strlen(BSP_SD_MOUNT_POINT) + (at_root() ? 0 : 1), e->name);
-    if (rel[0] == '/') memmove(rel, rel + 1, strlen(rel));
+    if (rel[0] == '/') {
+        memmove(rel, rel + 1, strlen(rel));
+    }
     if (!trash_encode(rel, enc, sizeof(enc))) {
         dlg_error("Its path is too long for the Recycle bin.");
         return;
@@ -403,13 +474,17 @@ static void do_trash(void)
 /* puts a bin item back where it was (making the folders on the way if they're gone) */
 static void do_restore(int idx)
 {
-    if (idx < 0 || idx >= s_n) return;
+    if (idx < 0 || idx >= s_n) {
+        return;
+    }
     char rel[PATH_MAX_B], from[PATH_MAX_B + NAME_MAX_B], to[PATH_MAX_B + NAME_MAX_B];
     trash_decode(s_ent[idx].name, rel, sizeof(rel));
     snprintf(from, sizeof(from), "%s/%s", TRASH_DIR, s_ent[idx].name);
     snprintf(to, sizeof(to), "%s/%s", BSP_SD_MOUNT_POINT, rel);
     const char *base = strrchr(rel, '/') ? strrchr(rel, '/') + 1 : rel;
-    if (base == rel && is_protected_name(rel)) return;   /* (a root name of the database: never) */
+    if (base == rel && is_protected_name(rel)) {
+        return;    /* (a root name of the database: never) */
+    }
     struct stat st;
     if (stat(to, &st) == 0) {
         char msg[160];
@@ -434,7 +509,9 @@ static void do_restore(int idx)
 
 static void do_purge(void)                          /* one bin item, for good */
 {
-    if (s_dlg_idx < 0 || s_dlg_idx >= s_n) return;
+    if (s_dlg_idx < 0 || s_dlg_idx >= s_n) {
+        return;
+    }
     char p[PATH_MAX_B + NAME_MAX_B];
     snprintf(p, sizeof(p), "%s/%s", TRASH_DIR, s_ent[s_dlg_idx].name);
     dlg_close();
@@ -445,18 +522,30 @@ static void on_dlg_cancel(lv_event_t *e) { dlg_close(); }
 static void on_dlg_ok(lv_event_t *e)
 {
     switch (s_dlg_mode) {
-    case DLG_RENAME: do_rename(); break;
-    case DLG_TRASH:  do_trash(); break;
-    case DLG_PURGE:  do_purge(); break;
-    case DLG_EMPTY:  dlg_close(); job_start(NULL); break;
+    case DLG_RENAME:
+        do_rename();
+        break;
+    case DLG_TRASH:
+        do_trash();
+        break;
+    case DLG_PURGE:
+        do_purge();
+        break;
+    case DLG_EMPTY:
+        dlg_close();
+        job_start(NULL);
+        break;
     }
 }
 
 static void on_kb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_READY) do_rename();
-    else if (code == LV_EVENT_CANCEL) dlg_close();
+    if (code == LV_EVENT_READY) {
+        do_rename();
+    } else if (code == LV_EVENT_CANCEL) {
+        dlg_close();
+    }
 }
 
 static void build_dialog(void)
@@ -533,7 +622,9 @@ static void build_dialog(void)
 
 static void dlg_open(int idx, int mode)
 {
-    if (mode != DLG_EMPTY && (idx < 0 || idx >= s_n)) return;
+    if (mode != DLG_EMPTY && (idx < 0 || idx >= s_n)) {
+        return;
+    }
     const entry_t *e = mode != DLG_EMPTY ? &s_ent[idx] : NULL;
     bool rename = mode == DLG_RENAME;
     s_dlg_idx = idx;
@@ -550,7 +641,7 @@ static void dlg_open(int idx, int mode)
         trash_decode(e->name, orig, sizeof(orig));
         lv_label_set_text_fmt(s_dlg_title, "Delete %s for good?", orig);
         lv_label_set_text(s_dlg_msg, e->dir ? "The folder and everything in it. This can't be undone."
-                                            : "This can't be undone.");
+                          : "This can't be undone.");
         lv_label_set_text(ok_lbl, "Delete");
         lv_obj_set_style_bg_color(s_dlg_ok, C_RED, 0);
     } else if (rename) {
@@ -563,9 +654,9 @@ static void dlg_open(int idx, int mode)
     } else {
         lv_label_set_text_fmt(s_dlg_title, "Delete %s?", e->name);
         lv_label_set_text(s_dlg_msg, e->dir ? "The folder and what's in it go to the Recycle bin: restore them "
-                                              "from there, or empty it to free the space."
-                                            : "It goes to the Recycle bin: restore it from there, or empty it to "
-                                              "free the space.");
+                          "from there, or empty it to free the space."
+                          : "It goes to the Recycle bin: restore it from there, or empty it to "
+                          "free the space.");
         lv_label_set_text(ok_lbl, "Delete");
         lv_obj_set_style_bg_color(s_dlg_ok, C_RED, 0);
     }
@@ -578,22 +669,30 @@ static void dlg_open(int idx, int mode)
 /* (not while the folder is read again: the worker is rewriting s_ent) */
 static void on_rename(lv_event_t *e)
 {
-    if (!s_busy && !s_job_busy) dlg_open((int)(intptr_t)lv_event_get_user_data(e), DLG_RENAME);
+    if (!s_busy && !s_job_busy) {
+        dlg_open((int)(intptr_t)lv_event_get_user_data(e), DLG_RENAME);
+    }
 }
 
 static void on_delete(lv_event_t *e)
 {
-    if (!s_busy && !s_job_busy) dlg_open((int)(intptr_t)lv_event_get_user_data(e), in_trash() ? DLG_PURGE : DLG_TRASH);
+    if (!s_busy && !s_job_busy) {
+        dlg_open((int)(intptr_t)lv_event_get_user_data(e), in_trash() ? DLG_PURGE : DLG_TRASH);
+    }
 }
 
 static void on_restore(lv_event_t *e)
 {
-    if (!s_busy && !s_job_busy) do_restore((int)(intptr_t)lv_event_get_user_data(e));
+    if (!s_busy && !s_job_busy) {
+        do_restore((int)(intptr_t)lv_event_get_user_data(e));
+    }
 }
 
 static void on_empty(lv_event_t *e)
 {
-    if (!s_busy && !s_job_busy && s_n > 0) dlg_open(-1, DLG_EMPTY);
+    if (!s_busy && !s_job_busy && s_n > 0) {
+        dlg_open(-1, DLG_EMPTY);
+    }
 }
 
 /* ------------------------------------------------------------- puzzle file preview */
@@ -633,7 +732,9 @@ static bool pv_parse(const char *src, int *var, int *lv, uint8_t g[81], sudoku_g
     static char line[2048];
     snprintf(line, sizeof(line), "%s", src);
     sdx_puzzle_t p;
-    if (!sdx_parse(line, &p) || !sdx_geom(&p, geom)) return false;
+    if (!sdx_parse(line, &p) || !sdx_geom(&p, geom)) {
+        return false;
+    }
     *var = p.variant;
     *lv = p.level;
     memcpy(g, p.givens, 81);
@@ -646,8 +747,10 @@ static void pv_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, int w, lv
     lv_draw_line_dsc_init(&d);
     d.color = c;
     d.width = w;
-    d.p1.x = x1; d.p1.y = y1;
-    d.p2.x = x2; d.p2.y = y2;
+    d.p1.x = x1;
+    d.p1.y = y1;
+    d.p2.x = x2;
+    d.p2.y = y2;
     lv_draw_line(layer, &d);
 }
 
@@ -656,7 +759,9 @@ static void pv_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, int w, lv
  * the accent colour, with their sums */
 static void pv_draw_cb(lv_event_t *e)
 {
-    if (!s_pv_shown) return;
+    if (!s_pv_shown) {
+        return;
+    }
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_obj_t *obj = lv_event_get_current_target_obj(e);
     lv_area_t a;
@@ -698,15 +803,41 @@ static void pv_draw_cb(lv_event_t *e)
         for (int r = 0; r < n; r++) {
             for (int c = 0; c < n; c++) {
                 int cell = r * 9 + c, k = g->cage_of[cell];
-                if (k == CAGE_NONE) continue;
+                if (k == CAGE_NONE) {
+                    continue;
+                }
                 int x1 = a.x1 + c * cs, y1 = a.y1 + r * cs, x2 = x1 + cs - 1, y2 = y1 + cs - 1;
                 bool top = r == 0 || g->cage_of[cell - 9] != k, bot = r == n - 1 || g->cage_of[cell + 9] != k;
                 bool lef = c == 0 || g->cage_of[cell - 1] != k, rig = c == n - 1 || g->cage_of[cell + 1] != k;
                 int xa = lef ? x1 + in : x1, xb = rig ? x2 - in : x2, ya = top ? y1 + in : y1, yb = bot ? y2 - in : y2;
-                if (top) { d.p1.x = xa; d.p1.y = ya; d.p2.x = xb; d.p2.y = ya; lv_draw_line(layer, &d); }
-                if (bot) { d.p1.x = xa; d.p1.y = yb; d.p2.x = xb; d.p2.y = yb; lv_draw_line(layer, &d); }
-                if (lef) { d.p1.x = xa; d.p1.y = ya; d.p2.x = xa; d.p2.y = yb; lv_draw_line(layer, &d); }
-                if (rig) { d.p1.x = xb; d.p1.y = ya; d.p2.x = xb; d.p2.y = yb; lv_draw_line(layer, &d); }
+                if (top) {
+                    d.p1.x = xa;
+                    d.p1.y = ya;
+                    d.p2.x = xb;
+                    d.p2.y = ya;
+                    lv_draw_line(layer, &d);
+                }
+                if (bot) {
+                    d.p1.x = xa;
+                    d.p1.y = yb;
+                    d.p2.x = xb;
+                    d.p2.y = yb;
+                    lv_draw_line(layer, &d);
+                }
+                if (lef) {
+                    d.p1.x = xa;
+                    d.p1.y = ya;
+                    d.p2.x = xa;
+                    d.p2.y = yb;
+                    lv_draw_line(layer, &d);
+                }
+                if (rig) {
+                    d.p1.x = xb;
+                    d.p1.y = ya;
+                    d.p2.x = xb;
+                    d.p2.y = yb;
+                    lv_draw_line(layer, &d);
+                }
                 if (g->cage_cell[k][0] == cell) {   /* the top-left cell: the sum */
                     char t[4];
                     snprintf(t, sizeof(t), "%d", g->cage_sum[k]);
@@ -745,7 +876,9 @@ static void pv_draw_cb(lv_event_t *e)
 
 static void pv_show(int at)
 {
-    if (s_pv_n <= 0) return;
+    if (s_pv_n <= 0) {
+        return;
+    }
     s_pv_at = (at + s_pv_n) % s_pv_n;
     s_pv_shown = pv_parse(s_pv_line[s_pv_at], &s_pv_var, &s_pv_lv, s_pv_givens, s_pv_geom);
     int n = s_pv_shown ? s_pv_geom->n : 9;
@@ -763,7 +896,9 @@ static void pv_show(int at)
 
 static void pv_close(void)
 {
-    if (!s_pv) return;
+    if (!s_pv) {
+        return;
+    }
     lv_obj_delete_async(s_pv);
     s_pv = NULL;
     heap_caps_free(s_pv_buf);
@@ -788,9 +923,13 @@ static int pv_load(const char *path, char *summary, size_t n)
     FILE *f = fopen(path, "r");
     s_pv_buf = heap_caps_malloc(PV_MAX_BYTES + 1, MALLOC_CAP_SPIRAM);
     s_pv_line = heap_caps_malloc(PV_MAX * sizeof(char *), MALLOC_CAP_SPIRAM);
-    if (!s_pv_geom) s_pv_geom = heap_caps_malloc(sizeof(sudoku_geom_t), MALLOC_CAP_SPIRAM);
+    if (!s_pv_geom) {
+        s_pv_geom = heap_caps_malloc(sizeof(sudoku_geom_t), MALLOC_CAP_SPIRAM);
+    }
     if (!f || !s_pv_buf || !s_pv_line || !s_pv_geom) {
-        if (f) fclose(f);
+        if (f) {
+            fclose(f);
+        }
         snprintf(summary, n, f ? "Out of memory." : "Couldn't open the file.");
         return 0;
     }
@@ -802,9 +941,13 @@ static int pv_load(const char *path, char *summary, size_t n)
     if (ends_with_ci(path, ".opensudoku")) {        /* OpenSudoku's XML: each data="..." (or '...') is a Classic one */
         for (char *q = s_pv_buf; s_pv_n < PV_MAX && (q = strstr(q, "data=")) != NULL; q += 5) {
             char quote = q[5];
-            if (quote != '"' && quote != '\'') continue;
+            if (quote != '"' && quote != '\'') {
+                continue;
+            }
             char *d = q + 6, *end = strchr(d, quote);
-            if (!end) break;                        /* (cut off at the end) */
+            if (!end) {
+                break;    /* (cut off at the end) */
+            }
             int v, lv;
             uint8_t g[81];
             *end = 0;
@@ -819,10 +962,15 @@ static int pv_load(const char *path, char *summary, size_t n)
     }
     for (char *p = s_pv_buf; !ends_with_ci(path, ".opensudoku") && *p && s_pv_n < PV_MAX;) {
         char *nl = strchr(p, '\n');
-        if (nl) *nl = 0;
-        else if (cut) break;                        /* (a line cut off at the end) */
+        if (nl) {
+            *nl = 0;
+        } else if (cut) {
+            break;    /* (a line cut off at the end) */
+        }
         size_t l = strlen(p);
-        while (l && (p[l - 1] == '\r' || p[l - 1] == ' ' || p[l - 1] == '\t')) p[--l] = 0;
+        while (l && (p[l - 1] == '\r' || p[l - 1] == ' ' || p[l - 1] == '\t')) {
+            p[--l] = 0;
+        }
         if (l && p[0] != '#') {
             int v, lv;
             uint8_t g[81];
@@ -833,21 +981,28 @@ static int pv_load(const char *path, char *summary, size_t n)
                 bad++;
             }
         }
-        if (!nl) break;
+        if (!nl) {
+            break;
+        }
         p = nl + 1;
     }
     /* "42 puzzles: 30 Classic, 12 Killer" (+ the lines left out) */
     int o = snprintf(summary, n, "%d puzzle%s%s", s_pv_n, s_pv_n == 1 ? "" : "s", s_pv_n ? ": " : "");
     for (int v = 0, first = 1; v < VAR_COUNT && o < (int)n; v++) {
-        if (!kinds[v]) continue;
+        if (!kinds[v]) {
+            continue;
+        }
         o += snprintf(summary + o, n - o, "%s%d %s", first ? "" : ", ", kinds[v], variant_name(v));
         first = 0;
     }
-    if (bad && o < (int)n) o += snprintf(summary + o, n - o, "  -  %d %s that %s", bad,
-                                         ends_with_ci(path, ".opensudoku") ? (bad == 1 ? "entry" : "entries")
-                                                                           : (bad == 1 ? "line" : "lines"),
-                                         bad == 1 ? "isn't a puzzle" : "aren't puzzles");
-    if ((cut || s_pv_n == PV_MAX) && o < (int)n) snprintf(summary + o, n - o, "  -  the first %d shown", s_pv_n);
+    if (bad && o < (int)n)
+        o += snprintf(summary + o, n - o, "  -  %d %s that %s", bad,
+                      ends_with_ci(path, ".opensudoku") ? (bad == 1 ? "entry" : "entries")
+                      : (bad == 1 ? "line" : "lines"),
+                      bad == 1 ? "isn't a puzzle" : "aren't puzzles");
+    if ((cut || s_pv_n == PV_MAX) && o < (int)n) {
+        snprintf(summary + o, n - o, "  -  the first %d shown", s_pv_n);
+    }
     return s_pv_n;
 }
 
@@ -895,10 +1050,10 @@ static void pv_open(int i)
     /* what Import does (or why it can't) */
     bool db = stats_db_ready();
     lv_obj_t *note = label(s_pv, &lv_font_montserrat_14, C_MUTED,
-        !db ? "Importing needs sudoku.db: insert the card before switching on."
-        : !s_pv_n ? "Nothing here to import."
-        : "Import adds them to Puzzles > Saved as a collection named after the file (each checked for exactly "
-          "one solution; more than 100 make several).");
+                           !db ? "Importing needs sudoku.db: insert the card before switching on."
+                           : !s_pv_n ? "Nothing here to import."
+                           : "Import adds them to Puzzles > Saved as a collection named after the file (each checked for exactly "
+                           "one solution; more than 100 make several).");
     lv_obj_set_width(note, 720 - 32);
     lv_label_set_long_mode(note, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_CENTER, 0);
@@ -919,8 +1074,11 @@ static void pv_open(int i)
     lv_obj_set_state(im, LV_STATE_DISABLED, !db || !s_pv_n);
 
     s_pv_shown = false;
-    if (s_pv_n) pv_show(0);
-    else lv_label_set_text(s_pv_pos, "No puzzles");
+    if (s_pv_n) {
+        pv_show(0);
+    } else {
+        lv_label_set_text(s_pv_pos, "No puzzles");
+    }
 }
 
 /* a picture or video: the viewer, with the folder's others for Prev / Next */
@@ -929,33 +1087,50 @@ static void open_media(int i)
     static const char *names[MAX_ENTRIES];
     int n = 0, at = 0;
     for (int k = 0; k < s_n; k++) {
-        if (s_ent[k].dir || !media_view_kind(s_ent[k].name)) continue;
-        if (k == i) at = n;
+        if (s_ent[k].dir || !media_view_kind(s_ent[k].name)) {
+            continue;
+        }
+        if (k == i) {
+            at = n;
+        }
         names[n++] = s_ent[k].name;
     }
-    if (n) media_view_open(s_scr, s_path, names, n, at);
+    if (n) {
+        media_view_open(s_scr, s_path, names, n, at);
+    }
 }
 
 static void on_row(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= s_n || s_busy || s_job_busy || in_trash()) return;
+    if (i < 0 || i >= s_n || s_busy || s_job_busy || in_trash()) {
+        return;
+    }
     if (!s_ent[i].dir) {
-        if (media_view_kind(s_ent[i].name)) open_media(i);
-        else if (is_puzzle_file(s_ent[i].name)) pv_open(i);   /* .sdm / .sdx: the preview */
+        if (media_view_kind(s_ent[i].name)) {
+            open_media(i);
+        } else if (is_puzzle_file(s_ent[i].name)) {
+            pv_open(i);    /* .sdm / .sdx: the preview */
+        }
         return;
     }
     size_t len = strlen(s_path);
-    if (len + 1 + strlen(s_ent[i].name) >= sizeof(s_path)) return;
+    if (len + 1 + strlen(s_ent[i].name) >= sizeof(s_path)) {
+        return;
+    }
     snprintf(s_path + len, sizeof(s_path) - len, "/%s", s_ent[i].name);
     rescan();
 }
 
 static void on_up(lv_event_t *e)
 {
-    if (at_root() || s_busy) return;
+    if (at_root() || s_busy) {
+        return;
+    }
     char *slash = strrchr(s_path, '/');
-    if (slash && slash != s_path) *slash = 0;
+    if (slash && slash != s_path) {
+        *slash = 0;
+    }
     rescan();
 }
 
@@ -1009,8 +1184,9 @@ static void show_list(void)
         lv_obj_set_style_border_width(r, i < s_n - 1 ? 1 : 0, 0);
         int media = e->dir ? MEDIA_NONE : media_view_kind(e->name);
         bool puzzles = !e->dir && is_puzzle_file(e->name);
-        if ((e->dir || media || puzzles) && !trashed) {   /* a folder, picture/video or puzzle file opens on a tap
-                                                             (not in the bin) */
+        if ((e->dir || media || puzzles) && !trashed) {
+            /* a folder, picture/video or puzzle file opens on a tap
+                                                                 (not in the bin) */
             lv_obj_set_clickable(r, true);
             lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
             lv_obj_set_style_bg_opa(r, LV_OPA_COVER, LV_STATE_PRESSED);
@@ -1019,8 +1195,8 @@ static void show_list(void)
 
         lv_obj_t *ic = label(r, &lv_font_montserrat_24, bin ? C_ORANGE : (e->dir ? C_ACCENT : C_MUTED),
                              bin ? LV_SYMBOL_TRASH : e->dir ? LV_SYMBOL_DIRECTORY
-                                 : media == MEDIA_IMAGE ? LV_SYMBOL_IMAGE : media == MEDIA_VIDEO ? LV_SYMBOL_VIDEO
-                                 : puzzles ? LV_SYMBOL_LIST : LV_SYMBOL_FILE);
+                             : media == MEDIA_IMAGE ? LV_SYMBOL_IMAGE : media == MEDIA_VIDEO ? LV_SYMBOL_VIDEO
+                             : puzzles ? LV_SYMBOL_LIST : LV_SYMBOL_FILE);
         lv_obj_set_width(ic, 30);
 
         lv_obj_t *col = lv_obj_create(r);
@@ -1031,9 +1207,13 @@ static void show_list(void)
         lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(col, 2, 0);
         char shown[PATH_MAX_B];
-        if (bin) strlcpy(shown, "Recycle bin", sizeof(shown));
-        else if (trashed) trash_decode(e->name, shown, sizeof(shown));   /* where it was */
-        else strlcpy(shown, e->name, sizeof(shown));
+        if (bin) {
+            strlcpy(shown, "Recycle bin", sizeof(shown));
+        } else if (trashed) {
+            trash_decode(e->name, shown, sizeof(shown));    /* where it was */
+        } else {
+            strlcpy(shown, e->name, sizeof(shown));
+        }
         lv_obj_t *nm = label(col, &lv_font_montserrat_20, C_TEXT, shown);
         lv_obj_set_width(nm, LV_PCT(100));
         lv_label_set_long_mode(nm, LV_LABEL_LONG_MODE_DOTS);
@@ -1042,7 +1222,9 @@ static void show_list(void)
         if (e->mtime > 0) {
             struct tm tm;
             localtime_r(&e->mtime, &tm);
-            if (tm.tm_year + 1900 >= 2000) strftime(when, sizeof(when), "%d %b %Y, %H:%M", &tm);
+            if (tm.tm_year + 1900 >= 2000) {
+                strftime(when, sizeof(when), "%d %b %Y, %H:%M", &tm);
+            }
         }
         if (prot) {
             fmt_size(size, sizeof(size), e->size);
@@ -1099,7 +1281,9 @@ void file_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
         lv_obj_delete(s_dlg);
         s_dlg = NULL;
     }
-    if (!s_ent) s_ent = heap_caps_calloc(MAX_ENTRIES, sizeof(entry_t), MALLOC_CAP_SPIRAM);
+    if (!s_ent) {
+        s_ent = heap_caps_calloc(MAX_ENTRIES, sizeof(entry_t), MALLOC_CAP_SPIRAM);
+    }
     s_scr = scr;
 
     /* top bar, as on the other Settings pages */
@@ -1150,13 +1334,18 @@ void file_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
 
     build_dialog();
     s_timer = lv_timer_create(poll, POLL_MS, NULL);
-    if (s_shown) rescan();                          /* (a rebuild while open: list again) */
-    else lv_timer_pause(s_timer);
+    if (s_shown) {
+        rescan();    /* (a rebuild while open: list again) */
+    } else {
+        lv_timer_pause(s_timer);
+    }
 }
 
 void file_ui_set_shown(bool shown)
 {
-    if (!s_timer) return;
+    if (!s_timer) {
+        return;
+    }
     s_shown = shown;
     if (shown) {
         lv_timer_resume(s_timer);

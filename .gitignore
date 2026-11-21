@@ -57,3 +57,8 @@ dkms.conf
 # PC-side test binary (make -C tests)
 tests/sudoku_tests
 tests/variant_examples
+
+# make: the firmware build, release files and Pages site
+/build/
+/dist/
+/site/

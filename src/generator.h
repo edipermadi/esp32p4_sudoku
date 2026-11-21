@@ -98,7 +98,8 @@ const char *gen_level_name(int level);   /* 0..GEN_LEVELS-1: "Easy", "Medium", "
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
                VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_KING, VAR_NONCONSEC, VAR_DISJOINT,
                VAR_ASTERISK, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
-               VAR_SKY, VAR_LK, VAR_COUNT } sudoku_variant_t;
+               VAR_SKY, VAR_LK, VAR_COUNT
+             } sudoku_variant_t;
 
 /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
  * "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki",
@@ -277,17 +278,31 @@ static inline bool sudoku_geom_on_diag(const sudoku_geom_t *g, int cell)
 static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
 {
     int r = cell / 9, c = cell % 9;
-    if (!g->windows || r % 4 == 0 || c % 4 == 0) return -1;
+    if (!g->windows || r % 4 == 0 || c % 4 == 0) {
+        return -1;
+    }
     return (r > 4) * 2 + (c > 4);
 }
 
 /* on the Asterisk (9x9: rows and columns 1, 2, 4, 6, 7 around the centre) */
 static inline bool sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
 {
-    if (g->variant != VAR_ASTERISK) return false;
+    if (g->variant != VAR_ASTERISK) {
+        return false;
+    }
     switch (cell) {                     /* (a switch: this header is C++ too, no designated array init) */
-    case 13: case 20: case 24: case 37: case 40: case 43: case 56: case 60: case 67: return true;
-    default: return false;
+    case 13:
+    case 20:
+    case 24:
+    case 37:
+    case 40:
+    case 43:
+    case 56:
+    case 60:
+    case 67:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -333,7 +348,8 @@ bool sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
 bool sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
 /* The same, and which rule says no: FIT_OK (it fits), or the first rule that rules d out */
 enum { FIT_OK = 0, FIT_FILLED, FIT_BROKEN, FIT_UNIT, FIT_XPEER, FIT_ALLOW, FIT_CONSEC, FIT_EDGE, FIT_QUAD,
-       FIT_SANDWICH_ROW, FIT_SANDWICH_COL, FIT_THERMO, FIT_CAGE, FIT_SKY_ROW, FIT_SKY_COL, FIT_LK };
+       FIT_SANDWICH_ROW, FIT_SANDWICH_COL, FIT_THERMO, FIT_CAGE, FIT_SKY_ROW, FIT_SKY_COL, FIT_LK
+     };
 int sudoku_fits_why(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
 
 /* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
@@ -348,7 +364,8 @@ int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cel
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
                TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH,
                TECH_NAKED_TRIPLE, TECH_X_WING, TECH_SWORDFISH, TECH_XY_WING,
-               TECH_EDGE, TECH_QUAD, TECH_LINE, TECH_SKY, TECH_LK } tech_kind_t;
+               TECH_EDGE, TECH_QUAD, TECH_LINE, TECH_SKY, TECH_LK
+             } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
     int unit, unit2, unit3;  /* pointing: box, line; claiming: line, box; pairs, triple: the unit; cage: the

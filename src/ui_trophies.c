@@ -58,9 +58,12 @@ static void ach_progress_text(const stats_ach_t *a, char *buf, size_t n)
 {
     switch (a->unit) {
     case ACH_UNIT_MINUTES:
-        if (a->value >= 60) snprintf(buf, n, "%ld h %ld min / %ld h", (long)(a->value / 60), (long)(a->value % 60),
-                                     (long)(a->goal / 60));
-        else snprintf(buf, n, "%ld min / %ld h", (long)a->value, (long)(a->goal / 60));
+        if (a->value >= 60)
+            snprintf(buf, n, "%ld h %ld min / %ld h", (long)(a->value / 60), (long)(a->value % 60),
+                     (long)(a->goal / 60));
+        else {
+            snprintf(buf, n, "%ld min / %ld h", (long)a->value, (long)(a->goal / 60));
+        }
         break;
     case ACH_UNIT_DAYS:
         snprintf(buf, n, "%ld / %ld days", (long)a->value, (long)a->goal);
@@ -123,7 +126,9 @@ static void render_achievements(const stats_achievements_t *a)
     lv_obj_clean(tr_ach_list);
     for (int pass = 0; pass < 2; pass++) {             /* unlocked first, then the rest */
         for (int i = 0; i < a->n; i++) {
-            if (a->a[i].unlocked == (pass == 0)) ach_card(&a->a[i]);
+            if (a->a[i].unlocked == (pass == 0)) {
+                ach_card(&a->a[i]);
+            }
         }
     }
     lv_obj_scroll_to_y(tr_ach_list, 0, LV_ANIM_OFF);
@@ -133,7 +138,9 @@ static void render_achievements(const stats_achievements_t *a)
 static void day_shift(char *day, int delta)
 {
     struct tm tm = {0};
-    if (sscanf(day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) != 3) return;
+    if (sscanf(day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) != 3) {
+        return;
+    }
     tm.tm_year -= 1900;
     tm.tm_mon -= 1;
     tm.tm_mday += delta;
@@ -171,14 +178,16 @@ static void render_board(const stats_board_t *b)
     }
     lv_obj_set_state(tr_day_next, LV_STATE_DISABLED, is_today);
     bool me_solved = false;
-    for (int i = 0; i < b->n; i++) me_solved |= b->rows[i].player_id == store_player_id() && b->rows[i].solved;
+    for (int i = 0; i < b->n; i++) {
+        me_solved |= b->rows[i].player_id == store_player_id() && b->rows[i].solved;
+    }
     lv_obj_set_hidden(tr_play_btn, !is_today || me_solved);
 
     if (!b->exists || b->solved == 0) {
         tr_hint(tr_board_list, !b->exists ? (is_today ? "Nobody has played today's puzzle yet. Be the first!"
-                                                      : "Nobody played the daily puzzle on this day.")
-                                          : (is_today ? "Nobody has solved today's puzzle yet. Be the first!"
-                                                      : "Nobody solved this day's puzzle."));
+                                             : "Nobody played the daily puzzle on this day.")
+                : (is_today ? "Nobody has solved today's puzzle yet. Be the first!"
+                   : "Nobody solved this day's puzzle."));
         return;
     }
     lv_obj_clean(tr_board_list);
@@ -202,8 +211,11 @@ static void render_board(const stats_board_t *b)
         rank++;
         lv_obj_t *pos = make_label(card, rank == 1 ? &font_icons_24 : &lv_font_montserrat_24,
                                    rank == 1 ? C_ORANGE : C_MUTED);
-        if (rank == 1) lv_label_set_text(pos, SYMBOL_STAR);
-        else lv_label_set_text_fmt(pos, "%d", rank);
+        if (rank == 1) {
+            lv_label_set_text(pos, SYMBOL_STAR);
+        } else {
+            lv_label_set_text_fmt(pos, "%d", rank);
+        }
         lv_obj_set_width(pos, 40);
         lv_obj_set_style_text_align(pos, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(pos, LV_ALIGN_LEFT_MID, 0, 0);
@@ -239,7 +251,9 @@ static void render_board(const stats_board_t *b)
 static bool this_monday(char day[12])
 {
     time_t now = time(NULL);
-    if (!CLOCK_VALID(now)) return false;
+    if (!CLOCK_VALID(now)) {
+        return false;
+    }
     struct tm tm;
     localtime_r(&now, &tm);
     tm.tm_mday -= (tm.tm_wday + 6) % 7;
@@ -268,7 +282,9 @@ static void render_week(const stats_week_t *w)
     int shown = 0, rank = 0;
     for (int i = 0; i < w->n; i++) {
         const stats_week_row_t *r = &w->rows[i];
-        if (!r->days) continue;
+        if (!r->days) {
+            continue;
+        }
         shown++;
         rank++;
         bool me = r->player_id == store_player_id();
@@ -278,8 +294,11 @@ static void render_week(const stats_week_t *w)
             lv_obj_set_style_border_width(card, 2, 0);
         }
         lv_obj_t *pos = make_label(card, rank == 1 ? &font_icons_24 : &lv_font_montserrat_24, rank == 1 ? C_ORANGE : C_MUTED);
-        if (rank == 1) lv_label_set_text(pos, SYMBOL_STAR);
-        else lv_label_set_text_fmt(pos, "%d", rank);
+        if (rank == 1) {
+            lv_label_set_text(pos, SYMBOL_STAR);
+        } else {
+            lv_label_set_text_fmt(pos, "%d", rank);
+        }
         lv_obj_set_width(pos, 40);
         lv_obj_set_style_text_align(pos, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(pos, LV_ALIGN_LEFT_MID, 0, 0);
@@ -307,17 +326,25 @@ static void render_week(const stats_week_t *w)
         lv_label_set_text(tl, t);
         lv_obj_align(tl, LV_ALIGN_RIGHT_MID, 0, 0);
     }
-    if (!shown) tr_hint(tr_week_list, current ? "No daily puzzle solved this week yet." : "No daily puzzle was solved that week.");
+    if (!shown) {
+        tr_hint(tr_week_list, current ? "No daily puzzle solved this week yet." : "No daily puzzle was solved that week.");
+    }
     lv_obj_scroll_to_y(tr_week_list, 0, LV_ANIM_OFF);
 }
 
 static void tr_week_cb(lv_event_t *e)
 {
     char now[12];
-    if (!this_monday(now)) return;
-    if (!tr_monday[0]) snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+    if (!this_monday(now)) {
+        return;
+    }
+    if (!tr_monday[0]) {
+        snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+    }
     day_shift(tr_monday, 7 * (int)(intptr_t)lv_event_get_user_data(e));
-    if (strcmp(tr_monday, now) > 0) snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+    if (strcmp(tr_monday, now) > 0) {
+        snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+    }
     stats_db_query_week(tr_monday);
 }
 
@@ -338,8 +365,9 @@ static void render_records(const stats_records_t *R)
             localtime_r(&tt, &tm);
             strftime(when, sizeof(when), "%d %b %Y", &tm);
         }
-        if (!r->has) snprintf(detail, sizeof(detail), "Not yet");
-        else if (r->puzzle != STORE_NO_GAME) {
+        if (!r->has) {
+            snprintf(detail, sizeof(detail), "Not yet");
+        } else if (r->puzzle != STORE_NO_GAME) {
             char name[40];
             puzzle_name(r->puzzle, name, sizeof(name));
             snprintf(detail, sizeof(detail), "%s%s%s", name, when[0] ? "   -   " : "", when);
@@ -354,13 +382,22 @@ static void render_records(const stats_records_t *R)
         char v[24] = "-";
         if (r->has) {
             switch (r->unit) {
-            case REC_TIME: fmt_time(v, sizeof(v), (uint32_t)r->value); break;
-            case REC_DAYS: snprintf(v, sizeof(v), "%ld day%s", (long)r->value, r->value == 1 ? "" : "s"); break;
-            case REC_MINUTES:
-                if (r->value >= 60) snprintf(v, sizeof(v), "%ld h %02ld min", (long)(r->value / 60), (long)(r->value % 60));
-                else snprintf(v, sizeof(v), "%ld min", (long)r->value);
+            case REC_TIME:
+                fmt_time(v, sizeof(v), (uint32_t)r->value);
                 break;
-            default: snprintf(v, sizeof(v), "%ld", (long)r->value); break;
+            case REC_DAYS:
+                snprintf(v, sizeof(v), "%ld day%s", (long)r->value, r->value == 1 ? "" : "s");
+                break;
+            case REC_MINUTES:
+                if (r->value >= 60) {
+                    snprintf(v, sizeof(v), "%ld h %02ld min", (long)(r->value / 60), (long)(r->value % 60));
+                } else {
+                    snprintf(v, sizeof(v), "%ld min", (long)r->value);
+                }
+                break;
+            default:
+                snprintf(v, sizeof(v), "%ld", (long)r->value);
+                break;
             }
         }
         lv_obj_t *vl = make_label(card, r->unit == REC_TIME && r->has ? &font_timer_36 : &lv_font_montserrat_24,
@@ -376,11 +413,11 @@ void tr_ask(void)
 {
     if (!stats_db_ready()) {
         tr_hint(tr_rec_list, "Records are worked out from the solves in sudoku.db: insert a FAT32 microSD card "
-                             "before switching on.");
+                "before switching on.");
         tr_hint(tr_week_list, "The weekly challenge needs sudoku.db on a microSD card.");
         lv_label_set_text(tr_ach_count, "");
         tr_hint(tr_ach_list, "Achievements are worked out from the solves in sudoku.db: insert a FAT32 microSD "
-                             "card before switching on.");
+                "card before switching on.");
         tr_hint(tr_board_list, "The leaderboard needs sudoku.db on a microSD card.");
         lv_label_set_text(tr_day_lbl, "");
         lv_obj_set_hidden(tr_play_btn, true);
@@ -399,10 +436,12 @@ void tr_ask(void)
         if (!this_monday(now)) {
             lv_label_set_text(tr_week_lbl, "");
             tr_hint(tr_week_list, "The weekly challenge needs today's date: connect Wi-Fi (Settings) so the clock "
-                                  "is set.");
+                    "is set.");
             return;
         }
-        if (!tr_monday[0] || strcmp(tr_monday, now) > 0) snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+        if (!tr_monday[0] || strcmp(tr_monday, now) > 0) {
+            snprintf(tr_monday, sizeof(tr_monday), "%s", now);
+        }
         stats_db_query_week(tr_monday);
         return;
     }
@@ -413,11 +452,13 @@ void tr_ask(void)
         lv_obj_set_state(tr_day_prev, LV_STATE_DISABLED, true);
         lv_obj_set_hidden(tr_play_btn, true);
         tr_hint(tr_board_list, "The daily leaderboard needs today's date: connect Wi-Fi (Settings) so the "
-                               "clock is set.");
+                "clock is set.");
         return;
     }
     lv_obj_set_state(tr_day_prev, LV_STATE_DISABLED, false);
-    if (!tr_day[0] || strcmp(tr_day, today) > 0) snprintf(tr_day, sizeof(tr_day), "%s", today);
+    if (!tr_day[0] || strcmp(tr_day, today) > 0) {
+        snprintf(tr_day, sizeof(tr_day), "%s", today);
+    }
     stats_db_query_board(tr_day);
 }
 
@@ -440,10 +481,16 @@ static void tr_tab_cb(lv_event_t *e)
 static void tr_day_cb(lv_event_t *e)
 {
     char today[12];
-    if (!tr_today(today)) return;
-    if (!tr_day[0]) snprintf(tr_day, sizeof(tr_day), "%s", today);
+    if (!tr_today(today)) {
+        return;
+    }
+    if (!tr_day[0]) {
+        snprintf(tr_day, sizeof(tr_day), "%s", today);
+    }
     day_shift(tr_day, (int)(intptr_t)lv_event_get_user_data(e));
-    if (strcmp(tr_day, today) > 0) snprintf(tr_day, sizeof(tr_day), "%s", today);
+    if (strcmp(tr_day, today) > 0) {
+        snprintf(tr_day, sizeof(tr_day), "%s", today);
+    }
     stats_db_query_board(tr_day);
 }
 
@@ -460,20 +507,40 @@ void trophy_poll(void)
 {
     static stats_achievements_t *a;                      /* PSRAM: internal RAM is tight */
     static stats_board_t *b;
-    if (!a) a = heap_caps_malloc(sizeof(*a), MALLOC_CAP_SPIRAM);
-    if (!b) b = heap_caps_malloc(sizeof(*b), MALLOC_CAP_SPIRAM);
-    if (!a || !b) return;
-    if (stats_db_take_achievements(a)) {
-        if (h_trophy_sub) lv_label_set_text_fmt(h_trophy_sub, "%d of %d achievements", a->unlocked, a->n);
-        if (scr_trophy && a->player_id == store_player_id()) render_achievements(a);
+    if (!a) {
+        a = heap_caps_malloc(sizeof(*a), MALLOC_CAP_SPIRAM);
     }
-    if (stats_db_take_board(b) && scr_trophy && !strcmp(b->day, tr_day)) render_board(b);
+    if (!b) {
+        b = heap_caps_malloc(sizeof(*b), MALLOC_CAP_SPIRAM);
+    }
+    if (!a || !b) {
+        return;
+    }
+    if (stats_db_take_achievements(a)) {
+        if (h_trophy_sub) {
+            lv_label_set_text_fmt(h_trophy_sub, "%d of %d achievements", a->unlocked, a->n);
+        }
+        if (scr_trophy && a->player_id == store_player_id()) {
+            render_achievements(a);
+        }
+    }
+    if (stats_db_take_board(b) && scr_trophy && !strcmp(b->day, tr_day)) {
+        render_board(b);
+    }
     static stats_records_t *r;
-    if (!r) r = heap_caps_malloc(sizeof(*r), MALLOC_CAP_SPIRAM);
-    if (r && stats_db_take_records(r) && scr_trophy && r->player_id == store_player_id()) render_records(r);
+    if (!r) {
+        r = heap_caps_malloc(sizeof(*r), MALLOC_CAP_SPIRAM);
+    }
+    if (r && stats_db_take_records(r) && scr_trophy && r->player_id == store_player_id()) {
+        render_records(r);
+    }
     static stats_week_t *w;
-    if (!w) w = heap_caps_malloc(sizeof(*w), MALLOC_CAP_SPIRAM);
-    if (w && stats_db_take_week(w) && scr_trophy && !strcmp(w->monday, tr_monday)) render_week(w);
+    if (!w) {
+        w = heap_caps_malloc(sizeof(*w), MALLOC_CAP_SPIRAM);
+    }
+    if (w && stats_db_take_week(w) && scr_trophy && !strcmp(w->monday, tr_monday)) {
+        render_week(w);
+    }
 }
 
 void build_trophies(void)
@@ -484,7 +551,8 @@ void build_trophies(void)
     lv_label_set_text(t, "Trophies");
     lv_obj_set_pos(t, 150, 20);
     static const char *const TABS[TR_TABS] = {SYMBOL_TROPHY "  Achievements", SYMBOL_STAR "  Daily",
-                                              SYMBOL_CALENDAR "  Weekly", SYMBOL_CHART "  Records"};
+                                              SYMBOL_CALENDAR "  Weekly", SYMBOL_CHART "  Records"
+                                             };
     /* the tabs: a row across the page under the title, each as wide as its label needs
      * with room either side (Achievements is the long one); 232 + 136 + 154 + 150 + 3 x 8 = 696 */
     static const int TAB_W[TR_TABS] = {232, 136, 154, 150};
@@ -620,11 +688,15 @@ void trophy_toast_poll(void)
 {
     char titles[160];
     int n = 0;
-    if (!stats_db_take_unlocked(titles, sizeof(titles), &n)) return;
+    if (!stats_db_take_unlocked(titles, sizeof(titles), &n)) {
+        return;
+    }
     snprintf(s_toast_text, sizeof(s_toast_text), "%s unlocked:\n%s", n == 1 ? "Achievement" : "Achievements", titles);
     lv_timer_t *t = lv_timer_create(trophy_toast_cb, 1200, NULL);   /* after the fanfare starts */
     lv_timer_set_repeat_count(t, 1);
-    if (h_trophy_sub && stats_db_ready()) stats_db_query_achievements();   /* the home line */
+    if (h_trophy_sub && stats_db_ready()) {
+        stats_db_query_achievements();    /* the home line */
+    }
 }
 
 /* ---- accessors: the other UI files reach this file's state through these */

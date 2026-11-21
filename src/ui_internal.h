@@ -132,7 +132,8 @@ typedef struct {
 /* Learn: the techniques there are practice puzzles for */
 enum { LEARN_HIDDEN = 0, LEARN_NAKED, LEARN_POINTING, LEARN_CLAIMING, LEARN_NAKED_PAIR, LEARN_HIDDEN_PAIR,
        LEARN_NAKED_TRIPLE, LEARN_X_WING, LEARN_SWORDFISH, LEARN_XY_WING,
-       LEARN_CAGE, LEARN_THERMO, LEARN_SANDWICH, LEARN_CONSEC, LEARN_COUNT };   /* (the last four: variant rules) */
+       LEARN_CAGE, LEARN_THERMO, LEARN_SANDWICH, LEARN_CONSEC, LEARN_COUNT
+     };   /* (the last four: variant rules) */
 
 /* ------------------------------------------------------------- generated puzzles */
 /* The puzzles made on the board live in sudoku.db (stats_db_gen_*); the last

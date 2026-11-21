@@ -39,9 +39,13 @@ static const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];
 
 bool game_in_progress(uint16_t id)
 {
-    if (store_saved_game()->id == id) return true;
+    if (store_saved_game()->id == id) {
+        return true;
+    }
     for (int i = 0; i < ui_ngames(); i++) {
-        if (ui_games()[i].puzzle == id) return true;
+        if (ui_games()[i].puzzle == id) {
+            return true;
+        }
     }
     return false;
 }
@@ -50,21 +54,28 @@ static void list_btnm_draw_cb(lv_event_t *e)
 {
     lv_draw_task_t *t = lv_event_get_draw_task(e);
     lv_draw_dsc_base_t *base = (lv_draw_dsc_base_t *)lv_draw_task_get_draw_dsc(t);
-    if (base->part != LV_PART_ITEMS) return;
+    if (base->part != LV_PART_ITEMS) {
+        return;
+    }
     if (l_coll >= coll_total() || (int)base->id1 >= coll_size(l_coll)) {   /* a place past the end: nothing */
-        if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_FILL) lv_draw_task_get_fill_dsc(t)->opa = LV_OPA_TRANSP;
-        else if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_BORDER) lv_draw_task_get_border_dsc(t)->opa = LV_OPA_TRANSP;
+        if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_FILL) {
+            lv_draw_task_get_fill_dsc(t)->opa = LV_OPA_TRANSP;
+        } else if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_BORDER) {
+            lv_draw_task_get_border_dsc(t)->opa = LV_OPA_TRANSP;
+        }
         return;
     }
     uint16_t id = coll_puzzle(l_coll, (int)base->id1);
     bool solved = l_coll < PUZZLE_COLLECTION_COUNT ? store_best_time(id) != 0
-                                                   : (base->id1 < 128 && (l_solved_bits[base->id1 >> 3] >> (base->id1 & 7) & 1));
+                  : (base->id1 < 128 && (l_solved_bits[base->id1 >> 3] >> (base->id1 & 7) & 1));
     bool active = game_in_progress(id);
-    if (!solved && !active) return;
+    if (!solved && !active) {
+        return;
+    }
     if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_FILL) {
         lv_draw_fill_dsc_t *f = lv_draw_task_get_fill_dsc(t);
         if (lv_buttonmatrix_get_selected_button(base->obj) == base->id1 &&
-            lv_obj_has_state(base->obj, LV_STATE_PRESSED)) {
+                lv_obj_has_state(base->obj, LV_STATE_PRESSED)) {
             return;   /* keep the pressed colour */
         }
         f->color = active ? C_LIST_ACTIVE : C_LIST_SOLVED;
@@ -78,7 +89,9 @@ static void list_btnm_draw_cb(lv_event_t *e)
 static void list_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= coll_size(l_coll)) return;
+    if (i < 0 || i >= coll_size(l_coll)) {
+        return;
+    }
     game_set_from_coll(l_coll);
     open_puzzle(coll_puzzle(l_coll, i));
 }
@@ -88,7 +101,9 @@ static void list_row_del_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     int k = l_coll >= PUZZLE_COLLECTION_COUNT ? coll_saved_index(l_coll) : -1;
-    if (k < 0 || i < 0 || i >= coll_size(l_coll)) return;
+    if (k < 0 || i < 0 || i >= coll_size(l_coll)) {
+        return;
+    }
     char name[48], msg[128], cname[STATS_IMPORT_NAME];
     uint16_t id = coll_puzzle(l_coll, i);
     puzzle_name(id, name, sizeof(name));
@@ -99,7 +114,7 @@ static void list_row_del_cb(lv_event_t *e)
         return;
     }
     snprintf(msg, sizeof(msg), last ? "%s taken out of %s: it was the last, so the collection is gone."
-                                    : "%s taken out of %s.", name, cname);
+             : "%s taken out of %s.", name, cname);
     sv_changed();
     list_reveal_coll(LV_ANIM_OFF);
     sudoku_ui_notice(msg, 3000);
@@ -175,7 +190,9 @@ static int       l_nstar;
 static void star_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= l_nstar) return;
+    if (i < 0 || i >= l_nstar) {
+        return;
+    }
     open_puzzle(l_star_ids[i]);
 }
 
@@ -183,7 +200,9 @@ static void star_row_cb(lv_event_t *e)
 static void star_row_off_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= l_nstar) return;
+    if (i < 0 || i >= l_nstar) {
+        return;
+    }
     uint16_t id = l_star_ids[i];
     stats_db_set_bookmark(id, false);
     if (id == game_id()) {                               /* (the game's own star) */
@@ -212,8 +231,8 @@ static void list_fill_starred(void)
         lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_pad_top(t, 40, 0);
         lv_label_set_text(t, n < 0 ? "Stars need sudoku.db on a microSD card."
-                                   : "No starred puzzles yet: use the menu's Star on the game screen to keep "
-                                     "one here.");
+                          : "No starred puzzles yet: use the menu's Star on the game screen to keep "
+                          "one here.");
     }
     for (int i = 0; i < l_nstar; i++) {
         uint16_t id = l_star_ids[i];
@@ -240,14 +259,18 @@ void list_star_cb(lv_event_t *e)
 {
     list_set_starred(!l_starred);
     refresh_list();
-    if (!l_starred) list_reveal_coll(LV_ANIM_OFF);
+    if (!l_starred) {
+        list_reveal_coll(LV_ANIM_OFF);
+    }
 }
 
 /* ---- deleting the collection shown (Saved tab) */
 static void list_del_confirm_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-    if (l_coll < PUZZLE_COLLECTION_COUNT || l_coll >= coll_total()) return;
+    if (l_coll < PUZZLE_COLLECTION_COUNT || l_coll >= coll_total()) {
+        return;
+    }
     int k = coll_saved_index(l_coll);
     char name[STATS_IMPORT_NAME], msg[96];
     snprintf(name, sizeof(name), "%s", coll_name(l_coll));
@@ -265,18 +288,23 @@ static void list_del_confirm_cb(lv_event_t *e)
 
 static void list_del_cb(lv_event_t *e)
 {
-    if (l_coll < PUZZLE_COLLECTION_COUNT || l_coll >= coll_total()) return;
+    if (l_coll < PUZZLE_COLLECTION_COUNT || l_coll >= coll_total()) {
+        return;
+    }
     bool imported = coll_saved_index(l_coll) < 0;
     int n = coll_size(l_coll);
     char title[64], text[256];
     snprintf(title, sizeof(title), "Delete %s?", coll_name(l_coll));
     char what[48];
-    if (n == 1) snprintf(what, sizeof(what), "Its puzzle stays on the board: its");
-    else snprintf(what, sizeof(what), "Its %d puzzles stay on the board: their", n);
+    if (n == 1) {
+        snprintf(what, sizeof(what), "Its puzzle stays on the board: its");
+    } else {
+        snprintf(what, sizeof(what), "Its %d puzzles stay on the board: their", n);
+    }
     snprintf(text, sizeof(text), "The collection goes%s. %s solves, History and Gameplays are kept%s.",
              imported ? " (its file can be imported again)" : "", what,
              imported ? "" : n == 1 ? ", and Save can put it in a collection again"
-                                    : ", and Save can put them in a collection again");
+             : ", and Save can put them in a collection again");
     lv_obj_t *m = make_msgbox(title, text);
     msgbox_button(m, "Cancel", mbox_close_cb, false);
     msgbox_button(m, LV_SYMBOL_TRASH "  Delete", list_del_confirm_cb, true);
@@ -286,11 +314,17 @@ static void list_del_cb(lv_event_t *e)
 void refresh_list(void)
 {
     games_refresh();
-    if (l_coll >= coll_total()) l_coll = 0;
+    if (l_coll >= coll_total()) {
+        l_coll = 0;
+    }
     if (coll_tab(l_coll) != l_tab) {               /* the tab shown decides: its last, or its first */
         int c = l_tab_coll[l_tab];
-        if (c < 0 || c >= coll_total() || coll_tab(c) != l_tab) c = l_tab ? PUZZLE_COLLECTION_COUNT : 0;
-        if (c < coll_total()) l_coll = c;
+        if (c < 0 || c >= coll_total() || coll_tab(c) != l_tab) {
+            c = l_tab ? PUZZLE_COLLECTION_COUNT : 0;
+        }
+        if (c < coll_total()) {
+            l_coll = c;
+        }
     }
     bool none = coll_tab(l_coll) != l_tab;          /* the Saved tab, with nothing in it */
     for (int i = 0; i < 2; i++) {
@@ -301,7 +335,9 @@ void refresh_list(void)
     lv_obj_set_hidden(l_btnm, none);
     lv_obj_set_hidden(l_name, none);
     lv_obj_set_hidden(l_stats, none);
-    if (!none) l_tab_coll[l_tab] = l_coll;
+    if (!none) {
+        l_tab_coll[l_tab] = l_coll;
+    }
     bool exportable = !none && coll_saved_index(l_coll) >= 0 && l_coll >= PUZZLE_COLLECTION_COUNT;
     bool listed = !none && l_tab == 1;              /* the Saved tab: rows, not numbers */
     lv_obj_set_hidden(l_export, !exportable);       /* a saved collection: to the card, for Import puzzles */
@@ -326,15 +362,17 @@ void refresh_list(void)
         lv_obj_set_hidden(l_coll_btn[c], coll_tab(c) != l_tab);
         uint16_t n = c < PUZZLE_COLLECTION_COUNT ? store_solved_count(coll_first(c), (uint16_t)size)
                      : k >= 0 ? (uint16_t)stats_db_solved_list(ui_saved()[k].puzzles, size, c == lc ? l_solved_bits : NULL)
-                              : (uint16_t)stats_db_solved_in(coll_first(c), size, c == lc ? l_solved_bits : NULL);
-        if (c < PUZZLE_COLLECTION_COUNT) total += n;
+                     : (uint16_t)stats_db_solved_in(coll_first(c), size, c == lc ? l_solved_bits : NULL);
+        if (c < PUZZLE_COLLECTION_COUNT) {
+            total += n;
+        }
         lv_label_set_text_fmt(l_coll_cnt[c], "%u/%u", (unsigned)n, (unsigned)size);
         /* selected row is accent blue: white text there in both themes */
         bool sel = c == l_coll && !none && !l_starred;
         lv_obj_set_state(l_coll_btn[c], LV_STATE_CHECKED, sel);
         lv_obj_set_style_text_color(l_coll_name[c], sel ? lv_color_white() : C_TEXT, 0);
         lv_obj_set_style_text_color(l_coll_cnt[c], sel ? lv_color_white()
-                                                   : (n == size ? C_GREEN : C_MUTED), 0);
+                                    : (n == size ? C_GREEN : C_MUTED), 0);
         lv_obj_set_style_text_opa(l_coll_cnt[c], sel ? LV_OPA_80 : LV_OPA_COVER, 0);
     }
     lv_label_set_text_fmt(l_total, "%u of %u solved", (unsigned)total, (unsigned)PUZZLE_COUNT);
@@ -345,15 +383,23 @@ void refresh_list(void)
     uint16_t n = 0;
     for (int i = 0; lc < PUZZLE_COLLECTION_COUNT && i < lsize; i++) {
         uint32_t s = store_best_time(coll_first(lc) + i);
-        if (!s) continue;
+        if (!s) {
+            continue;
+        }
         n++;
         sum += s;
-        if (!best || s < best) best = s;
+        if (!best || s < best) {
+            best = s;
+        }
     }
     if (lc >= PUZZLE_COLLECTION_COUNT) {
-        for (int i = 0; i < lsize && i < 128; i++) n += l_solved_bits[i >> 3] >> (i & 7) & 1;
+        for (int i = 0; i < lsize && i < 128; i++) {
+            n += l_solved_bits[i >> 3] >> (i & 7) & 1;
+        }
     }
-    if (listed && !l_starred) list_fill_rows(lc);   /* (after the counts: l_solved_bits is lc's) */
+    if (listed && !l_starred) {
+        list_fill_rows(lc);    /* (after the counts: l_solved_bits is lc's) */
+    }
     lv_label_set_text_fmt(l_name, "%s%s", coll_name(lc),
                           lc >= PUZZLE_COLLECTION_COUNT && coll_saved_index(lc) < 0 ? "  (imported)" : "");
     if (n && best) {
@@ -372,9 +418,14 @@ void refresh_list(void)
     int m = 0;
     int cnt = lsize > MAX_PER_COLL ? MAX_PER_COLL : lsize;
     for (int i = 0; i < MAX_PER_COLL; i++) {
-        if (i && i % 10 == 0) l_map[m++] = "\n";
-        if (i < cnt) snprintf(l_labels[i], sizeof(l_labels[i]), "%d", i + 1);
-        else snprintf(l_labels[i], sizeof(l_labels[i]), " ");   /* ("" would end the map) */
+        if (i && i % 10 == 0) {
+            l_map[m++] = "\n";
+        }
+        if (i < cnt) {
+            snprintf(l_labels[i], sizeof(l_labels[i]), "%d", i + 1);
+        } else {
+            snprintf(l_labels[i], sizeof(l_labels[i]), " ");    /* ("" would end the map) */
+        }
         l_map[m++] = l_labels[i];
     }
     l_map[m] = "";
@@ -383,20 +434,26 @@ void refresh_list(void)
     for (int i = cnt; i < MAX_PER_COLL; i++) {
         lv_buttonmatrix_set_button_ctrl(l_btnm, (uint32_t)i, LV_BUTTONMATRIX_CTRL_DISABLED);
     }
-    if (l_starred) list_fill_starred();            /* (its name and count over the collection's) */
+    if (l_starred) {
+        list_fill_starred();    /* (its name and count over the collection's) */
+    }
 }
 
 /* scrolls the collection column so the selected one is visible */
 void list_reveal_coll(lv_anim_enable_t anim)
 {
     lv_obj_update_layout(screen_list());
-    if (l_coll < coll_total() && coll_tab(l_coll) == l_tab) lv_obj_scroll_to_view(l_coll_btn[l_coll], anim);
+    if (l_coll < coll_total() && coll_tab(l_coll) == l_tab) {
+        lv_obj_scroll_to_view(l_coll_btn[l_coll], anim);
+    }
 }
 
 void show_list(void)
 {
     int gc = game_id() != STORE_NO_GAME ? coll_of(game_id()) : -1;
-    if (gc < 0 && game_id() != STORE_NO_GAME && coll_find(game_from_coll(), game_id()) >= 0) gc = game_from_coll();   /* a saved one */
+    if (gc < 0 && game_id() != STORE_NO_GAME && coll_find(game_from_coll(), game_id()) >= 0) {
+        gc = game_from_coll();    /* a saved one */
+    }
     if (gc >= 0) {                                  /* the collection of the puzzle just played */
         l_coll = gc;
         l_tab = coll_tab(gc);
@@ -420,7 +477,9 @@ static void coll_click_cb(lv_event_t *e)
 static void list_export_cb(lv_event_t *e)
 {
     int k = l_coll >= PUZZLE_COLLECTION_COUNT ? coll_saved_index(l_coll) : -1;
-    if (k < 0) return;
+    if (k < 0) {
+        return;
+    }
     char msg[96];
     stats_db_saved_export(ui_saved()[k].id, msg, sizeof(msg));
     sudoku_ui_notice(msg, 4000);
@@ -429,7 +488,9 @@ static void list_export_cb(lv_event_t *e)
 static void list_tab_cb(lv_event_t *e)
 {
     int t = (int)(intptr_t)lv_event_get_user_data(e);
-    if (t == l_tab && !l_starred) return;
+    if (t == l_tab && !l_starred) {
+        return;
+    }
     list_set_starred(false);
     l_tab = t;
     lv_obj_scroll_to_y(l_colls, 0, LV_ANIM_OFF);
@@ -440,9 +501,13 @@ static void list_tab_cb(lv_event_t *e)
 /* the dots under the menu (small circles, the page shown in the accent colour) */
 static void home_dots(void)
 {
-    if (!home_dots_obj()) return;
+    if (!home_dots_obj()) {
+        return;
+    }
     lv_obj_set_hidden(home_dots_obj(), h_npages < 2);
-    if (h_npages < 2) return;
+    if (h_npages < 2) {
+        return;
+    }
     int cur = (int)((lv_obj_get_scroll_x(home_menu()) + HOME_GRID_W / 2) / HOME_GRID_W);
     for (int p = 0; p < HOME_PAGES_MAX; p++) {
         lv_obj_t *d = lv_obj_get_child(home_dots_obj(), p);
@@ -463,14 +528,22 @@ void home_layout(void)
 {
     lv_obj_t *vis[16];
     int n = 0;
-    for (int i = 0; i < h_nitems; i++) if (!lv_obj_is_hidden(h_items[i])) vis[n++] = h_items[i];
+    for (int i = 0; i < h_nitems; i++) {
+        if (!lv_obj_is_hidden(h_items[i])) {
+            vis[n++] = h_items[i];
+        }
+    }
     const int rows = (HOME_MENU_MAX_H + HOME_GAP) / (HOME_BTN_H + HOME_GAP);   /* that fit under the header */
     bool grid = n > rows;
     int per_page = grid ? rows * 2 : rows;
     int npages = (n + per_page - 1) / per_page;
-    if (npages > HOME_PAGES_MAX) npages = HOME_PAGES_MAX;
+    if (npages > HOME_PAGES_MAX) {
+        npages = HOME_PAGES_MAX;
+    }
     int sig = (grid ? 1000 : 0) + n * 10 + npages;      /* (the same layout: nothing to do) */
-    if (sig == h_menu_grid) return;
+    if (sig == h_menu_grid) {
+        return;
+    }
     h_menu_grid = sig;
     h_npages = npages;
     for (int p = 0; p < HOME_PAGES_MAX; p++) {
@@ -479,26 +552,36 @@ void home_layout(void)
         lv_obj_set_hidden(home_page()[p], p >= npages);
     }
     for (int i = 0; i < h_nitems; i++) {               /* hidden ones wait on page 1 */
-        if (lv_obj_is_hidden(h_items[i])) lv_obj_set_parent(h_items[i], home_page()[0]);
+        if (lv_obj_is_hidden(h_items[i])) {
+            lv_obj_set_parent(h_items[i], home_page()[0]);
+        }
     }
     for (int k = 0; k < n; k++) {
         int p = k / per_page;
-        if (p >= npages) p = npages - 1;
+        if (p >= npages) {
+            p = npages - 1;
+        }
         lv_obj_set_parent(vis[k], home_page()[p]);
         lv_obj_move_to_index(vis[k], -1);              /* (in order on its page) */
         lv_obj_set_width(vis[k], grid ? (HOME_GRID_W - HOME_GAP) / 2 : HOME_COL_W);
     }
     lv_obj_set_scrollable(home_menu(), npages > 1);
     lv_obj_update_layout(home_menu());
-    if (lv_obj_get_scroll_x(home_menu()) > (npages - 1) * HOME_GRID_W) lv_obj_scroll_to_x(home_menu(), 0, LV_ANIM_OFF);
+    if (lv_obj_get_scroll_x(home_menu()) > (npages - 1) * HOME_GRID_W) {
+        lv_obj_scroll_to_x(home_menu(), 0, LV_ANIM_OFF);
+    }
     home_dots();
 }
 
 static void btnm_cb(lv_event_t *e)
 {
     uint32_t idx = lv_buttonmatrix_get_selected_button(l_btnm);
-    if (idx == LV_BUTTONMATRIX_BUTTON_NONE) return;
-    if ((int)idx >= coll_size(l_coll)) return;
+    if (idx == LV_BUTTONMATRIX_BUTTON_NONE) {
+        return;
+    }
+    if ((int)idx >= coll_size(l_coll)) {
+        return;
+    }
     game_set_from_coll(l_coll);
     open_puzzle(coll_puzzle(l_coll, (int)idx));
 }
@@ -520,7 +603,7 @@ lv_obj_t *make_coll_column(lv_obj_t *parent)
 
 /* One row of that column: name on the left, a small count on the right. */
 lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name_lbl, lv_obj_t **cnt_lbl,
-                               lv_event_cb_t cb, int user)
+                        lv_event_cb_t cb, int user)
 {
     lv_obj_t *b = lv_button_create(list);
     lv_obj_set_size(b, LV_PCT(100), 50);
@@ -642,9 +725,9 @@ void build_list(void)
     lv_label_set_long_mode(l_empty, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_align(l_empty, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(l_empty, "Nothing saved yet.\n\nOpen a puzzle made with New puzzle or Enter and tap "
-                               LV_SYMBOL_SAVE " next to the star to put it in a collection of your own. "
-                               "Collections imported from the card (Settings > Data > Import puzzles) are here "
-                               "too.");
+                      LV_SYMBOL_SAVE " next to the star to put it in a collection of your own. "
+                      "Collections imported from the card (Settings > Data > Import puzzles) are here "
+                      "too.");
     lv_obj_set_pos(l_empty, PANE_X + 12, L_GRID_Y + 20);
     lv_obj_set_hidden(l_empty, true);
 

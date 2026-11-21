@@ -31,6 +31,10 @@ Both colour schemes are tables at the top of `src/sudoku_ui.c`: `PAL_DARK` and `
 
 The effects are note tables at the top of `src/sfx.c`. Each note has a frequency, a length in ms, a waveform (sine, triangle or square) and a level. `SFX_VOLUME` sets the codec volume, 70 % by default.
 
+## Code style
+
+`make format` formats the project's own C sources and headers with astyle (`.astylerc`: K&R braces, 4-space indents, every `if` / `for` / `while` / `else` body in braces on its own lines; blocks already on one line, like one-line accessors, stay). `make format-check` lists the files that need it and fails if any do, changing nothing. Vendored code (SQLite, the QR Code generator, ggwave, `extras/lv_conf.h`) and generated files (puzzles, avatars, fonts) are left out. astyle 3.1 doesn't brace a loop whose body is itself an `if` / `for`; `tools/brace_nested.py` does, between two astyle passes. It also has a bug: a `<<` inside a designated initializer (`.pin_bit_mask = 1ULL << gpio,`) misaligns the following lines, so keep such shifts in parentheses.
+
 ## Tests
 
 The parts of the firmware that are plain C run on a PC too: `make -C tests` builds them with the host's compiler (AddressSanitizer and UBSan on) and runs `tests/test_main.c` in a few seconds, no board needed:

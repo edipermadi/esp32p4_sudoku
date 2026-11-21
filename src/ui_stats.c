@@ -38,16 +38,22 @@ static int       x_sel;          /* 0 = all levels, 1.. = collection x_sel-1, th
 static void add_puzzle_stat(level_stat_t *st, uint16_t id)
 {
     uint32_t t = store_best_time(id);
-    if (!t) return;
+    if (!t) {
+        return;
+    }
     st->solved++;
     st->solves += store_solve_count(id);
     st->time_sum += t;
-    if (!st->fastest || t < st->fastest) st->fastest = t;
+    if (!st->fastest || t < st->fastest) {
+        st->fastest = t;
+    }
     uint8_t m = store_fewest_mistakes(id);
     if (m != STORE_MISTAKES_UNKNOWN) {
         st->known++;
         st->miss_sum += m;
-        if (m == 0) st->perfect++;
+        if (m == 0) {
+            st->perfect++;
+        }
     }
 }
 
@@ -61,7 +67,9 @@ static void view_from_ram(int level, stats_view_t *v)
         for (uint16_t i = 0; i < pc->count; i++) {
             add_puzzle_stat(&v->levels[c], pc->first + i);
             add_puzzle_stat(&v->total, pc->first + i);
-            if (c != level || !store_best_time(pc->first + i) || v->n_puzzles >= STATS_MAX_PUZZLES) continue;
+            if (c != level || !store_best_time(pc->first + i) || v->n_puzzles >= STATS_MAX_PUZZLES) {
+                continue;
+            }
             stats_puzzle_t *p = &v->puzzles[v->n_puzzles++];
             p->number = i + 1;
             p->best = (uint16_t)store_best_time(pc->first + i);
@@ -131,7 +139,9 @@ static lv_obj_t *player_avatar_obj(lv_obj_t *parent, const stats_player_t *pl)
 }
 void stats_player_dd_update(void)
 {
-    if (!x_player_dd) return;
+    if (!x_player_dd) {
+        return;
+    }
     static char opts[STATS_MAX_PLAYERS * STORE_NAME_LEN];
     bool db = stats_db_ready() && players_count() > 0;
     int sel = 0;
@@ -140,7 +150,9 @@ void stats_player_dd_update(void)
         size_t len = 0;
         for (int i = 0; i < players_count(); i++) {
             len += snprintf(opts + len, sizeof(opts) - len, "%s%s", i ? "\n" : "", players_all()[i].name);
-            if (players_all()[i].id == store_player_id()) sel = i;
+            if (players_all()[i].id == store_player_id()) {
+                sel = i;
+            }
         }
     } else {
         snprintf(opts, sizeof(opts), "%s", store_player_name());
@@ -151,7 +163,9 @@ void stats_player_dd_update(void)
     /* the closed box: the avatar of who plays now left of the name, or the person icon */
     const stats_player_t *cur = db ? &players_all()[sel] : NULL;
     bool av = cur && cur->avatar && cur->avatar <= AVATAR_COUNT;
-    if (x_player_av) lv_obj_delete(x_player_av);
+    if (x_player_av) {
+        lv_obj_delete(x_player_av);
+    }
     x_player_av = NULL;
     if (av) {
         x_player_av = player_avatar_obj(x_player_dd, cur);
@@ -170,7 +184,9 @@ void stats_player_dd_update(void)
  * dropdown's own: the selected line's highlight is drawn then too, and would cover children). */
 static void stats_player_list_draw_cb(lv_event_t *e)
 {
-    if (!(stats_db_ready() && players_count() > 0)) return;
+    if (!(stats_db_ready() && players_count() > 0)) {
+        return;
+    }
     lv_obj_t *pdl = lv_event_get_current_target_obj(e);
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t a;
@@ -229,7 +245,9 @@ static void kind_total(const stats_view_t *v, int k, stats_level_t *t)
         t->solves += x->solves;
         t->time_sum += x->time_sum;
         t->miss_sum += x->miss_sum;
-        if (x->fastest && (!t->fastest || x->fastest < t->fastest)) t->fastest = x->fastest;
+        if (x->fastest && (!t->fastest || x->fastest < t->fastest)) {
+            t->fastest = x->fastest;
+        }
     }
 }
 
@@ -266,7 +284,7 @@ static void render_stats(const stats_view_t *v, bool from_db)
             fmt_stat_times(f, a, sizeof(f), st);
             fmt_avg_mistakes(m, sizeof(m), st);
             lv_table_set_cell_value(x_table, c + 1, 0, coll ? puzzle_collection(c)->name
-                                                            : stats_kind_name(c - PUZZLE_COLLECTION_COUNT));
+                                    : stats_kind_name(c - PUZZLE_COLLECTION_COUNT));
             lv_table_set_cell_value_fmt(x_table, c + 1, 1, "%u", (unsigned)st->solved);
             lv_table_set_cell_value(x_table, c + 1, 2, f);
             lv_table_set_cell_value(x_table, c + 1, 3, a);
@@ -322,8 +340,11 @@ static void render_stats(const stats_view_t *v, bool from_db)
         fmt_time(f, sizeof(f), p->best);
         lv_table_set_cell_value_fmt(x_table, r + 1, 0, "#%u", (unsigned)p->number);
         lv_table_set_cell_value(x_table, r + 1, 1, f);
-        if (p->fewest == STORE_MISTAKES_UNKNOWN) lv_table_set_cell_value(x_table, r + 1, 2, "-");
-        else lv_table_set_cell_value_fmt(x_table, r + 1, 2, "%u", (unsigned)p->fewest);
+        if (p->fewest == STORE_MISTAKES_UNKNOWN) {
+            lv_table_set_cell_value(x_table, r + 1, 2, "-");
+        } else {
+            lv_table_set_cell_value_fmt(x_table, r + 1, 2, "%u", (unsigned)p->fewest);
+        }
         lv_table_set_cell_value_fmt(x_table, r + 1, 3, "%u", (unsigned)p->solves);
     }
     lv_obj_set_hidden(x_table, x_chart_mode || v->n_puzzles == 0);
@@ -335,7 +356,9 @@ static uint32_t chart_step(uint32_t max)
 {
     static const uint32_t STEPS[] = {30, 60, 120, 300, 600, 900, 1200, 1800, 3600, 7200};
     for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); i++) {
-        if (max <= STEPS[i] * 5) return STEPS[i];
+        if (max <= STEPS[i] * 5) {
+            return STEPS[i];
+        }
     }
     return (max / 5 / 3600 + 1) * 3600;
 }
@@ -345,7 +368,9 @@ static uint32_t chart_avg(const stats_view_t *v, int i)
 {
     int from = i - AVG_WIN + 1 < 0 ? 0 : i - AVG_WIN + 1;
     uint32_t sum = 0;
-    for (int k = from; k <= i; k++) sum += v->recent[k];
+    for (int k = from; k <= i; k++) {
+        sum += v->recent[k];
+    }
     return sum / (uint32_t)(i - from + 1);
 }
 
@@ -392,17 +417,23 @@ static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color)
 static void plot_draw_cb(lv_event_t *e)
 {
     const stats_view_t *v = &(*x_view_p);
-    if (v->n_recent < 2) return;
+    if (v->n_recent < 2) {
+        return;
+    }
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t co;
     lv_obj_get_coords(x_plot, &co);
     int left = co.x1 + PLOT_L, right = co.x2 - PLOT_R, top = co.y1 + PLOT_T, bottom = co.y2 - PLOT_B;
     uint32_t max = 0;
     for (int i = 0; i < v->n_recent; i++) {
-        if (v->recent[i] > max) max = v->recent[i];
+        if (v->recent[i] > max) {
+            max = v->recent[i];
+        }
     }
     uint32_t step = chart_step(max), lines = (max + step - 1) / step, top_s = lines * step;
-    if (!top_s) top_s = step;
+    if (!top_s) {
+        top_s = step;
+    }
 
     /* scale: a line per step, labelled in minutes */
     char buf[16];
@@ -419,7 +450,9 @@ static void plot_draw_cb(lv_event_t *e)
     for (int i = 0; i < n; i++) {
         int x = left + (right - left) * i / (n - 1);
         int y = bottom - (int)((int64_t)(bottom - top) * v->recent[i] / top_s);
-        if (i) plot_line(layer, px, py, x, y, C_ACCENT, 2, LV_OPA_40);
+        if (i) {
+            plot_line(layer, px, py, x, y, C_ACCENT, 2, LV_OPA_40);
+        }
         px = x;
         py = y;
     }
@@ -431,7 +464,9 @@ static void plot_draw_cb(lv_event_t *e)
     for (int i = 0; i < n; i++) {
         int x = left + (right - left) * i / (n - 1);
         int y = bottom - (int)((int64_t)(bottom - top) * chart_avg(v, i) / top_s);
-        if (i) plot_line(layer, ax, ay, x, y, C_ORANGE, 4, LV_OPA_COVER);
+        if (i) {
+            plot_line(layer, ax, ay, x, y, C_ORANGE, 4, LV_OPA_COVER);
+        }
         ax = x;
         ay = y;
     }
@@ -448,20 +483,24 @@ static void chart_render(const stats_view_t *v, bool from_db)
 {
     lv_obj_set_hidden(x_chart, !x_chart_mode);
     lv_label_set_text(lv_obj_get_child(x_chart_btn, 0), x_chart_mode ? LV_SYMBOL_LIST "  Table"
-                                                                     : SYMBOL_CHART "  Chart");
-    if (!x_chart_mode) return;
+                      : SYMBOL_CHART "  Chart");
+    if (!x_chart_mode) {
+        return;
+    }
     char text[200];
     const int n = v->n_recent;
     if (!from_db) {
         snprintf(text, sizeof(text), "The chart needs sudoku.db on a microSD card: it is drawn from the "
-                                     "solves logged there.");
+                 "solves logged there.");
     } else if (n < 2) {
         snprintf(text, sizeof(text), "Solve at least two puzzles%s to see a chart.",
                  v->level < 0 ? "" : " at this level");
     } else {
         uint32_t fastest = 0xFFFFFFFF;
         for (int i = 0; i < n; i++) {
-            if (v->recent[i] < fastest) fastest = v->recent[i];
+            if (v->recent[i] < fastest) {
+                fastest = v->recent[i];
+            }
         }
         char f[16], a1[16], a2[16];
         fmt_time(f, sizeof(f), fastest);
@@ -512,9 +551,9 @@ static void stats_info_cb(lv_event_t *e)
              "Per level: puzzles solved, the fastest and the average of the best times, and the "
              "average of the fewest mistakes.",
              x_from_db ? "These are the statistics of the player chosen at the top right, from sudoku.db "
-                         "on the microSD card."
-                       : "No sudoku.db: insert a FAT32 microSD card before switching on to keep statistics. "
-                         "This shows what the board has in memory.");
+             "on the microSD card."
+             : "No sudoku.db: insert a FAT32 microSD card before switching on to keep statistics. "
+             "This shows what the board has in memory.");
     lv_obj_t *m = make_msgbox("About these statistics", text);
     lv_obj_set_width(m, 600);
     msgbox_button(m, "OK", mbox_close_cb, true);
@@ -544,15 +583,21 @@ static void stats_table_draw_cb(lv_event_t *e)
 {
     lv_draw_task_t *t = lv_event_get_draw_task(e);
     lv_draw_dsc_base_t *base = (lv_draw_dsc_base_t *)lv_draw_task_get_draw_dsc(t);
-    if (base->part != LV_PART_ITEMS) return;
+    if (base->part != LV_PART_ITEMS) {
+        return;
+    }
     uint32_t row = base->id1, col = base->id2;
     if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_FILL) {
         lv_draw_fill_dsc_t *fd = lv_draw_task_get_fill_dsc(t);
         fd->color = row == 0 ? C_CARD2 : C_CARD;
     } else if (lv_draw_task_get_type(t) == LV_DRAW_TASK_TYPE_LABEL) {
         lv_draw_label_dsc_t *ld = lv_draw_task_get_label_dsc(t);
-        if (row == 0) ld->color = C_MUTED;
-        if (col > 0) ld->align = LV_TEXT_ALIGN_RIGHT;
+        if (row == 0) {
+            ld->color = C_MUTED;
+        }
+        if (col > 0) {
+            ld->align = LV_TEXT_ALIGN_RIGHT;
+        }
     }
 }
 

@@ -88,7 +88,8 @@ typedef struct {
 typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_KILLER, KIND_KNIGHT, KIND_EVENODD,
                KIND_CONSEC, KIND_THERMO, KIND_SANDWICH, KIND_MINI, KIND_KIDS, KIND_KING, KIND_NONCONSEC,
                KIND_DISJOINT, KIND_ASTERISK, KIND_KROPKI, KIND_XV, KIND_GT, KIND_QUAD, KIND_ARROW, KIND_RENBAN,
-               KIND_WHISPER, KIND_SKY, KIND_LK, KIND_COUNT } stats_kind_t;
+               KIND_WHISPER, KIND_SKY, KIND_LK, KIND_COUNT
+             } stats_kind_t;
 const char *stats_kind_name(int kind);     /* "New puzzles", "Daily puzzle", "X-Sudoku", ... */
 const char *stats_kind_prefix(int kind);   /* "Generated", "Daily", "X-Sudoku", ... */
 /* the kind of a generated puzzle of a variant (daily ones: KIND_DAILY) */

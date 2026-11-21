@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 """
-Turns README.md and docs/*.md into HTML pages for GitHub Pages:
+Turns README.md and the Markdown under docs/ into HTML pages for GitHub Pages:
 
     python3 tools/make_docs_site.py OUT_DIR [VERSION]
 
-    OUT_DIR/index.html          README.md
-    OUT_DIR/<page>.html         docs/<page>.md
-    OUT_DIR/screenshots/*.png   docs/screenshots/
+    OUT_DIR/index.html                  README.md
+    OUT_DIR/<page>.html                 docs/<page>.md
+    OUT_DIR/variants.html               docs/variants/README.md, and
+    OUT_DIR/variant-<name>.html         docs/variants/<name>.md (in the order its table links them)
+    OUT_DIR/internals.html              docs/internals/README.md, and
+    OUT_DIR/internals-<name>.html       docs/internals/<name>.md (likewise)
+    OUT_DIR/screenshots/...             docs/screenshots/
+    OUT_DIR/variant-examples.sdx        the variant pages' example puzzles, to download
+
+The pages are flat (one folder), so every relative path is the same from each. A
+section's pages are under one entry of the menu, with a breadcrumb and previous / next
+links. Every link between pages, to an anchor or to an image is checked: a broken
+one stops the build.
 
 tools/make_flasher_site.sh calls it with OUT_DIR = <site>/docs, so the pages sit
 next to the web flasher (one level up). Links between the Markdown files become
@@ -26,11 +36,13 @@ from markdown_it import MarkdownIt
 REPO = "https://github.com/edipermadi/esp32p4_sudoku"
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# (source, page, title in the menu); the menu's order
-PAGES = [
+# (source, page, title in the menu); the menu's order. A section (a folder with a README.md)
+# brings its pages along after it: section(folder, prefix).
+MENU = [
     ("README.md", "index.html", "Overview"),
     ("docs/features.md", "features.html", "Features"),
     ("docs/features-puzzles.md", "features-puzzles.html", "Puzzles"),
+    ("docs/variants/README.md", "variants.html", "Variants"),
     ("docs/features-game.md", "features-game.html", "Playing a game"),
     ("docs/features-progress.md", "features-progress.html", "Players & progress"),
     ("docs/features-settings.md", "features-settings.html", "Home, settings & system"),
@@ -38,13 +50,50 @@ PAGES = [
     ("docs/data.md", "data.html", "Data & storage"),
     ("docs/building.md", "building.html", "Building"),
     ("docs/development.md", "development.html", "Development"),
+    ("docs/internals/README.md", "internals.html", "Internals"),
     ("docs/devctl.md", "devctl.html", "Remote control"),
     ("docs/devctl-protocol.md", "devctl-protocol.html", "devctl protocol"),
 ]
-PAGE_OF = {src: page for src, page, _ in PAGES}
+SECTIONS = {"docs/variants/README.md": "variant-", "docs/internals/README.md": "internals-"}
+DOWNLOADS = ["docs/variant-examples.sdx"]
+# pages with a diagram load Mermaid (pinned), in the page's light or dark look
+MERMAID = """<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" });
+</script>
+"""          # copied next to the pages, linked there
 
-# the line of links at the top of each docs/*.md (the site has its own menu)
-NAV_LINE = re.compile(r"^\[← README\]\(\.\./README\.md\).*\n\n?", re.M)
+
+def section_pages(readme, prefix):
+    """A section's pages, in the order its README links them: (source, page)."""
+    folder = posixpath.dirname(readme)
+    text = open(os.path.join(HERE, readme), encoding="utf-8").read()
+    out = []
+    for name in re.findall(r"\]\(([\w-]+)\.md(?:#[^)]*)?\)", text):
+        src = "%s/%s.md" % (folder, name)
+        if name != "README" and os.path.exists(os.path.join(HERE, src)) and src not in [s for s, _ in out]:
+            out.append((src, prefix + name + ".html"))
+    have = {s for s, _ in out}                      # (pages the README doesn't link: at the end)
+    for f in sorted(os.listdir(os.path.join(HERE, folder))):
+        src = "%s/%s" % (folder, f)
+        if f.endswith(".md") and f != "README.md" and src not in have:
+            out.append((src, prefix + f[:-3] + ".html"))
+    return out
+
+
+# every page: (source, page, menu entry it's under, its section's pages or None)
+PAGES = []
+for src, page, title in MENU:
+    PAGES.append((src, page, page, None))
+    if src in SECTIONS:
+        sub = section_pages(src, SECTIONS[src])
+        PAGES += [(s, p, page, sub) for s, p in sub]
+PAGE_OF = {src: page for src, page, _, _ in PAGES}
+TITLE_OF = {page: title for _, page, title in MENU}
+
+# the line of links at the top of each Markdown page ("[← README](...) · ...", "[← All
+# variants](README.md) · ..."): the site has its own menu
+NAV_LINE = re.compile(r"\A(#[^\n]*\n\n)\[← [^\n]*\n\n?")
 
 
 def slug(text):
@@ -63,6 +112,8 @@ def rewrite(url, src):
         out = PAGE_OF[target]
     elif target.startswith("docs/screenshots/"):
         out = target[len("docs/"):]
+    elif target in DOWNLOADS:
+        out = posixpath.basename(target)
     else:                                           # any other file: on GitHub
         out = "%s/blob/main/%s" % (REPO, target)
     return out + ("#" + frag if frag else "")
@@ -70,7 +121,7 @@ def rewrite(url, src):
 
 def render(src):
     text = open(os.path.join(HERE, src), encoding="utf-8").read()
-    text = NAV_LINE.sub("", text)
+    text = NAV_LINE.sub(r"\1", text)
     md = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable("table").enable("strikethrough")
     tokens = md.parse(text)
     title = None
@@ -92,6 +143,9 @@ def render(src):
                     c.attrSet("src", rewrite(c.attrGet("src"), src))
                     c.attrSet("loading", "lazy")
     body = md.renderer.render(tokens, md.options, {})
+    # Mermaid diagrams (as GitHub draws them): drawn in the browser, see MERMAID
+    body = re.sub(r'<pre><code class="language-mermaid">(.*?)</code></pre>', r'<pre class="mermaid">\1</pre>', body,
+                  flags=re.S)
     # wide tables scroll sideways on a phone instead of the page
     body = body.replace("<table>", '<div class="table"><table>').replace("</table>", "</table></div>")
     return title or src, body
@@ -146,9 +200,15 @@ TEMPLATE = """<!doctype html>
   table {{ border-collapse: collapse; font-size: 0.94rem; }}
   th, td {{ border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }}
   th {{ background: var(--bg); }}
+  th code, td code {{ overflow-wrap: normal; }}   /* (in a table: wrapped at spaces only, never inside a name) */
   img {{ max-width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); }}
   td img {{ min-width: 140px; }}
   footer {{ color: var(--muted); font-size: 0.9rem; margin-top: 24px; }}
+  .crumb {{ color: var(--muted); font-size: 0.92rem; margin: 16px 0 -8px; }}
+  .crumb a {{ color: var(--muted); }}
+  .pager {{ display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); }}
+  .pager a {{ text-decoration: none; }}
+  pre.mermaid {{ background: none; text-align: center; }}
 </style>
 </head>
 <body>
@@ -160,9 +220,9 @@ TEMPLATE = """<!doctype html>
 <nav>{nav}</nav>
 <main>
 <article>
-{body}
+{crumb}{body}{pager}
 </article>
-<footer>Generated from the repository's Markdown files · <a href="{repo}/blob/main/{src}">{src} on GitHub</a></footer>
+{script}<footer>Generated from the repository's Markdown files · <a href="{repo}/blob/main/{src}">{src} on GitHub</a></footer>
 </main>
 </body>
 </html>
@@ -175,18 +235,55 @@ def main():
     out = sys.argv[1]
     version = sys.argv[2] if len(sys.argv) > 2 else ""
     os.makedirs(out, exist_ok=True)
-    for src, page, _ in PAGES:
-        title, body = render(src)
-        nav = "".join('<a href="%s"%s>%s</a>' % (p, ' class="on"' if p == page else "", html.escape(t))
-                      for _, p, t in PAGES)
-        doc = TEMPLATE.format(title=html.escape(title), version=html.escape(version), repo=REPO,
-                              nav=nav, body=body, src=src)
+    titles, bodies = {}, {}
+    for src, page, _, _ in PAGES:
+        titles[page], bodies[page] = render(src)
+    for src, page, under, sub in PAGES:
+        nav = "".join('<a href="%s"%s>%s</a>' % (p, ' class="on"' if p == under else "", html.escape(t))
+                      for _, p, t in MENU)
+        crumb = pager = ""
+        if sub:                                     # a section's page: where it is, and its neighbours
+            crumb = '<p class="crumb"><a href="%s">%s</a> › %s</p>\n' % (
+                under, html.escape(TITLE_OF[under]), html.escape(titles[page]))
+            pages = [p for _, p in sub]
+            k = pages.index(page)
+            prev = '<a href="%s">← %s</a>' % (pages[k - 1], html.escape(titles[pages[k - 1]])) if k else "<span></span>"
+            nxt = ('<a href="%s">%s →</a>' % (pages[k + 1], html.escape(titles[pages[k + 1]]))
+                   if k + 1 < len(pages) else "<span></span>")
+            pager = '\n<p class="pager">%s%s</p>' % (prev, nxt)
+        doc = TEMPLATE.format(title=html.escape(titles[page]), version=html.escape(version), repo=REPO,
+                              nav=nav, crumb=crumb, body=bodies[page], pager=pager, src=src,
+                              script=MERMAID if 'class="mermaid"' in bodies[page] else "")
         with open(os.path.join(out, page), "w", encoding="utf-8") as f:
             f.write(doc)
     shots = os.path.join(out, "screenshots")
     shutil.rmtree(shots, ignore_errors=True)
     shutil.copytree(os.path.join(HERE, "docs", "screenshots"), shots)
+    for d in DOWNLOADS:
+        shutil.copy(os.path.join(HERE, d), os.path.join(out, posixpath.basename(d)))
+    check_links(out)
     print("docs: %d pages in %s" % (len(PAGES), out))
+
+
+def check_links(out):
+    """Every local link and image of the pages exists, and so does every #anchor they name."""
+    ids = {}
+    for _, page, _, _ in PAGES:
+        ids[page] = set(re.findall(r' id="([^"]+)"', open(os.path.join(out, page), encoding="utf-8").read()))
+    bad = []
+    for _, page, _, _ in PAGES:
+        text = open(os.path.join(out, page), encoding="utf-8").read()
+        for url in re.findall(r'(?:href|src)="([^"]+)"', text):
+            if re.match(r"^[a-z]+:|^//", url) or url == "../index.html":
+                continue                            # (another site; the web flasher, one level up)
+            path, _, frag = html.unescape(url).partition("#")
+            target = path or page
+            if not os.path.exists(os.path.join(out, target)):
+                bad.append("%s: %s (no such file)" % (page, url))
+            elif frag and target in ids and frag not in ids[target]:
+                bad.append("%s: %s (no such anchor)" % (page, url))
+    if bad:
+        sys.exit("broken links:\n  " + "\n  ".join(sorted(set(bad))))
 
 
 if __name__ == "__main__":

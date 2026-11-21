@@ -54,23 +54,35 @@ static void rgb888_to_ouyy_evyy(const uint8_t *src, uint8_t *dst, int w, int h)
             for (int i = 0; i < 4; i++) {
                 int b = px[i][0], g = px[i][1], r = px[i][2];
                 yy[i] = (uint8_t)(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16);
-                rs += r; gs += g; bs += b;
+                rs += r;
+                gs += g;
+                bs += b;
             }
-            rs >>= 2; gs >>= 2; bs >>= 2;
+            rs >>= 2;
+            gs >>= 2;
+            bs >>= 2;
             int u = ((-38 * rs - 74 * gs + 112 * bs + 128) >> 8) + 128;
             int v = ((112 * rs - 94 * gs - 18 * bs + 128) >> 8) + 128;
-            *d0++ = (uint8_t)u; *d0++ = yy[0]; *d0++ = yy[1];
-            *d1++ = (uint8_t)v; *d1++ = yy[2]; *d1++ = yy[3];
+            *d0++ = (uint8_t)u;
+            *d0++ = yy[0];
+            *d0++ = yy[1];
+            *d1++ = (uint8_t)v;
+            *d1++ = yy[2];
+            *d1++ = yy[3];
         }
     }
 }
 
 video_enc_t *video_enc_open(const char *path, int width, int height, int fps, int max_frames)
 {
-    if (width % 16 || height % 16) return NULL;
+    if (width % 16 || height % 16) {
+        return NULL;
+    }
     log_internal("before export");
     video_enc_t *v = calloc(1, sizeof(*v));
-    if (!v) return NULL;
+    if (!v) {
+        return NULL;
+    }
     v->w = width;
     v->h = height;
     v->fps = fps;
@@ -84,7 +96,7 @@ video_enc_t *video_enc_open(const char *path, int width, int height, int fps, in
         .rc = {.bitrate = (uint32_t)width * height * 2, .qp_min = 18, .qp_max = 32},
     };
     if (!v->yuv || !v->out || esp_h264_enc_hw_new(&cfg, &v->enc) != ESP_H264_ERR_OK ||
-        esp_h264_enc_open(v->enc) != ESP_H264_ERR_OK) {
+            esp_h264_enc_open(v->enc) != ESP_H264_ERR_OK) {
         printf("video_enc: H.264 encoder didn't start\n");
         video_enc_abort(v);
         return NULL;
@@ -107,26 +119,36 @@ video_enc_t *video_enc_open(const char *path, int width, int height, int fps, in
  * -> v->yuv, by the PPA; false if it couldn't */
 static bool ppa_convert(video_enc_t *v, const uint8_t *rgb888)
 {
-    if (!v->ppa) return false;
+    if (!v->ppa) {
+        return false;
+    }
     ppa_srm_oper_config_t o = {
-        .in = {.buffer = rgb888, .pic_w = (uint32_t)v->w, .pic_h = (uint32_t)v->h,
-               .block_w = (uint32_t)v->w, .block_h = (uint32_t)v->h, .srm_cm = PPA_SRM_COLOR_MODE_RGB888},
-        .out = {.buffer = v->yuv, .buffer_size = v->yuv_size, .pic_w = (uint32_t)v->w, .pic_h = (uint32_t)v->h,
-                .srm_cm = PPA_SRM_COLOR_MODE_YUV420, .yuv_range = PPA_COLOR_RANGE_LIMIT,
-                .yuv_std = PPA_COLOR_CONV_STD_RGB_YUV_BT601},        /* as the CPU loop: BT.601, limited */
+        .in = {
+            .buffer = rgb888, .pic_w = (uint32_t)v->w, .pic_h = (uint32_t)v->h,
+            .block_w = (uint32_t)v->w, .block_h = (uint32_t)v->h, .srm_cm = PPA_SRM_COLOR_MODE_RGB888
+        },
+        .out = {
+            .buffer = v->yuv, .buffer_size = v->yuv_size, .pic_w = (uint32_t)v->w, .pic_h = (uint32_t)v->h,
+            .srm_cm = PPA_SRM_COLOR_MODE_YUV420, .yuv_range = PPA_COLOR_RANGE_LIMIT,
+            .yuv_std = PPA_COLOR_CONV_STD_RGB_YUV_BT601
+        },        /* as the CPU loop: BT.601, limited */
         .rotation_angle = PPA_SRM_ROTATION_ANGLE_0,
         .scale_x = 1.0f,
         .scale_y = 1.0f,
         .mode = PPA_TRANS_MODE_BLOCKING,
     };
     esp_err_t err = ppa_do_scale_rotate_mirror(v->ppa, &o);
-    if (err != ESP_OK) printf("video_enc: PPA conversion failed (%s), using the CPU\n", esp_err_to_name(err));
+    if (err != ESP_OK) {
+        printf("video_enc: PPA conversion failed (%s), using the CPU\n", esp_err_to_name(err));
+    }
     return err == ESP_OK;
 }
 
 bool video_enc_frame(video_enc_t *v, const uint8_t *rgb888, bool changed)
 {
-    if ((changed || v->pts == 0) && !ppa_convert(v, rgb888)) rgb888_to_ouyy_evyy(rgb888, v->yuv, v->w, v->h);
+    if ((changed || v->pts == 0) && !ppa_convert(v, rgb888)) {
+        rgb888_to_ouyy_evyy(rgb888, v->yuv, v->w, v->h);
+    }
     esp_h264_enc_in_frame_t in = {
         .raw_data = {.buffer = v->yuv, .len = v->yuv_size},
         .pts = v->pts * 1000 / v->fps,
@@ -144,19 +166,27 @@ bool video_enc_frame(video_enc_t *v, const uint8_t *rgb888, bool changed)
 
 static void release(video_enc_t *v)
 {
-    if (v->ppa) ppa_unregister_client(v->ppa);
+    if (v->ppa) {
+        ppa_unregister_client(v->ppa);
+    }
     if (v->enc) {
         esp_h264_enc_close(v->enc);
         esp_h264_enc_del(v->enc);
     }
-    if (v->yuv) esp_h264_free(v->yuv);
-    if (v->out) esp_h264_free(v->out);
+    if (v->yuv) {
+        esp_h264_free(v->yuv);
+    }
+    if (v->out) {
+        esp_h264_free(v->out);
+    }
     free(v);
 }
 
 bool video_enc_close(video_enc_t *v)
 {
-    if (!v) return false;
+    if (!v) {
+        return false;
+    }
     bool ok = mp4w_close(v->mp4);
     v->mp4 = NULL;
     release(v);
@@ -165,8 +195,12 @@ bool video_enc_close(video_enc_t *v)
 
 void video_enc_abort(video_enc_t *v)
 {
-    if (!v) return;
-    if (v->mp4) mp4w_abort(v->mp4);
+    if (!v) {
+        return;
+    }
+    if (v->mp4) {
+        mp4w_abort(v->mp4);
+    }
     release(v);
 }
 

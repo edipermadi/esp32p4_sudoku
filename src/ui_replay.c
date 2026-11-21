@@ -54,14 +54,22 @@ static void rp_render(void)
     }
     int last = rp_k ? rp_moves[rp_k - 1].cell : -1;
     for (int i = 0; i < 81; i++) {
-        if (!rp_geo->used[i]) continue;
+        if (!rp_geo->used[i]) {
+            continue;
+        }
         bool bad = false;
-        for (int j = 0; j < 81 && val[i] && !bad; j++) bad = j != i && val[j] == val[i] && sudoku_geom_peer(rp_geo, i, j);
+        for (int j = 0; j < 81 && val[i] && !bad; j++) {
+            bad = j != i && val[j] == val[i] && sudoku_geom_peer(rp_geo, i, j);
+        }
         lv_color_t bg = cell_base_bg(rp_geo, i, rp_given[i]);
-        if (i == last) bg = C_CELL_SEL;
+        if (i == last) {
+            bg = C_CELL_SEL;
+        }
         lv_obj_set_style_bg_color(rp_cells[i], bg, 0);
         lv_color_t fg = rp_given[i] ? C_TEXT : (kind[i] == MOVE_FILL ? C_ORANGE : C_DIGIT_USER);
-        if (bad && !rp_given[i]) fg = C_RED;
+        if (bad && !rp_given[i]) {
+            fg = C_RED;
+        }
         lv_obj_set_style_text_color(rp_lbl[i], fg, 0);
         lv_label_set_text_static(rp_lbl[i], ui_digits()[val[i] <= 9 ? val[i] : 0]);
     }
@@ -77,7 +85,9 @@ static void rp_seek(int k, bool keep_playing)
 {
     rp_k = k < 0 ? 0 : (k > rp_n ? rp_n : k);
     rp_clock = rp_k ? rp_vt[rp_k - 1] : 0;
-    if (!keep_playing) rp_playing = false;
+    if (!keep_playing) {
+        rp_playing = false;
+    }
     rp_render();
 }
 
@@ -85,11 +95,17 @@ static void rp_timer_cb(lv_timer_t *t)
 {
     uint32_t now = lv_tick_get(), dt = now - rp_last_tick;
     rp_last_tick = now;
-    if (!rp_playing) return;
+    if (!rp_playing) {
+        return;
+    }
     rp_clock += dt * RP_SPEEDS[rp_speed];
     int k = rp_k;
-    while (k < rp_n && rp_vt[k] <= rp_clock) k++;
-    if (k == rp_n) rp_playing = false;
+    while (k < rp_n && rp_vt[k] <= rp_clock) {
+        k++;
+    }
+    if (k == rp_n) {
+        rp_playing = false;
+    }
     if (k != rp_k || !rp_playing) {
         rp_k = k;
         rp_render();
@@ -99,16 +115,26 @@ static void rp_timer_cb(lv_timer_t *t)
 static void rp_btn_cb(lv_event_t *e)
 {
     switch ((int)(intptr_t)lv_event_get_user_data(e)) {
-    case 0: rp_seek(0, false); break;                         /* start */
-    case 1: rp_seek(rp_k - 1, false); break;                  /* one back */
+    case 0:
+        rp_seek(0, false);
+        break;                         /* start */
+    case 1:
+        rp_seek(rp_k - 1, false);
+        break;                  /* one back */
     case 2:                                                   /* play / pause */
-        if (!rp_playing && rp_k >= rp_n) rp_seek(0, false);   /* at the end: from the start */
+        if (!rp_playing && rp_k >= rp_n) {
+            rp_seek(0, false);    /* at the end: from the start */
+        }
         rp_playing = !rp_playing;
         rp_last_tick = lv_tick_get();
         rp_render();
         break;
-    case 3: rp_seek(rp_k + 1, false); break;                  /* one forward */
-    case 4: rp_seek(rp_n, false); break;                      /* end */
+    case 3:
+        rp_seek(rp_k + 1, false);
+        break;                  /* one forward */
+    case 4:
+        rp_seek(rp_n, false);
+        break;                      /* end */
     case 5:                                                   /* speed */
         rp_speed = (rp_speed + 1) % (int)sizeof(RP_SPEEDS);
         lv_label_set_text_fmt(rp_speed_lbl, LV_SYMBOL_PLAY "  Speed %ux", RP_SPEEDS[rp_speed]);
@@ -123,7 +149,9 @@ static void rp_slider_cb(lv_event_t *e)
 
 static void rp_close(void)
 {
-    if (rp_timer) lv_timer_delete(rp_timer);
+    if (rp_timer) {
+        lv_timer_delete(rp_timer);
+    }
     rp_timer = NULL;
     lv_screen_load(rp_return ? rp_return : screen_home());
     lv_obj_delete_async(scr_replay);
@@ -138,11 +166,21 @@ static void rp_back_cb(lv_event_t *e)
 /* Loads a log for puzzle `id`: the givens, the moves and their play times. */
 static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
 {
-    if (!rp_moves) rp_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
-    if (!rp_vt) rp_vt = heap_caps_malloc(sizeof(uint32_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
-    if (!rp_moves || !rp_vt) return false;
-    if (n > GAME_MOVES_MAX) n = GAME_MOVES_MAX;
-    if (n > 0 && moves != rp_moves) memcpy(rp_moves, moves, sizeof(game_move_t) * n);
+    if (!rp_moves) {
+        rp_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    }
+    if (!rp_vt) {
+        rp_vt = heap_caps_malloc(sizeof(uint32_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    }
+    if (!rp_moves || !rp_vt) {
+        return false;
+    }
+    if (n > GAME_MOVES_MAX) {
+        n = GAME_MOVES_MAX;
+    }
+    if (n > 0 && moves != rp_moves) {
+        memcpy(rp_moves, moves, sizeof(game_move_t) * n);
+    }
     rp_n = n;
     uint32_t prev_t = 0, vt = 0;
     for (int i = 0; i < n; i++) {
@@ -151,8 +189,12 @@ static bool rp_prepare(uint16_t id, const game_move_t *moves, int n)
         rp_vt[i] = vt;
         prev_t = rp_moves[i].t_ms;
     }
-    if (!puzzle_get(id, rp_given)) return false;
-    if (!rp_geo_buf) rp_geo_buf = heap_caps_malloc(sizeof(*rp_geo_buf), MALLOC_CAP_SPIRAM);
+    if (!puzzle_get(id, rp_given)) {
+        return false;
+    }
+    if (!rp_geo_buf) {
+        rp_geo_buf = heap_caps_malloc(sizeof(*rp_geo_buf), MALLOC_CAP_SPIRAM);
+    }
     rp_geo = puzzle_geom(id, rp_geo_buf, NULL);
     return true;
 }
@@ -193,13 +235,21 @@ static void ss_task(void *arg)
             if (f) {
                 ok = fwrite(out, 1, len, f) == len;
                 ok = fclose(f) == 0 && ok;
-                if (!ok) unlink(ss_path);
+                if (!ok) {
+                    unlink(ss_path);
+                }
             }
         }
     }
-    if (err != ESP_OK) printf("screenshot: JPEG encoder: %s\n", esp_err_to_name(err));
-    if (enc) jpeg_del_encoder_engine(enc);
-    if (out) heap_caps_free(out);
+    if (err != ESP_OK) {
+        printf("screenshot: JPEG encoder: %s\n", esp_err_to_name(err));
+    }
+    if (enc) {
+        jpeg_del_encoder_engine(enc);
+    }
+    if (out) {
+        heap_caps_free(out);
+    }
     heap_caps_free(rgb);
     ss_state = ok ? 2 : 3;
     vTaskDelete(NULL);
@@ -207,13 +257,18 @@ static void ss_task(void *arg)
 
 static void ss_poll_cb(lv_timer_t *t)
 {
-    if (ss_state < 2) return;
+    if (ss_state < 2) {
+        return;
+    }
     lv_timer_delete(ss_timer);
     ss_timer = NULL;
     char msg[120];
-    if (ss_state == 2) snprintf(msg, sizeof(msg), "Saved %s. Copy it off with Settings > USB drive.",
-                                ss_path + strlen(BSP_SD_MOUNT_POINT) + 1);
-    else snprintf(msg, sizeof(msg), "Couldn't save the screenshot.");
+    if (ss_state == 2)
+        snprintf(msg, sizeof(msg), "Saved %s. Copy it off with Settings > USB drive.",
+                 ss_path + strlen(BSP_SD_MOUNT_POINT) + 1);
+    else {
+        snprintf(msg, sizeof(msg), "Couldn't save the screenshot.");
+    }
     printf("screenshot: %s\n", msg);
     ss_state = 0;
     sudoku_ui_notice(msg, 4000);
@@ -221,23 +276,31 @@ static void ss_poll_cb(lv_timer_t *t)
 
 void screenshot_cb(lv_event_t *e)
 {
-    if (ss_state) return;                           /* (one at a time) */
+    if (ss_state) {
+        return;    /* (one at a time) */
+    }
     if (!stats_db_ready()) {
         sudoku_ui_notice("Screenshots go on the microSD card: there's none to write to.", 3000);
         return;
     }
-    if (!ss_frame) ss_frame = heap_caps_aligned_alloc(64, (size_t)SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
+    if (!ss_frame) {
+        ss_frame = heap_caps_aligned_alloc(64, (size_t)SCR_W * SCR_W * 2, MALLOC_CAP_SPIRAM);
+    }
     lv_refr_now(NULL);
     const uint16_t *fb = bsp_display_frame();
-    if (!ss_frame || !fb) return;
+    if (!ss_frame || !fb) {
+        return;
+    }
     memcpy(ss_frame, fb, (size_t)SCR_W * SCR_W * 2);
     time_t now = time(NULL);
     struct tm tm;
     localtime_r(&now, &tm);
     mkdir(BSP_SD_MOUNT_POINT "/screenshots", 0775);
-    if (now > 1700000000) strftime(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/%Y%m%d-%H%M%S.jpg", &tm);
-    else snprintf(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/shot-%lu.jpg",
-                  (unsigned long)(esp_timer_get_time() / 1000000));
+    if (now > 1700000000) {
+        strftime(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/%Y%m%d-%H%M%S.jpg", &tm);
+    } else
+        snprintf(ss_path, sizeof(ss_path), BSP_SD_MOUNT_POINT "/screenshots/shot-%lu.jpg",
+                 (unsigned long)(esp_timer_get_time() / 1000000));
     ss_state = 1;
     if (xTaskCreatePinnedToCore(ss_task, "screenshot", 4096, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
         ss_state = 0;
@@ -252,9 +315,13 @@ static lv_timer_t *ins_timer;
 
 static void ins_close_cb(lv_event_t *e)
 {
-    if (ins_timer) lv_timer_delete(ins_timer);
+    if (ins_timer) {
+        lv_timer_delete(ins_timer);
+    }
     ins_timer = NULL;
-    if (ins_box) lv_msgbox_close_async(ins_box);
+    if (ins_box) {
+        lv_msgbox_close_async(ins_box);
+    }
     ins_box = ins_body = NULL;
 }
 
@@ -288,7 +355,11 @@ static void ins_show(const stats_insights_t *in)
     /* which digits: a bar each */
     ins_heading("Digits you put in the wrong place");
     int maxd = 1;
-    for (int d = 1; d <= 9; d++) if (in->by_digit[d] > maxd) maxd = in->by_digit[d];
+    for (int d = 1; d <= 9; d++) {
+        if (in->by_digit[d] > maxd) {
+            maxd = in->by_digit[d];
+        }
+    }
     for (int d = 1; d <= 9; d++) {
         lv_obj_t *row = lv_obj_create(ins_body);
         lv_obj_remove_style_all(row);
@@ -311,7 +382,11 @@ static void ins_show(const stats_insights_t *in)
     /* where: the nine boxes, the busier the redder */
     ins_heading("Where on the board");
     int maxb = 1;
-    for (int b = 0; b < 9; b++) if (in->by_box[b] > maxb) maxb = in->by_box[b];
+    for (int b = 0; b < 9; b++) {
+        if (in->by_box[b] > maxb) {
+            maxb = in->by_box[b];
+        }
+    }
     lv_obj_t *g = lv_obj_create(ins_body);
     lv_obj_remove_style_all(g);
     lv_obj_set_size(g, 3 * 76 + 2 * 6, 3 * 56 + 2 * 6);
@@ -336,10 +411,16 @@ static void ins_show(const stats_insights_t *in)
         int bp = 0, bb = 0, bn = 0;
         for (int p2 = 1; p2 <= 9; p2++) {
             for (int q = 1; q <= 9; q++) {
-                if (!done[p2][q] && in->pair[p2][q] > bn) { bn = in->pair[p2][q]; bp = p2; bb = q; }
+                if (!done[p2][q] && in->pair[p2][q] > bn) {
+                    bn = in->pair[p2][q];
+                    bp = p2;
+                    bb = q;
+                }
             }
         }
-        if (!bn) break;
+        if (!bn) {
+            break;
+        }
         done[bp][bb] = 1;
         snprintf(buf, sizeof(buf), "A %d where a %d belongs: %d time%s", bp, bb, bn, bn == 1 ? "" : "s");
         make_wrap_text(ins_body, &lv_font_montserrat_18, C_MUTED, buf);
@@ -349,15 +430,21 @@ static void ins_show(const stats_insights_t *in)
 static void ins_poll_cb(lv_timer_t *t)
 {
     static stats_insights_t in;                     /* (~250 bytes: off the LVGL stack) */
-    if (!stats_db_take_insights(&in)) return;
+    if (!stats_db_take_insights(&in)) {
+        return;
+    }
     lv_timer_delete(ins_timer);
     ins_timer = NULL;
-    if (ins_body) ins_show(&in);
+    if (ins_body) {
+        ins_show(&in);
+    }
 }
 
 void insights_cb(lv_event_t *e)
 {
-    if (ins_box) return;
+    if (ins_box) {
+        return;
+    }
     lv_obj_t *m = make_msgbox(SYMBOL_BULB "  Mistake insights", NULL);
     ins_box = m;
     lv_obj_set_width(m, 640);
@@ -445,7 +532,8 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub, const char *player)
 
     /* controls down the right, as tall as the board: start, back, play, forward, end */
     static const char *const SYM[] = {LV_SYMBOL_PREV, LV_SYMBOL_LEFT, LV_SYMBOL_PLAY, LV_SYMBOL_RIGHT,
-                                      LV_SYMBOL_NEXT};
+                                      LV_SYMBOL_NEXT
+                                     };
     const int gap = 8, bh = (GRID_SIZE - 4 * gap) / 5;
     for (int i = 0; i < 5; i++) {
         lv_obj_t *b = make_btn(scr, PAD_X, GRID_Y + i * (bh + gap), PAD_W, bh, SYM[i],
@@ -474,8 +562,12 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub, const char *player)
 /* Opens the Replay screen for a log of puzzle `id`; sub = the line under the title. */
 void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player)
 {
-    if (!rp_prepare(id, moves, n)) return;
-    if (scr_replay) rp_close();
+    if (!rp_prepare(id, moves, n)) {
+        return;
+    }
+    if (scr_replay) {
+        rp_close();
+    }
     rp_return = lv_screen_active();
     scr_replay = rp_build(id, sub, player);
     rp_playing = false;
@@ -483,7 +575,9 @@ void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, 
     rp_last_tick = lv_tick_get();
     rp_timer = lv_timer_create(rp_timer_cb, 40, NULL);
     lv_screen_load(scr_replay);
-    if (n == 0) sudoku_ui_notice("No moves were recorded for this game.", 3000);
+    if (n == 0) {
+        sudoku_ui_notice("No moves were recorded for this game.", 3000);
+    }
 }
 
 static bool rp_want_export;                 /* the replay asked for is to be exported, not shown */
@@ -491,11 +585,19 @@ static bool rx_busy;                        /* an export is running */
 
 void history_replay_poll(void)
 {
-    if (!rp_loaded) rp_loaded = heap_caps_malloc(sizeof(*rp_loaded), MALLOC_CAP_SPIRAM);
-    if (!rp_loaded || !stats_db_take_replay(rp_loaded)) return;
+    if (!rp_loaded) {
+        rp_loaded = heap_caps_malloc(sizeof(*rp_loaded), MALLOC_CAP_SPIRAM);
+    }
+    if (!rp_loaded || !stats_db_take_replay(rp_loaded)) {
+        return;
+    }
     lv_obj_t *act = lv_screen_active();
-    if (act != screen_history() && act != screen_plays()) return;      /* left meanwhile */
-    if (rx_busy) return;
+    if (act != screen_history() && act != screen_plays()) {
+        return;    /* left meanwhile */
+    }
+    if (rx_busy) {
+        return;
+    }
     if (!rp_loaded->found) {
         sudoku_ui_notice("This solve has no recorded moves.", 3000);
         return;
@@ -533,17 +635,26 @@ static void rx_cancel_cb(lv_event_t *e)
 
 static void rx_finish(bool ok)
 {
-    if (rx_timer) lv_timer_delete(rx_timer);
+    if (rx_timer) {
+        lv_timer_delete(rx_timer);
+    }
     rx_timer = NULL;
     uint32_t bytes = video_enc_bytes(rx_enc);
-    if (ok) ok = video_enc_close(rx_enc);
-    else video_enc_abort(rx_enc);
+    if (ok) {
+        ok = video_enc_close(rx_enc);
+    } else {
+        video_enc_abort(rx_enc);
+    }
     rx_enc = NULL;
-    if (rx_disp) lv_display_delete(rx_disp);       /* and the replay screen built on it */
+    if (rx_disp) {
+        lv_display_delete(rx_disp);    /* and the replay screen built on it */
+    }
     rx_disp = NULL;
     heap_caps_free(rx_fb);
     rx_fb = NULL;
-    if (rx_ovl) lv_obj_delete(rx_ovl);
+    if (rx_ovl) {
+        lv_obj_delete(rx_ovl);
+    }
     rx_ovl = NULL;
     rx_busy = false;
     char msg[200];
@@ -563,10 +674,14 @@ static int rx_k_at(int f, bool *playing)
 {
     int64_t t = (int64_t)f * 1000 / RX_FPS - RX_INTRO_MS;
     *playing = false;
-    if (t < 0 || rp_n == 0) return 0;
+    if (t < 0 || rp_n == 0) {
+        return 0;
+    }
     uint32_t clock = (uint32_t)(t * RX_SPEED);
     int k = 0;
-    while (k < rp_n && rp_vt[k] <= clock) k++;
+    while (k < rp_n && rp_vt[k] <= clock) {
+        k++;
+    }
     *playing = k < rp_n;
     return k;
 }
@@ -627,8 +742,12 @@ static void rx_name(const stats_replay_t *r, char *out, size_t n)
     for (size_t i = 0; raw[i] && j + 1 < n; i++) {   /* letters, digits, - and _ only */
         char c = raw[i];
         bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
-        if (!ok) c = (c == ' ' || c == '#') ? '-' : 0;
-        if (!c || (c == '-' && j && out[j - 1] == '-')) continue;
+        if (!ok) {
+            c = (c == ' ' || c == '#') ? '-' : 0;
+        }
+        if (!c || (c == '-' && j && out[j - 1] == '-')) {
+            continue;
+        }
         out[j++] = c;
     }
     out[j] = 0;
@@ -636,7 +755,9 @@ static void rx_name(const stats_replay_t *r, char *out, size_t n)
 
 static void export_start(const stats_replay_t *r)
 {
-    if (rx_busy) return;
+    if (rx_busy) {
+        return;
+    }
     if (!stats_db_ready()) {
         sudoku_ui_notice("Can't export: no sudoku.db on a microSD card.", 3000);
         return;

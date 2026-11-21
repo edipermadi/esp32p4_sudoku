@@ -1,0 +1,10 @@
+# astyle options for the project's own C code (make format; the Makefile has the file list)
+--mode=c
+--style=kr                  # function braces on their own line; if / for / while / else on the same line
+--indent=spaces=4
+--add-braces                # every if / for / while / else body in braces ...
+--break-one-line-headers    # ... on lines of its own (if (x) return; -> three lines)
+--keep-one-line-blocks      # but blocks already on one line stay: bool f(void) { return x; }
+--suffix=none
+--formatted                 # print only the files it changed
+--lineend=linux

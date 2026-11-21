@@ -99,7 +99,9 @@ const uint16_t *bsp_display_frame(void)
     lv_display_t *disp = lv_display_get_default();
     esp_lcd_panel_handle_t panel = disp ? (esp_lcd_panel_handle_t)lv_display_get_user_data(disp) : NULL;
     void *fb = NULL;
-    if (!panel || esp_lcd_dpi_panel_get_frame_buffer(panel, 1, &fb) != ESP_OK || !fb) return NULL;
+    if (!panel || esp_lcd_dpi_panel_get_frame_buffer(panel, 1, &fb) != ESP_OK || !fb) {
+        return NULL;
+    }
     /* DMA2D wrote it: drop whatever the CPU cache still holds of it */
     esp_cache_msync(fb, BSP_LCD_H_RES * BSP_LCD_V_RES * 2, ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_TYPE_DATA);
     return (const uint16_t *)fb;
@@ -121,7 +123,7 @@ esp_err_t bsp_lvgl_start(void)
 
     size_t buf_bytes = BSP_LCD_H_RES * DRAW_BUF_LINES * (BSP_LCD_BITS_PER_PIXEL / 8);
     const uint32_t caps = DRAW_BUF_INTERNAL ? (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT)
-                                            : (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                          : (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     void *buf1 = heap_caps_aligned_alloc(64, buf_bytes, caps);
     void *buf2 = heap_caps_aligned_alloc(64, buf_bytes, caps);
     ESP_RETURN_ON_FALSE(buf1 && buf2, ESP_ERR_NO_MEM, TAG, "draw buffer alloc failed (PSRAM enabled?)");

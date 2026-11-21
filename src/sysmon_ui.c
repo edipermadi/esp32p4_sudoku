@@ -220,24 +220,38 @@ static void set_bar(lv_obj_t *bar, uint64_t used, uint64_t total)
 
 static void set_text(lv_obj_t *l, const char *txt)
 {
-    if (strcmp(lv_label_get_text(l), txt) != 0) lv_label_set_text(l, txt);
+    if (strcmp(lv_label_get_text(l), txt) != 0) {
+        lv_label_set_text(l, txt);
+    }
 }
 
 static const char *reset_text(esp_reset_reason_t r)
 {
     switch (r) {
-    case ESP_RST_POWERON:   return "Power-on";
-    case ESP_RST_EXT:       return "Reset pin";
-    case ESP_RST_SW:        return "Software restart";
-    case ESP_RST_PANIC:     return "Crash (panic)";
-    case ESP_RST_INT_WDT:   return "Interrupt watchdog";
-    case ESP_RST_TASK_WDT:  return "Task watchdog";
-    case ESP_RST_WDT:       return "Watchdog";
-    case ESP_RST_DEEPSLEEP: return "Wake from sleep";
-    case ESP_RST_BROWNOUT:  return "Brownout";
-    case ESP_RST_USB:       return "USB";
-    case ESP_RST_JTAG:      return "JTAG";
-    default:                return "Unknown";
+    case ESP_RST_POWERON:
+        return "Power-on";
+    case ESP_RST_EXT:
+        return "Reset pin";
+    case ESP_RST_SW:
+        return "Software restart";
+    case ESP_RST_PANIC:
+        return "Crash (panic)";
+    case ESP_RST_INT_WDT:
+        return "Interrupt watchdog";
+    case ESP_RST_TASK_WDT:
+        return "Task watchdog";
+    case ESP_RST_WDT:
+        return "Watchdog";
+    case ESP_RST_DEEPSLEEP:
+        return "Wake from sleep";
+    case ESP_RST_BROWNOUT:
+        return "Brownout";
+    case ESP_RST_USB:
+        return "USB";
+    case ESP_RST_JTAG:
+        return "JTAG";
+    default:
+        return "Unknown";
     }
 }
 
@@ -245,7 +259,9 @@ static const char *reset_text(esp_reset_reason_t r)
 static void perf_cb(lv_observer_t *o, lv_subject_t *subject)
 {
     const lv_sysmon_perf_info_t *p = lv_subject_get_pointer(subject);
-    if (!p) return;
+    if (!p) {
+        return;
+    }
     s_cpu_sum += p->calculated.cpu;
     s_cpu_n++;
 }
@@ -261,21 +277,29 @@ static void disp_ev(lv_event_t *e)
         s_render_t0 = 0;
         s_frames++;
         s_draw_us_sum += us;
-        if (us > s_draw_us_max) s_draw_us_max = us;
+        if (us > s_draw_us_max) {
+            s_draw_us_max = us;
+        }
     }
 }
 
 static uint32_t count_tree(lv_obj_t *o)
 {
-    if (!o) return 0;
+    if (!o) {
+        return 0;
+    }
     uint32_t n = 1, c = lv_obj_get_child_count(o);
-    for (uint32_t i = 0; i < c; i++) n += count_tree(lv_obj_get_child(o, (int32_t)i));
+    for (uint32_t i = 0; i < c; i++) {
+        n += count_tree(lv_obj_get_child(o, (int32_t)i));
+    }
     return n;
 }
 
 static void read_flash(void)
 {
-    if (s_flash_read) return;
+    if (s_flash_read) {
+        return;
+    }
     s_flash_read = true;
     esp_flash_get_size(NULL, &s_flash_size);
     const esp_partition_t *run = esp_ota_get_running_partition();
@@ -283,12 +307,16 @@ static void read_flash(void)
         s_app_part = run->size;
         esp_partition_pos_t pos = {.offset = run->address, .size = run->size};
         esp_image_metadata_t md;
-        if (esp_image_get_metadata(&pos, &md) == ESP_OK) s_app_len = md.image_len;
+        if (esp_image_get_metadata(&pos, &md) == ESP_OK) {
+            s_app_len = md.image_len;
+        }
     }
     esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
     for (; it; it = esp_partition_next(it)) {
         const esp_partition_t *p = esp_partition_get(it);
-        if (p->address + p->size > s_part_end) s_part_end = p->address + p->size;
+        if (p->address + p->size > s_part_end) {
+            s_part_end = p->address + p->size;
+        }
     }
     esp_partition_iterator_release(it);
 }
@@ -307,7 +335,9 @@ static void sd_task(void *arg)
 
 static void sd_query(void)
 {
-    if (s_sd_busy) return;
+    if (s_sd_busy) {
+        return;
+    }
     /* only while sudoku.db has the card mounted (not while it's lent over USB) */
     if (!stats_db_ready()) {
         s_sd_err = ESP_ERR_INVALID_STATE;
@@ -315,7 +345,9 @@ static void sd_query(void)
         return;
     }
     s_sd_busy = true;
-    if (xTaskCreatePinnedToCore(sd_task, "sysmon_sd", 4096, NULL, 2, NULL, 0) != pdPASS) s_sd_busy = false;
+    if (xTaskCreatePinnedToCore(sd_task, "sysmon_sd", 4096, NULL, 2, NULL, 0) != pdPASS) {
+        s_sd_busy = false;
+    }
 }
 
 /* the table's order: a column (COL_*) and its direction, kept between visits */
@@ -334,14 +366,26 @@ static int row_cmp(const void *a, const void *b)
     const TaskStatus_t *tx = &s_ts[x->idx], *ty = &s_ts[y->idx];
     int c = 0;
     switch (s_sort_col) {
-    case COL_CORE:  c = core_key(tx) - core_key(ty); break;
-    case COL_CPU:   c = x->permille < y->permille ? -1 : (x->permille > y->permille); break;
-    case COL_STACK: c = tx->usStackHighWaterMark < ty->usStackHighWaterMark ? -1
-                      : (tx->usStackHighWaterMark > ty->usStackHighWaterMark); break;
-    default:        c = strcasecmp(tx->pcTaskName, ty->pcTaskName); break;
+    case COL_CORE:
+        c = core_key(tx) - core_key(ty);
+        break;
+    case COL_CPU:
+        c = x->permille < y->permille ? -1 : (x->permille > y->permille);
+        break;
+    case COL_STACK:
+        c = tx->usStackHighWaterMark < ty->usStackHighWaterMark ? -1
+            : (tx->usStackHighWaterMark > ty->usStackHighWaterMark);
+        break;
+    default:
+        c = strcasecmp(tx->pcTaskName, ty->pcTaskName);
+        break;
     }
-    if (s_sort_desc) c = -c;
-    if (c == 0) c = strcasecmp(tx->pcTaskName, ty->pcTaskName);   /* ties: by name, A-Z */
+    if (s_sort_desc) {
+        c = -c;
+    }
+    if (c == 0) {
+        c = strcasecmp(tx->pcTaskName, ty->pcTaskName);    /* ties: by name, A-Z */
+    }
     return c;
 }
 
@@ -358,8 +402,12 @@ static void show_cpu(void)
         uint32_t dt = (uint32_t)(now - t_prev), di = idle - idle_prev[c];
         if (t_prev && dt && s_have_cpu) {
             int pm = 1000 - (int)((uint64_t)di * 1000 / dt);    /* per mille */
-            if (pm < 0) pm = 0;
-            if (pm > 1000) pm = 1000;
+            if (pm < 0) {
+                pm = 0;
+            }
+            if (pm > 1000) {
+                pm = 1000;
+            }
             snprintf(buf, sizeof(buf), "%d.%d %%", pm / 10, pm % 10);
             set_text(c ? s_load1 : s_load0, buf);
         }
@@ -386,9 +434,15 @@ static void task_reader(void *arg)
 /* Tasks tab only: the list the core-0 reader made last (a second old), and a fresh one asked for */
 static void show_tasks(void)
 {
-    if (!s_ts) return;
-    if (!s_ts_w) s_ts_w = heap_caps_calloc(MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM);
-    if (!s_ts_w) return;
+    if (!s_ts) {
+        return;
+    }
+    if (!s_ts_w) {
+        s_ts_w = heap_caps_calloc(MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM);
+    }
+    if (!s_ts_w) {
+        return;
+    }
     if (!s_reader && xTaskCreatePinnedToCore(task_reader, "sysmon_tasks", 3072, NULL, 2, &s_reader, 0) != pdPASS) {
         s_reader = NULL;
         return;
@@ -404,14 +458,18 @@ static void show_tasks(void)
         s_reader_busy = true;
         xTaskNotifyGive(s_reader);
     }
-    if (!have || n == 0) return;                    /* (none yet, or more than MAX_TASKS: keep the last view) */
+    if (!have || n == 0) {
+        return;    /* (none yet, or more than MAX_TASKS: keep the last view) */
+    }
 
     uint32_t dt = total - s_prev_total;
     uint32_t idle[2] = {0, 0};
     for (UBaseType_t i = 0; i < n; i++) {
         rows[i].idx = (int)i;
         rows[i].permille = 0;
-        if (!s_have_prev || dt == 0) continue;
+        if (!s_have_prev || dt == 0) {
+            continue;
+        }
         for (int j = 0; j < s_prev_n; j++) {
             if (s_prev[j].num == s_ts[i].xTaskNumber) {
                 uint64_t d = s_ts[i].ulRunTimeCounter - s_prev[j].rt;
@@ -420,8 +478,12 @@ static void show_tasks(void)
                 break;
             }
         }
-        if (!strcmp(s_ts[i].pcTaskName, "IDLE0")) idle[0] = rows[i].permille;
-        if (!strcmp(s_ts[i].pcTaskName, "IDLE1")) idle[1] = rows[i].permille;
+        if (!strcmp(s_ts[i].pcTaskName, "IDLE0")) {
+            idle[0] = rows[i].permille;
+        }
+        if (!strcmp(s_ts[i].pcTaskName, "IDLE1")) {
+            idle[1] = rows[i].permille;
+        }
     }
 
     (void)idle;                                     /* (the System tab's load: show_cpu, from cheaper counters) */
@@ -457,12 +519,23 @@ static void show_task_table(void)
         lv_table_set_cell_value_fmt(s_table, r, 2, "%u", (unsigned)t->uxCurrentPriority);
         const char *st = "?";
         switch (t->eCurrentState) {
-        case eRunning:   st = "Run"; break;
-        case eReady:     st = "Ready"; break;
-        case eBlocked:   st = "Wait"; break;
-        case eSuspended: st = "Susp"; break;
-        case eDeleted:   st = "Del"; break;
-        default: break;
+        case eRunning:
+            st = "Run";
+            break;
+        case eReady:
+            st = "Ready";
+            break;
+        case eBlocked:
+            st = "Wait";
+            break;
+        case eSuspended:
+            st = "Susp";
+            break;
+        case eDeleted:
+            st = "Del";
+            break;
+        default:
+            break;
         }
         lv_table_set_cell_value(s_table, r, 3, st);
         if (s_rows_cpu) {
@@ -581,12 +654,16 @@ static void show_lvgl(void)
     s_cpu_sum = s_cpu_n = 0;
     lv_display_t *d = lv_obj_get_display(s_scr);
     uint32_t objs = 0;
-    for (uint32_t i = 0; i < d->screen_cnt; i++) objs += count_tree(d->screens[i]);
+    for (uint32_t i = 0; i < d->screen_cnt; i++) {
+        objs += count_tree(d->screens[i]);
+    }
     objs += count_tree(d->top_layer) + count_tree(d->sys_layer) + count_tree(d->bottom_layer);
     snprintf(buf, sizeof(buf), "%u on %u screens", (unsigned)objs, (unsigned)d->screen_cnt);
     set_text(s_lv_objs, buf);
     uint32_t timers = 0;
-    for (lv_timer_t *t = lv_timer_get_next(NULL); t; t = lv_timer_get_next(t)) timers++;
+    for (lv_timer_t *t = lv_timer_get_next(NULL); t; t = lv_timer_get_next(t)) {
+        timers++;
+    }
     snprintf(buf, sizeof(buf), "%u", (unsigned)timers);
     set_text(s_lv_timers, buf);
 }
@@ -606,8 +683,8 @@ static void show_overview(void)
     wifi_status_t ws;                               /* (a snapshot: wifi_mgr never blocks here) */
     wifi_mgr_get_status(&ws);
     set_text(s_ip, ws.state == WIFI_ST_CONNECTED ? ws.ip
-                   : ws.state == WIFI_ST_OFF ? "Wi-Fi off"
-                   : ws.state == WIFI_ST_CONNECTING ? "Connecting..." : "Not connected");
+             : ws.state == WIFI_ST_OFF ? "Wi-Fi off"
+             : ws.state == WIFI_ST_CONNECTING ? "Connecting..." : "Not connected");
     set_text(s_wifi_mac, ws.mac[0] ? ws.mac : (ws.state == WIFI_ST_OFF ? "Wi-Fi off" : "-"));
 
     float c;
@@ -623,7 +700,9 @@ static void show_overview(void)
 
 static void tick(lv_timer_t *t)
 {
-    if ((s_ticks++ % SD_EVERY) == 0) sd_query();
+    if ((s_ticks++ % SD_EVERY) == 0) {
+        sd_query();
+    }
     show_overview();
     show_cpu();
     show_mem_one(MALLOC_CAP_INTERNAL, true, s_int_bar, s_int_val, s_int_sub);
@@ -635,7 +714,9 @@ static void tick(lv_timer_t *t)
     set_text(s_dma_val, buf);
     show_storage();
     show_lvgl();
-    if (s_tab == SM_TASKS) show_tasks();            /* (only on its tab: see the top of the file) */
+    if (s_tab == SM_TASKS) {
+        show_tasks();    /* (only on its tab: see the top of the file) */
+    }
 }
 
 /* ------------------------------------------------------------- history */
@@ -666,20 +747,36 @@ static int32_t hist_pt(int16_t v) { return v == HIST_NONE ? LV_CHART_POINT_NONE 
 /* the labels over the graphs, and the temperature graph's range (it follows the data) */
 static void hist_show(void)
 {
-    if (!s_ch_cpu || h_count == 0) return;
+    if (!s_ch_cpu || h_count == 0) {
+        return;
+    }
     int last = (h_pos + HIST_N - 1) % HIST_N;
     int peak = 0, tmin = INT16_MAX, tmax = INT16_MIN, rmin = INT16_MAX, smin = INT16_MAX, smax = INT16_MIN;
     for (int i = 0; i < h_count; i++) {
         int k = (h_pos + HIST_N - 1 - i) % HIST_N;
-        for (int c = 0; c < 2; c++) if (h_load[c][k] != HIST_NONE && h_load[c][k] > peak) peak = h_load[c][k];
-        if (h_temp[k] != HIST_NONE) {
-            if (h_temp[k] < tmin) tmin = h_temp[k];
-            if (h_temp[k] > tmax) tmax = h_temp[k];
+        for (int c = 0; c < 2; c++) {
+            if (h_load[c][k] != HIST_NONE && h_load[c][k] > peak) {
+                peak = h_load[c][k];
+            }
         }
-        if (h_ram[k] < rmin) rmin = h_ram[k];
+        if (h_temp[k] != HIST_NONE) {
+            if (h_temp[k] < tmin) {
+                tmin = h_temp[k];
+            }
+            if (h_temp[k] > tmax) {
+                tmax = h_temp[k];
+            }
+        }
+        if (h_ram[k] < rmin) {
+            rmin = h_ram[k];
+        }
         if (h_rssi[k] != HIST_NONE) {
-            if (h_rssi[k] < smin) smin = h_rssi[k];
-            if (h_rssi[k] > smax) smax = h_rssi[k];
+            if (h_rssi[k] < smin) {
+                smin = h_rssi[k];
+            }
+            if (h_rssi[k] > smax) {
+                smax = h_rssi[k];
+            }
         }
     }
     char buf[96];
@@ -722,18 +819,28 @@ static void hist_sample(lv_timer_t *t)
     }
     bool first = h_t_prev == 0;
     h_t_prev = now;
-    if (first) return;                              /* (a load needs two readings) */
+    if (first) {
+        return;    /* (a load needs two readings) */
+    }
 
     int16_t temp = HIST_NONE;
     if (!s_tsens) {
         temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
-        if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK) s_tsens = NULL;
+        if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK) {
+            s_tsens = NULL;
+        }
     }
     if (s_tsens) {                                  /* on only for the reading, unless the page has it on */
-        if (!s_shown) temperature_sensor_enable(s_tsens);
+        if (!s_shown) {
+            temperature_sensor_enable(s_tsens);
+        }
         float c;
-        if (temperature_sensor_get_celsius(s_tsens, &c) == ESP_OK) temp = (int16_t)(c * 10 + (c >= 0 ? 0.5f : -0.5f));
-        if (!s_shown) temperature_sensor_disable(s_tsens);
+        if (temperature_sensor_get_celsius(s_tsens, &c) == ESP_OK) {
+            temp = (int16_t)(c * 10 + (c >= 0 ? 0.5f : -0.5f));
+        }
+        if (!s_shown) {
+            temperature_sensor_disable(s_tsens);
+        }
     }
     int16_t ram = (int16_t)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024);
     wifi_status_t ws;                               /* (wifi_mgr's snapshot: its RSSI is fresh while connected) */
@@ -746,7 +853,9 @@ static void hist_sample(lv_timer_t *t)
     h_ram[h_pos] = ram;
     h_rssi[h_pos] = rssi;
     h_pos = (h_pos + 1) % HIST_N;
-    if (h_count < HIST_N) h_count++;
+    if (h_count < HIST_N) {
+        h_count++;
+    }
     if (s_ch_cpu) {                                 /* (the graphs: one more point each, shifted left) */
         lv_chart_set_next_value(s_ch_cpu, s_se_c0, load[0]);
         lv_chart_set_next_value(s_ch_cpu, s_se_c1, load[1]);
@@ -872,7 +981,9 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
         lv_timer_delete(s_timer);
         s_timer = NULL;
     }
-    if (!s_ts) s_ts = heap_caps_calloc(MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM);
+    if (!s_ts) {
+        s_ts = heap_caps_calloc(MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM);
+    }
     s_scr = scr;
 
     /* top bar, as on the Wi-Fi page */
@@ -892,7 +1003,8 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     /* the tabs, under the title (as on Settings); each tab's cards: a scrolling column */
     static const char *const TABS[SM_TABS] = {LV_SYMBOL_SETTINGS "  System", LV_SYMBOL_DRIVE "  Memory",
                                               LV_SYMBOL_SD_CARD "  Storage", LV_SYMBOL_IMAGE "  Graphics",
-                                              LV_SYMBOL_LIST "  Tasks"};
+                                              LV_SYMBOL_LIST "  Tasks"
+                                             };
     const int gap = 8, tw = (720 - 24 - (SM_TABS - 1) * gap) / SM_TABS;
     for (int i = 0; i < SM_TABS; i++) {
         lv_obj_t *b = lv_button_create(scr);
@@ -953,7 +1065,7 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_chart_set_axis_range(s_ch_rssi, LV_CHART_AXIS_PRIMARY_Y, -95, -30);   /* dBm: weak at the bottom */
     s_se_rssi = lv_chart_add_series(s_ch_rssi, C_ACCENT, LV_CHART_AXIS_PRIMARY_Y);
     section(s_pane[SM_SYSTEM], "Wi-Fi signal, last hour, from -95 dBm (bottom) to -30 dBm (top); a gap while "
-                               "not connected. Above -67 dBm is good.");
+            "not connected. Above -67 dBm is good.");
 
     c = card(s_pane[SM_MEMORY]);
     bar_row(c, "Internal RAM", &s_int_bar, &s_int_val, &s_int_sub);
@@ -1005,7 +1117,9 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     s_table = lv_table_create(c);
     lv_obj_set_size(s_table, LV_PCT(100), LV_SIZE_CONTENT);
     lv_table_set_column_count(s_table, COLS);
-    for (int i = 0; i < COLS; i++) lv_table_set_column_width(s_table, i, COL_W[i]);
+    for (int i = 0; i < COLS; i++) {
+        lv_table_set_column_width(s_table, i, COL_W[i]);
+    }
     lv_obj_set_style_bg_opa(s_table, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_table, 0, 0);
     lv_obj_set_style_pad_all(s_table, 0, 0);
@@ -1021,7 +1135,7 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_scrollable(s_table, false);
     lv_obj_set_clickable(s_table, false);           /* drags scroll the page */
     section(s_pane[SM_TASKS], "Tap Name, Core, CPU or Stack free to sort, and again to reverse. CPU is a share of "
-                              "one core. Stack free: the least it has had.");
+            "one core. Stack free: the least it has had.");
 
     select_tab(s_tab);                              /* (a rebuild keeps the tab that was open) */
     hist_fill();
@@ -1043,19 +1157,27 @@ void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     }
 
     s_timer = lv_timer_create(tick, REFRESH_MS, NULL);
-    if (!s_shown) lv_timer_pause(s_timer);          /* (a rebuild while open keeps running) */
+    if (!s_shown) {
+        lv_timer_pause(s_timer);    /* (a rebuild while open keeps running) */
+    }
 }
 
 void sysmon_ui_set_shown(bool shown)
 {
-    if (!s_timer || shown == s_shown) return;
+    if (!s_timer || shown == s_shown) {
+        return;
+    }
     s_shown = shown;
     if (shown) {
         if (!s_tsens) {
             temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
-            if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK) s_tsens = NULL;
+            if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK) {
+                s_tsens = NULL;
+            }
         }
-        if (s_tsens) temperature_sensor_enable(s_tsens);
+        if (s_tsens) {
+            temperature_sensor_enable(s_tsens);
+        }
         s_have_prev = false;
         s_have_cpu = false;
         s_ticks = 0;
@@ -1065,6 +1187,8 @@ void sysmon_ui_set_shown(bool shown)
         lv_timer_resume(s_timer);
     } else {
         lv_timer_pause(s_timer);
-        if (s_tsens) temperature_sensor_disable(s_tsens);
+        if (s_tsens) {
+            temperature_sensor_disable(s_tsens);
+        }
     }
 }

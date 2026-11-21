@@ -145,8 +145,12 @@ void bsp_audio_set_volume(int percent)
     if (!s_codec) {
         return;
     }
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
+    if (percent < 0) {
+        percent = 0;
+    }
+    if (percent > 100) {
+        percent = 100;
+    }
     /* Reg 0x32: 0x00 = -95.5 dB, 0xBF = 0 dB, 0.5 dB/step. Map 1..100 % to -47.5..0 dB. */
     uint8_t reg = percent == 0 ? 0x00 : (uint8_t)(0x5F + (0xBF - 0x5F) * percent / 100);
     es_wr(0x32, reg);
@@ -167,7 +171,7 @@ esp_err_t bsp_audio_init(uint32_t sample_rate)
 
     /* Amp off while the codec comes up, to avoid pops */
     gpio_config_t pa = {
-        .pin_bit_mask = 1ULL << BSP_AUDIO_PA_GPIO,
+        .pin_bit_mask = (1ULL << BSP_AUDIO_PA_GPIO),
         .mode = GPIO_MODE_OUTPUT,
     };
     ESP_RETURN_ON_ERROR(gpio_config(&pa), TAG, "PA gpio failed");

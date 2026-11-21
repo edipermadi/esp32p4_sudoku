@@ -121,7 +121,9 @@ int compute_conflicts(void)
     int n = 0;
     memset(g_conflict, 0, sizeof(g_conflict));
     for (int i = 0; i < 81; i++) {
-        if (!g_b.val[i]) continue;
+        if (!g_b.val[i]) {
+            continue;
+        }
         for (int j = i + 1; j < 81; j++) {
             if (g_b.val[j] == g_b.val[i] && is_peer(i, j)) {
                 g_conflict[i] = g_conflict[j] = true;
@@ -131,42 +133,67 @@ int compute_conflicts(void)
     for (int i = 0; i < 81; i++) {                  /* Even-Odd: a digit of the wrong kind */
         /* (only the marked cells: Greater-Than narrows allow[] too, from the chains of signs, for the
          * solver; a digit out of that range breaks no sign by itself until its neighbours are in) */
-        if (g_b.val[i] && g_geo->parity[i] && !(g_geo->allow[i] >> g_b.val[i] & 1)) g_conflict[i] = true;
+        if (g_b.val[i] && g_geo->parity[i] && !(g_geo->allow[i] >> g_b.val[i] & 1)) {
+            g_conflict[i] = true;
+        }
     }
     for (int i = 0; g_geo->consec_on && i < 81; i++) {   /* Consecutive: a bar and not 1 apart, or 1 apart and no bar */
         for (int k = 0; k < 2; k++) {
             int o = k ? i + 9 : i + 1, bit = k ? CONSEC_DOWN : CONSEC_RIGHT;
-            if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) continue;
+            if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) {
+                continue;
+            }
             bool near = abs(g_b.val[i] - g_b.val[o]) == 1;
-            if (near != ((g_geo->consec[i] & bit) != 0)) g_conflict[i] = g_conflict[o] = true;
+            if (near != ((g_geo->consec[i] & bit) != 0)) {
+                g_conflict[i] = g_conflict[o] = true;
+            }
         }
     }
     for (int lu = 0; g_geo->sandwich && lu < 18; lu++) {   /* Sandwich: between the 1 and the 9, over the sum or short */
         int cells[9], p1 = -1, p9 = -1;
         for (int k = 0; k < 9; k++) {
             cells[k] = lu < 9 ? lu * 9 + k : k * 9 + (lu - 9);
-            if (g_b.val[cells[k]] == 1) p1 = k;
-            if (g_b.val[cells[k]] == 9) p9 = k;
+            if (g_b.val[cells[k]] == 1) {
+                p1 = k;
+            }
+            if (g_b.val[cells[k]] == 9) {
+                p9 = k;
+            }
         }
-        if (p1 < 0 || p9 < 0) continue;
+        if (p1 < 0 || p9 < 0) {
+            continue;
+        }
         int a = p1 < p9 ? p1 : p9, b = p1 < p9 ? p9 : p1, sum = 0, empty = 0;
         for (int k = a + 1; k < b; k++) {
             sum += g_b.val[cells[k]];
             empty += !g_b.val[cells[k]];
         }
         if (sum > g_geo->sandwich_sum[lu] || (!empty && sum != g_geo->sandwich_sum[lu])) {
-            for (int k = a; k <= b; k++) if (g_b.val[cells[k]]) g_conflict[cells[k]] = true;
+            for (int k = a; k <= b; k++) {
+                if (g_b.val[cells[k]]) {
+                    g_conflict[cells[k]] = true;
+                }
+            }
         }
     }
     for (int lu = 0; g_geo->skyscraper && lu < 18; lu++) {   /* Skyscraper: more seen than the clue, or (full) not it */
         int c = g_geo->sky[lu], seen = 0, top = 0, k = 0, cells[9];
-        if (!c) continue;
-        for (int j = 0; j < 9; j++) cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        if (!c) {
+            continue;
+        }
+        for (int j = 0; j < 9; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        }
         for (; k < 9 && g_b.val[cells[k]]; k++) {
-            if (g_b.val[cells[k]] > top) { top = g_b.val[cells[k]]; seen++; }
+            if (g_b.val[cells[k]] > top) {
+                top = g_b.val[cells[k]];
+                seen++;
+            }
         }
         if (seen > c || ((k == 9 || top == 9) && seen != c)) {
-            for (int j = 0; j < k; j++) g_conflict[cells[j]] = true;
+            for (int j = 0; j < k; j++) {
+                g_conflict[cells[j]] = true;
+            }
         }
     }
     for (int d = 0; d < g_geo->nlk; d++) {          /* Little Killer: a diagonal over its sum, or (full) not it */
@@ -176,7 +203,11 @@ int compute_conflicts(void)
             empty += !g_b.val[g_geo->lk_cell[d][j]];
         }
         if (sum + empty > g_geo->lk_sum[d] || (!empty && sum != g_geo->lk_sum[d])) {
-            for (int j = 0; j < g_geo->lk_n[d]; j++) if (g_b.val[g_geo->lk_cell[d][j]]) g_conflict[g_geo->lk_cell[d][j]] = true;
+            for (int j = 0; j < g_geo->lk_n[d]; j++) {
+                if (g_b.val[g_geo->lk_cell[d][j]]) {
+                    g_conflict[g_geo->lk_cell[d][j]] = true;
+                }
+            }
         }
     }
     for (int t = 0; t < g_geo->nthermos; t++) {     /* the lines: digits that break theirs */
@@ -187,9 +218,13 @@ int compute_conflicts(void)
         case LINE_WHISPER:                          /* two neighbours less than 5 apart */
             for (int i = 1; i < n; i++) {
                 int a = cell[i - 1], b = cell[i];
-                if (!g_b.val[a] || !g_b.val[b]) continue;
+                if (!g_b.val[a] || !g_b.val[b]) {
+                    continue;
+                }
                 bool bad = g_geo->line_kind == LINE_THERMO ? g_b.val[b] <= g_b.val[a] : abs(g_b.val[a] - g_b.val[b]) < 5;
-                if (bad) g_conflict[a] = g_conflict[b] = true;
+                if (bad) {
+                    g_conflict[a] = g_conflict[b] = true;
+                }
             }
             break;
         case LINE_RENBAN: {                         /* a repeat, or digits too far apart for the line */
@@ -197,15 +232,25 @@ int compute_conflicts(void)
             unsigned seen = 0, twice = 0;
             for (int i = 0; i < n; i++) {
                 int x = g_b.val[cell[i]];
-                if (!x) continue;
-                if (seen >> x & 1) twice |= 1u << x;
+                if (!x) {
+                    continue;
+                }
+                if (seen >> x & 1) {
+                    twice |= 1u << x;
+                }
                 seen |= 1u << x;
-                if (x < lo) lo = x;
-                if (x > hi) hi = x;
+                if (x < lo) {
+                    lo = x;
+                }
+                if (x > hi) {
+                    hi = x;
+                }
             }
             for (int i = 0; i < n; i++) {
                 int x = g_b.val[cell[i]];
-                if (x && (hi - lo > n - 1 || (twice >> x & 1))) g_conflict[cell[i]] = true;
+                if (x && (hi - lo > n - 1 || (twice >> x & 1))) {
+                    g_conflict[cell[i]] = true;
+                }
             }
             break;
         }
@@ -216,7 +261,11 @@ int compute_conflicts(void)
                 empty += !g_b.val[cell[i]];
             }
             if (circle && (sum + empty > circle || (!empty && sum != circle))) {
-                for (int i = 0; i < n; i++) if (g_b.val[cell[i]]) g_conflict[cell[i]] = true;
+                for (int i = 0; i < n; i++) {
+                    if (g_b.val[cell[i]]) {
+                        g_conflict[cell[i]] = true;
+                    }
+                }
             }
             break;
         }
@@ -225,15 +274,23 @@ int compute_conflicts(void)
     for (int i = 0; g_geo->edge_kind && i < 81; i++) {   /* Kropki, XV, Greater-Than: two digits the mark (or none) rules out */
         for (int k = 0; k < 2; k++) {
             int o = k ? i + 9 : i + 1, m = k ? EDGE_DOWN(g_geo->edge[i]) : EDGE_RIGHT(g_geo->edge[i]);
-            if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) continue;
-            if (!sudoku_edge_ok(g_geo->edge_kind, m, g_b.val[i], g_b.val[o])) g_conflict[i] = g_conflict[o] = true;
+            if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) {
+                continue;
+            }
+            if (!sudoku_edge_ok(g_geo->edge_kind, m, g_b.val[i], g_b.val[o])) {
+                g_conflict[i] = g_conflict[o] = true;
+            }
         }
     }
     for (int q = 0; q < g_geo->nquads; q++) {       /* Quadruple: no room left for the circle's digits */
         int empty, at = g_geo->quad_at[q];
         if (sudoku_quad_missing(g_geo, q, g_b.val, &empty) > empty) {
             const int cells[4] = {at, at + 1, at + 9, at + 10};
-            for (int k = 0; k < 4; k++) if (g_b.val[cells[k]]) g_conflict[cells[k]] = true;
+            for (int k = 0; k < 4; k++) {
+                if (g_b.val[cells[k]]) {
+                    g_conflict[cells[k]] = true;
+                }
+            }
         }
     }
     for (int k = 0; k < g_geo->ncages; k++) {       /* Killer: a cage over its sum, or full and short of it */
@@ -246,11 +303,15 @@ int compute_conflicts(void)
         if (sum > g_geo->cage_sum[k] || (filled == n && sum != g_geo->cage_sum[k])) {
             for (int i = 0; i < n; i++) {
                 int c = g_geo->cage_cell[k][i];
-                if (g_b.val[c]) g_conflict[c] = true;
+                if (g_b.val[c]) {
+                    g_conflict[c] = true;
+                }
             }
         }
     }
-    for (int i = 0; i < 81; i++) n += g_conflict[i];
+    for (int i = 0; i < 81; i++) {
+        n += g_conflict[i];
+    }
     return n;
 }
 
@@ -259,7 +320,9 @@ int compute_conflicts(void)
  * that isn't the solution's. Shown red; placing one buzzes. */
 static bool digit_wrong(int i)
 {
-    if (!g_b.val[i]) return false;
+    if (!g_b.val[i]) {
+        return false;
+    }
     switch (store_assist()) {
     case ASSIST_OFF:
         return false;
@@ -276,7 +339,9 @@ static bool unit_complete(int u)
     uint16_t seen = 0;
     for (int k = 0; k < g_geo->n; k++) {
         uint8_t v = g_b.val[g_geo->unit[u][k]];
-        if (!v || (seen & (1u << v))) return false;
+        if (!v || (seen & (1u << v))) {
+            return false;
+        }
         seen |= (uint16_t)(1u << v);
     }
     return true;
@@ -286,7 +351,9 @@ static bool unit_complete(int u)
 static int units_completed_by(int i)
 {
     int n = 0;
-    for (int k = 0; k < g_geo->ncu[i]; k++) n += unit_complete(g_geo->cu[i][k]);
+    for (int k = 0; k < g_geo->ncu[i]; k++) {
+        n += unit_complete(g_geo->cu[i][k]);
+    }
     return n;
 }
 
@@ -301,21 +368,27 @@ static lv_color_t cell_color(int k)
 lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given)
 {
     lv_color_t bg = given ? C_CELL_GIVEN : C_CELL;
-    if (geo->parity[i] == PARITY_EVEN) bg = lv_color_mix(C_GRID_THIN, bg, 150);   /* Even-Odd: even cells shaded */
+    if (geo->parity[i] == PARITY_EVEN) {
+        bg = lv_color_mix(C_GRID_THIN, bg, 150);    /* Even-Odd: even cells shaded */
+    }
     return sudoku_geom_tinted(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
 }
 
 static int filled_count(void)
 {
     int n = 0;
-    for (int i = 0; i < 81; i++) n += g_b.val[i] != 0;
+    for (int i = 0; i < 81; i++) {
+        n += g_b.val[i] != 0;
+    }
     return n;
 }
 
 bool has_progress(void)
 {
     for (int i = 0; i < 81; i++) {
-        if ((g_b.val[i] && !g_given[i]) || g_b.notes[i] || g_b.colors[i]) return true;
+        if ((g_b.val[i] && !g_given[i]) || g_b.notes[i] || g_b.colors[i]) {
+            return true;
+        }
     }
     return false;
 }
@@ -338,9 +411,13 @@ static int64_t game_started_at(void)
  */
 void save_current(void)
 {
-    if (g_id == STORE_NO_GAME || g_solved || g_practice >= 0 || g_attack) return;   /* (practice, time attack: not kept) */
+    if (g_id == STORE_NO_GAME || g_solved || g_practice >= 0 || g_attack) {
+        return;    /* (practice, time attack: not kept) */
+    }
     const saved_game_t *s = store_saved_game();
-    if (!has_progress() && s->id != g_id) return;   /* only looked at it: keep the slot as is */
+    if (!has_progress() && s->id != g_id) {
+        return;    /* only looked at it: keep the slot as is */
+    }
     saved_game_t sg;
     sg.id = g_id;
     memcpy(sg.val, g_b.val, sizeof(sg.val));
@@ -365,13 +442,19 @@ void update_timer_label(void)
         uint32_t used = attack_used_ms() + g_elapsed_ms;
         uint32_t left = used >= ATK_MS ? 0 : ATK_MS - used;
         fmt_time(buf, sizeof(buf), (left + 999) / 1000);
-        if (strcmp(lv_label_get_text(g_timer), buf) != 0) lv_label_set_text(g_timer, buf);
+        if (strcmp(lv_label_get_text(g_timer), buf) != 0) {
+            lv_label_set_text(g_timer, buf);
+        }
         lv_obj_set_style_text_color(g_timer, g_paused ? C_MUTED : (left < 60000 ? C_ORANGE : C_TEXT), 0);
         return;
     }
     fmt_time(buf, sizeof(buf), g_elapsed_ms / 1000);
-    if (!store_show_timer() && !g_solved) snprintf(buf, sizeof(buf), "--:--");   /* Settings > Show timer off */
-    if (strcmp(lv_label_get_text(g_timer), buf) != 0) lv_label_set_text(g_timer, buf);
+    if (!store_show_timer() && !g_solved) {
+        snprintf(buf, sizeof(buf), "--:--");    /* Settings > Show timer off */
+    }
+    if (strcmp(lv_label_get_text(g_timer), buf) != 0) {
+        lv_label_set_text(g_timer, buf);
+    }
     lv_obj_set_style_text_color(g_timer, g_solved ? C_GREEN : (g_paused ? C_MUTED : C_TEXT), 0);
 }
 
@@ -379,7 +462,9 @@ void update_header(void)
 {
     char name[40], best[24], buf[48];
     puzzle_name(g_id, name, sizeof(name));
-    if (g_practice >= 0) snprintf(name, sizeof(name), "Practice: %s", learn_names()[g_practice]);
+    if (g_practice >= 0) {
+        snprintf(name, sizeof(name), "Practice: %s", learn_names()[g_practice]);
+    }
     if (g_attack) {
         char n2[40];
         snprintf(n2, sizeof(n2), "Time attack: %s", name);
@@ -395,7 +480,9 @@ void update_header(void)
     /* Save: a puzzle made on the board (not an imported one: it has its collection) */
     bool can_save = can_star && !g_attack && puzzle_is_generated(g_id) && import_of(g_id, NULL) < 0;
     bool saved = false;
-    for (int k = 0; can_save && k < ui_nsaved(); k++) saved |= coll_find(PUZZLE_COLLECTION_COUNT + ui_nimports() + k, g_id) >= 0;
+    for (int k = 0; can_save && k < ui_nsaved(); k++) {
+        saved |= coll_find(PUZZLE_COLLECTION_COUNT + ui_nimports() + k, g_id) >= 0;
+    }
     lv_obj_set_hidden(g_save_btn, !can_save);
     lv_obj_set_style_text_color(lv_obj_get_child(g_save_btn, 0), saved ? C_ACCENT : C_MUTED, 0);
     uint32_t b = store_best_time(g_id);
@@ -413,7 +500,7 @@ void update_header(void)
     lv_label_set_text(g_best, buf);
     bool done = g_solved && !g_attack;              /* (a run's end isn't a solve: the bolt) */
     lv_label_set_text(g_timer_icon, g_attack && g_solved ? LV_SYMBOL_CHARGE
-                                    : done ? LV_SYMBOL_OK : (g_paused ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE));
+                      : done ? LV_SYMBOL_OK : (g_paused ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE));
     lv_obj_set_style_text_color(g_timer_icon, done ? C_GREEN : (g_attack && g_solved ? C_ORANGE : C_MUTED), 0);
     update_timer_label();
 }
@@ -422,36 +509,53 @@ void refresh_board(void)
 {
     int sv = g_lock ? g_lock : (g_sel >= 0 ? g_b.val[g_sel] : 0);   /* same-digit highlight */
     for (int i = 0; i < 81; i++) {
-        if (!g_geo->used[i]) continue;
+        if (!g_geo->used[i]) {
+            continue;
+        }
         lv_color_t bg = cell_base_bg(g_geo, i, g_given[i]);
-        if (g_b.colors[i]) bg = lv_color_mix(cell_color(g_b.colors[i]), bg, 110);   /* painted by the player */
+        if (g_b.colors[i]) {
+            bg = lv_color_mix(cell_color(g_b.colors[i]), bg, 110);    /* painted by the player */
+        }
         if (g_solved) {
             bg = C_CELL_SOLVED;
         } else if (g_sel >= 0) {
-            if (i == g_sel) bg = C_CELL_SEL;
-            else if (sv && g_b.val[i] == sv) bg = C_CELL_SAME;
-            else if (is_peer(i, g_sel)) bg = C_CELL_PEER;
+            if (i == g_sel) {
+                bg = C_CELL_SEL;
+            } else if (sv && g_b.val[i] == sv) {
+                bg = C_CELL_SAME;
+            } else if (is_peer(i, g_sel)) {
+                bg = C_CELL_PEER;
+            }
         }
         if (h_step && !g_solved && hint_mark()[i]) {
             bg = hint_mark()[i] == 2 ? (h_info.kind == STEP_WRONG ? C_CELL_BAD : C_CELL_SEL) : C_CELL_SAME;
         }
         bool wrong = !g_solved && digit_wrong(i);
-        if (wrong && !g_given[i] && i != g_sel) bg = C_CELL_BAD;
+        if (wrong && !g_given[i] && i != g_sel) {
+            bg = C_CELL_BAD;
+        }
         lv_obj_set_style_bg_color(g_cells[i], bg, 0);
 
         lv_color_t fg = g_given[i] ? C_TEXT : C_DIGIT_USER;
-        if (g_solved) fg = g_given[i] ? C_TEXT : C_GREEN;
-        else if (wrong) fg = C_RED;
+        if (g_solved) {
+            fg = g_given[i] ? C_TEXT : C_GREEN;
+        } else if (wrong) {
+            fg = C_RED;
+        }
         lv_obj_set_style_text_color(g_cell_lbl[i], fg, 0);
 
         const char *t = DIGITS[g_b.val[i]];
-        if (strcmp(lv_label_get_text(g_cell_lbl[i]), t) != 0) lv_label_set_text_static(g_cell_lbl[i], t);
+        if (strcmp(lv_label_get_text(g_cell_lbl[i]), t) != 0) {
+            lv_label_set_text_static(g_cell_lbl[i], t);
+        }
         lv_obj_invalidate(g_cells[i]);   /* notes are custom-drawn */
     }
 
     /* number pad: digits left to place; a finished digit is dimmed */
     int count[10] = {0};
-    for (int i = 0; i < 81; i++) count[g_b.val[i]]++;
+    for (int i = 0; i < 81; i++) {
+        count[g_b.val[i]]++;
+    }
     for (int d = 1; d <= g_geo->n; d++) {
         int left = g_geo->n - count[d];
         lv_label_set_text_fmt(g_pad_cnt[d - 1], "%d", left > 0 ? left : 0);
@@ -464,12 +568,16 @@ void refresh_board(void)
     lv_obj_set_style_opa(g_undo_btn, g_undo_len ? LV_OPA_COVER : LV_OPA_40, 0);
     lv_obj_set_style_opa(g_redo_btn, g_redo_len ? LV_OPA_COVER : LV_OPA_40, 0);
 
-    if (g_hints) lv_label_set_text_fmt(g_hint_cnt, "%u", (unsigned)g_hints);
+    if (g_hints) {
+        lv_label_set_text_fmt(g_hint_cnt, "%u", (unsigned)g_hints);
+    }
     lv_obj_set_hidden(g_hint_cnt, g_hints == 0);
 
     /* status line */
     int bad = 0;
-    for (int i = 0; i < 81; i++) bad += digit_wrong(i);
+    for (int i = 0; i < 81; i++) {
+        bad += digit_wrong(i);
+    }
     bool full = filled_count() == g_geo->ncells;
     if (g_solved) {
         char t[16];
@@ -507,12 +615,18 @@ static void solve_commit_cb(lv_timer_t *t)
     if (stats_db_ready() && stats_db_puzzle_rank(s_solve_id, &h) && h.rank) {
         char t[16];
         fmt_time(t, sizeof(t), h.leader_seconds);
-        if (!h.leader[0]) snprintf(line, sizeof(line), "Nobody else has solved this one yet");
-        else if (h.second) snprintf(line, sizeof(line), SYMBOL_STAR "  1st of %d: ahead of %s (%s)", h.of, h.leader, t);
-        else snprintf(line, sizeof(line), "%d%s of %d   -   %s leads with %s", h.rank, ordinal(h.rank), h.of, h.leader, t);
+        if (!h.leader[0]) {
+            snprintf(line, sizeof(line), "Nobody else has solved this one yet");
+        } else if (h.second) {
+            snprintf(line, sizeof(line), SYMBOL_STAR "  1st of %d: ahead of %s (%s)", h.of, h.leader, t);
+        } else {
+            snprintf(line, sizeof(line), "%d%s of %d   -   %s leads with %s", h.rank, ordinal(h.rank), h.of, h.leader, t);
+        }
     }
     lv_label_set_text(g_win_h2h, line);
-    while (lv_obj_get_child_count(g_win_h2h_row) > 1) lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
+    while (lv_obj_get_child_count(g_win_h2h_row) > 1) {
+        lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
+    }
     const stats_player_t *lead = line[0] && h.leader[0] ? player_find(0, h.leader) : NULL;
     if (lead && lead->avatar && lead->avatar <= AVATAR_COUNT) {   /* the one ahead (or behind): their avatar */
         lv_obj_t *b = player_badge(g_win_h2h_row, lead, -1, 26, 8);
@@ -553,14 +667,16 @@ static void cf_draw_cb(lv_event_t *e)
     lv_layer_t *layer = lv_event_get_layer(e);
     uint32_t age = lv_tick_elaps(cf_t0);
     lv_opa_t opa = age + CF_FADE_MS < CF_MS ? LV_OPA_COVER
-                                            : (lv_opa_t)(LV_OPA_COVER * (CF_MS - LV_MIN(age, CF_MS)) / CF_FADE_MS);
+                   : (lv_opa_t)(LV_OPA_COVER * (CF_MS - LV_MIN(age, CF_MS)) / CF_FADE_MS);
     lv_draw_rect_dsc_t d;
     lv_draw_rect_dsc_init(&d);
     d.radius = 2;
     d.bg_opa = opa;
     for (int i = 0; i < CF_N; i++) {
         const cf_piece_t *p = &cf_p[i];
-        if (p->y > SCR_W + 30 || p->x < -30 || p->x > SCR_W + 30) continue;
+        if (p->y > SCR_W + 30 || p->x < -30 || p->x > SCR_W + 30) {
+            continue;
+        }
         int32_t w = (int32_t)(p->w * fabsf(cosf(p->spin))) + 2;   /* turning over */
         int32_t x = (int32_t)(p->x + 10.0f * sinf(p->sway)), y = (int32_t)p->y;
         lv_area_t a = {x - w / 2, y - p->h / 2, x + (w - 1) / 2, y + (p->h - 1) / 2};
@@ -571,9 +687,13 @@ static void cf_draw_cb(lv_event_t *e)
 
 static void cf_stop(void)
 {
-    if (cf_timer) lv_timer_delete(cf_timer);
+    if (cf_timer) {
+        lv_timer_delete(cf_timer);
+    }
     cf_timer = NULL;
-    if (cf_ovl) lv_obj_delete(cf_ovl);
+    if (cf_ovl) {
+        lv_obj_delete(cf_ovl);
+    }
     cf_ovl = NULL;
     free(cf_p);
     cf_p = NULL;
@@ -584,7 +704,9 @@ static void cf_tick(lv_timer_t *t)
     uint32_t now = lv_tick_get();
     float dt = (float)lv_tick_diff(now, cf_last) / 1000.0f;
     cf_last = now;
-    if (dt > 0.1f) dt = 0.1f;                       /* (a slow frame doesn't throw them) */
+    if (dt > 0.1f) {
+        dt = 0.1f;    /* (a slow frame doesn't throw them) */
+    }
     for (int i = 0; i < CF_N; i++) {
         cf_piece_t *p = &cf_p[i];
         p->vy += 1300.0f * dt;                      /* gravity, px/s^2 */
@@ -600,7 +722,9 @@ static void cf_tick(lv_timer_t *t)
     if (lv_tick_elaps(cf_t0) >= CF_MS) {
         void (*done)(void) = cf_done;
         cf_stop();
-        if (done) done();
+        if (done) {
+            done();
+        }
     }
 }
 
@@ -610,7 +734,9 @@ static void confetti(void (*done)(void))
     cf_stop();
     cf_p = malloc(sizeof(cf_piece_t) * CF_N);
     if (!cf_p) {
-        if (done) done();
+        if (done) {
+            done();
+        }
         return;
     }
     for (int i = 0; i < CF_N; i++) {
@@ -713,7 +839,9 @@ static void on_solved(void)
         lv_obj_set_style_text_color(g_win_miss, C_MUTED, 0);
     }
     lv_label_set_text(g_win_h2h, "");                 /* (solve_commit_cb fills it in) */
-    while (lv_obj_get_child_count(g_win_h2h_row) > 1) lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
+    while (lv_obj_get_child_count(g_win_h2h_row) > 1) {
+        lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
+    }
     if (g_hints == 0) {
         lv_label_set_text(g_win_hint, "No hints");
         lv_obj_set_style_text_color(g_win_hint, C_GREEN, 0);
@@ -740,8 +868,12 @@ static void after_move(void)
     compute_conflicts();
     bool full = filled_count() == g_geo->ncells;
     bool ok = true;
-    for (int i = 0; i < 81; i++) ok &= !g_conflict[i];
-    if (full && ok) on_solved();
+    for (int i = 0; i < 81; i++) {
+        ok &= !g_conflict[i];
+    }
+    if (full && ok) {
+        on_solved();
+    }
     refresh_board();
     save_current();                                 /* every move (not once solved) */
 }
@@ -750,7 +882,9 @@ static void push_undo_keep_redo(void)
 {
     g_undo[g_undo_head] = g_b;
     g_undo_head = (g_undo_head + 1) % UNDO_MAX;
-    if (g_undo_len < UNDO_MAX) g_undo_len++;
+    if (g_undo_len < UNDO_MAX) {
+        g_undo_len++;
+    }
 }
 
 /* before every edit: the board goes on the undo ring, and redo is gone */
@@ -768,19 +902,29 @@ static bool can_edit(void)
 /* one entry in the move log (a cell's digit changed) */
 static void record_move(int cell, int digit, move_kind_t kind)
 {
-    if (!g_moves) g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
-    if (!g_moves || g_nmoves >= GAME_MOVES_MAX) return;
-    g_moves[g_nmoves++] = (game_move_t){.t_ms = g_elapsed_ms, .cell = (uint8_t)cell, .digit = (uint8_t)digit,
-                                        .kind = (uint8_t)kind};
+    if (!g_moves) {
+        g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    }
+    if (!g_moves || g_nmoves >= GAME_MOVES_MAX) {
+        return;
+    }
+    g_moves[g_nmoves++] = (game_move_t) {
+        .t_ms = g_elapsed_ms, .cell = (uint8_t)cell, .digit = (uint8_t)digit,
+        .kind = (uint8_t)kind
+    };
 }
 
 void enter_digit(int d)
 {
-    if (!can_edit()) return;
+    if (!can_edit()) {
+        return;
+    }
     int i = g_sel;
     bool placed = false;
     if (g_notes_mode) {
-        if (g_b.val[i]) return;
+        if (g_b.val[i]) {
+            return;
+        }
         push_undo();
         g_b.notes[i] ^= (uint16_t)(1u << d);
     } else {
@@ -795,14 +939,20 @@ void enter_digit(int d)
         }
     }
     after_move();
-    if (!placed || g_solved) return;          /* on_solved() plays its own sound */
+    if (!placed || g_solved) {
+        return;    /* on_solved() plays its own sound */
+    }
 
     /* a mistake: breaks a rule (with Mistake check on Solution: or isn't the
      * solution's digit). Counted even with the check off, just not shown. */
     bool wrong = g_conflict[i] || (store_assist() == ASSIST_SOLUTION && g_sol_ok && d != g_sol[i]);
     if (wrong) {
-        if (g_mistakes < 0xFFFF) g_mistakes++;
-        if (store_assist() != ASSIST_OFF) sfx_play(SFX_ERROR);
+        if (g_mistakes < 0xFFFF) {
+            g_mistakes++;
+        }
+        if (store_assist() != ASSIST_OFF) {
+            sfx_play(SFX_ERROR);
+        }
         return;
     }
     placed_sounds(i, d);
@@ -811,7 +961,9 @@ void enter_digit(int d)
 /* Fill: the selected cell gets its digit from the solution; counts as a hint */
 static void fill_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused) return;
+    if (g_solved || g_paused) {
+        return;
+    }
     if (g_attack) {
         sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
         return;
@@ -832,9 +984,13 @@ static void fill_cb(lv_event_t *e)
     push_undo();
     place_digit(i, d);
     record_move(i, d, MOVE_FILL);
-    if (g_hints < 0xFFFF) g_hints++;
+    if (g_hints < 0xFFFF) {
+        g_hints++;
+    }
     after_move();
-    if (!g_solved) placed_sounds(i, d);
+    if (!g_solved) {
+        placed_sounds(i, d);
+    }
 }
 
 /* a digit placed in cell i: its notes go, and peers lose that note */
@@ -843,14 +999,18 @@ static void place_digit(int i, int d)
     g_b.val[i] = (uint8_t)d;
     g_b.notes[i] = 0;
     for (int j = 0; j < 81; j++) {
-        if (j != i && is_peer(i, j)) g_b.notes[j] &= (uint16_t)~(1u << d);
+        if (j != i && is_peer(i, j)) {
+            g_b.notes[j] &= (uint16_t)~(1u << d);
+        }
     }
 }
 
 /* chimes for a digit d placed in cell i without a conflict */
 static void placed_sounds(int i, int d)
 {
-    if (g_conflict[i]) return;
+    if (g_conflict[i]) {
+        return;
+    }
     int n = 0;
     bool clean = true;
     for (int j = 0; j < 81; j++) {
@@ -859,14 +1019,20 @@ static void placed_sounds(int i, int d)
             clean &= !g_conflict[j];
         }
     }
-    if (n == g_geo->n && clean) sfx_play(SFX_DIGIT_DONE);
+    if (n == g_geo->n && clean) {
+        sfx_play(SFX_DIGIT_DONE);
+    }
     int units = units_completed_by(i);              /* row / column / box / diagonal now complete */
-    if (units) sfx_play(units > 1 ? SFX_UNITS_DONE : SFX_UNIT_DONE);
+    if (units) {
+        sfx_play(units > 1 ? SFX_UNITS_DONE : SFX_UNIT_DONE);
+    }
 }
 
 static void cell_click_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused) return;
+    if (g_solved || g_paused) {
+        return;
+    }
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     g_sel = i;
     if (g_lock && !g_given[i]) {                    /* digit-first: the locked digit goes in (or its note) */
@@ -882,13 +1048,17 @@ static int cm_cell;
 
 static void cm_close(void)
 {
-    if (cm_ovl) lv_obj_delete_async(cm_ovl);
+    if (cm_ovl) {
+        lv_obj_delete_async(cm_ovl);
+    }
     cm_ovl = NULL;
 }
 
 static void cm_backdrop_cb(lv_event_t *e)
 {
-    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) cm_close();
+    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) {
+        cm_close();
+    }
 }
 
 static void cm_color_cb(lv_event_t *e)
@@ -896,7 +1066,9 @@ static void cm_color_cb(lv_event_t *e)
     int k = (int)(intptr_t)lv_event_get_user_data(e);
     int i = cm_cell;
     cm_close();
-    if (g_solved || g_paused || i < 0 || g_b.colors[i] == k) return;
+    if (g_solved || g_paused || i < 0 || g_b.colors[i] == k) {
+        return;
+    }
     push_undo();
     g_b.colors[i] = (uint8_t)k;
     after_move();                                   /* redraws and saves (colours aren't in the move log) */
@@ -910,21 +1082,33 @@ static int cage_sets_text(int k, char *buf, size_t n)
     uint16_t have = 0;
     for (int j = 0; j < size; j++) {
         int v = g_b.val[g_geo->cage_cell[k][j]];
-        if (v) have |= (uint16_t)(1u << v);
+        if (v) {
+            have |= (uint16_t)(1u << v);
+        }
     }
     size_t len = 0;
     buf[0] = 0;
     for (uint16_t m = 2; m < 0x400; m += 2) {       /* digit sets as bits 1..9 */
-        if (__builtin_popcount(m) != size || (m & have) != have) continue;
+        if (__builtin_popcount(m) != size || (m & have) != have) {
+            continue;
+        }
         int s = 0;
-        for (int d = 1; d <= 9; d++) s += (m >> d & 1) * d;
-        if (s != sum) continue;
+        for (int d = 1; d <= 9; d++) {
+            s += (m >> d & 1) * d;
+        }
+        if (s != sum) {
+            continue;
+        }
         count++;
-        if (len + 24 >= n) continue;                /* (the count still goes on) */
+        if (len + 24 >= n) {
+            continue;    /* (the count still goes on) */
+        }
         len += snprintf(buf + len, n - len, "%s", count > 1 ? "     " : "");
         bool first = true;
         for (int d = 1; d <= 9; d++) {
-            if (!(m >> d & 1)) continue;
+            if (!(m >> d & 1)) {
+                continue;
+            }
             len += snprintf(buf + len, n - len, first ? "%d" : "+%d", d);
             first = false;
         }
@@ -934,7 +1118,9 @@ static int cage_sets_text(int k, char *buf, size_t n)
 
 static void cell_long_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused) return;
+    if (g_solved || g_paused) {
+        return;
+    }
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     cm_close();
     cm_cell = i;
@@ -969,8 +1155,11 @@ static void cell_long_cb(lv_event_t *e)
     for (int k = 0; k <= CELL_COLORS; k++) {        /* none, then the colours */
         lv_obj_t *b = make_btn(row, 0, 0, 58, 56, k ? NULL : LV_SYMBOL_CLOSE, &lv_font_montserrat_20, cm_color_cb,
                                (void *)(intptr_t)k);
-        if (k) lv_obj_set_style_bg_color(b, cell_color(k), 0);
-        else lv_obj_set_style_bg_color(b, C_CARD2, 0);
+        if (k) {
+            lv_obj_set_style_bg_color(b, cell_color(k), 0);
+        } else {
+            lv_obj_set_style_bg_color(b, C_CARD2, 0);
+        }
         if (g_b.colors[i] == k) {
             lv_obj_set_style_border_color(b, C_TEXT, 0);
             lv_obj_set_style_border_width(b, 3, 0);
@@ -995,7 +1184,9 @@ static void cell_long_cb(lv_event_t *e)
 static void cell_draw_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (g_b.val[i] || !g_b.notes[i]) return;
+    if (g_b.val[i] || !g_b.notes[i]) {
+        return;
+    }
     lv_obj_t *cell = lv_event_get_current_target_obj(e);
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t co;
@@ -1011,7 +1202,7 @@ static void cell_draw_cb(lv_event_t *e)
     lv_draw_label_dsc_init(&d);
     const bool big = store_big_digits();            /* (Digit size: Large) */
     d.font = size >= 80 ? (big ? &lv_font_montserrat_24 : &lv_font_montserrat_22)
-                        : (big ? &lv_font_montserrat_18 : &lv_font_montserrat_16);
+             : (big ? &lv_font_montserrat_18 : &lv_font_montserrat_16);
     if (g_geo->ncages) {                            /* Killer: smaller, below the cage sum in the corner */
         d.font = &lv_font_montserrat_12;
         y0 = 13;
@@ -1019,7 +1210,9 @@ static void cell_draw_cb(lv_event_t *e)
     }
     d.align = LV_TEXT_ALIGN_CENTER;
     for (int n = 1; n <= g_geo->n; n++) {
-        if (!(g_b.notes[i] & (1u << n))) continue;
+        if (!(g_b.notes[i] & (1u << n))) {
+            continue;
+        }
         int r = (n - 1) / cols, c = (n - 1) % cols;
         lv_area_t a = {
             .x1 = co.x1 + x0 + c * pitch, .y1 = co.y1 + y0 + r * vpitch,
@@ -1047,7 +1240,9 @@ static void pad_click_cb(lv_event_t *e)
 /* A long press locks the digit: then each tap on a cell places it there. */
 static void pad_long_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused) return;
+    if (g_solved || g_paused) {
+        return;
+    }
     int d = (int)(intptr_t)lv_event_get_user_data(e);
     g_lock = g_lock == d ? 0 : d;
     refresh_board();
@@ -1057,15 +1252,21 @@ static void pad_long_cb(lv_event_t *e)
  * pencil marks (replacing its notes). Undo takes it back. */
 static void auto_notes_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused || (g_flags & GAME_FLAG_NO_NOTES)) return;
+    if (g_solved || g_paused || (g_flags & GAME_FLAG_NO_NOTES)) {
+        return;
+    }
     uint16_t notes[81];
     int changed = 0;
     for (int k = 0; k < g_geo->ncells; k++) {
         int c = g_geo->cells[k];
         notes[c] = g_b.notes[c];
-        if (g_b.val[c]) continue;
+        if (g_b.val[c]) {
+            continue;
+        }
         uint16_t m = g_geo->all;
-        for (int p = 0; p < g_geo->npeers[c]; p++) m &= (uint16_t)~(1u << g_b.val[g_geo->peers[c][p]]);
+        for (int p = 0; p < g_geo->npeers[c]; p++) {
+            m &= (uint16_t)~(1u << g_b.val[g_geo->peers[c][p]]);
+        }
         notes[c] = m;
         changed += m != g_b.notes[c];
     }
@@ -1074,16 +1275,24 @@ static void auto_notes_cb(lv_event_t *e)
         return;
     }
     push_undo();
-    for (int k = 0; k < g_geo->ncells; k++) g_b.notes[g_geo->cells[k]] = notes[g_geo->cells[k]];
+    for (int k = 0; k < g_geo->ncells; k++) {
+        g_b.notes[g_geo->cells[k]] = notes[g_geo->cells[k]];
+    }
     after_move();
 }
 
 static void erase_cb(lv_event_t *e)
 {
-    if (!can_edit()) return;
-    if (!g_b.val[g_sel] && !g_b.notes[g_sel]) return;
+    if (!can_edit()) {
+        return;
+    }
+    if (!g_b.val[g_sel] && !g_b.notes[g_sel]) {
+        return;
+    }
     push_undo();
-    if (g_b.val[g_sel]) record_move(g_sel, 0, MOVE_ERASE);
+    if (g_b.val[g_sel]) {
+        record_move(g_sel, 0, MOVE_ERASE);
+    }
     g_b.val[g_sel] = 0;
     g_b.notes[g_sel] = 0;
     after_move();
@@ -1091,7 +1300,9 @@ static void erase_cb(lv_event_t *e)
 
 static void undo_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused || g_undo_len == 0) return;
+    if (g_solved || g_paused || g_undo_len == 0) {
+        return;
+    }
     if (g_redo_len == UNDO_MAX) {                   /* full: the oldest undone board goes */
         memmove(g_redo, g_redo + 1, sizeof(board_t) * (UNDO_MAX - 1));
         g_redo_len--;
@@ -1103,7 +1314,9 @@ static void undo_cb(lv_event_t *e)
     memcpy(before, g_b.val, sizeof(before));
     g_b = g_undo[g_undo_head];
     for (int i = 0; i < 81; i++) {
-        if (g_b.val[i] != before[i]) record_move(i, g_b.val[i], MOVE_UNDO);
+        if (g_b.val[i] != before[i]) {
+            record_move(i, g_b.val[i], MOVE_UNDO);
+        }
     }
     after_move();
 }
@@ -1111,13 +1324,17 @@ static void undo_cb(lv_event_t *e)
 /* puts back what the last Undo took away (until the next edit) */
 static void redo_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused || g_redo_len == 0) return;
+    if (g_solved || g_paused || g_redo_len == 0) {
+        return;
+    }
     push_undo_keep_redo();
     uint8_t before[81];
     memcpy(before, g_b.val, sizeof(before));
     g_b = g_redo[--g_redo_len];
     for (int i = 0; i < 81; i++) {
-        if (g_b.val[i] != before[i]) record_move(i, g_b.val[i], MOVE_REDO);
+        if (g_b.val[i] != before[i]) {
+            record_move(i, g_b.val[i], MOVE_REDO);
+        }
     }
     after_move();
 }
@@ -1144,7 +1361,9 @@ void challenge_ui(void)
 
 void set_paused(bool p)
 {
-    if (g_solved) p = false;
+    if (g_solved) {
+        p = false;
+    }
     if (p) {
         hint_drop();
         refresh_board();
@@ -1152,7 +1371,9 @@ void set_paused(bool p)
     g_paused = p;
     lv_obj_set_hidden(g_pause_ovl, !p);
     update_header();
-    if (p) save_current();
+    if (p) {
+        save_current();
+    }
 }
 
 /* ------------------------------------------------------------- build */
@@ -1389,8 +1610,12 @@ void build_game(void)
 
 static void hint_act_cb(lv_event_t *e)
 {
-    if (!h_step || g_solved || g_paused) return;
-    if (h_step == 1 && hint_nudge()) return;
+    if (!h_step || g_solved || g_paused) {
+        return;
+    }
+    if (h_step == 1 && hint_nudge()) {
+        return;
+    }
     if (h_step == 1) {
         h_step = 2;
         hint_render();
@@ -1405,11 +1630,15 @@ static void hint_act_cb(lv_event_t *e)
     } else {
         place_digit(i, d);
         record_move(i, d, MOVE_FILL);
-        if (g_practice >= 0) stats_db_learned(g_practice);   /* Learn: this technique practised (Graduate) */
+        if (g_practice >= 0) {
+            stats_db_learned(g_practice);    /* Learn: this technique practised (Graduate) */
+        }
     }
     g_sel = i;
     after_move();                                   /* closes the hint */
-    if (!wrong && !g_solved) placed_sounds(i, d);
+    if (!wrong && !g_solved) {
+        placed_sounds(i, d);
+    }
 }
 
 static void hint_close_cb(lv_event_t *e)
@@ -1420,19 +1649,29 @@ static void hint_close_cb(lv_event_t *e)
 
 static void hint_cb(lv_event_t *e)
 {
-    if (g_solved || g_paused || !g_sol_ok) return;
+    if (g_solved || g_paused || !g_sol_ok) {
+        return;
+    }
     if (g_attack) {
         sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
         return;
     }
     if (h_step) {                                   /* already open: same as More / Place it */
-        if (hint_nudge()) return;                   /* (a nudge goes no further) */
+        if (hint_nudge()) {
+            return;    /* (a nudge goes no further) */
+        }
         hint_act_cb(e);
         return;
     }
-    if (!sudoku_next_step(g_geo, g_b.val, g_sol, &h_info) || h_info.cell < 0) return;
-    if (g_hints < 0xFFFF) g_hints++;               /* every hint opened counts once */
-    if (h_info.tech.kind > 0 && h_info.tech.kind < 16) g_flags |= 1u << h_info.tech.kind;   /* (achievements) */
+    if (!sudoku_next_step(g_geo, g_b.val, g_sol, &h_info) || h_info.cell < 0) {
+        return;
+    }
+    if (g_hints < 0xFFFF) {
+        g_hints++;    /* every hint opened counts once */
+    }
+    if (h_info.tech.kind > 0 && h_info.tech.kind < 16) {
+        g_flags |= 1u << h_info.tech.kind;    /* (achievements) */
+    }
     refresh_board();                                /* the hint count on the Fill button */
     save_current();
     h_step = 1;
@@ -1486,7 +1725,9 @@ static void win_next_cb(lv_event_t *e)
     int ic = coll_of(g_id);
     if (ic >= PUZZLE_COLLECTION_COUNT) {         /* imported: the next one of its collection */
         uint16_t first = coll_first(ic), next = g_id + 1;
-        if (next >= first + coll_size(ic)) next = first;
+        if (next >= first + coll_size(ic)) {
+            next = first;
+        }
         open_puzzle(next);
         return;
     }
@@ -1499,7 +1740,9 @@ static void win_next_cb(lv_event_t *e)
     int c = puzzle_collection_of(g_id);
     const puzzle_collection_t *pc = puzzle_collection(c);
     uint16_t next = g_id + 1;
-    if (next >= pc->first + pc->count) next = pc->first;
+    if (next >= pc->first + pc->count) {
+        next = pc->first;
+    }
     open_puzzle(next);
 }
 
@@ -1511,7 +1754,9 @@ static void win_list_cb(lv_event_t *e)
 static void win_hide_cb(lv_event_t *e)
 {
     /* tap outside the card: look at the solved board */
-    if (lv_event_get_target_obj(e) == g_win_ovl) lv_obj_set_hidden(g_win_ovl, true);
+    if (lv_event_get_target_obj(e) == g_win_ovl) {
+        lv_obj_set_hidden(g_win_ovl, true);
+    }
 }
 
 void start_game(uint16_t id, bool resume)
@@ -1527,7 +1772,9 @@ void start_game(uint16_t id, bool resume)
     g_geo = puzzle_geom(id, g_geo_buf, &g_var);
     game_layout();
     for (int i = 0; i < 81; i++) {                  /* only the board's cells, digits 1..n */
-        if (!g_geo->used[i] || given[i] > g_geo->n) given[i] = 0;
+        if (!g_geo->used[i] || given[i] > g_geo->n) {
+            given[i] = 0;
+        }
     }
     memcpy(g_given, given, sizeof(g_given));
     g_sol_ok = sudoku_solve(g_geo, g_given, g_sol);
@@ -1536,11 +1783,19 @@ void start_game(uint16_t id, bool resume)
     if (resume && s->id == id) {
         memcpy(g_b.val, s->val, sizeof(g_b.val));
         memcpy(g_b.notes, s->notes, sizeof(g_b.notes));
-        for (int i = 0; i < 81; i++) g_b.colors[i] = s->colors[i] <= CELL_COLORS ? s->colors[i] : 0;
         for (int i = 0; i < 81; i++) {
-            if (g_given[i]) g_b.val[i] = g_given[i];   /* givens are never editable */
-            if (g_b.val[i] > g_geo->n || !g_geo->used[i]) g_b.val[i] = 0;
-            if (!g_geo->used[i]) g_b.notes[i] = 0;
+            g_b.colors[i] = s->colors[i] <= CELL_COLORS ? s->colors[i] : 0;
+        }
+        for (int i = 0; i < 81; i++) {
+            if (g_given[i]) {
+                g_b.val[i] = g_given[i];    /* givens are never editable */
+            }
+            if (g_b.val[i] > g_geo->n || !g_geo->used[i]) {
+                g_b.val[i] = 0;
+            }
+            if (!g_geo->used[i]) {
+                g_b.notes[i] = 0;
+            }
             g_b.notes[i] &= g_geo->all;
         }
         g_elapsed_ms = s->elapsed_ms;
@@ -1550,12 +1805,14 @@ void start_game(uint16_t id, bool resume)
         const game_move_t *sm;
         int sn = store_game_moves(&sm);
         if (sn > 0 && (g_moves || (g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX,
-                                                              MALLOC_CAP_SPIRAM)))) {
+                                             MALLOC_CAP_SPIRAM)))) {
             memcpy(g_moves, sm, sizeof(game_move_t) * sn);
             g_nmoves = sn;
         }
         g_started_at = s->started_at;               /* from when it was first opened */
-        if (!g_started_at) g_started_tick = 0;      /* unknown, and not worked out from this session */
+        if (!g_started_at) {
+            g_started_tick = 0;    /* unknown, and not worked out from this session */
+        }
     }
     g_notes_mode = false;
     lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
@@ -1575,12 +1832,17 @@ static void win_share_cb(lv_event_t *e)
 {
     char day[12] = "", kind[48] = "", t[16];
     int var = 0, lv = 0;
-    if (!puzzle_is_generated(s_solve_id) || !gen_lookup_day(s_solve_id, NULL, &var, &lv, day) || !day[0]) return;
+    if (!puzzle_is_generated(s_solve_id) || !gen_lookup_day(s_solve_id, NULL, &var, &lv, day) || !day[0]) {
+        return;
+    }
     daily_kind_text(var, lv, kind, sizeof(kind));
     fmt_time(t, sizeof(t), s_solve_secs);
     char hints[24];
-    if (s_solve_hints) snprintf(hints, sizeof(hints), "%u hint%s", (unsigned)s_solve_hints, s_solve_hints == 1 ? "" : "s");
-    else snprintf(hints, sizeof(hints), "no hints");
+    if (s_solve_hints) {
+        snprintf(hints, sizeof(hints), "%u hint%s", (unsigned)s_solve_hints, s_solve_hints == 1 ? "" : "s");
+    } else {
+        snprintf(hints, sizeof(hints), "no hints");
+    }
     static char text[256];
     snprintf(text, sizeof(text), "Sudoku daily %s (%s)\n%s: solved in %s, %u mistake%s, %s%s\nESP32-P4 Sudoku",
              day, kind, store_player_name(), t, (unsigned)s_solve_mistakes, s_solve_mistakes == 1 ? "" : "s", hints,
@@ -1599,8 +1861,10 @@ static void game_menu_cb(lv_event_t *e)
         {SYMBOL_BULB, "Rules", rules_cb, false},
         {SYMBOL_QR, "Share", share_cb, g_id == STORE_NO_GAME},
         {SYMBOL_STAR, g_starred ? "Unstar" : "Star", star_cb, !g_can_star},
-        {LV_SYMBOL_LIST, "Auto notes", auto_notes_cb,        /* all the marks at once (Undo takes them back) */
-         g_solved || (g_flags & GAME_FLAG_NO_NOTES) != 0},
+        {
+            LV_SYMBOL_LIST, "Auto notes", auto_notes_cb,        /* all the marks at once (Undo takes them back) */
+            g_solved || (g_flags & GAME_FLAG_NO_NOTES) != 0
+        },
         {LV_SYMBOL_REFRESH, "Restart", restart_cb, false},   /* (asks first once there's progress) */
     };
     ctx_menu_toggle(g_bulb_btn, items, (int)(sizeof(items) / sizeof(items[0])));
@@ -1608,7 +1872,9 @@ static void game_menu_cb(lv_event_t *e)
 
 static void star_cb(lv_event_t *e)
 {
-    if (g_practice >= 0 || g_id >= PUZZLE_GEN_RAM_BASE) return;
+    if (g_practice >= 0 || g_id >= PUZZLE_GEN_RAM_BASE) {
+        return;
+    }
     g_starred = !g_starred;
     stats_db_set_bookmark(g_id, g_starred);
     update_header();

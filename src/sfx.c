@@ -89,9 +89,13 @@ static void voice_start(sfx_id_t id)
     /* free voice, or steal the first one */
     voice_t *v = NULL;
     for (int i = 0; i < SFX_VOICES && !v; i++) {
-        if (!s_voices[i].note) v = &s_voices[i];
+        if (!s_voices[i].note) {
+            v = &s_voices[i];
+        }
     }
-    if (!v) v = &s_voices[0];
+    if (!v) {
+        v = &s_voices[0];
+    }
     v->note = s_sounds[id];
     voice_start_note(v);
 }
@@ -102,16 +106,21 @@ static float envelope(uint32_t pos, uint32_t len)
     const uint32_t attack = SFX_RATE / 500;
     float t = (float)pos / (float)len;
     float e = pos < attack ? (float)pos / attack : expf(-3.0f * t);
-    if (t > 0.85f) e *= (1.0f - t) / 0.15f;
+    if (t > 0.85f) {
+        e *= (1.0f - t) / 0.15f;
+    }
     return e;
 }
 
 static float osc(uint8_t wave, float ph)
 {
     switch (wave) {
-    case W_TRI:    return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph;
-    case W_SQUARE: return ph < 0.5f ? 1.0f : -1.0f;
-    default:       return sinf(2.0f * (float)M_PI * ph);
+    case W_TRI:
+        return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph;
+    case W_SQUARE:
+        return ph < 0.5f ? 1.0f : -1.0f;
+    default:
+        return sinf(2.0f * (float)M_PI * ph);
     }
 }
 
@@ -122,18 +131,25 @@ static bool render(int16_t *out, int frames)
         float acc = 0;
         for (int i = 0; i < SFX_VOICES; i++) {
             voice_t *v = &s_voices[i];
-            if (!v->note) continue;
+            if (!v->note) {
+                continue;
+            }
             any = true;
             const note_t *n = v->note;
             if (n->freq) {
                 acc += osc(n->wave, v->phase) * envelope(v->pos, v->len) * (n->amp / 100.0f);
                 v->phase += (float)n->freq / SFX_RATE;
-                if (v->phase >= 1.0f) v->phase -= 1.0f;
+                if (v->phase >= 1.0f) {
+                    v->phase -= 1.0f;
+                }
             }
             if (++v->pos >= v->len) {
                 v->note++;
-                if (v->note->ms == 0) v->note = NULL;
-                else voice_start_note(v);
+                if (v->note->ms == 0) {
+                    v->note = NULL;
+                } else {
+                    voice_start_note(v);
+                }
             }
         }
         if (s_pcm && s_pcm_pos < s_pcm_len) {   /* a clip (gibberlink's replies) */
@@ -144,8 +160,12 @@ static bool render(int16_t *out, int frames)
                 s_pcm_busy = false;
             }
         }
-        if (acc > 1.0f) acc = 1.0f;
-        if (acc < -1.0f) acc = -1.0f;
+        if (acc > 1.0f) {
+            acc = 1.0f;
+        }
+        if (acc < -1.0f) {
+            acc = -1.0f;
+        }
         int16_t s = (int16_t)(acc * 30000.0f);
         out[2 * f] = s;
         out[2 * f + 1] = s;
@@ -161,8 +181,11 @@ static void sfx_task(void *arg)
         uint8_t id;
         /* idle: sleep until something is queued; playing: just drain the queue */
         while (xQueueReceive(s_queue, &id, active ? 0 : portMAX_DELAY) == pdTRUE) {
-            if (id < SFX_COUNT) voice_start((sfx_id_t)id);
-            else if (id == SFX_PCM_ID) s_pcm_pos = 0;
+            if (id < SFX_COUNT) {
+                voice_start((sfx_id_t)id);
+            } else if (id == SFX_PCM_ID) {
+                s_pcm_pos = 0;
+            }
             active = true;
         }
         /* the chunk after the last note is all zeros: written too, so the tail plays out */
@@ -180,16 +203,22 @@ esp_err_t sfx_init(void)
     }
     bsp_audio_set_volume(SFX_VOLUME);
     s_queue = xQueueCreate(8, sizeof(uint8_t));
-    if (!s_queue) return ESP_ERR_NO_MEM;
+    if (!s_queue) {
+        return ESP_ERR_NO_MEM;
+    }
     /* core 0, away from LVGL (loopTask, core 1). Unpinned would not stay so: on the
      * P4 a task is pinned to the core it is on when it first uses the FPU. */
-    if (xTaskCreatePinnedToCore(sfx_task, "sfx", 4096, NULL, 5, NULL, 0) != pdPASS) return ESP_ERR_NO_MEM;
+    if (xTaskCreatePinnedToCore(sfx_task, "sfx", 4096, NULL, 5, NULL, 0) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
     return ESP_OK;
 }
 
 void sfx_play(sfx_id_t id)
 {
-    if (!s_queue || !s_enabled) return;
+    if (!s_queue || !s_enabled) {
+        return;
+    }
     uint8_t b = (uint8_t)id;
     xQueueSend(s_queue, &b, 0);
 }
@@ -206,7 +235,9 @@ bool sfx_enabled(void)
 
 bool sfx_play_pcm(const int16_t *mono, size_t frames)
 {
-    if (!s_queue || s_pcm_busy || !frames) return false;
+    if (!s_queue || s_pcm_busy || !frames) {
+        return false;
+    }
     s_pcm_len = frames;
     s_pcm = mono;
     s_pcm_busy = true;

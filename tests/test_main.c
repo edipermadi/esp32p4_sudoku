@@ -44,7 +44,9 @@ static int s_checks, s_failed;
 static uint32_t fnv1a(const uint8_t *p, size_t n)
 {
     uint32_t h = 2166136261u;
-    while (n--) h = (h ^ *p++) * 16777619u;
+    while (n--) {
+        h = (h ^ *p++) * 16777619u;
+    }
     return h;
 }
 
@@ -56,65 +58,112 @@ static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const ui
         unsigned seen = 0;
         for (int k = 0; k < g->n; k++) {
             int c = g->unit[u][k], d = sol[c];
-            if (d < 1 || d > g->n || (seen >> d & 1)) return false;
+            if (d < 1 || d > g->n || (seen >> d & 1)) {
+                return false;
+            }
             seen |= 1u << d;
         }
     }
     for (int c = 0; c < 81; c++) {
-        if (givens[c] && givens[c] != sol[c]) return false;
-        if (!g->used[c] && sol[c]) return false;
+        if (givens[c] && givens[c] != sol[c]) {
+            return false;
+        }
+        if (!g->used[c] && sol[c]) {
+            return false;
+        }
     }
     for (int k = 0; k < g->ncells; k++) {           /* peers differ (Anti-Knight, Anti-King too) */
         int c = g->cells[k];
         for (int p = 0; p < g->npeers[c]; p++) {
-            if (sol[g->peers[c][p]] == sol[c]) return false;
+            if (sol[g->peers[c][p]] == sol[c]) {
+                return false;
+            }
         }
     }
     for (int c = 0; g->consec_on && c < 81; c++) {  /* Consecutive, Non-Consecutive: bar = 1 apart */
-        if (c % 9 < 8 && (abs(sol[c] - sol[c + 1]) == 1) != ((g->consec[c] & CONSEC_RIGHT) != 0)) return false;
-        if (c < 72 && (abs(sol[c] - sol[c + 9]) == 1) != ((g->consec[c] & CONSEC_DOWN) != 0)) return false;
+        if (c % 9 < 8 && (abs(sol[c] - sol[c + 1]) == 1) != ((g->consec[c] & CONSEC_RIGHT) != 0)) {
+            return false;
+        }
+        if (c < 72 && (abs(sol[c] - sol[c + 9]) == 1) != ((g->consec[c] & CONSEC_DOWN) != 0)) {
+            return false;
+        }
     }
     for (int c = 0; g->edge_kind && c < 81; c++) {  /* Kropki, XV, Greater-Than: the marks (and none) */
-        if (c % 9 < 8 && !sudoku_edge_ok(g->edge_kind, EDGE_RIGHT(g->edge[c]), sol[c], sol[c + 1])) return false;
-        if (c < 72 && !sudoku_edge_ok(g->edge_kind, EDGE_DOWN(g->edge[c]), sol[c], sol[c + 9])) return false;
+        if (c % 9 < 8 && !sudoku_edge_ok(g->edge_kind, EDGE_RIGHT(g->edge[c]), sol[c], sol[c + 1])) {
+            return false;
+        }
+        if (c < 72 && !sudoku_edge_ok(g->edge_kind, EDGE_DOWN(g->edge[c]), sol[c], sol[c + 9])) {
+            return false;
+        }
     }
     for (int t = 0; t < g->nthermos; t++) {         /* the lines: Thermo, Arrow, Renban, Whispers */
         int n = g->thermo_n[t], lo = 10, hi = 0, sum = 0;
         unsigned seen = 0;
         for (int i = 0; i < n; i++) {
             int x = sol[g->thermo_cell[t][i]];
-            if (i && g->line_kind == LINE_THERMO && x <= sol[g->thermo_cell[t][i - 1]]) return false;
-            if (i && g->line_kind == LINE_WHISPER && abs(x - sol[g->thermo_cell[t][i - 1]]) < 5) return false;
-            if (g->line_kind == LINE_RENBAN && (seen >> x & 1)) return false;
+            if (i && g->line_kind == LINE_THERMO && x <= sol[g->thermo_cell[t][i - 1]]) {
+                return false;
+            }
+            if (i && g->line_kind == LINE_WHISPER && abs(x - sol[g->thermo_cell[t][i - 1]]) < 5) {
+                return false;
+            }
+            if (g->line_kind == LINE_RENBAN && (seen >> x & 1)) {
+                return false;
+            }
             seen |= 1u << x;
-            if (x < lo) lo = x;
-            if (x > hi) hi = x;
-            if (i) sum += x;
+            if (x < lo) {
+                lo = x;
+            }
+            if (x > hi) {
+                hi = x;
+            }
+            if (i) {
+                sum += x;
+            }
         }
-        if (g->line_kind == LINE_RENBAN && hi - lo != n - 1) return false;
-        if (g->line_kind == LINE_ARROW && sum != sol[g->thermo_cell[t][0]]) return false;
+        if (g->line_kind == LINE_RENBAN && hi - lo != n - 1) {
+            return false;
+        }
+        if (g->line_kind == LINE_ARROW && sum != sol[g->thermo_cell[t][0]]) {
+            return false;
+        }
     }
     for (int lu = 0; g->skyscraper && lu < 18; lu++) {   /* Skyscraper: the buildings seen */
         int seen = 0, top = 0;
         for (int k = 0; g->sky[lu] && k < 9; k++) {
             int x = sol[lu < 9 ? lu * 9 + k : k * 9 + lu - 9];
-            if (x > top) { top = x; seen++; }
+            if (x > top) {
+                top = x;
+                seen++;
+            }
         }
-        if (g->sky[lu] && seen != g->sky[lu]) return false;
+        if (g->sky[lu] && seen != g->sky[lu]) {
+            return false;
+        }
     }
     for (int k = 0; k < g->nlk; k++) {              /* Little Killer: the diagonals' sums */
         int sum = 0;
-        for (int j = 0; j < g->lk_n[k]; j++) sum += sol[g->lk_cell[k][j]];
-        if (sum != g->lk_sum[k]) return false;
+        for (int j = 0; j < g->lk_n[k]; j++) {
+            sum += sol[g->lk_cell[k][j]];
+        }
+        if (sum != g->lk_sum[k]) {
+            return false;
+        }
     }
     for (int q = 0; q < g->nquads; q++) {           /* Quadruple: every circle's digits are there */
         int empty;
-        if (sudoku_quad_missing(g, q, sol, &empty) != 0) return false;
+        if (sudoku_quad_missing(g, q, sol, &empty) != 0) {
+            return false;
+        }
     }
     for (int k = 0; k < g->ncages; k++) {           /* Killer: the cage sums */
         int sum = 0;
-        for (int j = 0; j < g->cage_n[k]; j++) sum += sol[g->cage_cell[k][j]];
-        if (sum != g->cage_sum[k]) return false;
+        for (int j = 0; j < g->cage_n[k]; j++) {
+            sum += sol[g->cage_cell[k][j]];
+        }
+        if (sum != g->cage_sum[k]) {
+            return false;
+        }
     }
     return true;
 }
@@ -123,8 +172,12 @@ static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const ui
 static bool givens_ok(const sudoku_geom_t *g, const uint8_t givens[81])
 {
     for (int c = 0; c < 81; c++) {
-        if (givens[c] > g->n) return false;
-        if (givens[c] && !g->used[c]) return false;
+        if (givens[c] > g->n) {
+            return false;
+        }
+        if (givens[c] && !g->used[c]) {
+            return false;
+        }
     }
     return true;
 }
@@ -152,24 +205,41 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     regions[0] = cages[0] = marks[0] = thermos[0] = 0;
     switch (g->variant) {
     case VAR_JIGSAW:
-        for (int i = 0; i < 81; i++) regions[i] = (char)('0' + g->region[i]);
+        for (int i = 0; i < 81; i++) {
+            regions[i] = (char)('0' + g->region[i]);
+        }
         regions[81] = 0;
         break;
-    case VAR_KILLER:   sudoku_cages_text(g, cages, len); break;
-    case VAR_QUAD:     sudoku_quads_text(g, cages, len); break;
+    case VAR_KILLER:
+        sudoku_cages_text(g, cages, len);
+        break;
+    case VAR_QUAD:
+        sudoku_quads_text(g, cages, len);
+        break;
     case VAR_EVENODD:
     case VAR_CONSEC:
     case VAR_KROPKI:
     case VAR_XV:
-    case VAR_GT:       sudoku_marks_text(g, marks, len); break;
-    case VAR_SANDWICH: sudoku_sandwich_text(g, marks, len); break;
-    case VAR_SKY:      sudoku_sky_text(g, marks, len); break;
-    case VAR_LK:       sudoku_lk_text(g, cages, len); break;
+    case VAR_GT:
+        sudoku_marks_text(g, marks, len);
+        break;
+    case VAR_SANDWICH:
+        sudoku_sandwich_text(g, marks, len);
+        break;
+    case VAR_SKY:
+        sudoku_sky_text(g, marks, len);
+        break;
+    case VAR_LK:
+        sudoku_lk_text(g, cages, len);
+        break;
     case VAR_THERMO:
     case VAR_ARROW:
     case VAR_RENBAN:
-    case VAR_WHISPER:  sudoku_thermos_text(g, thermos, len); break;
-    default: break;
+    case VAR_WHISPER:
+        sudoku_thermos_text(g, thermos, len);
+        break;
+    default:
+        break;
     }
 }
 
@@ -191,7 +261,9 @@ static void test_geometry(void)
         CHECKF(g->npeers[0] == G[i].peers0, "%s peers of cell 0: %d", variant_name(G[i].variant), g->npeers[0]);
         for (int k = 0; k < g->ncells; k++) {       /* boxes / regions: n cells each */
             int c = g->cells[k], cnt = 0;
-            for (int j = 0; j < g->ncells; j++) cnt += g->region[g->cells[j]] == g->region[c];
+            for (int j = 0; j < g->ncells; j++) {
+                cnt += g->region[g->cells[j]] == g->region[c];
+            }
             CHECK(cnt == g->n);
         }
     }
@@ -221,7 +293,9 @@ static void test_builtin(void)
         puzzle_load((uint16_t)id, g);
         int n = sudoku_count_solutions(G, g, 2);
         CHECKF(n == 1, "puzzle %d has %d solutions", id, n);
-        if (n != 1) continue;
+        if (n != 1) {
+            continue;
+        }
         unique++;
         CHECKF(sudoku_solve(G, g, sol) && solved_ok(G, g, sol), "puzzle %d: solve", id);
         CHECKF(sudoku_classic_unique(g), "puzzle %d: classic_unique", id);
@@ -243,7 +317,9 @@ static void test_generate(void)
             uint32_t seed = 1000u + (uint32_t)v * 17u + (uint32_t)lv;
             bool ok = sudoku_generate(v, (gen_level_t)lv, seed, g, &board, &got);
             CHECKF(ok, "%s %s: generated", variant_name(v), gen_level_name(lv));
-            if (!ok) continue;
+            if (!ok) {
+                continue;
+            }
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
             CHECKF(givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));
             CHECKF(sudoku_count_solutions(&board, g, 2) == 1, "%s %s: one solution", variant_name(v),
@@ -253,10 +329,12 @@ static void test_generate(void)
             int graded = sudoku_grade(&board, g);
             CHECKF(graded == (int)got, "%s %s: graded %d, generator said %d", variant_name(v),
                    gen_level_name(lv), graded, (int)got);
-            if (v == VAR_KIDS) CHECKF(got <= GEN_MEDIUM, "Kids 4x4 %s came out %s", gen_level_name(lv),
-                                      gen_level_name(got));
-            if (v != VAR_KIDS && lv < GEN_HARD) CHECKF((int)got == lv, "%s %s came out %s", variant_name(v),
-                                                       gen_level_name(lv), gen_level_name(got));
+            if (v == VAR_KIDS)
+                CHECKF(got <= GEN_MEDIUM, "Kids 4x4 %s came out %s", gen_level_name(lv),
+                       gen_level_name(got));
+            if (v != VAR_KIDS && lv < GEN_HARD)
+                CHECKF((int)got == lv, "%s %s came out %s", variant_name(v),
+                       gen_level_name(lv), gen_level_name(got));
         }
     }
 }
@@ -285,10 +363,12 @@ static void test_determinism(void)
         memcpy(key + 81, b1.region, 81);
         memcpy(key + 162, b1.cage_of, 81);
         uint32_t h = fnv1a(key, sizeof(key));
-        if (getenv("PRINT_GOLDEN")) printf("    golden %s %s seed %u: 0x%08x\n", variant_name(GOLD[i].variant),
-                                           gen_level_name(GOLD[i].level), GOLD[i].seed, h);
-        else CHECKF(h == GOLD[i].hash, "%s %s seed %u: 0x%08x, pinned 0x%08x", variant_name(GOLD[i].variant),
-                    gen_level_name(GOLD[i].level), GOLD[i].seed, h, GOLD[i].hash);
+        if (getenv("PRINT_GOLDEN"))
+            printf("    golden %s %s seed %u: 0x%08x\n", variant_name(GOLD[i].variant),
+                   gen_level_name(GOLD[i].level), GOLD[i].seed, h);
+        else
+            CHECKF(h == GOLD[i].hash, "%s %s seed %u: 0x%08x, pinned 0x%08x", variant_name(GOLD[i].variant),
+                   gen_level_name(GOLD[i].level), GOLD[i].seed, h, GOLD[i].hash);
     }
 }
 
@@ -302,12 +382,16 @@ static void test_texts_and_sdx(void)
     for (int v = 0; v < VAR_COUNT; v++) {
         uint8_t g[81];
         gen_level_t got;
-        if (!sudoku_generate(v, GEN_EASY, 777u + (uint32_t)v, g, &board, &got)) continue;
+        if (!sudoku_generate(v, GEN_EASY, 777u + (uint32_t)v, g, &board, &got)) {
+            continue;
+        }
         layout_texts(&board, regions, cages, marks, thermos, (int)sizeof(cages));
         for (int pack = 0; pack <= 1; pack++) {
             int len = sdx_format(v, got, g, regions, cages, marks, thermos, pack, line, sizeof(line));
             CHECKF(len > 0, "%s: sdx_format", variant_name(v));
-            if (len <= 0) continue;
+            if (len <= 0) {
+                continue;
+            }
             sdx_puzzle_t p;
             CHECKF(sdx_parse(line, &p), "%s: sdx_parse (packed %d)", variant_name(v), pack);
             CHECKF(p.variant == v && p.level == (int)got && !memcmp(p.givens, g, 81), "%s: fields back (packed %d)",
@@ -359,8 +443,12 @@ static void test_sdx_edges(void)
     /* long runs: an empty board, and one given at each end (runs of 26 and more) */
     for (int k = 0; k < 3; k++) {
         uint8_t g[81] = {0};
-        if (k >= 1) g[0] = 5;
-        if (k == 2) g[80] = 7;
+        if (k >= 1) {
+            g[0] = 5;
+        }
+        if (k == 2) {
+            g[80] = 7;
+        }
         char giv[82];
         CHECK(sdx_pack_givens(g, giv, sizeof(giv)) > 0);
         snprintf(buf, sizeof(buf), "0|-|%s", giv);
@@ -370,7 +458,9 @@ static void test_sdx_edges(void)
     srand(1);
     for (int t = 0; t < 2000; t++) {
         uint8_t g[81];
-        for (int i = 0; i < 81; i++) g[i] = (uint8_t)(rand() % 3 ? 0 : 1 + rand() % 9);
+        for (int i = 0; i < 81; i++) {
+            g[i] = (uint8_t)(rand() % 3 ? 0 : 1 + rand() % 9);
+        }
         char giv[82];
         int len = sdx_pack_givens(g, giv, sizeof(giv));
         CHECK(len > 0 && len <= 81);
@@ -441,7 +531,9 @@ int main(int argc, char **argv)
     sudoku_geom_init();
     int failed_tests = 0;
     for (size_t i = 0; i < sizeof(TESTS) / sizeof(TESTS[0]); i++) {
-        if (argc > 1 && !strstr(TESTS[i].name, argv[1])) continue;
+        if (argc > 1 && !strstr(TESTS[i].name, argv[1])) {
+            continue;
+        }
         int before = s_failed;
         clock_t t0 = clock();
         TESTS[i].fn();

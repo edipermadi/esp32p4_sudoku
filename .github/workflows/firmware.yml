@@ -2,7 +2,7 @@
 # run's artifact for 30 days). A pushed tag v* also makes a GitHub release with
 # them: git tag v1.0.0 && git push origin v1.0.0
 # A release tag (no '-', so not v1.1.0-rc1) also publishes the web flasher
-# (web/index.html + the firmware) and the documentation (README.md and docs/*.md
+# (web/index.html + the firmware) and the documentation (README.md and docs/, variants and internals too,
 # as HTML, under /docs/) on GitHub Pages. To publish it for an existing
 # tag: Actions > Firmware > Run workflow, and pick the tag.
 # Needs, once: Settings > Pages > Build and deployment > Source: GitHub Actions.

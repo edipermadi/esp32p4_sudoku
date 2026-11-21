@@ -106,11 +106,21 @@ void sudoku_ui_notice(const char *text, uint32_t ms)
 const char *sudoku_ui_io_busy(void)
 {
     const char *why = settings_card_busy();
-    if (why) return why;
-    if (replay_exporting()) return "an MP4 video is being exported";
-    if (screenshot_busy()) return "a screenshot is being saved";
-    if (files_busy()) return "Files is working on the card";
-    if (stats_db_busy()) return "sudoku.db is busy (saving, an import, an export or a backup)";
+    if (why) {
+        return why;
+    }
+    if (replay_exporting()) {
+        return "an MP4 video is being exported";
+    }
+    if (screenshot_busy()) {
+        return "a screenshot is being saved";
+    }
+    if (files_busy()) {
+        return "Files is working on the card";
+    }
+    if (stats_db_busy()) {
+        return "sudoku.db is busy (saving, an import, an export or a backup)";
+    }
     return NULL;
 }
 
@@ -121,7 +131,9 @@ static lv_obj_t *busy_ovl, *busy_text;
 void sudoku_ui_busy(const char *text)
 {
     if (!text) {
-        if (busy_ovl) lv_obj_delete(busy_ovl);
+        if (busy_ovl) {
+            lv_obj_delete(busy_ovl);
+        }
         busy_ovl = busy_text = NULL;
         return;
     }
@@ -159,7 +171,9 @@ static lv_obj_t *pin_pad(lv_obj_t *parent, lv_event_cb_t cb)
     lv_obj_remove_style_all(pad);
     lv_obj_set_size(pad, 3 * 110 + 2 * 12, 4 * 72 + 3 * 12);
     for (int i = 0; i < 12; i++) {
-        if (KEYS[i] == ' ') continue;
+        if (KEYS[i] == ' ') {
+            continue;
+        }
         char t[4] = {KEYS[i], 0};
         lv_obj_t *b = make_btn(pad, (i % 3) * 122, (i / 3) * 84, 110, 72, KEYS[i] == '<' ? LV_SYMBOL_BACKSPACE : t,
                                &lv_font_montserrat_28, cb, (void *)(intptr_t)KEYS[i]);
@@ -193,7 +207,9 @@ static void pin_dots_make(lv_obj_t *parent, lv_obj_t **dots)
 
 static void lock_tick(lv_timer_t *t)
 {
-    if (!lk_ovl) return;
+    if (!lk_ovl) {
+        return;
+    }
     time_t now = time(NULL);
     char hm[8] = "--:--", date[48] = "";
     if (CLOCK_VALID(now)) {
@@ -209,8 +225,9 @@ static void lock_tick(lv_timer_t *t)
         bool waiting = lk_wait_until && left > 0;
         lv_obj_set_state(lk_pad, LV_STATE_DISABLED, waiting);
         lv_obj_set_style_opa(lk_pad, waiting ? LV_OPA_40 : LV_OPA_COVER, 0);
-        if (waiting) lv_label_set_text_fmt(lk_hint, "Too many tries: wait %d s", (int)(left / 1000) + 1);
-        else if (lk_wait_until) {
+        if (waiting) {
+            lv_label_set_text_fmt(lk_hint, "Too many tries: wait %d s", (int)(left / 1000) + 1);
+        } else if (lk_wait_until) {
             lk_wait_until = 0;
             lv_label_set_text(lk_hint, "Enter the PIN");
         }
@@ -219,26 +236,36 @@ static void lock_tick(lv_timer_t *t)
 
 static void lock_open(void)   /* unlock: remove the lock screen */
 {
-    if (lk_timer) lv_timer_delete(lk_timer);
+    if (lk_timer) {
+        lv_timer_delete(lk_timer);
+    }
     lk_timer = NULL;
-    if (lk_ovl) lv_obj_delete_async(lk_ovl);
+    if (lk_ovl) {
+        lv_obj_delete_async(lk_ovl);
+    }
     lk_ovl = lk_box = lk_pad = NULL;
 }
 
 static void lock_key_cb(lv_event_t *e)
 {
     char k = (char)(intptr_t)lv_event_get_user_data(e);
-    if (lk_wait_until) return;
+    if (lk_wait_until) {
+        return;
+    }
     size_t n = strlen(lk_entry);
     if (k == '<') {
-        if (n) lk_entry[n - 1] = 0;
+        if (n) {
+            lk_entry[n - 1] = 0;
+        }
     } else if (n < 4) {
         lk_entry[n] = k;
         lk_entry[n + 1] = 0;
     }
     n = strlen(lk_entry);
     pin_dots(lk_dots, (int)n, C_ACCENT);
-    if (n < 4) return;
+    if (n < 4) {
+        return;
+    }
     if (!strcmp(lk_entry, store_lock_pin())) {      /* right: back to where it was */
         lk_tries = 0;
         lock_open();
@@ -250,7 +277,9 @@ static void lock_key_cb(lv_event_t *e)
     if (++lk_tries >= LOCK_TRIES) {
         lk_tries = 0;
         lk_wait_until = lv_tick_get() + LOCK_WAIT_MS;
-        if (!lk_wait_until) lk_wait_until = 1;
+        if (!lk_wait_until) {
+            lk_wait_until = 1;
+        }
     } else {
         lv_label_set_text_fmt(lk_hint, "Wrong PIN, try again (%d left)", LOCK_TRIES - lk_tries);
     }
@@ -290,8 +319,12 @@ static void lock_swipe_cb(lv_event_t *e)
 static void lock_show(bool force)
 {
     uint8_t mode = store_lock_mode();
-    if (mode == LOCK_OFF && force) mode = LOCK_SWIPE;
-    if (mode == LOCK_OFF || lk_ovl) return;
+    if (mode == LOCK_OFF && force) {
+        mode = LOCK_SWIPE;
+    }
+    if (mode == LOCK_OFF || lk_ovl) {
+        return;
+    }
     lk_ovl = lv_obj_create(lv_layer_sys());
     lv_obj_remove_style_all(lk_ovl);
     lv_obj_set_size(lk_ovl, LV_PCT(100), LV_PCT(100));
@@ -347,10 +380,16 @@ static bool ps_from_dd;                             /* opened by choosing PIN (c
 
 static void pin_setup_close(bool done)
 {
-    if (ps_ovl) lv_obj_delete_async(ps_ovl);
+    if (ps_ovl) {
+        lv_obj_delete_async(ps_ovl);
+    }
     ps_ovl = NULL;
-    if (!done && ps_from_dd && settings_lock_dd()) lv_dropdown_set_selected(settings_lock_dd(), store_lock_mode());
-    if (settings_pin_btn()) lv_obj_set_state(settings_pin_btn(), LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
+    if (!done && ps_from_dd && settings_lock_dd()) {
+        lv_dropdown_set_selected(settings_lock_dd(), store_lock_mode());
+    }
+    if (settings_pin_btn()) {
+        lv_obj_set_state(settings_pin_btn(), LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
+    }
 }
 
 static void pin_setup_key_cb(lv_event_t *e)
@@ -358,14 +397,18 @@ static void pin_setup_key_cb(lv_event_t *e)
     char k = (char)(intptr_t)lv_event_get_user_data(e);
     size_t n = strlen(ps_entry);
     if (k == '<') {
-        if (n) ps_entry[n - 1] = 0;
+        if (n) {
+            ps_entry[n - 1] = 0;
+        }
     } else if (n < 4) {
         ps_entry[n] = k;
         ps_entry[n + 1] = 0;
     }
     n = strlen(ps_entry);
     pin_dots(ps_dots, (int)n, C_ACCENT);
-    if (n < 4) return;
+    if (n < 4) {
+        return;
+    }
     if (!ps_first[0]) {                             /* once more, to be sure */
         snprintf(ps_first, sizeof(ps_first), "%s", ps_entry);
         ps_entry[0] = 0;
@@ -393,7 +436,9 @@ static void pin_setup_cancel_cb(lv_event_t *e)
 
 static void pin_setup_open(bool from_dd)
 {
-    if (ps_ovl) return;
+    if (ps_ovl) {
+        return;
+    }
     ps_from_dd = from_dd;
     ps_first[0] = ps_entry[0] = 0;
     ps_ovl = lv_obj_create(lv_layer_top());
@@ -438,7 +483,9 @@ static uint32_t sv_since, sv_moved;
 
 static void saver_clock_tick(lv_timer_t *t)
 {
-    if (!s_saver || !sv_clock) return;
+    if (!s_saver || !sv_clock) {
+        return;
+    }
     if (lv_tick_elaps(sv_since) >= SAVER_CLOCK_MIN * 60u * 1000u) {   /* enough: dark */
         lv_obj_delete(sv_clock);
         sv_clock = NULL;
@@ -469,7 +516,9 @@ static void saver_clock_tick(lv_timer_t *t)
 
 static void saver_clock_stop(void)
 {
-    if (sv_timer) lv_timer_delete(sv_timer);
+    if (sv_timer) {
+        lv_timer_delete(sv_timer);
+    }
     sv_timer = NULL;
     sv_clock = NULL;                                /* (a child of s_saver: goes with it) */
 }
@@ -552,7 +601,9 @@ int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why
     game_set_notes_mode(false);                           /* digits, not notes */
     int placed = 0;
     for (int k = 0; k < n && !game_solved(); k++) {
-        if (game_b()->val[cells[k]] == digits[k]) continue;   /* (a second tap would clear it) */
+        if (game_b()->val[cells[k]] == digits[k]) {
+            continue;    /* (a second tap would clear it) */
+        }
         game_set_sel(cells[k]);
         enter_digit(digits[k]);                     /* as from the pad */
         placed++;
@@ -577,7 +628,9 @@ void sudoku_ui_screen_name(char *buf, size_t n)
     lv_obj_t *act = lv_screen_active();
     const char *name = "other";
     for (size_t i = 0; i < sizeof(S) / sizeof(S[0]); i++) {
-        if (S[i].scr() && S[i].scr() == act) name = S[i].name;
+        if (S[i].scr() && S[i].scr() == act) {
+            name = S[i].name;
+        }
     }
     int len = snprintf(buf, n, "%s", name);
     if (act == screen_home() && home_menu()) {                /* which page of the menu: home1, home2 */
@@ -597,19 +650,30 @@ void sudoku_ui_screen_name(char *buf, size_t n)
 
 bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82])
 {
-    if (lv_screen_active() != screen_game() || !game_geo()) return false;
+    if (lv_screen_active() != screen_game() || !game_geo()) {
+        return false;
+    }
     memset(st, 0, sizeof(*st));
-    if (game_practice() >= 0) snprintf(st->name, sizeof(st->name), "Learn practice");
-    else if (game_id() != STORE_NO_GAME) puzzle_name(game_id(), st->name, sizeof(st->name));
+    if (game_practice() >= 0) {
+        snprintf(st->name, sizeof(st->name), "Learn practice");
+    } else if (game_id() != STORE_NO_GAME) {
+        puzzle_name(game_id(), st->name, sizeof(st->name));
+    }
     st->variant = game_var() >= 0 && game_var() < VAR_COUNT ? variant_name(game_var()) : "?";
     st->size = game_geo()->n;
     st->cells = game_geo()->ncells;
     for (int i = 0; i < 81; i++) {
         int v = game_b()->val[i];
-        if (!game_geo()->used[i]) board[i] = '#';
-        else if (!v) board[i] = '.';
-        else board[i] = game_given()[i] ? (char)('0' + v) : (char)('a' + v - 1);
-        if (game_geo()->used[i] && v) st->filled++;
+        if (!game_geo()->used[i]) {
+            board[i] = '#';
+        } else if (!v) {
+            board[i] = '.';
+        } else {
+            board[i] = game_given()[i] ? (char)('0' + v) : (char)('a' + v - 1);
+        }
+        if (game_geo()->used[i] && v) {
+            st->filled++;
+        }
     }
     board[81] = 0;
     st->solved = game_solved();
@@ -624,24 +688,32 @@ bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82])
 
 void sudoku_ui_screen_off(void)
 {
-    if (!s_saver) saver_sleep(false);
+    if (!s_saver) {
+        saver_sleep(false);
+    }
 }
 
 /* the lock button on Home: the screen off now, and locked when it wakes */
 void lock_now_cb(lv_event_t *e)
 {
-    if (!s_saver) saver_sleep(true);
+    if (!s_saver) {
+        saver_sleep(true);
+    }
 }
 
 static void saver_cb(lv_timer_t *t)
 {
     if (!s_saver && ui_sleep_min() &&
-        lv_display_get_inactive_time(NULL) >= (uint32_t)ui_sleep_min() * 60 * 1000) saver_sleep(false);
+            lv_display_get_inactive_time(NULL) >= (uint32_t)ui_sleep_min() * 60 * 1000) {
+        saver_sleep(false);
+    }
 }
 
 static void touch_sound_cb(lv_event_t *e)
 {
-    if (s_saver) return;   /* waking tap is silent */
+    if (s_saver) {
+        return;    /* waking tap is silent */
+    }
     sfx_play(SFX_TOUCH);
 }
 
@@ -649,13 +721,17 @@ esp_err_t sudoku_ui_start(void)
 {
     game_set_undo(heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM));
     game_set_redo(heap_caps_calloc(UNDO_MAX, sizeof(board_t), MALLOC_CAP_SPIRAM));
-    if (!game_undo() || !game_redo()) return ESP_ERR_NO_MEM;
+    if (!game_undo() || !game_redo()) {
+        return ESP_ERR_NO_MEM;
+    }
     sudoku_geom_init();                             /* before the generator task can use the tables */
     game_set_geo(sudoku_geom(VAR_CLASSIC));
     game_set_geo_buf(heap_caps_malloc(sizeof(*game_geo_buf()), MALLOC_CAP_SPIRAM));
     ui_set_gen_cache(heap_caps_calloc(GEN_CACHE, sizeof(gen_cache_t), MALLOC_CAP_SPIRAM));
     stats_set_view_p(heap_caps_calloc(1, sizeof(stats_view_t), MALLOC_CAP_SPIRAM));
-    if (!game_geo_buf() || !ui_gen_cache() || !stats_view_p()) return ESP_ERR_NO_MEM;
+    if (!game_geo_buf() || !ui_gen_cache() || !stats_view_p()) {
+        return ESP_ERR_NO_MEM;
+    }
 #if LV_USE_PERF_MONITOR
     lv_sysmon_hide_performance(NULL);
 #endif
@@ -683,7 +759,9 @@ esp_err_t sudoku_ui_start(void)
         stats_db_start();
         if (stats_db_wait_open(4000)) {
             store_prefs_t prefs;
-            if (stats_db_take_prefs(&prefs)) store_apply_prefs(&prefs);
+            if (stats_db_take_prefs(&prefs)) {
+                store_apply_prefs(&prefs);
+            }
             static uint16_t c_best[PUZZLE_COUNT];
             static uint8_t c_fewest[PUZZLE_COUNT], c_solves[PUZZLE_COUNT];
             if (stats_db_take_cache(c_best, c_fewest, c_solves)) {

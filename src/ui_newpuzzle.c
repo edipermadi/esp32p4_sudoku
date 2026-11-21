@@ -40,7 +40,8 @@ static void enter_cb(lv_event_t *e);
 static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
                                                      "Naked pair", "Hidden pair", "Naked triple", "X-Wing",
                                                      "Swordfish", "XY-Wing", "Killer cage", "Thermometer",
-                                                     "Sandwich clue", "Consecutive bars"};
+                                                     "Sandwich clue", "Consecutive bars"
+                                                    };
 
 /* ------------------------------------------------------------- new puzzle (generator) */
 /*
@@ -103,7 +104,9 @@ void sudoku_gen_yield(void)
 {
     static int64_t last;
     int64_t now = esp_timer_get_time();
-    if (now - last < 100000) return;
+    if (now - last < 100000) {
+        return;
+    }
     last = now;
     vTaskDelay(1);
 }
@@ -115,18 +118,33 @@ static void gen_task(void *arg)
     sudoku_generate(gen_var_req, (gen_level_t)gen_level_req, gen_seed ? gen_seed : esp_random(), gen_givens,
                     gen_board, &got);
     gen_cages[0] = 0;
-    if (gen_var_req == VAR_KILLER) sudoku_cages_text(gen_board, gen_cages, STATS_CAGES_LEN);
-    if (gen_var_req == VAR_QUAD) sudoku_quads_text(gen_board, gen_cages, STATS_CAGES_LEN);   /* (where cages go) */
+    if (gen_var_req == VAR_KILLER) {
+        sudoku_cages_text(gen_board, gen_cages, STATS_CAGES_LEN);
+    }
+    if (gen_var_req == VAR_QUAD) {
+        sudoku_quads_text(gen_board, gen_cages, STATS_CAGES_LEN);    /* (where cages go) */
+    }
     gen_marks[0] = 0;
-    if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC || gen_board->edge_kind)
+    if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC || gen_board->edge_kind) {
         sudoku_marks_text(gen_board, gen_marks, 82);
-    if (gen_var_req == VAR_SANDWICH) sudoku_sandwich_text(gen_board, gen_marks, 82);
-    if (gen_var_req == VAR_SKY) sudoku_sky_text(gen_board, gen_marks, 82);
-    if (gen_var_req == VAR_LK) sudoku_lk_text(gen_board, gen_cages, STATS_CAGES_LEN);   /* (where cages go) */
+    }
+    if (gen_var_req == VAR_SANDWICH) {
+        sudoku_sandwich_text(gen_board, gen_marks, 82);
+    }
+    if (gen_var_req == VAR_SKY) {
+        sudoku_sky_text(gen_board, gen_marks, 82);
+    }
+    if (gen_var_req == VAR_LK) {
+        sudoku_lk_text(gen_board, gen_cages, STATS_CAGES_LEN);    /* (where cages go) */
+    }
     gen_thermos[0] = 0;
-    if (gen_board->nthermos) sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);   /* (any lines) */
+    if (gen_board->nthermos) {
+        sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);    /* (any lines) */
+    }
     int clues = 0;
-    for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
+    for (int i = 0; i < 81; i++) {
+        clues += gen_givens[i] != 0;
+    }
     printf("generator: %s %s asked, %s made, %d clues, %u ms\n", variant_name(gen_var_req),
            gen_level_name(gen_level_req), gen_level_name(got), clues,
            (unsigned)(esp_timer_get_time() / 1000 - t0));
@@ -144,12 +162,16 @@ static void gen_poll_cb(lv_timer_t *t)
         float expect = GEN_EXPECT_MS[gen_var_req][lv] < 50 ? 50.0f : (float)GEN_EXPECT_MS[gen_var_req][lv];
         float ms = (float)(esp_timer_get_time() - gen_t0) / 1000.0f;
         int v = (int)(1000.0f * (1.0f - expf(-ms / expect)));
-        if (gen_bar) lv_bar_set_value(gen_bar, v > 970 ? 970 : v, LV_ANIM_OFF);
+        if (gen_bar) {
+            lv_bar_set_value(gen_bar, v > 970 ? 970 : v, LV_ANIM_OFF);
+        }
         return;
     }
     lv_timer_delete(gen_timer);
     gen_timer = NULL;
-    if (gen_box) lv_msgbox_close(gen_box);
+    if (gen_box) {
+        lv_msgbox_close(gen_box);
+    }
     gen_box = NULL;
     gen_bar = NULL;                                 /* (went with the box) */
     uint16_t id;
@@ -158,8 +180,8 @@ static void gen_poll_cb(lv_timer_t *t)
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,
-                                                  thermos, gen_day[0] ? gen_day : NULL)
-                               : -1;
+              thermos, gen_day[0] ? gen_day : NULL)
+              : -1;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
     } else {
@@ -182,7 +204,9 @@ static bool gen_bench;                              /* devctl genbench has the g
 /* devctl genbench: the generator to itself (false: New puzzle or Learn is using it) */
 bool gen_bench_begin(void)
 {
-    if (gen_timer || learn_timer || gen_bench) return false;
+    if (gen_timer || learn_timer || gen_bench) {
+        return false;
+    }
     gen_bench = true;
     return true;
 }
@@ -194,10 +218,18 @@ void gen_bench_end(void)
 
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
 {
-    if (gen_timer || learn_timer || gen_bench) return;   /* one at a time */
-    if (!gen_board && !(gen_board = heap_caps_malloc(sizeof(*gen_board), MALLOC_CAP_SPIRAM))) return;
-    if (!gen_cages && !(gen_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return;
-    if (!gen_thermos && !(gen_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) return;
+    if (gen_timer || learn_timer || gen_bench) {
+        return;    /* one at a time */
+    }
+    if (!gen_board && !(gen_board = heap_caps_malloc(sizeof(*gen_board), MALLOC_CAP_SPIRAM))) {
+        return;
+    }
+    if (!gen_cages && !(gen_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) {
+        return;
+    }
+    if (!gen_thermos && !(gen_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) {
+        return;
+    }
     gen_var_req = variant >= 0 && variant < VAR_COUNT ? variant : VAR_CLASSIC;
     gen_level_req = level;
     gen_seed = seed;
@@ -208,9 +240,11 @@ static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
         char kind[32];
         daily_kind_text(gen_var_req, level, kind, sizeof(kind));
         snprintf(text, sizeof(text), "Making today's %s puzzle...", kind);
+    } else if (gen_var_req == VAR_CLASSIC) {
+        snprintf(text, sizeof(text), "Making a new %s puzzle...", gen_level_name(level));
+    } else {
+        snprintf(text, sizeof(text), "Making a new %s %s puzzle...", gen_level_name(level), variant_name(gen_var_req));
     }
-    else if (gen_var_req == VAR_CLASSIC) snprintf(text, sizeof(text), "Making a new %s puzzle...", gen_level_name(level));
-    else snprintf(text, sizeof(text), "Making a new %s %s puzzle...", gen_level_name(level), variant_name(gen_var_req));
     gen_box = make_msgbox(LV_SYMBOL_REFRESH "  New puzzle", text);
     gen_bar = lv_bar_create(lv_msgbox_get_content(gen_box));   /* filled by gen_poll_cb */
     lv_obj_set_size(gen_bar, LV_PCT(100), 14);
@@ -252,12 +286,16 @@ static const uint8_t DAILY_VARIANT[7] = {VAR_CLASSIC, VAR_CLASSIC, VAR_MINI, VAR
 static bool daily_today_v(char day[12], int *level, int *variant)
 {
     time_t now = time(NULL);
-    if (!CLOCK_VALID(now)) return false;
+    if (!CLOCK_VALID(now)) {
+        return false;
+    }
     struct tm tm;
     localtime_r(&now, &tm);
     strftime(day, 12, "%Y-%m-%d", &tm);
     *level = DAILY_LEVEL[tm.tm_wday];
-    if (variant) *variant = DAILY_VARIANT[tm.tm_wday];
+    if (variant) {
+        *variant = DAILY_VARIANT[tm.tm_wday];
+    }
     return true;
 }
 
@@ -271,14 +309,19 @@ bool daily_today(char day[12], int *level, int *wday)
 void daily_kind_text(int variant, int level, char *buf, size_t n)
 {
     const char *lv = level >= 0 && level < GEN_LEVELS ? gen_level_name(level) : "";
-    if (variant > VAR_CLASSIC && variant < VAR_COUNT) snprintf(buf, n, "%s %s", variant_name(variant), lv);
-    else snprintf(buf, n, "%s", lv);
+    if (variant > VAR_CLASSIC && variant < VAR_COUNT) {
+        snprintf(buf, n, "%s %s", variant_name(variant), lv);
+    } else {
+        snprintf(buf, n, "%s", lv);
+    }
 }
 
 static uint32_t daily_seed(const char *day)          /* FNV-1a of the date */
 {
     uint32_t h = 2166136261u;
-    for (const char *p = day; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+    for (const char *p = day; *p; p++) {
+        h = (h ^ (uint8_t)*p) * 16777619u;
+    }
     return h ? h : 1;
 }
 
@@ -297,11 +340,17 @@ void daily_sub_text(char *buf, size_t n)
         snprintf(buf, n, "Today: %s", kind);
         return;
     }
-    if (id) gen_lookup((uint16_t)(PUZZLE_GEN_BASE + id), NULL, &variant, &level);   /* as it was made */
+    if (id) {
+        gen_lookup((uint16_t)(PUZZLE_GEN_BASE + id), NULL, &variant, &level);    /* as it was made */
+    }
     daily_kind_text(variant, level, kind, sizeof(kind));
-    if (solved) snprintf(buf, n, LV_SYMBOL_OK "  Solved today  -  streak %d", streak);
-    else if (streak) snprintf(buf, n, "Today: %s  -  streak %d", kind, streak);
-    else snprintf(buf, n, "Today: %s", kind);
+    if (solved) {
+        snprintf(buf, n, LV_SYMBOL_OK "  Solved today  -  streak %d", streak);
+    } else if (streak) {
+        snprintf(buf, n, "Today: %s  -  streak %d", kind, streak);
+    } else {
+        snprintf(buf, n, "Today: %s", kind);
+    }
 }
 
 void daily_cb(lv_event_t *e)
@@ -316,11 +365,15 @@ void daily_cb(lv_event_t *e)
     stats_db_daily_status(day, &id, &solved, &streak);
     if (!id) {                                        /* RAM-only (no card): look in the cache */
         for (int i = 0; i < GEN_CACHE; i++) {
-            if (ui_gen_cache()[i].id && !strcmp(ui_gen_cache()[i].day, day)) id = ui_gen_cache()[i].id - PUZZLE_GEN_BASE;
+            if (ui_gen_cache()[i].id && !strcmp(ui_gen_cache()[i].day, day)) {
+                id = ui_gen_cache()[i].id - PUZZLE_GEN_BASE;
+            }
         }
     }
     if (id) {
-        if (solved) sudoku_ui_notice("You've solved today's puzzle; playing it again doesn't change the streak.", 3500);
+        if (solved) {
+            sudoku_ui_notice("You've solved today's puzzle; playing it again doesn't change the streak.", 3500);
+        }
         open_puzzle((uint16_t)(PUZZLE_GEN_BASE + id));
         return;
     }
@@ -338,7 +391,8 @@ static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, 
                                                  VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK,
                                                  VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
                                                  VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
-                                                 VAR_SKY, VAR_LK};
+                                                 VAR_SKY, VAR_LK
+                                                };
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -372,13 +426,17 @@ static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /* the level buttons (Kids 4x
 static void gen_levels_update(void)
 {
     for (int lv = 0; lv < GEN_LEVELS; lv++) {
-        if (gen_lvl_btn[lv]) lv_obj_set_state(gen_lvl_btn[lv], LV_STATE_DISABLED, gen_pick_var == VAR_KIDS && lv >= GEN_HARD);
+        if (gen_lvl_btn[lv]) {
+            lv_obj_set_state(gen_lvl_btn[lv], LV_STATE_DISABLED, gen_pick_var == VAR_KIDS && lv >= GEN_HARD);
+        }
     }
 }
 
 static void gen_pick_close(void)
 {
-    if (gen_pick) lv_msgbox_close_async(gen_pick);
+    if (gen_pick) {
+        lv_msgbox_close_async(gen_pick);
+    }
     gen_pick = NULL;
 }
 
@@ -393,7 +451,9 @@ static void gen_var_cb(lv_event_t *e)
 {
     lv_obj_t *bm = lv_event_get_target_obj(e);
     uint32_t sel = lv_buttonmatrix_get_selected_button(bm);
-    if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= VAR_COUNT) return;
+    if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= VAR_COUNT) {
+        return;
+    }
     gen_pick_var = GEN_VAR_ORDER[sel];
     lv_label_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
     gen_levels_update();
@@ -407,7 +467,9 @@ static void gen_cancel_cb(lv_event_t *e)
 /* a tap on the dimmed background (not on the dialog) closes it too */
 static void gen_backdrop_cb(lv_event_t *e)
 {
-    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) gen_pick_close();
+    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) {
+        gen_pick_close();
+    }
 }
 
 static void new_puzzle_cb(lv_event_t *e)
@@ -426,13 +488,16 @@ static void new_puzzle_cb(lv_event_t *e)
                                           "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", "\n",
                                           "Kropki", "XV", "Greater-Than", "Quadruple", "\n",
                                           "Arrow", "Renban", "Whispers", "\n",
-                                          "Skyscraper", "Little Killer", ""};
+                                          "Skyscraper", "Little Killer", ""
+                                         };
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
     lv_buttonmatrix_set_one_checked(vm, true);
     for (uint32_t i = 0; i < VAR_COUNT; i++) {
-        if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+        if (GEN_VAR_ORDER[i] == gen_pick_var) {
+            lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+        }
     }
     lv_obj_set_size(vm, LV_PCT(100), 344);          /* seven rows */
     lv_obj_set_style_pad_row(vm, 8, 0);
@@ -494,7 +559,9 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_set_height(head, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_ver(head, 6, 0);
     lv_obj_t *backdrop = lv_obj_get_parent(m);         /* the modal's dimmed layer */
-    if (backdrop && backdrop != lv_layer_top()) lv_obj_add_event_cb(backdrop, gen_backdrop_cb, LV_EVENT_CLICKED, NULL);
+    if (backdrop && backdrop != lv_layer_top()) {
+        lv_obj_add_event_cb(backdrop, gen_backdrop_cb, LV_EVENT_CLICKED, NULL);
+    }
 }
 
 /* ------------------------------------------------------------- learn (practice a technique) */
@@ -526,10 +593,14 @@ static const char *const LEARN_DESC[LEARN_COUNT] = {
 static int learn_variant(int target)
 {
     switch (target) {
-    case LEARN_CAGE:     return VAR_KILLER;
-    case LEARN_THERMO:   return VAR_THERMO;
-    case LEARN_SANDWICH: return VAR_SANDWICH;
-    case LEARN_CONSEC:   return VAR_CONSEC;
+    case LEARN_CAGE:
+        return VAR_KILLER;
+    case LEARN_THERMO:
+        return VAR_THERMO;
+    case LEARN_SANDWICH:
+        return VAR_SANDWICH;
+    case LEARN_CONSEC:
+        return VAR_CONSEC;
     }
     return -1;
 }
@@ -537,10 +608,14 @@ static int learn_variant(int target)
 static int learn_variant_tech(int target)
 {
     switch (target) {
-    case LEARN_CAGE:     return TECH_CAGE;
-    case LEARN_THERMO:   return TECH_THERMO;
-    case LEARN_SANDWICH: return TECH_SANDWICH;
-    case LEARN_CONSEC:   return TECH_CONSEC;
+    case LEARN_CAGE:
+        return TECH_CAGE;
+    case LEARN_THERMO:
+        return TECH_THERMO;
+    case LEARN_SANDWICH:
+        return TECH_SANDWICH;
+    case LEARN_CONSEC:
+        return TECH_CONSEC;
     }
     return TECH_NONE;
 }
@@ -550,10 +625,14 @@ static int learn_variant_tech(int target)
 static int learn_tech(int target)
 {
     switch (target) {
-    case LEARN_NAKED_TRIPLE: return TECH_NAKED_TRIPLE;
-    case LEARN_X_WING:       return TECH_X_WING;
-    case LEARN_SWORDFISH:    return TECH_SWORDFISH;
-    case LEARN_XY_WING:      return TECH_XY_WING;
+    case LEARN_NAKED_TRIPLE:
+        return TECH_NAKED_TRIPLE;
+    case LEARN_X_WING:
+        return TECH_X_WING;
+    case LEARN_SWORDFISH:
+        return TECH_SWORDFISH;
+    case LEARN_XY_WING:
+        return TECH_XY_WING;
     }
     return TECH_NONE;
 }
@@ -569,12 +648,18 @@ static sudoku_step_t learn_step;
 static bool learn_match(int target, const sudoku_step_t *st)
 {
     switch (target) {
-    case LEARN_HIDDEN: return st->kind == STEP_HIDDEN_SINGLE && !st->tech.kind;
-    case LEARN_NAKED: return st->kind == STEP_NAKED_SINGLE && !st->tech.kind;
-    case LEARN_POINTING: return st->tech.kind == TECH_POINTING;
-    case LEARN_CLAIMING: return st->tech.kind == TECH_CLAIMING;
-    case LEARN_NAKED_PAIR: return st->tech.kind == TECH_NAKED_PAIR;
-    case LEARN_HIDDEN_PAIR: return st->tech.kind == TECH_HIDDEN_PAIR;
+    case LEARN_HIDDEN:
+        return st->kind == STEP_HIDDEN_SINGLE && !st->tech.kind;
+    case LEARN_NAKED:
+        return st->kind == STEP_NAKED_SINGLE && !st->tech.kind;
+    case LEARN_POINTING:
+        return st->tech.kind == TECH_POINTING;
+    case LEARN_CLAIMING:
+        return st->tech.kind == TECH_CLAIMING;
+    case LEARN_NAKED_PAIR:
+        return st->tech.kind == TECH_NAKED_PAIR;
+    case LEARN_HIDDEN_PAIR:
+        return st->tech.kind == TECH_HIDDEN_PAIR;
     }
     return false;
 }
@@ -585,9 +670,13 @@ static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudo
 {
     const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
     for (int c = 0; c < 81; c++) {
-        if (vals[c]) continue;
+        if (vals[c]) {
+            continue;
+        }
         uint16_t m = 0x3FE;
-        for (int p = 0; p < G->npeers[c]; p++) m &= (uint16_t)~(1u << vals[G->peers[c][p]]);
+        for (int p = 0; p < G->npeers[c]; p++) {
+            m &= (uint16_t)~(1u << vals[G->peers[c][p]]);
+        }
         if (__builtin_popcount(m) == 1 && __builtin_ctz(m) == sol[c]) {
             memset(st, 0, sizeof(*st));
             st->kind = STEP_NAKED_SINGLE;
@@ -612,20 +701,34 @@ static int learn_variant_find(int target)
     const int var = learn_variant(target), tech = learn_variant_tech(target);
     for (int tries = 0; tries < 6; tries++) {      /* most puzzles have one early; a few seconds each at most */
         gen_level_t got;
-        if (!sudoku_generate(var, GEN_MEDIUM, esp_random(), learn_givens, learn_board, &got)) continue;
-        if (!sudoku_solve(learn_board, learn_givens, sol)) continue;
+        if (!sudoku_generate(var, GEN_MEDIUM, esp_random(), learn_givens, learn_board, &got)) {
+            continue;
+        }
+        if (!sudoku_solve(learn_board, learn_givens, sol)) {
+            continue;
+        }
         memcpy(vals, learn_givens, 81);
         for (int step = 0; step < 81; step++) {
             sudoku_step_t st;
-            if (!sudoku_next_step(learn_board, vals, sol, &st) || st.cell < 0) break;
+            if (!sudoku_next_step(learn_board, vals, sol, &st) || st.cell < 0) {
+                break;
+            }
             if (st.tech.kind == tech) {
                 memcpy(learn_vals, vals, 81);
                 learn_step = st;
                 learn_cages[0] = learn_marks[0] = learn_thermos[0] = 0;
-                if (var == VAR_KILLER) sudoku_cages_text(learn_board, learn_cages, STATS_CAGES_LEN);
-                if (var == VAR_CONSEC) sudoku_marks_text(learn_board, learn_marks, sizeof(learn_marks));
-                if (var == VAR_SANDWICH) sudoku_sandwich_text(learn_board, learn_marks, sizeof(learn_marks));
-                if (var == VAR_THERMO) sudoku_thermos_text(learn_board, learn_thermos, STATS_THERMOS_LEN);
+                if (var == VAR_KILLER) {
+                    sudoku_cages_text(learn_board, learn_cages, STATS_CAGES_LEN);
+                }
+                if (var == VAR_CONSEC) {
+                    sudoku_marks_text(learn_board, learn_marks, sizeof(learn_marks));
+                }
+                if (var == VAR_SANDWICH) {
+                    sudoku_sandwich_text(learn_board, learn_marks, sizeof(learn_marks));
+                }
+                if (var == VAR_THERMO) {
+                    sudoku_thermos_text(learn_board, learn_thermos, STATS_THERMOS_LEN);
+                }
                 return 1;
             }
             vals[st.cell] = (uint8_t)st.digit;      /* on to the next step */
@@ -649,19 +752,27 @@ static void learn_task(void *arg)
     int found = 0;
     for (int tries = 0; tries < 2000 && !found; tries++) {     /* (pairs are the rarest: ~200 puzzles) */
         int c = (int)((r + (uint32_t)tries * 7) % PUZZLE_COLLECTION_COUNT);
-        if (target >= LEARN_POINTING && strstr(puzzle_collection(c)->name, "Easy")) continue;
+        if (target >= LEARN_POINTING && strstr(puzzle_collection(c)->name, "Easy")) {
+            continue;
+        }
         uint16_t id = (uint16_t)(puzzle_collection(c)->first + (esp_random() % puzzle_collection(c)->count));
         puzzle_load(id, vals);
-        if (!sudoku_solve(G, vals, sol)) continue;
+        if (!sudoku_solve(G, vals, sol)) {
+            continue;
+        }
         sudoku_step_t st, w;
         const int tech = learn_tech(target);
         for (int step = 0; step < 81 && !found; step++) {
-            if (target == LEARN_NAKED && step >= 8 && learn_find_naked(vals, sol, &st)) found = 1;
-            else if (!sudoku_next_step(G, vals, sol, &st) || st.cell < 0) break;
-            else if (tech && (st.tech.kind || st.kind == STEP_NONE) && sudoku_step_with(G, vals, sol, tech, &w)) {
+            if (target == LEARN_NAKED && step >= 8 && learn_find_naked(vals, sol, &st)) {
+                found = 1;
+            } else if (!sudoku_next_step(G, vals, sol, &st) || st.cell < 0) {
+                break;
+            } else if (tech && (st.tech.kind || st.kind == STEP_NONE) && sudoku_step_with(G, vals, sol, tech, &w)) {
                 st = w;                             /* stuck on singles, and this technique opens one */
                 found = 1;
-            } else if (!tech && learn_match(target, &st)) found = 1;
+            } else if (!tech && learn_match(target, &st)) {
+                found = 1;
+            }
             if (found) {
                 learn_id = id;
                 memcpy(learn_vals, vals, 81);
@@ -677,10 +788,14 @@ static void learn_task(void *arg)
 
 static void learn_poll_cb(lv_timer_t *t)
 {
-    if (learn_state == 0) return;
+    if (learn_state == 0) {
+        return;
+    }
     lv_timer_delete(learn_timer);
     learn_timer = NULL;
-    if (learn_wait) lv_msgbox_close(learn_wait);
+    if (learn_wait) {
+        lv_msgbox_close(learn_wait);
+    }
     learn_wait = NULL;
     if (learn_state != 1) {
         sudoku_ui_notice("Couldn't find an example just now: try again.", 3000);
@@ -700,7 +815,9 @@ static void learn_poll_cb(lv_timer_t *t)
     uint8_t given[81];
     puzzle_get(learn_id, given);
     for (int i = 0; i < 81; i++) {
-        if (!given[i]) game_put_value(i, learn_vals[i]);
+        if (!given[i]) {
+            game_put_value(i, learn_vals[i]);
+        }
     }
     game_set_undo_len(0);
     game_set_undo_head(0);
@@ -715,15 +832,27 @@ static void learn_poll_cb(lv_timer_t *t)
 static void learn_pick_cb(lv_event_t *e)
 {
     int target = (int)(intptr_t)lv_event_get_user_data(e);
-    if (learn_box) lv_msgbox_close_async(learn_box);
+    if (learn_box) {
+        lv_msgbox_close_async(learn_box);
+    }
     learn_box = NULL;
-    if (learn_timer || gen_bench) return;            /* (genbench: the generator is busy) */
+    if (learn_timer || gen_bench) {
+        return;    /* (genbench: the generator is busy) */
+    }
     char text[120];
     if (learn_variant(target) >= 0) {
-        if (gen_timer) return;                      /* New puzzle is using the generator (one at a time) */
-        if (!learn_board && !(learn_board = heap_caps_malloc(sizeof(*learn_board), MALLOC_CAP_SPIRAM))) return;
-        if (!learn_cages && !(learn_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return;
-        if (!learn_thermos && !(learn_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) return;
+        if (gen_timer) {
+            return;    /* New puzzle is using the generator (one at a time) */
+        }
+        if (!learn_board && !(learn_board = heap_caps_malloc(sizeof(*learn_board), MALLOC_CAP_SPIRAM))) {
+            return;
+        }
+        if (!learn_cages && !(learn_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) {
+            return;
+        }
+        if (!learn_thermos && !(learn_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) {
+            return;
+        }
         snprintf(text, sizeof(text), "Making a %s puzzle where the next step uses its rule...",
                  variant_name(learn_variant(target)));
     } else {
@@ -743,7 +872,9 @@ static void learn_pick_cb(lv_event_t *e)
 
 static void learn_close_cb(lv_event_t *e)
 {
-    if (learn_box) lv_msgbox_close_async(learn_box);
+    if (learn_box) {
+        lv_msgbox_close_async(learn_box);
+    }
     learn_box = NULL;
 }
 
@@ -799,11 +930,15 @@ static void ed_refresh(void)
     int filled = 0, bad = 0;
     for (int i = 0; i < 81; i++) {
         bool clash = false;
-        for (int p = 0; ed_val[i] && p < G->npeers[i]; p++) clash |= ed_val[G->peers[i][p]] == ed_val[i];
+        for (int p = 0; ed_val[i] && p < G->npeers[i]; p++) {
+            clash |= ed_val[G->peers[i][p]] == ed_val[i];
+        }
         filled += ed_val[i] != 0;
         bad += clash;
         lv_color_t bg = i == ed_sel ? C_CELL_SEL : (ed_sel >= 0 && sudoku_geom_peer(G, i, ed_sel) ? C_CELL_PEER : C_CELL);
-        if (clash) bg = C_CELL_BAD;
+        if (clash) {
+            bg = C_CELL_BAD;
+        }
         lv_obj_set_style_bg_color(ed_cells[i], bg, 0);
         lv_obj_set_style_text_color(ed_lbl[i], clash ? C_RED : C_TEXT, 0);
         lv_label_set_text_static(ed_lbl[i], ui_digits()[ed_val[i]]);
@@ -826,16 +961,22 @@ static void ed_cell_cb(lv_event_t *e)
 static void ed_digit_cb(lv_event_t *e)
 {
     int d = (int)(intptr_t)lv_event_get_user_data(e);
-    if (ed_sel < 0) return;
+    if (ed_sel < 0) {
+        return;
+    }
     ed_val[ed_sel] = ed_val[ed_sel] == d ? 0 : (uint8_t)d;   /* the same digit again clears it */
-    if (ed_val[ed_sel] && ed_sel < 80) ed_sel++;     /* on to the next cell, as when typing */
+    if (ed_val[ed_sel] && ed_sel < 80) {
+        ed_sel++;    /* on to the next cell, as when typing */
+    }
     ed_refresh();
 }
 
 static void ed_close(void)
 {
     lv_screen_load(screen_list());
-    if (scr_edit) lv_obj_delete_async(scr_edit);
+    if (scr_edit) {
+        lv_obj_delete_async(scr_edit);
+    }
     scr_edit = NULL;
 }
 
@@ -846,7 +987,9 @@ static void ed_cancel_cb(lv_event_t *e)
 
 static void ed_erase_cb(lv_event_t *e)
 {
-    if (ed_sel >= 0) ed_val[ed_sel] = 0;
+    if (ed_sel >= 0) {
+        ed_val[ed_sel] = 0;
+    }
     ed_refresh();
 }
 
@@ -876,13 +1019,17 @@ static void ed_check_task(void *arg)
 
 static void ed_check_done(lv_timer_t *t)
 {
-    if (ed_check_state != 2 || eTaskGetState(ed_check_handle) != eSuspended) return;
+    if (ed_check_state != 2 || eTaskGetState(ed_check_handle) != eSuspended) {
+        return;
+    }
     vTaskDeleteWithCaps(ed_check_handle);
     ed_check_handle = NULL;
     lv_timer_delete(ed_check_timer);
     ed_check_timer = NULL;
     ed_check_state = 0;
-    if (!scr_edit) return;                          /* (cancelled meanwhile) */
+    if (!scr_edit) {
+        return;    /* (cancelled meanwhile) */
+    }
     ed_refresh();
     if (ed_check_n == 0) {
         sudoku_ui_notice("This puzzle has no solution: check the digits (red ones break a rule).", 4000);
@@ -893,7 +1040,9 @@ static void ed_check_done(lv_timer_t *t)
         return;
     }
     int level = ed_check_level;
-    if (level < 0 || level >= GEN_LEVELS) level = GEN_EXPERT;
+    if (level < 0 || level >= GEN_LEVELS) {
+        level = GEN_EXPERT;
+    }
     int number = 0;
     int gid = stats_db_ready() ? stats_db_gen_add_own(ed_check_cells, level, &number) : -1;
     uint16_t id;
@@ -909,16 +1058,22 @@ static void ed_check_done(lv_timer_t *t)
     snprintf(msg, sizeof(msg), "Saved as %s #%d: one solution, rated %s.", STATS_OWN_SOURCE, number,
              gen_level_name(level));
     sudoku_ui_notice(msg, 3500);
-    if (scr_edit) lv_obj_delete_async(scr_edit);
+    if (scr_edit) {
+        lv_obj_delete_async(scr_edit);
+    }
     scr_edit = NULL;
     open_puzzle(id);
 }
 
 static void ed_play_cb(lv_event_t *e)
 {
-    if (ed_check_state) return;
+    if (ed_check_state) {
+        return;
+    }
     int filled = 0;
-    for (int i = 0; i < 81; i++) filled += ed_val[i] != 0;
+    for (int i = 0; i < 81; i++) {
+        filled += ed_val[i] != 0;
+    }
     if (filled < 17) {                              /* no Sudoku with fewer has just one solution */
         sudoku_ui_notice("A puzzle needs at least 17 digits to have just one solution.", 4000);
         return;
@@ -1003,8 +1158,10 @@ void new_menu_cb(lv_event_t *e)
         {LV_SYMBOL_PLUS, "New puzzle", new_puzzle_cb},
         {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
         {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
-        {list_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, list_starred() ? "All puzzles" : "Starred puzzles",
-         list_star_cb},                                      /* the starred ones in the right pane, or back */
+        {
+            list_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, list_starred() ? "All puzzles" : "Starred puzzles",
+            list_star_cb
+        },                                      /* the starred ones in the right pane, or back */
     };
     ctx_menu_toggle(list_new_btn(), ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));
 }

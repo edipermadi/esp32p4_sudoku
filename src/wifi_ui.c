@@ -322,11 +322,20 @@ static void show_status(const wifi_status_t *st)
     char main_buf[64];
     lv_color_t icon_c = C_MUTED;
     switch (st->state) {
-    case WIFI_ST_OFF:        main_txt = "Wi-Fi is off"; break;
-    case WIFI_ST_STARTING:   main_txt = "Starting Wi-Fi..."; break;
-    case WIFI_ST_NO_RADIO:   main_txt = st->fail_reason; icon_c = C_ORANGE; break;
-    case WIFI_ST_IDLE:       main_txt = "Not connected";
-                             snprintf(sub, sizeof(sub), "Pick a network below"); break;
+    case WIFI_ST_OFF:
+        main_txt = "Wi-Fi is off";
+        break;
+    case WIFI_ST_STARTING:
+        main_txt = "Starting Wi-Fi...";
+        break;
+    case WIFI_ST_NO_RADIO:
+        main_txt = st->fail_reason;
+        icon_c = C_ORANGE;
+        break;
+    case WIFI_ST_IDLE:
+        main_txt = "Not connected";
+        snprintf(sub, sizeof(sub), "Pick a network below");
+        break;
     case WIFI_ST_CONNECTING:
         snprintf(main_buf, sizeof(main_buf), "Connecting to %s...", st->ssid);
         main_txt = main_buf;
@@ -369,7 +378,7 @@ static void tick(lv_timer_t *t)
     wifi_mgr_get_status(&st);
     show_status(&st);
     if (st.scan_serial != s_shown_scan || st.state != s_shown_state ||
-        strcmp(st.ssid, s_shown_ssid) != 0) {
+            strcmp(st.ssid, s_shown_ssid) != 0) {
         s_shown_scan = st.scan_serial;
         s_shown_state = st.state;
         strlcpy(s_shown_ssid, st.ssid, sizeof(s_shown_ssid));
@@ -508,13 +517,22 @@ const char *wifi_ui_summary(void)
     wifi_status_t st;
     wifi_mgr_get_status(&st);
     switch (st.state) {
-    case WIFI_ST_OFF:        return "Off";
-    case WIFI_ST_STARTING:   return "Starting...";
-    case WIFI_ST_NO_RADIO:   return "Unavailable";
-    case WIFI_ST_IDLE:       return "Not connected";
-    case WIFI_ST_CONNECTING: snprintf(s_summary, sizeof(s_summary), "Connecting..."); return s_summary;
-    case WIFI_ST_CONNECTED:  snprintf(s_summary, sizeof(s_summary), "%s", st.ssid); return s_summary;
+    case WIFI_ST_OFF:
+        return "Off";
+    case WIFI_ST_STARTING:
+        return "Starting...";
+    case WIFI_ST_NO_RADIO:
+        return "Unavailable";
+    case WIFI_ST_IDLE:
+        return "Not connected";
+    case WIFI_ST_CONNECTING:
+        snprintf(s_summary, sizeof(s_summary), "Connecting...");
+        return s_summary;
+    case WIFI_ST_CONNECTED:
+        snprintf(s_summary, sizeof(s_summary), "%s", st.ssid);
+        return s_summary;
     case WIFI_ST_FAILED:
-    default:                 return "Not connected";
+    default:
+        return "Not connected";
     }
 }
