@@ -158,10 +158,47 @@ int compute_conflicts(void)
             for (int k = a; k <= b; k++) if (g_b.val[cells[k]]) g_conflict[cells[k]] = true;
         }
     }
-    for (int t = 0; t < g_geo->nthermos; t++) {     /* Thermo: two digits along it that don't rise */
-        for (int i = 1; i < g_geo->thermo_n[t]; i++) {
-            int a = g_geo->thermo_cell[t][i - 1], b = g_geo->thermo_cell[t][i];
-            if (g_b.val[a] && g_b.val[b] && g_b.val[b] <= g_b.val[a]) g_conflict[a] = g_conflict[b] = true;
+    for (int t = 0; t < g_geo->nthermos; t++) {     /* the lines: digits that break theirs */
+        int n = g_geo->thermo_n[t];
+        const uint8_t *cell = g_geo->thermo_cell[t];
+        switch (g_geo->line_kind) {
+        case LINE_THERMO:                           /* two neighbours along it that don't rise */
+        case LINE_WHISPER:                          /* two neighbours less than 5 apart */
+            for (int i = 1; i < n; i++) {
+                int a = cell[i - 1], b = cell[i];
+                if (!g_b.val[a] || !g_b.val[b]) continue;
+                bool bad = g_geo->line_kind == LINE_THERMO ? g_b.val[b] <= g_b.val[a] : abs(g_b.val[a] - g_b.val[b]) < 5;
+                if (bad) g_conflict[a] = g_conflict[b] = true;
+            }
+            break;
+        case LINE_RENBAN: {                         /* a repeat, or digits too far apart for the line */
+            int lo = 10, hi = 0;
+            unsigned seen = 0, twice = 0;
+            for (int i = 0; i < n; i++) {
+                int x = g_b.val[cell[i]];
+                if (!x) continue;
+                if (seen >> x & 1) twice |= 1u << x;
+                seen |= 1u << x;
+                if (x < lo) lo = x;
+                if (x > hi) hi = x;
+            }
+            for (int i = 0; i < n; i++) {
+                int x = g_b.val[cell[i]];
+                if (x && (hi - lo > n - 1 || (twice >> x & 1))) g_conflict[cell[i]] = true;
+            }
+            break;
+        }
+        case LINE_ARROW: {                          /* the shaft over its circle, or (all filled) not equal */
+            int sum = 0, empty = 0, circle = g_b.val[cell[0]];
+            for (int i = 1; i < n; i++) {
+                sum += g_b.val[cell[i]];
+                empty += !g_b.val[cell[i]];
+            }
+            if (circle && (sum + empty > circle || (!empty && sum != circle))) {
+                for (int i = 0; i < n; i++) if (g_b.val[cell[i]]) g_conflict[cell[i]] = true;
+            }
+            break;
+        }
         }
     }
     for (int i = 0; g_geo->edge_kind && i < 81; i++) {   /* Kropki, XV, Greater-Than: two digits the mark (or none) rules out */

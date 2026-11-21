@@ -222,6 +222,7 @@ typedef struct {
     uint8_t edge_kind;                  /* Kropki, XV, Greater-Than: EDGE_*, with edges */
     const uint8_t *edges;               /* per mark: a cell and its MARK_* on the line to its right; ends 0xFF */
     const char *quad;                   /* Quadruple: a circle's digits at the picture's centre, may be NULL */
+    uint8_t line_kind;                  /* the kind of the thermo line: LINE_* (Arrow, Renban, Whispers) */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound */
@@ -534,6 +535,7 @@ const char *settings_card_busy(void);
 /* Kropki / XV / Greater-Than marks and Quadruple circles (board and rules card) */
 void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy);
 void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n);
+void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, int cs);
 /* ui_newpuzzle.c */
 const char *const *learn_names(void);
 lv_obj_t *screen_edit(void);

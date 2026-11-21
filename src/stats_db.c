@@ -356,11 +356,12 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                   "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo",
                                                   "Sandwich", "Mini 6x6", "Kids 4x4", "Anti-King",
                                                   "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki", "XV",
-                                                  "Greater-Than", "Quadruple"};
+                                                  "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers"};
 static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
                                                    "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini",
                                                    "Kids", "Anti-King", "Non-Consecutive", "Disjoint", "Asterisk",
-                                                   "Kropki", "XV", "Greater-Than", "Quadruple"};
+                                                   "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
+                                                   "German Whispers"};
 const char *stats_kind_name(int kind) { return STATS_KIND_NAMES[kind]; }
 const char *stats_kind_prefix(int kind) { return STATS_KIND_PREFIX[kind]; }
 
@@ -387,6 +388,9 @@ int stats_kind_of(int variant, bool daily)
     case VAR_XV: return KIND_XV;
     case VAR_GT: return KIND_GT;
     case VAR_QUAD: return KIND_QUAD;
+    case VAR_ARROW: return KIND_ARROW;
+    case VAR_RENBAN: return KIND_RENBAN;
+    case VAR_WHISPER: return KIND_WHISPER;
     default: return KIND_NEW;
     }
 }
@@ -2730,6 +2734,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest XV", OF_VARIANT(17)},
     {"Fastest Greater-Than", OF_VARIANT(18)},
     {"Fastest Quadruple", OF_VARIANT(19)},
+    {"Fastest Arrow", OF_VARIANT(20)},
+    {"Fastest Renban", OF_VARIANT(21)},
+    {"Fastest German Whispers", OF_VARIANT(22)},
 };
 
 /* a player's records into R */

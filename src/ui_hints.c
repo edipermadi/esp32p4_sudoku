@@ -59,7 +59,8 @@ static const char *units_word(void)
     if (game_geo()->variant == VAR_KING) return "row, column, box or a touching cell";
     if (game_geo()->variant == VAR_DISJOINT) return "row, column, box or group";
     if (game_geo()->variant == VAR_ASTERISK) return "row, column, box or the asterisk";
-    if (game_geo()->nthermos) return "row, column or box (or the thermometer)";
+    if (game_geo()->nthermos) return game_geo()->line_kind == LINE_THERMO ? "row, column or box (or the thermometer)"
+                                     : "row, column or box (or the line)";
     return "row, column or box";
 }
 
@@ -115,6 +116,21 @@ void hint_render(void)
         unit_name(t->unit, u1, sizeof(u1));
         snprintf(tech, sizeof(tech), "In %s the digits between the 1 and the 9 add up to %d: that leaves the 1 and "
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? game_geo()->sandwich_sum[t->unit] : 0);
+    } else if (t->kind == TECH_LINE) {              /* Arrow, Renban, Whispers: the line */
+        int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
+        for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) h_mark[game_geo()->thermo_cell[k][i]] = 1;
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+        }
+        int lk = game_geo()->line_kind;
+        snprintf(u1, sizeof(u1), "this %s", lk == LINE_ARROW ? "arrow" : "line");
+        snprintf(tech, sizeof(tech), "%s, so row %d, column %d can only be %s. ",
+                 lk == LINE_ARROW ? "The arrow's shaft adds up to its circle" :
+                 lk == LINE_RENBAN ? "The digits on this line are a run of consecutive digits" :
+                 "Along this line, neighbours are 5 or more apart",
+                 c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
         int k = t->unit;
         for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) h_mark[game_geo()->thermo_cell[k][i]] = 1;
@@ -627,40 +643,96 @@ static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     }
 }
 
-/* Thermo: each thermometer as a wide, soft grey line through its cells from
- * a round bulb (translucent: the digits show through) */
+/* A line through cell centres pts[0..n-1] (cs: the cell size), as its kind is drawn, under the
+ * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey
+ * ring (the circle) and a thin shaft from its edge with an arrowhead at the end; LINE_RENBAN a
+ * wide purple band; LINE_WHISPER a narrow green line. Also the rules card's picture. */
+void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, int cs)
+{
+    lv_draw_line_dsc_t ld;
+    lv_draw_line_dsc_init(&ld);
+    ld.round_start = ld.round_end = 1;
+    int from = 0;
+    lv_point_t start = pts[0];
+    switch (kind) {
+    case LINE_ARROW:
+        ld.color = C_MUTED;
+        ld.opa = LV_OPA_80;
+        ld.width = 4;
+        if (n > 1) {                                /* the shaft starts at the circle's edge */
+            int dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y, r = cs * 4 / 10;
+            int len = (int)sqrtf((float)(dx * dx + dy * dy));
+            if (len) { start.x = pts[0].x + dx * r / len; start.y = pts[0].y + dy * r / len; }
+        }
+        break;
+    case LINE_RENBAN:
+        ld.color = lv_color_hex(0xA66BE0);
+        ld.opa = LV_OPA_40;
+        ld.width = cs * 35 / 100;
+        break;
+    case LINE_WHISPER:
+        ld.color = lv_color_hex(0x2EAD5B);
+        ld.opa = LV_OPA_70;
+        ld.width = cs * 12 / 100;
+        break;
+    default:
+        ld.color = C_MUTED;
+        ld.opa = LV_OPA_40;
+        ld.width = cs * 3 / 10;
+    }
+    for (int i = from + 1; i < n; i++) {
+        ld.p1.x = i == 1 ? start.x : pts[i - 1].x;
+        ld.p1.y = i == 1 ? start.y : pts[i - 1].y;
+        ld.p2.x = pts[i].x;
+        ld.p2.y = pts[i].y;
+        lv_draw_line(layer, &ld);
+    }
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.radius = LV_RADIUS_CIRCLE;
+    int r = cs * 4 / 10;
+    lv_area_t b = {.x1 = pts[0].x - r, .y1 = pts[0].y - r, .x2 = pts[0].x + r, .y2 = pts[0].y + r};
+    if (kind == LINE_THERMO) {                      /* the bulb */
+        d.bg_color = C_MUTED;
+        d.bg_opa = LV_OPA_40;
+        lv_draw_rect(layer, &d, &b);
+    } else if (kind == LINE_ARROW) {                /* the circle, and the arrowhead at the shaft's end */
+        d.bg_opa = LV_OPA_TRANSP;
+        d.border_color = C_MUTED;
+        d.border_opa = LV_OPA_80;
+        d.border_width = 3;
+        lv_draw_rect(layer, &d, &b);
+        if (n > 1) {
+            int dx = pts[n - 1].x - pts[n - 2].x, dy = pts[n - 1].y - pts[n - 2].y;
+            float len = sqrtf((float)(dx * dx + dy * dy));
+            if (len > 0) {
+                float ux = dx / len, uy = dy / len, h = cs * 0.22f;
+                for (int s = -1; s <= 1; s += 2) {
+                    ld.p1.x = pts[n - 1].x;
+                    ld.p1.y = pts[n - 1].y;
+                    ld.p2.x = (int32_t)(pts[n - 1].x - ux * h - s * uy * h * 0.8f);
+                    ld.p2.y = (int32_t)(pts[n - 1].y - uy * h + s * ux * h * 0.8f);
+                    lv_draw_line(layer, &ld);
+                }
+            }
+        }
+    }
+}
+
+/* the board's lines (Thermo, Arrow, Renban, Whispers) through the cells' centres */
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
     for (int t = 0; t < geo->nthermos; t++) {
-        lv_area_t a;
-        int px = 0, py = 0, cs = 0;
+        lv_point_t pts[9];
+        int cs = 0;
         for (int i = 0; i < geo->thermo_n[t]; i++) {
+            lv_area_t a;
             lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->thermo_cell[t][i]), &a);
-            int x = (a.x1 + a.x2) / 2, y = (a.y1 + a.y2) / 2;
+            pts[i].x = (a.x1 + a.x2) / 2;
+            pts[i].y = (a.y1 + a.y2) / 2;
             cs = lv_area_get_width(&a);
-            if (i) {
-                lv_draw_line_dsc_t ld;
-                lv_draw_line_dsc_init(&ld);
-                ld.p1.x = px; ld.p1.y = py; ld.p2.x = x; ld.p2.y = y;
-                ld.width = cs * 3 / 10;
-                ld.color = C_MUTED;
-                ld.opa = LV_OPA_40;
-                ld.round_start = ld.round_end = 1;
-                lv_draw_line(layer, &ld);
-            }
-            px = x;
-            py = y;
         }
-        lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->thermo_cell[t][0]), &a);   /* the bulb */
-        lv_draw_rect_dsc_t d;
-        lv_draw_rect_dsc_init(&d);
-        d.bg_color = C_MUTED;
-        d.bg_opa = LV_OPA_40;
-        d.radius = LV_RADIUS_CIRCLE;
-        int r = cs * 4 / 10;
-        lv_area_t b = {.x1 = (a.x1 + a.x2) / 2 - r, .y1 = (a.y1 + a.y2) / 2 - r,
-                       .x2 = (a.x1 + a.x2) / 2 + r, .y2 = (a.y1 + a.y2) / 2 + r};
-        lv_draw_rect(layer, &d, &b);
+        draw_line_path(layer, geo->line_kind, pts, geo->thermo_n[t], cs);
     }
 }
 
@@ -774,7 +846,8 @@ void game_layout(void)
     const bool left = store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
     if (game_layout_var() == game_var() && g_layout_left == left && game_var() != VAR_JIGSAW && game_var() != VAR_KILLER &&
         game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH &&
-        game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD) {
+        game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD &&
+        game_var() != VAR_ARROW && game_var() != VAR_RENBAN && game_var() != VAR_WHISPER) {
         lv_obj_invalidate(game_grid());
         return;
     }

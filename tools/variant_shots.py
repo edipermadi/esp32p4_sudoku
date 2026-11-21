@@ -30,7 +30,7 @@ import devctl  # noqa: E402  (tools/devctl.py: the serial connection, commands a
 # the pages, in the order of docs/variant-examples.sdx (variant-examples #1 .. #20)
 PAGES = ["classic", "x-sudoku", "mini-6x6", "hyper", "jigsaw", "killer", "anti-knight", "even-odd",
          "consecutive", "thermo", "sandwich", "kids-4x4", "anti-king", "non-consecutive", "disjoint-groups",
-         "asterisk", "kropki", "xv", "greater-than", "quadruple"]
+         "asterisk", "kropki", "xv", "greater-than", "quadruple", "arrow", "renban", "german-whispers"]
 
 ROW0, ROW_H = 168, 74          # the collection's list: the first row's centre, the row pitch (pixels)
 FIT = 6                        # rows that fit before the list has to scroll
@@ -83,6 +83,7 @@ def puzzle_name(board):
 def open_example(args, k, extra):
     """a fresh session on the game of variant-examples #k; (board, name, number opened, tap's dy)"""
     b = devctl.Board(args.port, args.baud, True, args.verbose)
+    b.command("wait 1000")                                      # (the first screen settles)
     b.command("tap 206 355"); b.command("wait 900")             # Home > Puzzles
     b.command("tap 202 96"); b.command("wait 900")              # the Saved tab: the collection shown
     scroll = max(0, k - FIT) * ROW_H
@@ -136,7 +137,7 @@ def main():
     ap.add_argument("--out", default=os.path.join("docs", "screenshots", "variants"), help="folder for the PNGs")
     ap.add_argument("--collection", default="variant-examples", help="the imported collection's name")
     ap.add_argument("-v", "--verbose", action="store_true")
-    ap.add_argument("variants", nargs="*", help="page names (kropki) or numbers 1-20; none: all")
+    ap.add_argument("variants", nargs="*", help="page names (kropki) or numbers 1-%d; none: all" % len(PAGES))
     args = ap.parse_args()
     todo = []
     for v in args.variants or [str(i + 1) for i in range(len(PAGES))]:

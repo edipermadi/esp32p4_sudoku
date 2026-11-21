@@ -95,7 +95,10 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_KROPKI:
     case VAR_XV:
     case VAR_GT:       return strlen(p->marks) == 81 && sudoku_geom_marks(p->variant, p->marks, out);
-    case VAR_THERMO:   return sudoku_geom_thermo_text(p->thermos, out);
+    case VAR_THERMO:
+    case VAR_ARROW:
+    case VAR_RENBAN:
+    case VAR_WHISPER:  return sudoku_geom_lines_text(p->variant, p->thermos, out);   /* (lines go in thermos) */
     case VAR_SANDWICH: return sudoku_geom_sandwich_text(p->marks, out);
     default: {
         if (p->variant < 0 || p->variant >= VAR_COUNT) return false;

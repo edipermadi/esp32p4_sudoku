@@ -310,7 +310,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_EVENODD: case VAR_CONSEC: case VAR_KROPKI: case VAR_XV: case VAR_GT:
         sudoku_marks_text(g, marks, len); break;
     case VAR_SANDWICH: sudoku_sandwich_text(g, marks, len); break;
-    case VAR_THERMO: sudoku_thermos_text(g, thermos, len); break;
+    case VAR_THERMO: case VAR_ARROW: case VAR_RENBAN: case VAR_WHISPER: sudoku_thermos_text(g, thermos, len); break;
     default: break;
     }
 }
@@ -350,6 +350,16 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     }
     case FIT_THERMO: {
         int t = G->thermo_of[c], p = G->thermo_pos[c];
+        if (G->line_kind != LINE_THERMO) {          /* Arrow, Renban, Whispers: the line (and a neighbour) */
+            int o = -1;
+            for (int k = -1; G->line_kind == LINE_WHISPER && k <= 1; k += 2) {
+                int q = p + k;
+                if (q >= 0 && q < G->thermo_n[t] && v[G->thermo_cell[t][q]] &&
+                    abs(v[G->thermo_cell[t][q]] - d) < 5) o = G->thermo_cell[t][q];
+            }
+            printf(", \"rule\": \"line\", \"line\": %d, \"pos\": %d, \"with\": %d", t, p, o);
+            return;
+        }
         int before = p > 0 ? G->thermo_cell[t][p - 1] : -1, after = p + 1 < G->thermo_n[t] ? G->thermo_cell[t][p + 1] : -1;
         int o = before >= 0 && v[before] && d <= v[before] ? before : after;
         printf(", \"rule\": \"thermo\", \"with\": %d, \"after\": %s", o, o == before ? "true" : "false");
@@ -392,7 +402,7 @@ static void layout_json(const sudoku_geom_t *G)
         for (int j = 0; j < G->cage_n[k]; j++) printf("%s%d", j ? "," : "", G->cage_cell[k][j]);
         printf("]}");
     }
-    printf("],\n \"thermos\": [");
+    printf("],\n \"line_kind\": %d, \"thermos\": [", G->line_kind);
     for (int t = 0; t < G->nthermos; t++) {
         printf("%s[", t ? ", " : "");
         for (int j = 0; j < G->thermo_n[t]; j++) printf("%s%d", j ? "," : "", G->thermo_cell[t][j]);

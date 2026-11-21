@@ -78,6 +78,22 @@ static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const ui
         if (c % 9 < 8 && !sudoku_edge_ok(g->edge_kind, EDGE_RIGHT(g->edge[c]), sol[c], sol[c + 1])) return false;
         if (c < 72 && !sudoku_edge_ok(g->edge_kind, EDGE_DOWN(g->edge[c]), sol[c], sol[c + 9])) return false;
     }
+    for (int t = 0; t < g->nthermos; t++) {         /* the lines: Thermo, Arrow, Renban, Whispers */
+        int n = g->thermo_n[t], lo = 10, hi = 0, sum = 0;
+        unsigned seen = 0;
+        for (int i = 0; i < n; i++) {
+            int x = sol[g->thermo_cell[t][i]];
+            if (i && g->line_kind == LINE_THERMO && x <= sol[g->thermo_cell[t][i - 1]]) return false;
+            if (i && g->line_kind == LINE_WHISPER && abs(x - sol[g->thermo_cell[t][i - 1]]) < 5) return false;
+            if (g->line_kind == LINE_RENBAN && (seen >> x & 1)) return false;
+            seen |= 1u << x;
+            if (x < lo) lo = x;
+            if (x > hi) hi = x;
+            if (i) sum += x;
+        }
+        if (g->line_kind == LINE_RENBAN && hi - lo != n - 1) return false;
+        if (g->line_kind == LINE_ARROW && sum != sol[g->thermo_cell[t][0]]) return false;
+    }
     for (int q = 0; q < g->nquads; q++) {           /* Quadruple: every circle's digits are there */
         int empty;
         if (sudoku_quad_missing(g, q, sol, &empty) != 0) return false;
@@ -108,7 +124,7 @@ static bool same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->cage_sum, b->cage_sum, sizeof(a->cage_sum)) && !memcmp(a->parity, b->parity, 81) &&
            !memcmp(a->consec, b->consec, 81) && a->nthermos == b->nthermos &&
            !memcmp(a->thermo_of, b->thermo_of, 81) && !memcmp(a->thermo_pos, b->thermo_pos, 81) &&
-           a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
+           a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
            a->edge_kind == b->edge_kind && !memcmp(a->edge, b->edge, 81) && a->nquads == b->nquads &&
            !memcmp(a->quad_at, b->quad_at, a->nquads) && !memcmp(a->quad_n, b->quad_n, a->nquads) &&
            !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads);
@@ -131,7 +147,10 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_XV:
     case VAR_GT:       sudoku_marks_text(g, marks, len); break;
     case VAR_SANDWICH: sudoku_sandwich_text(g, marks, len); break;
-    case VAR_THERMO:   sudoku_thermos_text(g, thermos, len); break;
+    case VAR_THERMO:
+    case VAR_ARROW:
+    case VAR_RENBAN:
+    case VAR_WHISPER:  sudoku_thermos_text(g, thermos, len); break;
     default: break;
     }
 }
@@ -302,7 +321,7 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "20|0|%s", E1);      /* no variant 20 */
+    snprintf(buf, sizeof(buf), "23|0|%s", E1);      /* no variant 23 */
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);

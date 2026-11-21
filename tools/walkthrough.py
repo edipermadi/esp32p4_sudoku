@@ -42,7 +42,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "killer": "Killer", "anti-knight": "Anti-Knight", "even-odd": "Even-Odd", "consecutive": "Consecutive",
          "thermo": "Thermo", "sandwich": "Sandwich", "kids-4x4": "Kids", "anti-king": "Anti-King",
          "non-consecutive": "Non-Consecutive", "disjoint-groups": "Disjoint", "asterisk": "Asterisk",
-         "kropki": "Kropki", "xv": "XV", "greater-than": "Greater", "quadruple": "Quadruple"}
+         "kropki": "Kropki", "xv": "XV", "greater-than": "Greater", "quadruple": "Quadruple", "arrow": "Arrow",
+         "renban": "Renban", "german-whispers": "German"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -53,6 +54,7 @@ UNIT_BG = (255, 244, 190)                                   # the unit the step 
 NEW_BG, NEW_FG = (205, 242, 212), (22, 120, 50)             # the step's digit
 RING, CROSS, ORANGE = (230, 126, 34), (214, 48, 49), (230, 126, 34)
 MUTED, THERMO, SUM_FG = (120, 126, 138), (196, 200, 207), (43, 111, 224)
+ARROW, RENBAN, WHISPER = (140, 146, 158), (222, 200, 245), (120, 205, 150)   # (the board's, on white)
 RIGHT, DOWN = 0, 1
 WINDOWS = ["top-left", "top-right", "bottom-left", "bottom-right"]
 SPOTS = ["top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right"]
@@ -117,6 +119,8 @@ def rule_words(d, vals, c, v, r):
         smaller = (r["mark"] == 1) == r["cell_first"]       # LESS: the left / top one is the smaller
         return "the sign says it's %s than the %d in %s" % ("smaller" if smaller else "bigger", w, at)
     if rule == "range":
+        if d.get("line_kind") == 3 and v == 5:              # German Whispers: no 5 on a line
+            return "it's on a green line, and nothing is 5 or more away from a 5"
         if d["thermos"]:
             return "its place on its thermometer keeps it between %d and %d" % (r["lo"], r["hi"])
         return "the chains of signs in its box keep it between %d and %d" % (r["lo"], r["hi"])
@@ -158,6 +162,35 @@ def rule_words(d, vals, c, v, r):
             return "the circle %s still needs %s in its one empty cell" % (circle, listing(map(str, need)))
         return "the circle %s still needs %s in its %d empty cells, so they take nothing else" % (
             circle, listing(map(str, need)), empty)
+    if rule == "line":
+        cells = d["thermos"][r["line"]]
+        kind = d.get("line_kind", 0)
+        if kind == 3:                                       # German Whispers
+            return "it's next to the %d in %s on a green line, and %d is less than 5 away from it" % (w, at, v)
+        if kind == 2:                                       # Renban
+            have = sorted(vals[x] for x in cells if vals[x] and x != c)
+            if v in have:
+                return "its purple line already has a %d" % v
+            return ("its purple line of %d cells already has %s: with %s the digits couldn't be a run of %d" %
+                    (len(cells), listing(map(str, have)), a_n(v), len(cells)))
+        circle, shaft = cells[0], cells[1:]                 # Arrow
+        if c == circle:
+            filled = [vals[x] for x in shaft if vals[x]]
+            empty = sum(1 for x in shaft if not vals[x])
+            lo, hi = sum(filled) + empty, sum(filled) + 9 * empty
+            if not empty:
+                return "it's an arrow's circle, and its shaft adds up to %d" % sum(filled)
+            if v < lo:
+                return "it's an arrow's circle, and its shaft makes at least %d" % lo
+            return "it's an arrow's circle, and its shaft makes at most %d" % hi
+        others = [x for x in shaft if x != c]
+        filled = sum(vals[x] for x in others if vals[x])
+        empty = sum(1 for x in others if not vals[x])
+        if vals[circle]:
+            return ("it's on the shaft of the arrow whose circle is %d (in %s): %s would take the shaft to %s" %
+                    (vals[circle], rc(circle), a_n(v), "%d" % (filled + v) if not empty else
+                     "at least %d" % (filled + v + empty)))
+        return "it's on an arrow's shaft, which adds up to one digit: %s would take it past 9" % a_n(v)
     if rule == "sandwich":
         line = r["line"]
         name = "row %d" % (line + 1) if line < 9 else "column %d" % (line - 8)
@@ -265,15 +298,37 @@ def make_drawer(d, fonts):
             if step and c == step["cell"]:
                 bg = NEW_BG
             g.rectangle([x, y, x + CELL, y + CELL], fill=bg, outline=LINE_THIN, width=THIN)
-        for t in d["thermos"]:                              # thermometers, under the digits
+        kind = d.get("line_kind", 0)
+        for t in d["thermos"]:                              # the lines, under the digits
             pts = [centre(c) for c in t]
-            g.line(pts, fill=THERMO, width=int(CELL * 0.3), joint="curve")
-            for px, py in pts:
-                rr = CELL * 0.15
-                g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=THERMO)
-            bx, by = pts[0]
-            rr = CELL * 0.4
-            g.ellipse([bx - rr, by - rr, bx + rr, by + rr], fill=THERMO)
+            if kind == 0:                                   # Thermo: a soft grey line from a round bulb
+                g.line(pts, fill=THERMO, width=int(CELL * 0.3), joint="curve")
+                for px, py in pts:
+                    rr = CELL * 0.15
+                    g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=THERMO)
+                bx, by = pts[0]
+                rr = CELL * 0.4
+                g.ellipse([bx - rr, by - rr, bx + rr, by + rr], fill=THERMO)
+            elif kind == 1:                                 # Arrow: a ring, a shaft from its edge, a head
+                (x0, y0), (x1, y1) = pts[0], pts[1]
+                ln = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
+                r0 = CELL * 0.4
+                start = (x0 + (x1 - x0) * r0 / ln, y0 + (y1 - y0) * r0 / ln)
+                g.line([start] + pts[1:], fill=ARROW, width=4, joint="curve")
+                g.ellipse([x0 - r0, y0 - r0, x0 + r0, y0 + r0], outline=ARROW, width=3)
+                (ax, ay), (bx, by) = pts[-2], pts[-1]
+                ln = ((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
+                ux, uy, h = (bx - ax) / ln, (by - ay) / ln, CELL * 0.22
+                for s in (-1, 1):
+                    g.line([(bx, by), (bx - ux * h - s * uy * h * 0.8, by - uy * h + s * ux * h * 0.8)], fill=ARROW,
+                           width=4)
+            elif kind == 2:                                 # Renban: a wide purple band
+                g.line(pts, fill=RENBAN, width=int(CELL * 0.35), joint="curve")
+                for px, py in (pts[0], pts[-1]):
+                    rr = CELL * 0.175
+                    g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=RENBAN)
+            else:                                           # German Whispers: a narrow green line
+                g.line(pts, fill=WHISPER, width=int(CELL * 0.12), joint="curve")
         for c in cells:                                     # thick lines between regions, and the frame
             x, y = xy(c)
             col, row = c % 9, c // 9

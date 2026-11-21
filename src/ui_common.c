@@ -297,7 +297,8 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_QUAD && buf && sudoku_geom_quad_text(cages, buf)) return buf;   /* (its circles are in cages) */
     if ((v == VAR_EVENODD || v == VAR_CONSEC || v == VAR_KROPKI || v == VAR_XV || v == VAR_GT) && buf &&
         sudoku_geom_marks(v, marks, buf)) return buf;
-    if (v == VAR_THERMO && buf && sudoku_geom_thermo_text(thermos, buf)) return buf;
+    if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER) && buf &&
+        sudoku_geom_lines_text(v, thermos, buf)) return buf;
     if (v == VAR_SANDWICH && buf && sudoku_geom_sandwich_text(marks, buf)) return buf;   /* (its sums are in marks) */
     return sudoku_geom(v);                          /* (a broken map or cages: a classic board) */
 }

@@ -8,7 +8,8 @@ static const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard"
 static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
                                               "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich",
                                               "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups",
-                                              "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple"};
+                                              "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
+                                              "German Whispers"};
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
 const char *variant_name(int variant) { return VARIANT_NAMES[variant]; }
@@ -74,6 +75,86 @@ static uint16_t edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, cons
         }
         free &= ok;
     }
+    return free;
+}
+
+/* the digits the cell at place p of line t may hold, by the line's rule: against its filled
+ * cells, or (with cand) also the candidates of its empty ones (Thermo, Arrow, Renban, Whispers) */
+static uint16_t line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, const uint16_t *cand)
+{
+    const int n = G->thermo_n[t];
+    const uint8_t *cell = G->thermo_cell[t];
+#define LMASK(c) ((uint16_t)(v[c] ? (1u << v[c]) : cand ? cand[c] : 0x3FE))
+#define LO(m) (__builtin_ctz(m))
+#define HI(m) (31 - __builtin_clz(m))
+#define RANGE(a, b) ((uint16_t)((a) > (b) || (b) < 1 || (a) > 9 ? 0 : \
+                     (((1u << ((b) > 9 ? 10 : (b) + 1)) - 1) & ~((1u << ((a) < 1 ? 1 : (a))) - 1))))
+    uint16_t free = 0x3FE;
+    switch (G->line_kind) {
+    case LINE_THERMO:                               /* above the cell before it, below the one after */
+        if (p > 0 && v[cell[p - 1]]) free &= (uint16_t)~((1u << (v[cell[p - 1]] + 1)) - 1);
+        if (p + 1 < n && v[cell[p + 1]]) free &= (uint16_t)((1u << v[cell[p + 1]]) - 1);
+        if (cand) {
+            if (p > 0 && LMASK(cell[p - 1])) free &= (uint16_t)~((1u << (LO(LMASK(cell[p - 1])) + 1)) - 1);
+            if (p + 1 < n && LMASK(cell[p + 1])) free &= (uint16_t)((1u << HI(LMASK(cell[p + 1]))) - 1);
+        }
+        break;
+    case LINE_WHISPER:                              /* 5 or more away from each neighbour on it */
+        for (int k = -1; k <= 1; k += 2) {
+            int q = p + k;
+            if (q < 0 || q >= n) continue;
+            uint16_t m = LMASK(cell[q]), ok = 0;
+            if (!m) continue;
+            for (int d = 1; d <= 9; d++) {
+                for (int w = 1; w <= 9; w++) if ((m >> w & 1) && abs(d - w) >= 5) { ok |= (uint16_t)(1u << d); break; }
+            }
+            free &= ok;
+        }
+        break;
+    case LINE_RENBAN: {                             /* different digits, all within a window of n */
+        int lo = 10, hi = 0;
+        for (int k = 0; k < n; k++) {
+            if (k == p || !v[cell[k]]) continue;
+            free &= (uint16_t)~(1u << v[cell[k]]);
+            if (v[cell[k]] < lo) lo = v[cell[k]];
+            if (v[cell[k]] > hi) hi = v[cell[k]];
+        }
+        if (hi) free &= RANGE(hi - n + 1, lo + n - 1);
+        if (cand) {                                 /* a window that leaves every other cell a candidate */
+            uint16_t ok = 0;
+            for (int w0 = 1; w0 + n - 1 <= 9; w0++) {
+                uint16_t win = RANGE(w0, w0 + n - 1);
+                bool fits = true;
+                for (int k = 0; k < n && fits; k++) if (k != p) fits = (LMASK(cell[k]) & win) != 0;
+                if (fits) ok |= win;
+            }
+            free &= ok;
+        }
+        break;
+    }
+    case LINE_ARROW: {                              /* the circle (place 0) is the shaft's sum */
+        int smin = 0, smax = 0;                     /* the shaft's sum, the place asked about left out */
+        for (int k = 1; k < n; k++) {
+            if (k == p) continue;
+            uint16_t m = LMASK(cell[k]);
+            if (!m) return 0;
+            smin += LO(m);
+            smax += HI(m);
+        }
+        if (p == 0) {
+            free &= RANGE(smin, smax);
+        } else {
+            uint16_t m = LMASK(cell[0]);
+            if (!m) return 0;
+            free &= RANGE(LO(m) - smax, HI(m) - smin);
+        }
+        break;
+    }
+    }
+#undef LMASK
+#undef LO
+#undef HI
+#undef RANGE
     return free;
 }
 
@@ -215,7 +296,7 @@ void sudoku_geom_init(void)
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
     g[VAR_KILLER] = g[VAR_CLASSIC];
     g[VAR_KILLER].variant = VAR_KILLER;
-    static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD};   /* placeholders too */
+    static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER};
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
         g[OWN[i]].variant = OWN[i];
@@ -233,7 +314,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
     sudoku_geom_init();
     if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER ||
         variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH ||
-        variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD) {
+        variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD ||
+        variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -306,12 +388,20 @@ bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
 }
 
 /* Thermo: a classic board plus thermometers (cells from the bulb) */
-static bool geom_thermo(const uint8_t cells[][9], const uint8_t *lens, int n, sudoku_geom_t *out)
+static int line_kind_of(int variant)
+{
+    return variant == VAR_ARROW ? LINE_ARROW : variant == VAR_RENBAN ? LINE_RENBAN :
+           variant == VAR_WHISPER ? LINE_WHISPER : LINE_THERMO;
+}
+
+/* a classic board with these lines of the variant's kind (Thermo, Arrow, Renban, Whispers) */
+static bool geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, int n, sudoku_geom_t *out)
 {
     if (n < 1 || n > THERMOS_MAX) return false;
     sudoku_geom_init();
     *out = s_geom[VAR_CLASSIC];
-    out->variant = VAR_THERMO;
+    out->variant = (uint8_t)variant;
+    out->line_kind = (uint8_t)line_kind_of(variant);
     out->nthermos = (uint8_t)n;
     for (int t = 0; t < n; t++) {
         if (lens[t] < 2 || lens[t] > 9) return false;
@@ -326,14 +416,22 @@ static bool geom_thermo(const uint8_t cells[][9], const uint8_t *lens, int n, su
             out->thermo_cell[t][i] = (uint8_t)c;
             out->thermo_of[c] = (uint8_t)t;
             out->thermo_pos[c] = (uint8_t)i;
-            /* the place along it bounds the digit: the bulb's digit is at most 10 - length, and so on */
-            out->allow[c] &= (uint16_t)(((1u << (10 - lens[t] + i + 1)) - 1) & ~((1u << (i + 1)) - 1));
+            /* Thermo: the place along it bounds the digit (the bulb's at most 10 - length, and so on);
+             * Whispers: no 5 (nothing is 5 or more away from it) */
+            if (out->line_kind == LINE_THERMO)
+                out->allow[c] &= (uint16_t)(((1u << (10 - lens[t] + i + 1)) - 1) & ~((1u << (i + 1)) - 1));
+            if (out->line_kind == LINE_WHISPER) out->allow[c] &= (uint16_t)~(1u << 5);
         }
     }
     return true;
 }
 
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out)
+{
+    return sudoku_geom_lines_text(VAR_THERMO, text, out);
+}
+
+bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out)
 {
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX];
     int n = 0;
@@ -354,7 +452,7 @@ bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out)
         if (*p == ';') p++;
         else if (*p) return false;
     }
-    return geom_thermo(cells, lens, n, out);
+    return geom_lines(variant, cells, lens, n, out);
 }
 
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len)
@@ -781,17 +879,7 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     int t = G->thermo_of[i];
-    if (t != THERMO_NONE && free) {                 /* Thermo: above the cell before it, below the one after */
-        int p = G->thermo_pos[i];
-        if (p > 0) {
-            int v = g->v[G->thermo_cell[t][p - 1]];
-            if (v) free &= (uint16_t)~((1u << (v + 1)) - 1);
-        }
-        if (p + 1 < G->thermo_n[t]) {
-            int v = g->v[G->thermo_cell[t][p + 1]];
-            if (v) free &= (uint16_t)((1u << v) - 1);
-        }
-    }
+    if (t != THERMO_NONE && free) free &= line_allow(G, t, G->thermo_pos[i], g->v, NULL);   /* the lines */
     WHY(FIT_THERMO);
     int c = G->cage_of[i];
     if (c != CAGE_NONE && free) {                    /* Killer: what the cage's sum still allows */
@@ -1191,6 +1279,21 @@ static bool quad_logic(logic_t *L)
 static bool thermo_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
+    if (G->line_kind != LINE_THERMO) {              /* Arrow, Renban, Whispers: each cell by its line */
+        for (int t = 0; t < G->nthermos; t++) {
+            for (int p = 0; p < G->thermo_n[t]; p++) {
+                int c = G->thermo_cell[t][p];
+                if (L->v[c]) continue;
+                uint16_t keep = (uint16_t)(L->cand[c] & line_allow(G, t, p, L->v, L->cand));
+                if (keep != L->cand[c]) {
+                    eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+                    trace(TECH_LINE, t, -1, keep, 0, c, -1);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     for (int t = 0; t < G->nthermos; t++) {
         int n = G->thermo_n[t], lo[9], hi[9];
         for (int i = 0; i < n; i++) {
@@ -1543,6 +1646,7 @@ static int easy_min_clues(const sudoku_geom_t *G)
     if (G->edge_kind == EDGE_XV) return 22;
     if (G->edge_kind == EDGE_GT) return 16;
     if (G->nquads) return 28;
+    if (G->nthermos && G->line_kind != LINE_THERMO) return 28;
     if (G->consec_on) return 12;                    /* the bars say a lot */
     if (G->variant == VAR_EVENODD) return 30;
     if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT) return 32;
@@ -1778,6 +1882,61 @@ static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, su
 
 /* Thermometers over a solved grid: from random cells, a path grows through
  * neighbours (diagonals too) whose digit is higher, 3 to 6 cells long. */
+/* Arrow, Renban, Whispers: up to want lines drawn over the full grid as random walks (side by
+ * side or diagonal, not crossing), each kept only if the grid keeps its rule: an arrow's shaft
+ * (1-3 cells) adds up to its circle, a Renban (3-5 cells) is a run of consecutive digits, along a
+ * Whispers line (3-6 cells) neighbours are 5 or more apart */
+static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    int n = 0;
+    for (int tries = 0; tries < 2000 && n < want; tries++) {
+        int c = (int)(rnd(rng) % 81);
+        int target = variant == VAR_ARROW ? 2 + (int)(rnd(rng) % 3)          /* circle + 1-3 */
+                   : variant == VAR_RENBAN ? 3 + (int)(rnd(rng) % 3) : 3 + (int)(rnd(rng) % 4);
+        if (used[c] || (variant == VAR_WHISPER && full[c] == 5) || (variant == VAR_ARROW && full[c] < 3)) continue;
+        int len = 0, sum = 0, lo = full[c], hi = full[c];
+        cells[n][len++] = (uint8_t)c;
+        while (len < target) {
+            int cur = cells[n][len - 1], r = cur / 9, q = cur % 9, cand[8], nc = 0;
+            for (int dr = -1; dr <= 1; dr++) {
+                for (int dq = -1; dq <= 1; dq++) {
+                    int rr = r + dr, qq = q + dq, o = rr * 9 + qq;
+                    if ((!dr && !dq) || rr < 0 || rr > 8 || qq < 0 || qq > 8 || used[o]) continue;
+                    bool on = false;
+                    for (int k = 0; k < len; k++) on |= cells[n][k] == o;
+                    if (on) continue;
+                    int x = full[o];
+                    bool ok;
+                    if (variant == VAR_WHISPER) {
+                        ok = abs(x - full[cur]) >= 5;
+                    } else if (variant == VAR_RENBAN) {
+                        bool seen = false;
+                        for (int k = 0; k < len; k++) seen |= full[cells[n][k]] == x;
+                        int nlo = x < lo ? x : lo, nhi = x > hi ? x : hi;
+                        ok = !seen && nhi - nlo <= target - 1;
+                    } else {                        /* Arrow: the shaft stays under the circle */
+                        ok = sum + x <= full[c] && (len + 1 < target || sum + x == full[c]);
+                    }
+                    if (ok) cand[nc++] = o;
+                }
+            }
+            if (!nc) break;
+            int o = cand[rnd(rng) % (uint32_t)nc];
+            cells[n][len++] = (uint8_t)o;
+            if (full[o] < lo) lo = full[o];
+            if (full[o] > hi) hi = full[o];
+            if (len > 1) sum += full[o];
+        }
+        bool keep = variant == VAR_ARROW ? len >= 2 && sum == full[c]
+                  : variant == VAR_RENBAN ? len >= 3 && hi - lo == len - 1 : len >= 3;
+        if (!keep) continue;
+        for (int k = 0; k < len; k++) used[cells[n][k]] = 1;
+        lens[n++] = (uint8_t)len;
+    }
+    return n >= 3 && geom_lines(variant, cells, lens, n, out);
+}
+
 static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
@@ -1805,7 +1964,7 @@ static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
         for (int k = 0; k < len; k++) used[cells[n][k]] = 1;
         lens[n++] = (uint8_t)len;
     }
-    return n >= 3 && geom_thermo(cells, lens, n, out);
+    return n >= 3 && geom_lines(VAR_THERMO, cells, lens, n, out);
 }
 
 /* ---------------------------------------------------------------- generating (all variants) */
@@ -1817,8 +1976,9 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
     const bool thermo = variant == VAR_THERMO, sandwich = variant == VAR_SANDWICH;
+    const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
-    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad;
+    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines;
     if (sandwich) bread_tables();
     if (own && !jig && !(jig = malloc(sizeof(*jig)))) return false;
     const sudoku_geom_t *G = own ? jig : sudoku_geom(variant);
@@ -1906,6 +2066,9 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 memcpy(dig[q], four, 4);
             }
             if (!geom_quad(at, n, (const uint8_t (*)[4])dig, nq, jig)) continue;
+        } else if (lines) {                         /* a grid, then lines that keep their rule on it */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            if (!rule_paths(variant, full, &rng, level >= GEN_HARD ? 10 : 8, jig)) continue;
         } else if (thermo) {                        /* a grid, then thermometers along rising digits */
             random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!thermo_paths(full, &rng, level >= GEN_HARD ? 10 : 7, jig)) continue;

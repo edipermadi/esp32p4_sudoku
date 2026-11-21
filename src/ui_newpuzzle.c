@@ -77,6 +77,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {15, 136, 307, 1743},   /* XV */
     {7, 24, 197, 489},      /* Greater-Than */
     {9, 72, 204, 600},      /* Quadruple */
+    {9, 320, 518, 497},   /* Arrow */
+    {9, 174, 525, 477},   /* Renban */
+    {12, 450, 1784, 1111}, /* German Whispers */
 };
 static lv_timer_t *gen_timer;
 static volatile bool gen_done;
@@ -117,7 +120,7 @@ static void gen_task(void *arg)
         sudoku_marks_text(gen_board, gen_marks, 82);
     if (gen_var_req == VAR_SANDWICH) sudoku_sandwich_text(gen_board, gen_marks, 82);
     gen_thermos[0] = 0;
-    if (gen_var_req == VAR_THERMO) sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);
+    if (gen_board->nthermos) sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);   /* (any lines) */
     int clues = 0;
     for (int i = 0; i < 81; i++) clues += gen_givens[i] != 0;
     printf("generator: %s %s asked, %s made, %d clues, %u ms\n", variant_name(gen_var_req),
@@ -329,7 +332,8 @@ static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, 
                                                  VAR_KILLER, VAR_MINI, VAR_KIDS, VAR_THERMO,
                                                  VAR_KNIGHT, VAR_KING, VAR_EVENODD, VAR_SANDWICH,
                                                  VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK,
-                                                 VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD};
+                                                 VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
+                                                 VAR_ARROW, VAR_RENBAN, VAR_WHISPER};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -351,6 +355,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_XV] = "9x9: X joins two cells that add up to 10, V two that add up to 5; no mark, neither.",
     [VAR_GT] = "9x9: in each box, the signs between side-by-side cells say which digit is bigger.",
     [VAR_QUAD] = "9x9: a circle where four cells meet lists digits that are among those four cells.",
+    [VAR_ARROW] = "9x9 with arrows: the digits along each shaft add up to the digit in its circle.",
+    [VAR_RENBAN] = "9x9 with purple lines: each line's digits are a run of consecutive digits, in any order.",
+    [VAR_WHISPER] = "9x9 with green lines (German Whispers): neighbours along a line differ by 5 or more.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /* the level buttons (Kids 4x4: Hard and Expert off) */
 
@@ -410,7 +417,8 @@ static void new_puzzle_cb(lv_event_t *e)
                                           "Killer", "Mini 6x6", "Kids 4x4", "Thermo", "\n",
                                           "Anti-Knight", "Anti-King", "Even-Odd", "Sandwich", "\n",
                                           "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", "\n",
-                                          "Kropki", "XV", "Greater-Than", "Quadruple", ""};
+                                          "Kropki", "XV", "Greater-Than", "Quadruple", "\n",
+                                          "Arrow", "Renban", "Whispers", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
@@ -418,7 +426,7 @@ static void new_puzzle_cb(lv_event_t *e)
     for (uint32_t i = 0; i < VAR_COUNT; i++) {
         if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
     }
-    lv_obj_set_size(vm, LV_PCT(100), 264);          /* five rows */
+    lv_obj_set_size(vm, LV_PCT(100), 316);          /* six rows */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);

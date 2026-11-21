@@ -53,7 +53,7 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 How long **New puzzle** takes on the board, measured with devctl's `genbench` ([Remote control](devctl.md)): `python3 tools/devctl.py --port /dev/ttyACM1 "genbench all all 10"`. Ten puzzles of each variant and level, from fixed seeds (the same every run, so two builds compare puzzle for puzzle), each on the worker core like New puzzle, the CPU at 360 MHz. Measured 2026-11-21 on the Waveshare 4B board (pre-v3 ESP32-P4 silicon), firmware `0ce035d` (the generator as committed there); the whole run takes about 5 minutes.
 
-Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Kids 4x4 has no Hard or Expert.
+Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban and German Whispers were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert.
 
 | Variant | Easy | Medium | Hard | Expert |
 |---|---|---|---|---|
@@ -77,6 +77,9 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | XV | 15 / 20 (23.9) | 136 / 181 (4.6) | 307 / 749 (3.2) | 1743 / 5422 (3.8) |
 | Greater-Than | 7 / 10 (18.5) | 24 / 35 (4.2) | 197 / 538 (3.4) | 489 / 751 (3.8) |
 | Quadruple | 9 / 13 (29.4) | 72 / 92 (13.3) | 204 / 359 (9) | 600 / 1975 (7.4) |
+| Arrow | 9 / 11 (29.6) | 320 / 551 (18.5) | 518 / 1733 (16.2) | 497 / 770 (14.5) |
+| Renban | 9 / 19 (30.6) | 174 / 248 (18.8) | 525 / 943 (17) | 477 / 721 (14.9) |
+| German Whispers | 12 / 26 (29.7) | 450 / 1265 (14.6) | 1784 / 3302 (13.2) | 1111 / 2311 (11.4) |
 
 Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
@@ -129,7 +132,7 @@ src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/sdx.c               the puzzle line format (Import puzzles, the Files preview, Send by sound): parse, pack, format; plain C, tested on a PC
-src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Kids 4x4, Anti-Knight, Anti-King, Even-Odd, Consecutive, Non-Consecutive, Disjoint Groups, Asterisk, Kropki, XV, Greater-Than, Quadruple, Thermo, Sandwich): generator, grader, solver (Fill) and hints
+src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Kids 4x4, Anti-Knight, Anti-King, Even-Odd, Consecutive, Non-Consecutive, Disjoint Groups, Asterisk, Kropki, XV, Greater-Than, Quadruple, Arrow, Renban, German Whispers, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
 src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code, camera and vertical-dots (menu) icons at 24/20 px (lv_font_conv)

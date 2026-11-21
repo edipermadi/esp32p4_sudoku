@@ -148,6 +148,9 @@ static const uint8_t PIC_XV[] = {0, MARK_V, 1, MARK_X, 0xFF};               /* 2
 static const uint8_t PIC_GT[] = {0, MARK_LESS, 1, MARK_MORE, 2, MARK_LESS, 0xFF};   /* 2 < 5 > 4 < 9 */
 static const uint8_t PIC_BARS[] = {0, 1, 0xFF};    /* 4|5: a bar; 5 3 and 3 7: none */
 static const uint8_t PIC_THERMO[] = {0, 1, 2, 3, 0xFF};
+static const uint8_t PIC_ARROW[] = {0, 1, 2, 0xFF};         /* 7: 4 + 3 */
+static const uint8_t PIC_RENBAN[] = {0, 1, 2, 3, 0xFF};     /* 5 3 6 4 */
+static const uint8_t PIC_WHISPER[] = {0, 1, 2, 3, 0xFF};    /* 2 8 1 6 */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /* 9 + 2 = 11, and an empty 8 */
 
 static const rules_pic_t RULES_PIC[VAR_COUNT] = {
@@ -180,6 +183,10 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_XV] = {4, 1, 0, 0, "2379", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, EDGE_XV, PIC_XV},
     [VAR_GT] = {4, 1, 0, 0, "2549", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, EDGE_GT, PIC_GT},
     [VAR_QUAD] = {2, 2, 0, 0, "16" "93", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, 0, NULL, "139"},
+    [VAR_ARROW] = {3, 1, 0, 0, "743", NULL, NULL, NULL, NULL, NULL, PIC_ARROW, NULL, -1, 0, NULL, NULL, LINE_ARROW},
+    [VAR_RENBAN] = {4, 1, 0, 0, "5364", NULL, NULL, NULL, NULL, NULL, PIC_RENBAN, NULL, -1, 0, NULL, NULL, LINE_RENBAN},
+    [VAR_WHISPER] = {4, 1, 0, 0, "2816", NULL, NULL, NULL, NULL, NULL, PIC_WHISPER, NULL, -1, 0, NULL, NULL,
+                     LINE_WHISPER},
 };
 
 static const char *const RULES_TEXT[VAR_COUNT] = {
@@ -222,6 +229,12 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
                "the smaller digit: 2 < 5 > 4 < 9.",
     [VAR_QUAD] = "Classic rules, and a circle where four cells meet lists digits that must be among those four "
                  "cells, in any order: here 1, 3 and 9. The fourth cell can be anything else.",
+    [VAR_ARROW] = "Classic rules, and the digits along each arrow's shaft add up to the digit in its circle: "
+                  "4 + 3 = 7. Digits on a shaft can repeat, where the rows, columns and boxes allow it.",
+    [VAR_RENBAN] = "Classic rules, and the digits on each purple line are a run of consecutive digits, in any "
+                   "order: 5, 3, 6, 4 is 3 to 6. No digit repeats on a line.",
+    [VAR_WHISPER] = "Classic rules, and along each green line, two neighbours differ by at least 5: 2, 8, 1, 6. "
+                    "So there's never a 5 on a line.",
 };
 
 static void rules_pic_draw_cb(lv_event_t *e)
@@ -264,25 +277,14 @@ static void rules_pic_draw_cb(lv_event_t *e)
     r.border_width = 3;
     lv_area_t fr = {.x1 = x0 - 1, .y1 = y0 - 1, .x2 = x0 + w + 1, .y2 = y0 + h + 1};
     lv_draw_rect(layer, &r, &fr);
-    if (p->thermo) {                                /* a thermometer under the digits */
-        lv_draw_line_dsc_init(&l);
-        l.color = C_MUTED;
-        l.opa = LV_OPA_40;
-        l.width = cs * 3 / 10;
-        l.round_start = l.round_end = 1;
-        for (int k = 1; p->thermo[k] != 0xFF; k++) {
-            int a = p->thermo[k - 1], b = p->thermo[k];
-            l.p1.x = x0 + (a % p->w) * cs + cs / 2; l.p1.y = y0 + (a / p->w) * cs + cs / 2;
-            l.p2.x = x0 + (b % p->w) * cs + cs / 2; l.p2.y = y0 + (b / p->w) * cs + cs / 2;
-            lv_draw_line(layer, &l);
+    if (p->thermo) {                                /* a thermometer (or an arrow, a Renban, a Whispers line) */
+        lv_point_t pts[9];
+        int n = 0;
+        for (; n < 9 && p->thermo[n] != 0xFF; n++) {
+            pts[n].x = x0 + (p->thermo[n] % p->w) * cs + cs / 2;
+            pts[n].y = y0 + (p->thermo[n] / p->w) * cs + cs / 2;
         }
-        lv_draw_rect_dsc_init(&r);
-        r.bg_color = C_MUTED;
-        r.bg_opa = LV_OPA_40;
-        r.radius = LV_RADIUS_CIRCLE;
-        int b = p->thermo[0], cx = x0 + (b % p->w) * cs + cs / 2, cy = y0 + (b / p->w) * cs + cs / 2, rad = cs * 4 / 10;
-        lv_area_t a = {.x1 = cx - rad, .y1 = cy - rad, .x2 = cx + rad, .y2 = cy + rad};
-        lv_draw_rect(layer, &r, &a);
+        draw_line_path(layer, p->line_kind, pts, n, cs);
     }
     for (int i = 0; p->parity && i < p->w * p->h; i++) {   /* odd rings */
         if (p->parity[i] != 'o') continue;
@@ -458,6 +460,9 @@ static bool share_text(char *buf, size_t n)
     case VAR_XV:
     case VAR_GT: key = sudoku_marks_text(G, extra, sizeof(extra)) ? "marks" : NULL; break;
     case VAR_THERMO: key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "thermos" : NULL; break;
+    case VAR_ARROW:
+    case VAR_RENBAN:
+    case VAR_WHISPER: key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL; break;
     case VAR_SANDWICH: key = sudoku_sandwich_text(G, extra, sizeof(extra)) ? "sums" : NULL; break;
     default: break;
     }
@@ -554,7 +559,10 @@ static int pz_line(char *buf, size_t n)
     case VAR_XV:
     case VAR_GT:       if (sudoku_marks_text(G, extra, sizeof(extra))) marks = extra; break;
     case VAR_SANDWICH: if (sudoku_sandwich_text(G, extra, sizeof(extra))) marks = extra; break;
-    case VAR_THERMO:   if (sudoku_thermos_text(G, extra, sizeof(extra))) thermos = extra; break;
+    case VAR_THERMO:
+    case VAR_ARROW:
+    case VAR_RENBAN:
+    case VAR_WHISPER:  if (sudoku_thermos_text(G, extra, sizeof(extra))) thermos = extra; break;
     default: break;
     }
     int len = sdx_format(game_var(), lv >= 0 && lv < GEN_LEVELS ? lv : -1, game_given(), regions, cages, marks, thermos, true,

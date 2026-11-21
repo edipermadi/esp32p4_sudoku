@@ -40,6 +40,12 @@
  *                cells in a box a sign says which one is bigger
  *   VAR_QUAD     Quadruple: Classic rules, and a circle where four cells meet
  *                lists digits that must be among those four cells
+ *   VAR_ARROW    Arrow: Classic rules, and the digits along an arrow's shaft add
+ *                up to the digit in its circle (shaft digits may repeat)
+ *   VAR_RENBAN   Renban: Classic rules, and the digits on each line are a set of
+ *                consecutive digits, in any order (3-5-4-6)
+ *   VAR_WHISPER  German Whispers: Classic rules, and neighbours along a line
+ *                differ by at least 5 (so no 5 on a line)
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -86,11 +92,12 @@ const char *gen_level_name(int level);   /* 0..GEN_LEVELS-1: "Easy", "Medium", "
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
                VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_KING, VAR_NONCONSEC, VAR_DISJOINT,
-               VAR_ASTERISK, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_COUNT } sudoku_variant_t;
+               VAR_ASTERISK, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
+               VAR_COUNT } sudoku_variant_t;
 
 /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
  * "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki",
- * "XV", "Greater-Than", "Quadruple" */
+ * "XV", "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers" */
 const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku", ... */
 #define UNIT_DIAG_MAIN 27
 #define UNIT_DIAG_ANTI 28
@@ -102,6 +109,7 @@ const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku
 #define CAGE_NONE      0xFF
 #define THERMOS_MAX    16
 #define THERMO_NONE    0xFF
+enum { LINE_THERMO = 0, LINE_ARROW, LINE_RENBAN, LINE_WHISPER };
 #define QUADS_MAX      32
 #define QUAD_NONE      0xFF
 
@@ -148,7 +156,10 @@ typedef struct {
     /* peers that share no unit (Anti-Knight: the knight's moves; Anti-King: the touching cells) */
     uint8_t nxpeers[81];
     uint8_t xpeers[81][8];
-    /* Thermo: thermometers, each a path of cells from its bulb (digits rise along it) */
+    /* Thermo, Arrow, Renban, German Whispers: lines, each a path of cells (side by side or
+     * diagonal), of the kind line_kind: a thermometer from its bulb (digits rise along it), an
+     * arrow from its circle (the rest, its shaft, adds up to it), a Renban or a Whispers line */
+    uint8_t line_kind;                  /* LINE_* */
     uint8_t nthermos;
     uint8_t thermo_n[THERMOS_MAX];
     uint8_t thermo_cell[THERMOS_MAX][9];
@@ -196,6 +207,9 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
  * (each from its bulb; cells 0..80, side by side or diagonal neighbours, on
  * one thermometer at most); sudoku_thermos_text() writes it. */
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
+/* The same for any line variant (Thermo, Arrow: its circle first, Renban, German Whispers);
+ * sudoku_thermos_text() writes them all */
+bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out);
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
 /* A Sandwich board from its clues as text: 18 numbers 0..35, the rows top
  * to bottom then the columns left to right, comma-separated;
@@ -301,14 +315,15 @@ int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cel
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
                TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH,
                TECH_NAKED_TRIPLE, TECH_X_WING, TECH_SWORDFISH, TECH_XY_WING,
-               TECH_EDGE, TECH_QUAD } tech_kind_t;
+               TECH_EDGE, TECH_QUAD, TECH_LINE } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
     int unit, unit2, unit3;  /* pointing: box, line; claiming: line, box; pairs, triple: the unit; cage: the
                                 cage; consecutive: the cell whose candidates its neighbours narrowed;
                                 thermo: the thermometer; sandwich: the row or column; edge (Kropki, XV,
                                 Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
-                                the circle; X-Wing, Swordfish:
+                                the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
+                                X-Wing, Swordfish:
                                 the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
     int digit, digit2;       /* pointing/claiming, X-Wing, Swordfish: digit; pairs: the two digits; triple:
                                 bit mask of its three digits; cage: bit mask of the digits its sum still
