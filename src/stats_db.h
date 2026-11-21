@@ -518,6 +518,10 @@ bool stats_db_take_records(stats_records_t *out);
  * message (stats_db_take_message()). */
 void stats_db_export_csv(void);
 
+/* A copy of sudoku.db as backup/sudoku_<unix time>.db on the card (consistent
+ * while in use); the result comes back as a message. */
+void stats_db_backup(void);
+
 void stats_db_query_plays(int offset);
 bool stats_db_take_plays(stats_plays_t *out);
 

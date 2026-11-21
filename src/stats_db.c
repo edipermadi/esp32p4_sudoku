@@ -47,7 +47,7 @@ typedef enum {
     CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_PLAYER_AVATAR, CMD_IMPORT, CMD_IMPORT_FILE, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
     CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM, CMD_BM_GET, CMD_BM_SET, CMD_BM_LIST, CMD_SEEN_GET, CMD_SEEN_SET,
     CMD_ATTACK, CMD_ATTACK_BOARD, CMD_SAVED_LIST, CMD_SAVED_ADD, CMD_SAVED_REMOVE, CMD_SOLVED_LIST, CMD_SAVED_EXPORT,
-    CMD_COLL_DELETE,
+    CMD_COLL_DELETE, CMD_BACKUP,
 } cmd_type_t;
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
@@ -2964,6 +2964,43 @@ static void do_export(void)
     post_message(msg);
 }
 
+/* A consistent copy of sudoku.db as backup/sudoku_<unix time>.db (VACUUM INTO:
+ * one transaction, so pending writes are either all in it or not at all; it
+ * is compacted too). Without the clock (no Wi-Fi yet) the time is small and
+ * may repeat after a restart: a _2, _3, ... suffix keeps an older file. */
+#define BACKUP_DIR BSP_SD_MOUNT_POINT "/backup"
+
+static void do_backup(void)
+{
+    if (!s_db) return;
+    mkdir(BACKUP_DIR, 0775);                        /* fine if it's there */
+    long long ts = (long long)time(NULL);
+    char path[96];
+    struct stat st;
+    snprintf(path, sizeof(path), BACKUP_DIR "/sudoku_%lld.db", ts);
+    for (int n = 2; stat(path, &st) == 0 && n < 100; n++) {
+        snprintf(path, sizeof(path), BACKUP_DIR "/sudoku_%lld_%d.db", ts, n);
+    }
+    char msg[128];
+    sqlite3_stmt *q = NULL;
+    int rc = sqlite3_prepare_v2(s_db, "VACUUM INTO ?", -1, &q, NULL);
+    if (rc == SQLITE_OK) {
+        sqlite3_bind_text(q, 1, path, -1, SQLITE_STATIC);
+        rc = sqlite3_step(q);
+    }
+    sqlite3_finalize(q);
+    const char *name = path + strlen(BSP_SD_MOUNT_POINT "/");
+    if (rc == SQLITE_DONE && stat(path, &st) == 0) {
+        snprintf(msg, sizeof(msg), "Backed up to %s (%ld KB) on the card.", name, (long)((st.st_size + 1023) / 1024));
+    } else {
+        printf("stats_db: backup: %s\n", sqlite3_errmsg(s_db));
+        unlink(path);                               /* no half-written copy left behind */
+        snprintf(msg, sizeof(msg), "Backup failed: couldn't write %s on the card.", name);
+    }
+    printf("stats_db: %s\n", msg);
+    post_message(msg);
+}
+
 /* a page of recorded solves (newest first), for the Gameplays screen */
 static void do_plays(int offset)
 {
@@ -3217,6 +3254,9 @@ static void worker(void *arg)
             break;
         case CMD_EXPORT:
             do_export();
+            break;
+        case CMD_BACKUP:
+            do_backup();
             break;
         case CMD_WEEK:
             do_week(c.text);
@@ -3873,6 +3913,12 @@ void stats_db_export_csv(void)
 {
     cmd_t c = {.type = CMD_EXPORT};
     if (!send(&c)) post_message("Export: no database.");
+}
+
+void stats_db_backup(void)
+{
+    cmd_t c = {.type = CMD_BACKUP};
+    if (!send(&c)) post_message("Backup: no database.");
 }
 
 void stats_db_query_records(void)

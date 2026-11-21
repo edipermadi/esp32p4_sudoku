@@ -25,7 +25,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 - **Helpers**: a left-handed layout, pencil marks, Auto notes, digit-first entry, cell colours, undo/redo, mistake check, step-by-step hints (up to X-Wing, Swordfish and XY-Wing, or nudges only), a Learn mode for ten techniques and four variant rules, a tour of the game screen, starred puzzles and a 10-minute time attack.
 - **Players, statistics and trophies**: per-player progress and emoji avatars, a history calendar, charts, achievements, daily and weekly leaderboards.
 - **Replays**: every solve can be played back, or exported as an H.264 MP4 video.
-- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, puzzle import, a file manager with a Recycle bin (the database protected), a picture/video viewer and a puzzle file preview, screenshots, USB drive mode and firmware updates from the card.
+- **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, one-tap database backups, puzzle import, a file manager with a Recycle bin (the database protected), a picture/video viewer and a puzzle file preview, screenshots, USB drive mode and firmware updates from the card.
 - **Wi-Fi clock**, light and dark mode, a night mode, accent colours, colour-blind friendly colours, lock screen, screen-saver clock, synthesised sound effects, remote control by sound (Gibberlink / ggwave) and a system monitor with graphs of the last hour.
 
 ## Documentation
@@ -36,7 +36,7 @@ Also online, as web pages: **https://edipermadi.github.io/esp32p4_sudoku/docs/**
 |------|--------------|
 | [Features](docs/features.md) | Everything the game does, by topic: puzzles, playing, players & progress, settings & system |
 | [How to play](docs/how-to-play.md) | Which button does what, as a table |
-| [Data & storage](docs/data.md) | `sudoku.db` and its tables, firmware update, USB drive, format, factory reset, saving |
+| [Data & storage](docs/data.md) | `sudoku.db` and its tables, backups, firmware update, USB drive, format, factory reset, saving |
 | [Building and releases](docs/building.md) | Arduino settings, `arduino-cli`, GitHub Actions releases, the web flasher |
 | [Development](docs/development.md) | Regenerating puzzles and fonts, colours, sounds, source layout |
 | [Screenshots and remote control](docs/devctl.md) | `tools/devctl.py`: screenshots, simulated touches, files on the card over serial |

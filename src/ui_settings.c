@@ -28,6 +28,7 @@ static void fw_update_cb(lv_event_t *e);
 static void timer_sw_cb(lv_event_t *e);
 static void import_cb(lv_event_t *e);
 static void export_cb(lv_event_t *e);
+static void backup_cb(lv_event_t *e);
 static void accent_dd_cb(lv_event_t *e);
 static void assist_dd_cb(lv_event_t *e);
 static lv_obj_t *settings_dropdown(lv_obj_t *row, const char *options, uint32_t sel, int width, lv_event_cb_t cb);
@@ -291,6 +292,16 @@ static void export_cb(lv_event_t *e)
     }
     sudoku_ui_notice("Exporting...", 1500);
     stats_db_export_csv();                          /* the result comes back as a message */
+}
+
+static void backup_cb(lv_event_t *e)
+{
+    if (!stats_db_ready()) {
+        sudoku_ui_notice("Backup needs sudoku.db on a microSD card.", 3000);
+        return;
+    }
+    sudoku_ui_notice("Backing up...", 1500);
+    stats_db_backup();                              /* the result comes back as a message */
 }
 
 static void accent_dd_cb(lv_event_t *e)
@@ -1047,6 +1058,11 @@ void build_settings(void)
     lv_obj_t *ex = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_SAVE "  Export", &lv_font_montserrat_18, export_cb, NULL);
     lv_obj_set_style_bg_color(ex, C_CARD2, 0);
     lv_obj_align(ex, LV_ALIGN_RIGHT_MID, 0, 0);
+
+    r = settings_row(col, "Back up database", "A copy of sudoku.db: backup/ on the card");
+    lv_obj_t *bk = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_SAVE "  Back up", &lv_font_montserrat_18, backup_cb, NULL);
+    lv_obj_set_style_bg_color(bk, C_CARD2, 0);
+    lv_obj_align(bk, LV_ALIGN_RIGHT_MID, 0, 0);
 
     r = settings_row(col, "Factory reset", "Settings, Wi-Fi network, players and statistics");
     lv_obj_t *fr = make_btn(r, 0, 0, 160, 52, LV_SYMBOL_WARNING "  Reset", &lv_font_montserrat_18,
