@@ -135,7 +135,8 @@ src/fw_update.c         firmware update from the card: update.bin into the other
 src/sd_card.c           the microSD card: probe and format
 src/device_ops.c        factory reset, power off
 src/usb_drive.c         the card lent to a computer over USB
-src/ui_history.c        History
+src/ui_history.c        History: the calendar and a day's games
+src/history_core.c      History's data without LVGL: the month asked for, its days' counts, the day picked
 src/ui_gameplays.c      Gameplays: the pages of recorded solves
 src/gameplays_core.h    Gameplays and Replay without LVGL (a header for the three parts below)
 src/gameplays_list.c    the Gameplays pages, opening a row's replay or video

@@ -1,5 +1,17 @@
-/* ui_sudoku.c split: History (Gameplays: ui_gameplays.c). See ui_sudoku.c for the whole. */
+/**
+ * @file ui_history.c
+ * @ingroup ui_history
+ * @brief History (Home): a calendar of the days that had games (a badge says how many), and the
+ *        games of the day tapped, each solve with a move log replayable. The data: history_core.h.
+ */
 #include "ui_internal.h"
+#include "history_core.h"
+
+/**
+ * @defgroup ui_history History screen
+ * @brief The History screen: the calendar and a day's games (Gameplays: ui_gameplays.c).
+ * @{
+ */
 
 /* this file's own functions, in any order */
 static void history_row_cb(lv_event_t *e);
@@ -8,23 +20,20 @@ static void history_hint(const char *text);
 static void render_day(const stats_day_t *d);
 static void render_month(const stats_month_t *m);
 static void history_cal_draw_cb(lv_event_t *e);
-static void history_ask_month(int year, int month);
 static void history_day_cb(lv_event_t *e);
 static void history_back_cb(lv_event_t *e);
 
-/* history screen */
-static lv_obj_t *hz_cal, *hz_title, *hz_list;
-static lv_calendar_date_t hz_marked[31];  /* highlighted days (the calendar keeps the pointer) */
-static int hz_year, hz_month;             /* month asked for / shown, 0 = not yet */
-static uint8_t hz_count[31];              /* games per day of the highlighted month (badges) */
-static lv_calendar_date_t hz_sel;         /* the day tapped (its list is shown), year 0 = none */
-static bool hz_latest_pending;            /* asked for "the latest month"; show what comes back */
+static lv_obj_t *hz_cal;                  /**< the calendar */
+static lv_obj_t *hz_title;                /**< the day picked, or what to do */
+static lv_obj_t *hz_list;                 /**< its games */
+static lv_calendar_date_t hz_marked[31];  /**< highlighted days (the calendar keeps the pointer) */
 
-/* a solve from History: ask sudoku.db, history_poll() opens it */
-static int64_t hz_row_solve[STATS_MAX_DAY_ROWS];
-
-/* ------------------------------------------------------------- history */
-
+/**
+ * @brief A Unix time as the local "HH:MM".
+ * @param buf  gets it ("?" for 0: not known)
+ * @param n    its size
+ * @param t    the time
+ */
 static void fmt_clock(char *buf, size_t n, int64_t t)
 {
     if (!t) {
@@ -37,6 +46,10 @@ static void fmt_clock(char *buf, size_t n, int64_t t)
     strftime(buf, n, "%H:%M", &tm);
 }
 
+/**
+ * @brief Replaces the day's list with a line of text (what to do, nothing that day, why not).
+ * @param text  the text
+ */
 static void history_hint(const char *text)
 {
     lv_obj_clean(hz_list);
@@ -46,6 +59,11 @@ static void history_hint(const char *text)
     lv_label_set_text(l, text);
 }
 
+/**
+ * @brief Shows a day: its date, and a card per game (who, the puzzle, solved or in progress, the
+ *        times, mistakes, hints, no notes); a solve with a move log can be tapped to replay it.
+ * @param d  the day
+ */
 static void render_day(const stats_day_t *d)
 {
     struct tm tm = {.tm_year = d->year - 1900, .tm_mon = d->month - 1, .tm_mday = d->day, .tm_hour = 12};
@@ -104,9 +122,7 @@ static void render_day(const stats_day_t *d)
             snprintf(line + len, sizeof(line) - len, "   -   no notes");
         }
         lv_label_set_text(what, line);
-        hz_row_solve[i] = 0;
-        if (!r->in_progress && r->has_moves && r->solve_id) {     /* tap to watch it again */
-            hz_row_solve[i] = r->solve_id;
+        if (history_row_solve(i)) {                     /* tap to watch it again */
             lv_obj_set_clickable(card, true);
             lv_obj_set_style_bg_color(card, C_CARD2, LV_STATE_PRESSED);
             lv_obj_add_event_cb(card, history_row_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
@@ -122,9 +138,12 @@ static void render_day(const stats_day_t *d)
     }
 }
 
+/**
+ * @brief Highlights a month's days that had games on the calendar.
+ * @param m  the month
+ */
 static void render_month(const stats_month_t *m)
 {
-    memcpy(hz_count, m->count, sizeof(hz_count));
     int n = 0;
     for (int d = 1; d <= 31; d++) {
         if (!m->count[d - 1]) {
@@ -138,9 +157,12 @@ static void render_month(const stats_month_t *m)
     lv_calendar_set_highlighted_dates(hz_cal, hz_marked, n);
 }
 
-/* The tapped day: solid accent fill, white number (the calendar itself only
- * marks it faintly, and only on highlighted days). Plus a badge with the
- * number of games at the top right of each highlighted day. */
+/**
+ * @brief The calendar's drawing: the day picked with a solid accent fill and a white number (the
+ *        calendar itself only marks it faintly, and only on highlighted days), and a badge with
+ *        the number of games at the top right of each highlighted day.
+ * @param e  the draw task event
+ */
 static void history_cal_draw_cb(lv_event_t *e)
 {
     lv_draw_task_t *t = lv_event_get_draw_task(e);
@@ -163,7 +185,7 @@ static void history_cal_draw_cb(lv_event_t *e)
     }
 
     const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
-    bool selected = hz_sel.year == sh->year && hz_sel.month == sh->month && hz_sel.day == day;
+    bool selected = is_history_picked(sh->year, sh->month, day);
     if (type == LV_DRAW_TASK_TYPE_FILL) {
         if (selected) {
             lv_draw_fill_dsc_t *f = lv_draw_task_get_fill_dsc(t);
@@ -179,15 +201,16 @@ static void history_cal_draw_cb(lv_event_t *e)
     if (!lv_buttonmatrix_has_button_ctrl(bm, id, LV_BUTTONMATRIX_CTRL_CUSTOM_2)) {
         return;    /* highlighted */
     }
-    if (!hz_count[day - 1]) {
+    uint8_t count = history_day_count(day);
+    if (!count) {
         return;
     }
 
     char txt[4];
-    if (hz_count[day - 1] > 99) {
+    if (count > 99) {
         snprintf(txt, sizeof(txt), "99");
     } else {
-        snprintf(txt, sizeof(txt), "%u", (unsigned)hz_count[day - 1]);
+        snprintf(txt, sizeof(txt), "%u", (unsigned)count);
     }
     lv_area_t a;                                    /* the day number's text area */
     lv_draw_task_get_area(t, &a);
@@ -212,85 +235,78 @@ static void history_cal_draw_cb(lv_event_t *e)
     lv_draw_label(base->layer, &ld, &ta);
 }
 
-static void history_ask_month(int year, int month)
-{
-    hz_year = year;
-    hz_month = month;
-    stats_db_query_month(year, month);
-}
-
+/**
+ * @brief A day tapped on the calendar: picked (drawn so), and its games asked for.
+ * @param e  the event
+ */
 static void history_day_cb(lv_event_t *e)
 {
     lv_calendar_date_t d;
     if (lv_calendar_get_pressed_date(hz_cal, &d) != LV_RESULT_OK || !d.year) {
         return;
     }
-    hz_sel = d;
+    history_pick(d.year, d.month, d.day);
     lv_obj_invalidate(lv_calendar_get_btnmatrix(hz_cal));
-    if (!is_stats_db_ready()) {
-        return;
-    }
-    stats_db_query_day(d.year, d.month, d.day);
 }
 
+/**
+ * @brief Home's History button: the screen, on this month (no clock: the latest month played),
+ *        nothing picked yet.
+ * @param e  the event
+ */
 void history_cb(lv_event_t *e)
 {
     lv_label_set_text(hz_title, "Tap a day to see who played what");
-    hz_sel.year = 0;                                /* nothing picked yet */
+    history_pick(0, 0, 0);                          /* nothing picked yet */
     if (!is_stats_db_ready()) {
         history_hint("No sudoku.db: insert a FAT32 microSD card before switching on to keep a history.");
     } else {
         history_hint("Highlighted days had games; the badge says how many. Solves from before the "
                      "clock was set (Wi-Fi) "
                      "have no date and don't appear.");
-        time_t now = time(NULL);
-        if (CLOCK_VALID(now)) {
-            struct tm tm;
-            localtime_r(&now, &tm);
-            lv_calendar_set_today_date(hz_cal, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
-            lv_calendar_set_month_shown(hz_cal, tm.tm_year + 1900, tm.tm_mon + 1);
-            hz_latest_pending = false;
-            history_ask_month(tm.tm_year + 1900, tm.tm_mon + 1);
+        int y, m, d;
+        if (history_today(&y, &m, &d)) {
+            lv_calendar_set_today_date(hz_cal, y, m, d);
+            lv_calendar_set_month_shown(hz_cal, y, m);
+            history_ask_current(y, m);
         } else {
-            hz_latest_pending = true;                  /* no clock: open on the latest month played */
-            history_ask_month(0, 0);
+            history_ask_latest();
         }
     }
     lv_screen_load(screen_history());
 }
 
+/**
+ * @brief Back: Home.
+ * @param e  the event
+ */
 static void history_back_cb(lv_event_t *e)
 {
     show_home();
 }
 
-/* results from sudoku.db, and the month arrows (called from sd_poll_cb) */
+/** @brief sudoku.db's answers, and the month arrows (from the UI's poll). */
 void history_poll(void)
 {
-    static stats_month_t m;
-    if (stats_db_take_month(&m)) {
-        if (hz_latest_pending && m.year) {
-            lv_calendar_set_month_shown(hz_cal, m.year, m.month);
-            hz_year = m.year;
-            hz_month = m.month;
-        }
-        hz_latest_pending = false;
-        if (m.year == hz_year && m.month == hz_month) {
-            render_month(&m);
-        }
+    bool jump;
+    const stats_month_t *m = history_take_month(&jump);
+    if (jump) {
+        lv_calendar_set_month_shown(hz_cal, m->year, m->month);
     }
-    static stats_day_t d;
-    if (stats_db_take_day(&d)) {
-        render_day(&d);
+    if (m) {
+        render_month(m);
     }
-    if (lv_screen_active() == screen_history() && is_stats_db_ready() && !hz_latest_pending) {
+    const stats_day_t *d = history_take_day();
+    if (d) {
+        render_day(d);
+    }
+    if (lv_screen_active() == screen_history()) {
         const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
-        if (sh->year != hz_year || sh->month != hz_month) {
-            history_ask_month(sh->year, sh->month);
-        }
+        history_follow(sh->year, sh->month);
     }
 }
 
+/** @brief Builds the screen: Back, the title, the calendar, the day's title and list. */
 void build_history(void)
 {
     screen_set_history(make_screen());
@@ -313,8 +329,9 @@ void build_history(void)
     lv_obj_set_send_draw_task_events(bm, true);
     lv_obj_add_event_cb(bm, history_cal_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
     lv_obj_add_event_cb(hz_cal, history_day_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    if (hz_year) {
-        lv_calendar_set_month_shown(hz_cal, hz_year, hz_month);    /* theme rebuild */
+    int y, m;
+    if (history_month_asked(&y, &m)) {
+        lv_calendar_set_month_shown(hz_cal, y, m);    /* theme rebuild */
     }
 
     hz_title = make_label(screen_history(), &lv_font_montserrat_20, C_TEXT);
@@ -330,13 +347,13 @@ void build_history(void)
     lv_obj_set_scroll_dir(hz_list, LV_DIR_VER);
 }
 
+/**
+ * @brief A replayable game tapped: its replay (the Replay screen opens on sudoku.db's answer).
+ * @param e  the event (user data: the row)
+ */
 static void history_row_cb(lv_event_t *e)
 {
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !hz_row_solve[i]) {
-        return;
-    }
-    replay_set_want_export(false);
-    stats_db_query_replay(hz_row_solve[i]);
+    history_open_row((int)(intptr_t)lv_event_get_user_data(e));
 }
 
+/** @} */
