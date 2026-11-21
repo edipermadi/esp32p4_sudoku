@@ -1,7 +1,8 @@
 /**
  * @file ui_insights.c
  * @brief Mistake insights (Statistics): what the move logs say about the player's mistakes, in a
- *        dialog (was in ui_replay.c).
+ *        dialog: how many digits were wrong, which digits, where on the board, and the commonest
+ *        mix-ups (worked out by sudoku.db: stats_db_query_insights()).
  */
 #include "ui_internal.h"
 
@@ -10,10 +11,14 @@ static lv_obj_t *ins_heading(const char *text);
 static void ins_show(const stats_insights_t *in);
 static void ins_poll_cb(lv_timer_t *t);
 
-/* ------------------------------------------------------------- mistake insights */
-static lv_obj_t *ins_box, *ins_body;
-static lv_timer_t *ins_timer;
+static lv_obj_t *ins_box;               /**< the dialog (NULL: closed) */
+static lv_obj_t *ins_body;              /**< what it shows, scrolling */
+static lv_timer_t *ins_timer;           /**< waits for sudoku.db's answer (100 ms) */
 
+/**
+ * @brief Close: the dialog, and the wait for sudoku.db if it's still on.
+ * @param e  the event
+ */
 static void ins_close_cb(lv_event_t *e)
 {
     if (ins_timer) {
@@ -26,6 +31,11 @@ static void ins_close_cb(lv_event_t *e)
     ins_box = ins_body = NULL;
 }
 
+/**
+ * @brief A heading in the dialog.
+ * @param text  its text
+ * @return the label
+ */
 static lv_obj_t *ins_heading(const char *text)
 {
     lv_obj_t *l = make_label(ins_body, &lv_font_montserrat_18, C_TEXT);
@@ -34,6 +44,11 @@ static lv_obj_t *ins_heading(const char *text)
     return l;
 }
 
+/**
+ * @brief Shows the insights: the share of wrong digits; a bar per digit put in the wrong place; the
+ *        nine boxes, the busier the redder; the three commonest mix-ups ("A 3 where a 5 belongs").
+ * @param in  sudoku.db's answer
+ */
 static void ins_show(const stats_insights_t *in)
 {
     lv_obj_clean(ins_body);
@@ -128,6 +143,10 @@ static void ins_show(const stats_insights_t *in)
     }
 }
 
+/**
+ * @brief Waits for sudoku.db's answer, then shows it (if the dialog is still open).
+ * @param t  the timer
+ */
 static void ins_poll_cb(lv_timer_t *t)
 {
     static stats_insights_t in;                     /* (~250 bytes: off the LVGL stack) */
@@ -141,6 +160,11 @@ static void ins_poll_cb(lv_timer_t *t)
     }
 }
 
+/**
+ * @brief Statistics' Insights button: the dialog, "Reading your move logs..." until sudoku.db answers
+ *        (without it: why not).
+ * @param e  the event
+ */
 void insights_cb(lv_event_t *e)
 {
     if (ins_box) {

@@ -1,18 +1,27 @@
 /**
  * @file ui_screenshot.c
- * @brief The camera buttons (Solved dialog, Replay): the screen as a JPEG in screenshots/ on the card
- *        (was in ui_replay.c).
+ * @brief The camera buttons (Solved dialog, Replay): the screen as a JPEG in screenshots/ on the card.
+ *
+ * The frame is copied at once (the screen keeps going); a worker task has the hardware JPEG encoder
+ * compress it (by DMA, full colour resolution, quality SS_QUALITY: about 100-200 KB instead of a
+ * 1.5 MB uncompressed PNG) and writes it. The encoder gets RGB888, widened from RGB565 here: given
+ * RGB565 it widens by shifting alone, and white came out (236, 245, 244), with a green cast.
  */
 #include "ui_internal.h"
 
 static void ss_task(void *arg);
 static void ss_poll_cb(lv_timer_t *t);
 
-static uint16_t *ss_frame;                          /* 64-byte aligned: the encoder reads it by DMA */
-static volatile int ss_state;                       /* 0 idle, 1 writing, 2 done, 3 failed */
-static char ss_path[64];
-static lv_timer_t *ss_timer;
+static uint16_t *ss_frame;                          /**< the copied frame, RGB565 (PSRAM, 64-byte aligned: the encoder reads it by DMA) */
+static volatile int ss_state;                       /**< 0 idle, 1 writing, 2 done, 3 failed */
+static char ss_path[64];                            /**< the file being written */
+static lv_timer_t *ss_timer;                        /**< waits for the task (200 ms) */
 
+/**
+ * @brief The screenshot task: the frame widened to RGB888, compressed by the JPEG encoder and
+ *        written to ss_path (deleted if it fails half way); ss_state says how it went, then it ends.
+ * @param arg  unused
+ */
 static void ss_task(void *arg)
 {
     bool ok = false;
@@ -65,6 +74,10 @@ static void ss_task(void *arg)
     vTaskDelete(NULL);
 }
 
+/**
+ * @brief Waits for the task, then says where the picture went (or that it failed).
+ * @param t  the timer
+ */
 static void ss_poll_cb(lv_timer_t *t)
 {
     if (ss_state < 2) {
@@ -84,6 +97,11 @@ static void ss_poll_cb(lv_timer_t *t)
     sudoku_ui_notice(msg, 4000);
 }
 
+/**
+ * @brief A camera button: the screen copied now, written by a task as screenshots/YYYYMMDD-HHMMSS.jpg
+ *        (without the clock: shot-\<seconds since start\>.jpg). One at a time; needs the card.
+ * @param e  the event
+ */
 void screenshot_cb(lv_event_t *e)
 {
     if (ss_state) {
@@ -120,4 +138,5 @@ void screenshot_cb(lv_event_t *e)
 }
 
 /* ---- accessors: the other UI files reach this file's state through these */
-bool is_screenshot_busy(void) { return ss_state != 0; }               /* a screenshot being written */
+/** @brief Whether a screenshot is being written (the card is in use). @return true: writing */
+bool is_screenshot_busy(void) { return ss_state != 0; }
