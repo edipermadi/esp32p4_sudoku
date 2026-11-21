@@ -31,6 +31,9 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     screen                  where the board is: home1, home2, list, game, stats, settings, sysmon,
                             players, trophies, ... with +dialog when a dialog is open
     expect NAME ...         (scripts) stop unless the board is on one of those screens
+    clock                   Wi-Fi's state and whether the time is set: "wifi=connected time=set
+                            2026-11-21 17:43:05" (local time) or "wifi=connecting time=unset"
+    waitclock [S]           (scripts) wait until the time is set (default 60 s), else stop
     ping
 
 Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
@@ -622,6 +625,22 @@ def run(board, words):
             print(where)
         elif where not in words[1:]:
             sys.exit("expected %s, but the board is on %s: stopping before any more taps" % (" or ".join(words[1:]), where))
+    elif cmd in ("clock", "waitclock"):
+        # clock: Wi-Fi and the time; waitclock [S]: wait (default 60 s) until the time is set, else stop
+        # the run (the daily puzzle and Trophies' Daily / Weekly tabs need it)
+        limit = time.time() + (float(words[1]) if cmd == "waitclock" and len(words) > 1 else 60)
+        while True:
+            board.ser.write(b"clock\n")
+            line = board.wait_for("OK clock", 10, fail="ERR")
+            info = line.split(" ", 2)[2] if len(line.split(" ", 2)) > 2 else ""
+            if cmd == "clock":
+                print(info)
+                break
+            if "time=set" in info:
+                break
+            if time.time() > limit:
+                sys.exit("the clock isn't set (%s): stopping" % info)
+            time.sleep(1)
     elif cmd == "state":
         board.ser.write(b"state\n")
         end = time.time() + 10

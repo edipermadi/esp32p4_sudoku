@@ -10,6 +10,7 @@
  * | devctl_screen.c    | shot, bench, screenoff |
  * | devctl_files.c     | ls, get, put, mv, rm, mkdir |
  * | devctl_game.c      | state, fill |
+ * | devctl_clock.c     | clock |
  * | devctl_genbench.c  | genbench |
  * | devctl_sql.c       | sql |
  * | devctl_stream.c    | the data to and from the host: numbered base64 lines with a CRC, compression, base64 in |
@@ -171,6 +172,14 @@ void devctl_genbench(const char *line);
  * @param line  the command line
  */
 void devctl_sql(const char *line);
+/**
+ * @brief clock: whether Wi-Fi is connected and the clock is set (by NTP), as "OK clock wifi=\<state\>
+ *        time=set YYYY-MM-DD HH:MM:SS" (local time) or "OK clock wifi=\<state\> time=unset".
+ *
+ * state: off, starting, idle, connecting, connected, failed or no-radio. The network's name, the IP
+ * and the time zone are left out (they say where the board is).
+ */
+void devctl_clock(void);
 /** @} */
 
 /** @} */

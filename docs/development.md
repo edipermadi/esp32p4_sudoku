@@ -134,6 +134,11 @@ src/device_ops.c        factory reset, power off
 src/usb_drive.c         the card lent to a computer over USB
 src/ui_history.c        History and Gameplays
 src/ui_trophies.c       Trophies: achievements, leaderboards, records
+src/trophies_core.h     the Trophies screen's data, without LVGL (a header for the four parts below)
+src/trophies_dates.c    date arithmetic: a day moved, this week's Monday
+src/trophies_view.c     the day and week shown: moving them, asking sudoku.db
+src/trophies_results.c  sudoku.db's answers for the screen, taken (PSRAM buffers)
+src/trophies_text.c     an achievement's progress, the unlock toast's text
 src/ui_players.c        the name dialog, Players, avatars
 src/devctl.c            serial control: screenshots, simulated touches, files, SQL (tools/devctl.py)
 src/devctl_touch.c      devctl: tap, long, swipe, press, move, release
@@ -142,6 +147,7 @@ src/devctl_files.c      devctl: ls, get, put, mv, rm, mkdir
 src/devctl_game.c       devctl: state, fill
 src/devctl_genbench.c   devctl: genbench
 src/devctl_sql.c        devctl: sql
+src/devctl_clock.c      devctl: clock (Wi-Fi connected? time set?)
 src/devctl_stream.c     devctl: data to and from the host (base64 lines, CRC, compression); devctl_internal.h lists them
 src/serial_port.cpp     the USB-UART port (Arduino's Serial) as C functions, for devctl.c
 src/qrcode/             Project Nayuki's QR Code generator (MIT), for Share

@@ -30,6 +30,9 @@ extern "C" {
  *   press <x> <y> / move <x> <y> / release    by hand
  *   wait <ms>                 let the UI run (animations, the database)
  *   screenoff                 turn the screen off as its timeout does (the next tap wakes it)
+ *   clock                     -> "OK clock wifi=<state> time=set YYYY-MM-DD HH:MM:SS" (local) or
+ *                             "OK clock wifi=<state> time=unset"; state: off, starting, idle,
+ *                             connecting, connected, failed, no-radio
  *   state                     the game on screen: "STATE name=\"...\" variant=... size=9 solved=0
  *                             paused=0 filled=36/81 time=12 mistakes=0 hints=0", "BOARD <81 chars>"
  *                             (row by row: 1-9 given, a-i entered, . empty, # off the board);

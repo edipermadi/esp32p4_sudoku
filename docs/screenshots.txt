@@ -161,6 +161,7 @@ expect gameplays
 tap 72 36                   # Home
 wait 500
 expect home1
+waitclock                   # Daily and Weekly need the time (Wi-Fi)
 tap 513 543                 # Trophies
 wait 1200
 expect trophies

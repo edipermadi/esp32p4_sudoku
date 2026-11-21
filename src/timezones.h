@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#define CLOCK_VALID(t) ((t) > 1700000000)      /* the clock has been set (by NTP) */
+
 typedef struct {
     const char *name;     /* IANA, e.g. "Asia/Dubai" */
     const char *posix;    /* e.g. "<+04>-4" */

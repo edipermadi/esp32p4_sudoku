@@ -107,6 +107,10 @@ static void run(char *line)
         devctl_reply("OK screen %s\n", name);
         return;
     }
+    if (!strcmp(cmd, "clock")) {                   /* Wi-Fi connected? the time set? */
+        devctl_clock();
+        return;
+    }
     if (!strcmp(cmd, "state")) {                   /* the game on screen, as text */
         devctl_state();
         return;

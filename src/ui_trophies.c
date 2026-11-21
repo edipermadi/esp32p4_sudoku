@@ -1,20 +1,20 @@
-/* ui_sudoku.c split: Trophies: achievements, leaderboards, records. See ui_sudoku.c for the whole. */
+/* ui_sudoku.c split: Trophies: achievements, leaderboards, records (the screen; its data and dates:
+ * trophies_core.c). See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
+#include "trophies_core.h"
 
 /* this file's own functions, in any order */
 static void tr_hint(lv_obj_t *list, const char *text);
 static lv_obj_t *tr_card(lv_obj_t *list, int h);
-static void ach_progress_text(const stats_ach_t *a, char *buf, size_t n);
 static void ach_card(const stats_ach_t *a);
 static void render_achievements(const stats_achievements_t *a);
-static void day_shift(char *day, int delta);
 static bool tr_today(char day[12]);
 static void render_board(const stats_board_t *b);
-static bool this_monday(char day[12]);
 static void render_week(const stats_week_t *w);
 static void tr_week_cb(lv_event_t *e);
 static void render_records(const stats_records_t *R);
 static void tr_select_tab(int tab);
+static bool tr_clock_tabs(void);
 static void tr_tab_cb(lv_event_t *e);
 static void tr_day_cb(lv_event_t *e);
 static void trophy_toast_cb(lv_timer_t *t);
@@ -23,10 +23,8 @@ static lv_obj_t *scr_trophy;              /* Trophies: achievements, daily leade
 static lv_obj_t *tr_tab[TR_TABS], *tr_view[TR_TABS];
 static lv_obj_t *tr_ach_count, *tr_ach_list, *tr_rec_list;
 static lv_obj_t *tr_week_lbl, *tr_week_prev, *tr_week_next, *tr_week_list;
-static char tr_monday[12];                /* week on the Weekly tab, "" = this week */
 static lv_obj_t *tr_day_lbl, *tr_day_prev, *tr_day_next, *tr_board_list, *tr_play_btn;
 static int tr_tab_sel;
-static char tr_day[12];                   /* day on the leaderboard, "" = today */
 static lv_obj_t *h_trophy_sub;            /* home button line: "7 of 22 achievements" */
 
 static void tr_hint(lv_obj_t *list, const char *text)
@@ -51,27 +49,6 @@ static lv_obj_t *tr_card(lv_obj_t *list, int h)
     lv_obj_set_scrollable(card, false);
     lv_obj_set_clickable(card, false);
     return card;
-}
-
-/* "3 / 10", "2 h 5 min / 10 h", "4 / 7 days" */
-static void ach_progress_text(const stats_ach_t *a, char *buf, size_t n)
-{
-    switch (a->unit) {
-    case ACH_UNIT_MINUTES:
-        if (a->value >= 60)
-            snprintf(buf, n, "%ld h %ld min / %ld h", (long)(a->value / 60), (long)(a->value % 60),
-                     (long)(a->goal / 60));
-        else {
-            snprintf(buf, n, "%ld min / %ld h", (long)a->value, (long)(a->goal / 60));
-        }
-        break;
-    case ACH_UNIT_DAYS:
-        snprintf(buf, n, "%ld / %ld days", (long)a->value, (long)a->goal);
-        break;
-    default:
-        snprintf(buf, n, "%ld / %ld", (long)a->value, (long)a->goal);
-        break;
-    }
 }
 
 static void ach_card(const stats_ach_t *a)
@@ -104,7 +81,7 @@ static void ach_card(const stats_ach_t *a)
         lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, 0);
     } else if (a->goal > 1) {
         char prog[32];
-        ach_progress_text(a, prog, sizeof(prog));
+        trophies_ach_progress_text(a, prog, sizeof(prog));
         lv_label_set_text(r, prog);
         lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, -12);
         lv_obj_t *bar = lv_bar_create(card);
@@ -132,21 +109,6 @@ static void render_achievements(const stats_achievements_t *a)
         }
     }
     lv_obj_scroll_to_y(tr_ach_list, 0, LV_ANIM_OFF);
-}
-
-/* day moved by delta days ('YYYY-MM-DD', in place) */
-static void day_shift(char *day, int delta)
-{
-    struct tm tm = {0};
-    if (sscanf(day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) != 3) {
-        return;
-    }
-    tm.tm_year -= 1900;
-    tm.tm_mon -= 1;
-    tm.tm_mday += delta;
-    tm.tm_hour = 12;                                    /* clear of DST changes */
-    mktime(&tm);
-    strftime(day, 12, "%Y-%m-%d", &tm);
 }
 
 static bool tr_today(char day[12])
@@ -247,26 +209,10 @@ static void render_board(const stats_board_t *b)
     lv_obj_scroll_to_y(tr_board_list, 0, LV_ANIM_OFF);
 }
 
-/* Monday of this week ('YYYY-MM-DD'); false while the clock isn't set */
-static bool this_monday(char day[12])
-{
-    time_t now = time(NULL);
-    if (!CLOCK_VALID(now)) {
-        return false;
-    }
-    struct tm tm;
-    localtime_r(&now, &tm);
-    tm.tm_mday -= (tm.tm_wday + 6) % 7;
-    tm.tm_hour = 12;
-    mktime(&tm);
-    strftime(day, 12, "%Y-%m-%d", &tm);
-    return true;
-}
-
 static void render_week(const stats_week_t *w)
 {
     char now[12] = "", date[24] = "";
-    bool clock = this_monday(now);
+    bool clock = trophies_this_monday(now);
     struct tm tm = {0};
     if (sscanf(w->monday, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
         tm.tm_year -= 1900;
@@ -330,22 +276,6 @@ static void render_week(const stats_week_t *w)
         tr_hint(tr_week_list, current ? "No daily puzzle solved this week yet." : "No daily puzzle was solved that week.");
     }
     lv_obj_scroll_to_y(tr_week_list, 0, LV_ANIM_OFF);
-}
-
-static void tr_week_cb(lv_event_t *e)
-{
-    char now[12];
-    if (!this_monday(now)) {
-        return;
-    }
-    if (!tr_monday[0]) {
-        snprintf(tr_monday, sizeof(tr_monday), "%s", now);
-    }
-    day_shift(tr_monday, 7 * (int)(intptr_t)lv_event_get_user_data(e));
-    if (strcmp(tr_monday, now) > 0) {
-        snprintf(tr_monday, sizeof(tr_monday), "%s", now);
-    }
-    stats_db_query_week(tr_monday);
 }
 
 static void render_records(const stats_records_t *R)
@@ -432,17 +362,11 @@ void tr_ask(void)
         return;
     }
     if (tr_tab_sel == TR_WEEK) {
-        char now[12];
-        if (!this_monday(now)) {
+        if (!trophies_ask_week()) {
             lv_label_set_text(tr_week_lbl, "");
             tr_hint(tr_week_list, "The weekly challenge needs today's date: connect Wi-Fi (Settings) so the clock "
                     "is set.");
-            return;
         }
-        if (!tr_monday[0] || strcmp(tr_monday, now) > 0) {
-            snprintf(tr_monday, sizeof(tr_monday), "%s", now);
-        }
-        stats_db_query_week(tr_monday);
         return;
     }
     char today[12];
@@ -456,10 +380,24 @@ void tr_ask(void)
         return;
     }
     lv_obj_set_state(tr_day_prev, LV_STATE_DISABLED, false);
-    if (!tr_day[0] || strcmp(tr_day, today) > 0) {
-        snprintf(tr_day, sizeof(tr_day), "%s", today);
+    trophies_ask_board(today);
+}
+
+/* the Daily and Weekly tabs need today's date: greyed out (not tappable) until the clock is set
+ * (Wi-Fi connected, time fetched), like Home's Daily puzzle button; the page then opens on
+ * Achievements. True if they changed. */
+static bool tr_clock_tabs(void)
+{
+    bool clock = CLOCK_VALID(time(NULL));
+    if (!clock && (tr_tab_sel == 1 || tr_tab_sel == TR_WEEK)) {
+        tr_tab_sel = 0;
     }
-    stats_db_query_board(tr_day);
+    if (lv_obj_has_state(tr_tab[1], LV_STATE_DISABLED) == !clock) {
+        return false;
+    }
+    lv_obj_set_state(tr_tab[1], LV_STATE_DISABLED, !clock);
+    lv_obj_set_state(tr_tab[TR_WEEK], LV_STATE_DISABLED, !clock);
+    return true;
 }
 
 static void tr_select_tab(int tab)
@@ -484,20 +422,18 @@ static void tr_day_cb(lv_event_t *e)
     if (!tr_today(today)) {
         return;
     }
-    if (!tr_day[0]) {
-        snprintf(tr_day, sizeof(tr_day), "%s", today);
-    }
-    day_shift(tr_day, (int)(intptr_t)lv_event_get_user_data(e));
-    if (strcmp(tr_day, today) > 0) {
-        snprintf(tr_day, sizeof(tr_day), "%s", today);
-    }
-    stats_db_query_board(tr_day);
+    trophies_step_day(today, (int)(intptr_t)lv_event_get_user_data(e));
+}
+
+static void tr_week_cb(lv_event_t *e)
+{
+    trophies_step_week((int)(intptr_t)lv_event_get_user_data(e));
 }
 
 void trophy_cb(lv_event_t *e)
 {
-    tr_day[0] = 0;                                       /* the leaderboard opens on today */
-    tr_monday[0] = 0;                                    /* and the weekly one on this week */
+    trophies_reset_days();                               /* the leaderboard opens on today, the weekly one on this week */
+    tr_clock_tabs();
     tr_select_tab(tr_tab_sel);
     lv_screen_load(scr_trophy);
 }
@@ -505,18 +441,14 @@ void trophy_cb(lv_event_t *e)
 /* sudoku.db answers for the Trophies screen and the home button line */
 void trophy_poll(void)
 {
-    static stats_achievements_t *a;                      /* PSRAM: internal RAM is tight */
-    static stats_board_t *b;
-    if (!a) {
-        a = heap_caps_malloc(sizeof(*a), MALLOC_CAP_SPIRAM);
+    if (scr_trophy) {
+        tr_clock_tabs();                                 /* the clock was just set: Daily and Weekly open up */
     }
-    if (!b) {
-        b = heap_caps_malloc(sizeof(*b), MALLOC_CAP_SPIRAM);
-    }
-    if (!a || !b) {
+    if (!trophies_bufs()) {
         return;
     }
-    if (stats_db_take_achievements(a)) {
+    const stats_achievements_t *a = trophies_take_achievements();
+    if (a) {
         if (h_trophy_sub) {
             lv_label_set_text_fmt(h_trophy_sub, "%d of %d achievements", a->unlocked, a->n);
         }
@@ -524,21 +456,16 @@ void trophy_poll(void)
             render_achievements(a);
         }
     }
-    if (stats_db_take_board(b) && scr_trophy && !strcmp(b->day, tr_day)) {
+    const stats_board_t *b = trophies_take_board();
+    if (b && scr_trophy) {
         render_board(b);
     }
-    static stats_records_t *r;
-    if (!r) {
-        r = heap_caps_malloc(sizeof(*r), MALLOC_CAP_SPIRAM);
-    }
-    if (r && stats_db_take_records(r) && scr_trophy && r->player_id == store_player_id()) {
+    const stats_records_t *r = trophies_take_records();
+    if (r && scr_trophy && r->player_id == store_player_id()) {
         render_records(r);
     }
-    static stats_week_t *w;
-    if (!w) {
-        w = heap_caps_malloc(sizeof(*w), MALLOC_CAP_SPIRAM);
-    }
-    if (w && stats_db_take_week(w) && scr_trophy && !strcmp(w->monday, tr_monday)) {
+    const stats_week_t *w = trophies_take_week();
+    if (w && scr_trophy) {
         render_week(w);
     }
 }
@@ -560,6 +487,10 @@ void build_trophies(void)
     for (int i = 0, x = 12; i < TR_TABS; x += TAB_W[i++] + tab_gap) {
         tr_tab[i] = make_btn(scr_trophy, x, TR_TAB_Y, TAB_W[i], TR_TAB_H, TABS[i], &font_icons_20, tr_tab_cb,
                              (void *)(intptr_t)i);
+    }
+    for (int i = 1; i <= TR_WEEK; i++) {                 /* Daily, Weekly: greyed out until the clock is set */
+        lv_obj_set_style_bg_opa(tr_tab[i], LV_OPA_40, LV_STATE_DISABLED);
+        lv_obj_set_style_text_opa(tr_tab[i], LV_OPA_40, LV_STATE_DISABLED);
     }
 
     /* achievements */
@@ -644,6 +575,7 @@ void build_trophies(void)
     lv_obj_set_scroll_dir(tr_rec_list, LV_DIR_VER);
     tr_hint(tr_rec_list, "Loading...");
 
+    tr_clock_tabs();
     for (int i = 0; i < TR_TABS; i++) {
         lv_obj_set_state(tr_tab[i], LV_STATE_CHECKED, i == tr_tab_sel);
         lv_obj_set_style_text_color(lv_obj_get_child(tr_tab[i], 0), i == tr_tab_sel ? lv_color_white() : C_TEXT, 0);
@@ -686,12 +618,9 @@ static void trophy_toast_cb(lv_timer_t *t)
 
 void trophy_toast_poll(void)
 {
-    char titles[160];
-    int n = 0;
-    if (!stats_db_take_unlocked(titles, sizeof(titles), &n)) {
+    if (!trophies_take_unlocked(s_toast_text, sizeof(s_toast_text))) {
         return;
     }
-    snprintf(s_toast_text, sizeof(s_toast_text), "%s unlocked:\n%s", n == 1 ? "Achievement" : "Achievements", titles);
     lv_timer_t *t = lv_timer_create(trophy_toast_cb, 1200, NULL);   /* after the fanfare starts */
     lv_timer_set_repeat_count(t, 1);
     if (h_trophy_sub && is_stats_db_ready()) {
