@@ -99,7 +99,7 @@ The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `ui_sud
 
 Variables are always `static`: only the file that owns one touches it, and the other files call that file's accessors, declared in `ui_internal.h` under each owner. The game's state (`g_*`) belongs to `ui_game.c`, so `ui_hints.c` reads `game_sel()` and writes `game_set_sel(i)`; a screen's widget is `screen_home()`. An accessor of an array or a struct gives a `const` pointer (`game_given()[i]`, `game_b()->val[i]`), so the compiler rejects a write from another file. A change another file needs to make is a function in the owner (`game_put_value`, `players_take`, `stats_take_view`). Add an accessor only when another file needs it.
 
-The other modules work the same way: no `extern` variables in `src/`. Their tables are reached through functions: `variant_name(v)`, `gen_level_name(l)` (generator.c), `stats_kind_name(k)` (stats_db.c), `puzzle_collection(c)`, `puzzle_load(id, cells)` (puzzles_data.c), `avatar_image(k)` (avatars.c), and the active colours through `ui_palette()` (the `C_*` macros). Constant tables follow the rule too: `static` in their owner, read through a function (`ui_digits()`, `learn_names()`, `sleep_minutes()` in the UI), never an `extern`. `tools/gen_puzzles.py` and `tools/gen_avatars.py` write those accessors with the data.
+The other modules work the same way: no `extern` variables in `src/`. Their tables are reached through functions: `variant_name(v)`, `gen_level_name(l)` (generator.c), `stats_kind_name(k)` (stats_db_kinds.c), `puzzle_collection(c)`, `puzzle_load(id, cells)` (puzzles_data.c), `avatar_image(k)` (avatars.c), and the active colours through `ui_palette()` (the `C_*` macros). Constant tables follow the rule too: `static` in their owner, read through a function (`ui_digits()`, `learn_names()`, `sleep_minutes()` in the UI), never an `extern`. `tools/gen_puzzles.py` and `tools/gen_avatars.py` write those accessors with the data.
 
 ## Internal RAM
 
@@ -146,7 +146,10 @@ src/devctl_stream.c     devctl: data to and from the host (base64 lines, CRC, co
 src/serial_port.cpp     the USB-UART port (Arduino's Serial) as C functions, for devctl.c
 src/qrcode/             Project Nayuki's QR Code generator (MIT), for Share
 src/store.cpp           RAM copy of statistics, saved game and settings; reads the old NVS keys once
-src/stats_db.c          sudoku.db on the microSD card: statistics, saved game, settings, queries
+src/stats_db.c          sudoku.db on the microSD card: the worker task, opening, the calls the parts share
+src/stats_db_*.c        its parts, one per subject: schema, prefs, players, games, solves, kinds, generated,
+                        rank, achievements, import, saved, history, records, export, small, sql
+                        (stats_db_internal.h lists them; the game uses stats_db.h)
 src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP

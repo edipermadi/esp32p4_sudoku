@@ -2,7 +2,7 @@
 
 [← Internals](README.md) · [README](../../README.md) · [Features](../features.md) · [How to play](../how-to-play.md) · [Data & storage](../data.md) · [Building](../building.md) · [Development](../development.md) · [Remote control](../devctl.md)
 
-How `sudoku.db` is laid out: its tables, what each one is for, and how they connect. [Data & storage](../data.md) lists every column; this page explains the design. The schema is in `src/stats_db.c` (`T_*`, `SCHEMA`, `SCHEMA_POST`) and is described again at the top of `src/stats_db.h`.
+How `sudoku.db` is laid out: its tables, what each one is for, and how they connect. [Data & storage](../data.md) lists every column; this page explains the design. The schema is in `src/stats_db_schema.c` (`T_*`, `SCHEMA`, `SCHEMA_POST`) and is described again at the top of `src/stats_db.h`.
 
 ## Overview
 
@@ -179,7 +179,7 @@ The `REFERENCES players(id)` clauses document the links, but SQLite's `foreign_k
 
 **`bookmarks`**: starred puzzles (player + puzzle id, with the time). The Starred list sorts them newest first.
 
-**`achievements`**: one row per unlocked achievement (`key` from the `ACH` list in `src/stats_db.c`). They are checked after every solve against `solves`, `puzzle_stats`, `attack` and `learned`. `unlocked_at` is NULL when the achievement was found already done or the clock wasn't set.
+**`achievements`**: one row per unlocked achievement (`key` from the `ACH` list in `src/stats_db_achievements.c`). They are checked after every solve against `solves`, `puzzle_stats`, `attack` and `learned`. `unlocked_at` is NULL when the achievement was found already done or the clock wasn't set.
 
 **`learned`**: Learn practices finished (technique 0–9).
 

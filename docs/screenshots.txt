@@ -6,7 +6,8 @@
 # (no puzzle is played or made, no setting is changed). The game screen tour must
 # have been seen (tour.png is taken by hand). It expects one recorded
 # solve (for Gameplays and the replay) and a puzzle file (.sdx, .sdm or .opensudoku)
-# first in puzzles/ (for the preview); the Home menu always has its two pages.
+# first in puzzles/ (for the preview), and a backup/ folder on the card (Files: the Recycle
+# bin, backup/, then puzzles/ as the first rows); the Home menu always has its two pages.
 
 wait 12000                  # Wi-Fi connects and sets the clock (time on Home, the daily puzzle)
 expect home1
@@ -35,7 +36,7 @@ tap 600 103                 # New puzzle: the variant and level dialog
 wait 800
 expect list+dialog
 shot docs/screenshots/new-puzzle.png
-tap 620 111                 # the X in its title bar
+tap 620 71                  # the X in its title bar
 wait 400
 expect list
 tap 682 36                  # the menu
@@ -190,7 +191,7 @@ tap 513 637                 # Files (Home, page 1): the card's root
 wait 1500
 expect files
 shot docs/screenshots/files.png
-tap 250 217                 # the puzzles folder
+tap 250 286                 # the puzzles folder (after the Recycle bin and backup/)
 wait 1200
 tap 250 148                 # its first file (an .sdx): the puzzle file preview (only looked at)
 wait 1500

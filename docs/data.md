@@ -23,7 +23,7 @@ Where the game keeps its data (`sudoku.db` on the microSD card), and the mainten
   - `seen`: things shown once per player: `player_id`, `what` (`tour`: the game screen tour) and `at`.
   - `attack`: time attack runs: `id`, `player_id`, `finished_at`, `solved` (Easy puzzles solved in the 10 minutes) and `mistakes`.
   - `learned`: Learn practices each player has finished (placed the digit the technique leads to): `player_id`, `technique` (Learn's list, 0 Hidden single .. 9 XY-Wing) and `at`.
-  - `achievements`: `player_id`, `key` (e.g. `clean_25`, `streak_7`; the list is `ACH` in `src/stats_db.c`) and `unlocked_at` (Unix time; NULL when it was found already done or the clock wasn't set).
+  - `achievements`: `player_id`, `key` (e.g. `clean_25`, `streak_7`; the list is `ACH` in `src/stats_db_achievements.c`) and `unlocked_at` (Unix time; NULL when it was found already done or the clock wasn't set).
   - `settings`: `dark_mode`, `sound`, `brightness` (10–100), `volume` (0–100), `assist` (Mistake check: 0 Off, 1 Rules, 2 Solution), `show_timer`, `accent` (0 Blue .. 4 Pink), `rules_seen` (bit per variant), `screen_off_minutes`, `saver_clock`, `lock_mode`, `lock_pin`, `cvd` (colour-blind friendly), `no_notes` (the no-notes challenge for new games), `left_hand` (the number pad on the left), `big_digits` (Digit size: Large), `is_hint_nudge` (Hints: Nudge only), `night_mode`, `night_start` and `night_end` (hours 0–23), `night_brightness` (10–100), `time_zone`, `last_level`, `current_player` and `migrated_from_nvs`.
 
   ```
