@@ -1,4 +1,8 @@
-/*
+/**
+ * @file bsp_sdcard.c
+ * @ingroup bsp
+ * @brief The microSD slot: detect, mount at /sdcard, format.
+ *
  * microSD (TF) slot: SDMMC slot 0, 4-bit, IO_MUX pins CLK43 CMD44 D0..D3 39..42.
  * Based on the esp32p4_86box project's driver: detect the card, mount its
  * FAT volume at /sdcard (stats_db.c keeps sudoku.db there), and lay down a
@@ -6,6 +10,7 @@
  *
  * Not using the Arduino SD_MMC library: its generic P4 variant toggles GPIO45
  * as a card power switch, which this board does not have.
+ *
  */
 #include "bsp_board.h"
 #include <string.h>
@@ -19,15 +24,18 @@
 #include "diskio_impl.h"
 #include "esp_vfs_fat.h"
 
-static const char *TAG = "bsp_sdcard";
+static const char *TAG = "bsp_sdcard";  /**< the log's tag */
 
-static esp_ldo_channel_handle_t s_ldo;
-static bool s_host_ok, s_slot_ok, s_ready;
-static sdmmc_card_t s_card;
-static BYTE s_pdrv = 0xFF;
-static FATFS *s_fs;
-static char s_drv[3];
+static esp_ldo_channel_handle_t s_ldo;  /**< the slot's IO rail (LDO) */
+static bool s_host_ok;                  /**< the SDMMC host runs */
+static bool s_slot_ok;                  /**< slot 0 is set up */
+static bool s_ready;                    /**< a card answered (bsp_sdcard_probe()) */
+static sdmmc_card_t s_card;             /**< the card */
+static BYTE s_pdrv = 0xFF;              /**< FatFs' drive number (0xFF: not registered) */
+static FATFS *s_fs;                     /**< the mounted volume (NULL: none) */
+static char s_drv[3];                   /**< its drive name, "0:" */
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_sdcard_host_init(void)
 {
     if (s_host_ok) {
@@ -49,6 +57,7 @@ esp_err_t bsp_sdcard_host_init(void)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_sdcard_probe(uint64_t *bytes, char *name)
 {
     s_ready = false;
@@ -80,6 +89,7 @@ esp_err_t bsp_sdcard_probe(uint64_t *bytes, char *name)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_sdcard_check(void)
 {
     if (!s_ready) {
@@ -88,6 +98,7 @@ esp_err_t bsp_sdcard_check(void)
     return sdmmc_get_status(&s_card);
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_sdcard_read(void *buf, uint32_t sector, uint32_t count)
 {
     if (!s_ready) {
@@ -96,6 +107,7 @@ esp_err_t bsp_sdcard_read(void *buf, uint32_t sector, uint32_t count)
     return sdmmc_read_sectors(&s_card, buf, sector, count);
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_sdcard_write(const void *buf, uint32_t sector, uint32_t count)
 {
     if (!s_ready) {
@@ -107,20 +119,52 @@ esp_err_t bsp_sdcard_write(const void *buf, uint32_t sector, uint32_t count)
 uint32_t bsp_sdcard_sector_count(void) { return s_ready ? (uint32_t)s_card.csd.capacity : 0; }
 uint32_t bsp_sdcard_sector_size(void)  { return s_ready ? (uint32_t)s_card.csd.sector_size : 512; }
 
-/* ------------------------------------------------------- FatFs disk driver */
+/**
+ * @brief FatFs diskio: init.
+ * @param pdrv  the drive
+ * @return 0, or STA_NOINIT without a card
+ */
 static DSTATUS dio_init(BYTE pdrv)   { return s_ready ? 0 : STA_NOINIT; }
+/**
+ * @brief FatFs diskio: status.
+ * @param pdrv  the drive
+ * @return 0, or STA_NOINIT without a card
+ */
 static DSTATUS dio_status(BYTE pdrv) { return s_ready ? 0 : STA_NOINIT; }
 
+/**
+ * @brief FatFs diskio: read sectors.
+ * @param pdrv  the drive
+ * @param buf  gets them
+ * @param sector  the first
+ * @param count  how many
+ * @return RES_OK or RES_ERROR
+ */
 static DRESULT dio_read(BYTE pdrv, BYTE *buf, DWORD sector, UINT count)
 {
     return sdmmc_read_sectors(&s_card, buf, sector, count) == ESP_OK ? RES_OK : RES_ERROR;
 }
 
+/**
+ * @brief FatFs diskio: write sectors.
+ * @param pdrv  the drive
+ * @param buf  the sectors
+ * @param sector  the first
+ * @param count  how many
+ * @return RES_OK or RES_ERROR
+ */
 static DRESULT dio_write(BYTE pdrv, const BYTE *buf, DWORD sector, UINT count)
 {
     return sdmmc_write_sectors(&s_card, buf, sector, count) == ESP_OK ? RES_OK : RES_ERROR;
 }
 
+/**
+ * @brief FatFs diskio: sync, the card's size, its sector size.
+ * @param pdrv  the drive
+ * @param cmd  what
+ * @param buf  gets the answer
+ * @return RES_OK, RES_PARERR or RES_ERROR
+ */
 static DRESULT dio_ioctl(BYTE pdrv, BYTE cmd, void *buf)
 {
     switch (cmd) {
@@ -142,6 +186,7 @@ static DRESULT dio_ioctl(BYTE pdrv, BYTE cmd, void *buf)
     }
 }
 
+/** FatFs' diskio for the card */
 static const ff_diskio_impl_t s_diskio = {
     .init = dio_init,
     .status = dio_status,
@@ -150,6 +195,10 @@ static const ff_diskio_impl_t s_diskio = {
     .ioctl = dio_ioctl,
 };
 
+/**
+ * @brief Registers the card as a FatFs drive (once).
+ * @return ESP_OK, or why not
+ */
 static esp_err_t register_drive(void)
 {
     if (s_pdrv == 0xFF) {
@@ -162,6 +211,7 @@ static esp_err_t register_drive(void)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_sdcard_mount(void)
 {
     ESP_RETURN_ON_FALSE(s_ready, ESP_ERR_INVALID_STATE, TAG, "no card");
@@ -186,6 +236,7 @@ esp_err_t bsp_sdcard_mount(void)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 void bsp_sdcard_unmount(void)
 {
     if (!s_fs) {
@@ -196,6 +247,7 @@ void bsp_sdcard_unmount(void)
     s_fs = NULL;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_sdcard_format_fat32(void)
 {
     ESP_RETURN_ON_FALSE(s_ready, ESP_ERR_INVALID_STATE, TAG, "probe the card first");

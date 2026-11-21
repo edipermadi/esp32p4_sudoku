@@ -228,7 +228,7 @@ files_restore_t files_restore(const char *name)
     }
     struct stat st;
     if (stat(to, &st) == 0) {
-        char msg[160];
+        char msg[FILES_PATH_MAX + 48];
         snprintf(msg, sizeof(msg), "Can't restore: something is already at %s.", rel);
         printf("files: %s\n", msg);
         return FILES_RESTORE_TAKEN;

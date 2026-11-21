@@ -452,9 +452,9 @@ static void player_menu_cb(lv_event_t *e)
 {
     bool db = is_stats_db_ready() && players_count() >= 0;
     const ctx_item_t items[] = {
-        {LV_SYMBOL_PLUS, "Add player", player_add_cb, !db},
-        {LV_SYMBOL_EDIT, "Rename player", player_rename_cb, !db},
-        {LV_SYMBOL_IMAGE, "Avatar", player_avatar_cb, !db || !players_current()},
+        {LV_SYMBOL_PLUS, "Add player", player_add_cb, !db, false},
+        {LV_SYMBOL_EDIT, "Rename player", player_rename_cb, !db, false},
+        {LV_SYMBOL_IMAGE, "Avatar", player_avatar_cb, !db || !players_current(), false},
         {LV_SYMBOL_TRASH, "Delete player", player_delete_cb, !db || players_count() < 2, true},
     };
     ctx_menu_toggle(p_menu_btn, items, (int)(sizeof(items) / sizeof(items[0])));

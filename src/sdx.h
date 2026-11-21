@@ -1,3 +1,7 @@
+/**
+ * @file sdx.h
+ * @brief The .sdx puzzle format: one puzzle a line, its variant, level, givens and extras.
+ */
 #pragma once
 /*
  * One puzzle as a line of text: the .sdx format (Settings > Data > Import puzzles,
@@ -25,26 +29,63 @@
 extern "C" {
 #endif
 
+/** A puzzle read from an .sdx line. */
 typedef struct {
-    int variant;                        /* sudoku_variant_t */
-    int level;                          /* gen_level_t, -1: none given */
-    uint8_t givens[81];                 /* 0 = empty */
-    const char *regions, *cages, *marks, *thermos;   /* into the parsed line; "" when not there */
+    int variant;                        /**< sudoku_variant_t */
+    int level;                          /**< gen_level_t, -1: none given */
+    uint8_t givens[81];                 /**< 0 = empty */
+    const char *regions;                /**< Jigsaw's regions (into the parsed line; "" when not there) */
+    const char *cages;                  /**< Killer's cages (the same) */
+    const char *marks;                  /**< the marks: Kropki, XV, ... (the same) */
+    const char *thermos;                /**< Thermo's lines (the same) */
 } sdx_puzzle_t;
 
-/* Reads one line (changed in place: the fields are cut out of it). false: it isn't a
+/**
+ * @brief
+ * @param line  the line
+ * @param p  gets the puzzle
+ * @return true if it is a puzzle line
+ */
+/** @brief Reads one line (changed in place: the fields are cut out of it). false: it isn't a
  * puzzle line (a comment, an unknown variant or level, givens that aren't 81 cells). */
 bool sdx_parse(char *line, sdx_puzzle_t *p);
 
-/* The board of a parsed puzzle (Jigsaw's regions, Killer's cages, ...) into out.
+/**
+ * @brief
+ * @param p  the puzzle
+ * @param out  gets its board
+ * @return false: its layout doesn't read
+ */
+/** @brief The board of a parsed puzzle (Jigsaw's regions, Killer's cages, ...) into out.
  * false: its layout doesn't read. */
 bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out);
 
-/* givens as text, runs of empty cells packed into letters a-z; its length, or -1
+/**
+ * @brief
+ * @param givens  the cells, 0 = empty
+ * @param out  gets the text
+ * @param n  its size
+ * @return its length, or -1
+ */
+/** @brief givens as text, runs of empty cells packed into letters a-z; its length, or -1
  * if it doesn't fit (n >= 82 always does). */
 int sdx_pack_givens(const uint8_t givens[81], char *out, size_t n);
 
-/* A line: the variant and level as numbers (level < 0: "-"), the givens packed (pack)
+/**
+ * @brief
+ * @param variant  sudoku_variant_t
+ * @param level  gen_level_t, or -1
+ * @param givens  the cells, 0 = empty
+ * @param regions  Jigsaw's regions
+ * @param cages  Killer's cages
+ * @param marks  the marks (Kropki, XV, ...)
+ * @param thermos  Thermo's lines
+ * @param pack  pack the givens
+ * @param out  gets the line
+ * @param n  its size
+ * @return its length, or -1
+ */
+/** @brief A line: the variant and level as numbers (level < 0: "-"), the givens packed (pack)
  * or as 81 digits, the texts (NULL or "" for none), trailing empty fields left out.
  * Its length, or -1 if it doesn't fit. */
 int sdx_format(int variant, int level, const uint8_t givens[81], const char *regions, const char *cages,

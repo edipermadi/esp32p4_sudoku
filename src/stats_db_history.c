@@ -103,7 +103,7 @@ void sdb_do_month(int year, int month)
     static stats_month_t m;
     memset(&m, 0, sizeof(m));
     sqlite3_stmt *st;
-    char ym[8] = "";
+    char ym[24] = "";                             /* "YYYY-MM" (room for any int, for the compiler) */
     if (sdb_db() && year == 0) {                  /* the latest month with anything in it */
         if (sqlite3_prepare_v2(sdb_db(), "SELECT strftime('%Y-%m', MAX(t), 'unixepoch', 'localtime') FROM ("
                                HISTORY_EVENTS ")", -1, &st, NULL) == SQLITE_OK) {

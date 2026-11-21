@@ -1,3 +1,7 @@
+/**
+ * @file puzzles.h
+ * @brief The built-in puzzles (puzzles_data.c, generated): the collections and each puzzle.
+ */
 #pragma once
 /* Puzzles from the OpenSudoku collections, stored in flash (see tools/gen_puzzles.py). */
 #include <stdint.h>
@@ -7,35 +11,61 @@
 extern "C" {
 #endif
 
-#define PUZZLE_PACKED_BYTES 41   /* 81 cells, 4 bits each, 0 = empty */
+#define PUZZLE_PACKED_BYTES 41   /**< 81 cells, 4 bits each, 0 = empty */
 
-/* Puzzles made on the board (generator.h) have ids from PUZZLE_GEN_BASE:
+/** @brief Puzzles made on the board (generator.h) have ids from PUZZLE_GEN_BASE:
  * PUZZLE_GEN_BASE + generated.id in sudoku.db, or, without a card,
  * PUZZLE_GEN_RAM_BASE and up (kept in RAM until power-off). */
 #define PUZZLE_GEN_BASE      2000
-#define PUZZLE_GEN_RAM_BASE  0xF000
+#define PUZZLE_GEN_RAM_BASE  0xF000     /**< the first id of puzzles kept in RAM (no card) */
+/**
+ * @brief A generated puzzle (not built-in).
+ * @param id  the puzzle
+ * @return nonzero if so
+ */
 static inline int puzzle_is_generated(uint16_t id)
 {
     return id >= PUZZLE_GEN_BASE && id != 0xFFFF;
 }
-/* a puzzle this firmware can show: built-in or generated */
+/**
+ * @brief
+ * @param id  the puzzle
+ * @return nonzero if so
+ */
+/** @brief a puzzle this firmware can show: built-in or generated */
 static inline int puzzle_id_valid(int id)
 {
     return (id >= 0 && id < PUZZLE_COUNT) || (id >= PUZZLE_GEN_BASE && id < 0xFFFF);
 }
 
+/** A built-in collection: its name and its puzzles' ids. */
 typedef struct {
-    const char *name;
-    uint16_t first;              /* global index of the collection's first puzzle */
-    uint16_t count;
+    const char *name;                   /**< "Easy", "Medium", ... */
+    uint16_t first;              /**< global index of the collection's first puzzle */
+    uint16_t count;                     /**< how many puzzles */
 } puzzle_collection_t;
 
-const puzzle_collection_t *puzzle_collection(int c);   /* 0..PUZZLE_COLLECTION_COUNT-1 */
+/**
+ * @brief A built-in collection.
+ * @param c  the collection, 0..PUZZLE_COLLECTION_COUNT-1
+ * @return it
+ */
+const puzzle_collection_t *puzzle_collection(int c);
 
-/* Unpacks puzzle `id` (0..PUZZLE_COUNT-1) into 81 cells, row-major, 0 = empty. */
+/**
+ * @brief
+ * @param id  the puzzle
+ * @param cells  gets the cells
+ */
+/** @brief Unpacks puzzle `id` (0..PUZZLE_COUNT-1) into 81 cells, row-major, 0 = empty. */
 void puzzle_load(uint16_t id, uint8_t cells[81]);
 
-/* Collection that holds puzzle `id`. */
+/**
+ * @brief
+ * @param id  the puzzle
+ * @return the collection, 0..PUZZLE_COLLECTION_COUNT-1
+ */
+/** @brief Collection that holds puzzle `id`. */
 int puzzle_collection_of(uint16_t id);
 
 #ifdef __cplusplus

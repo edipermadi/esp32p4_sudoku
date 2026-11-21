@@ -9,9 +9,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-/* one attempt: clues taken away in random symmetric gen_pairs (a cell and its
+/**
+ * @brief one attempt: clues taken away in random symmetric gen_pairs (a cell and its
  * 180-degree turn) while the solution stays unique; for Easy, stops at a
- * random few clues above the Easy minimum */
+ * random few clues above the Easy minimum
+ * @param G  the board
+ * @param full  the solution
+ * @param out  gets the puzzle
+ * @param level  the level aimed at
+ * @param rng  the random state
+ */
 static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81], gen_level_t level, uint32_t *rng)
 {
     memcpy(out, full, 81);
@@ -76,7 +83,12 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
 
 /* ---------------------------------------------------------------- Jigsaw regions */
 
-/* is region `reg` of the map one connected piece (4-neighbours)? */
+/**
+ * @brief is region `reg` of the map one connected piece (4-neighbours)?
+ * @param map  the region of each cell
+ * @param reg  the region
+ * @return true if so
+ */
 static bool is_region_connected(const uint8_t map[81], int reg)
 {
     uint8_t seen[81] = {0}, stack[81];
@@ -110,9 +122,13 @@ static bool is_region_connected(const uint8_t map[81], int reg)
     return reached == total;
 }
 
-/* A random Jigsaw map: the 3x3 boxes, reshaped by trading cells across
+/**
+ * @brief A random Jigsaw map: the 3x3 boxes, reshaped by trading cells across
  * region borders (a cell of A goes to B, a cell of B next to A goes to A)
- * while both regions stay in one piece. */
+ * while both regions stay in one piece.
+ * @param map  gets the region of each cell
+ * @param rng  the random state
+ */
 static void jigsaw_map(uint8_t map[81], uint32_t *rng)
 {
     for (int c = 0; c < 81; c++) {
@@ -161,10 +177,17 @@ static void jigsaw_map(uint8_t map[81], uint32_t *rng)
 
 /* ---------------------------------------------------------------- Killer cages */
 
-/* Random cages over a solved grid: from each cell not in a cage yet (in a
+/**
+ * @brief Random cages over a solved grid: from each cell not in a cage yet (in a
  * random order), a cage grows to 2..max_size cells through neighbours whose
  * digit isn't in it yet. A lone cell left over joins a neighbouring cage
- * that can take its digit, if there is one. */
+ * that can take its digit, if there is one.
+ * @param full  the solution
+ * @param max_size  cells per cage at most
+ * @param rng  the random state
+ * @param out  gets the board
+ * @return false if the cages don't make one
+ */
 static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out)
 {
     uint8_t cage_of[81], sums[CAGES_MAX], size[CAGES_MAX], order[81];
@@ -258,10 +281,18 @@ static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, su
 
 /* Thermometers over a solved grid: from random cells, a path grows through
  * neighbours (diagonals too) whose digit is higher, 3 to 6 cells long. */
-/* Arrow, Renban, Whispers: up to want lines drawn over the full grid as random walks (side by
+/**
+ * @brief Arrow, Renban, Whispers: up to want lines drawn over the full grid as random walks (side by
  * side or diagonal, not crossing), each kept only if the grid keeps its rule: an arrow's shaft
  * (1-3 cells) adds up to its circle, a Renban (3-5 cells) is a run of consecutive digits, along a
- * Whispers line (3-6 cells) neighbours are 5 or more apart */
+ * Whispers line (3-6 cells) neighbours are 5 or more apart
+ * @param variant  VAR_ARROW, VAR_RENBAN or VAR_WHISPER
+ * @param full  the solution
+ * @param rng  the random state
+ * @param want  lines wanted
+ * @param out  gets the lines
+ * @return false: fewer than 3
+ */
 static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
@@ -337,6 +368,14 @@ static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int w
     return n >= 3 && gen_geom_lines(variant, cells, lens, n, out);
 }
 
+/**
+ * @brief Thermo: up to want thermometers (3-6 cells) drawn over the full grid as random walks whose digits rise from the bulb.
+ * @param full  the solution
+ * @param rng  the random state
+ * @param want  thermometers wanted
+ * @param out  gets the board
+ * @return false: fewer than 3
+ */
 static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
@@ -383,6 +422,7 @@ static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
 
 /* ---------------------------------------------------------------- generating (all variants) */
 
+/* (documented in generator.h) */
 bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], sudoku_geom_t *board,
                      gen_level_t *got_level)
 {

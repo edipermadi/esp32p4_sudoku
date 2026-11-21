@@ -1,4 +1,7 @@
-/*
+/**
+ * @file gibberlink.cpp
+ * @brief Gibberlink: devctl commands heard as sound (ggwave), and the answers played back.
+ *
  * Gibberlink (see gibberlink.h).
  *
  * ggwave at 24 kHz (the speaker's rate, shared by the microphones on the same
@@ -9,6 +12,7 @@
  * a queue (devctl runs there), and the answer comes back to the worker, which
  * encodes it and has the sound-effects task play it (sfx_play_pcm). While that
  * plays, and a little after, nothing is decoded: the microphones hear it too.
+ *
  */
 #include "gibberlink.h"
 #include "devctl.h"
@@ -27,30 +31,34 @@
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 
-#define SPF        512                  /* samples per ggwave frame (21.3 ms at 24 kHz) */
-#define MSG_MAX    (GGWave::kMaxLengthVariable + 1)
-#define REPLY_ID   "P4"                 /* our id in Gibberlink's "ID$message" */
-#define TX_VOLUME  80                   /* ggwave's 0..100 (30 was too quiet: a laptop a metre away missed 1 reply in 4) */
-#define ECHO_MS    400                  /* deaf for this long after a reply */
-#define LIT_MS     1500                 /* the icon stays lit after a command */
+#define SPF        512                  /**< samples per ggwave frame (21.3 ms at 24 kHz) */
+#define MSG_MAX    (GGWave::kMaxLengthVariable + 1)  /**< a message's room, with the terminator */
+#define REPLY_ID   "P4"                 /**< our id in Gibberlink's "ID$message" */
+#define TX_VOLUME  80                   /**< ggwave's 0..100 (30 was too quiet: a laptop a metre away missed 1 reply in 4) */
+#define ECHO_MS    400                  /**< deaf for this long after a reply */
+#define LIT_MS     1500                 /**< the icon stays lit after a command */
 
-static GGWave *s_gg;
-static volatile bool s_on, s_task_up;
-/* s_on and s_task_up change together under it: a worker that is ending (off) and
+static GGWave *s_gg;                    /**< the ggwave instance */
+static volatile bool s_on;              /**< listening is on */
+static volatile bool s_task_up;         /**< the worker runs */
+/** @brief s_on and s_task_up change together under it: a worker that is ending (off) and
  * gibberlink_set_enabled(true) at that moment never both think the other one runs */
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
-static QueueHandle_t s_cmdq;            /* messages heard: char[MSG_MAX] */
-static QueueHandle_t s_txq;             /* messages to send (gibberlink_send): char[MSG_MAX] */
-static volatile int s_tx_count;         /* of them, not yet played out (under s_mux) */
-#define TX_GAP_MS  700                  /* between two messages sent: the listener's decoder settles */
-static char s_reply[MSG_MAX];
-static volatile bool s_reply_ready;
-static int16_t *s_tx;                   /* the reply's samples, while it plays */
-static size_t s_tx_cap;
-static lv_obj_t *s_icon;
-static uint32_t s_lit_until;
+static QueueHandle_t s_cmdq;            /**< messages heard: char[MSG_MAX] */
+static QueueHandle_t s_txq;             /**< messages to send (gibberlink_send): char[MSG_MAX] */
+static volatile int s_tx_count;         /**< of them, not yet played out (under s_mux) */
+#define TX_GAP_MS  700                  /**< between two messages sent: the listener's decoder settles */
+static char s_reply[MSG_MAX];           /**< the answer to a command heard (devctl's), for the worker to send */
+static volatile bool s_reply_ready;     /**< it's there */
+static int16_t *s_tx;                   /**< the reply's samples, while it plays */
+static size_t s_tx_cap;                 /**< s_tx's room, samples */
+static lv_obj_t *s_icon;                /**< the icon (bottom right) while listening (NULL: none) */
+static uint32_t s_lit_until;            /**< it stays lit until then, lv_tick_get() */
 
-/* ------------------------------------------------------------- worker */
+/**
+ * @brief Makes the ggwave instance: receives audible Normal and Fast, sends audible Fast, at 24 kHz.
+ * @return false: no memory
+ */
 static bool make_ggwave(void)
 {
     GGWave::Protocols::rx().disableAll();
@@ -79,7 +87,10 @@ static bool make_ggwave(void)
     return true;
 }
 
-/* encodes text and starts it playing */
+/**
+ * @brief Encodes text and starts it playing.
+ * @param text  the message
+ */
 static void send_text(const char *text)
 {
     while (is_sfx_pcm_busy()) {
@@ -116,7 +127,11 @@ static void send_text(const char *text)
     }
 }
 
-/* "AB$tap 1 2" -> "tap 1 2" (a Gibberlink sender id); false: our own, or empty */
+/**
+ * @brief "AB$tap 1 2" -> "tap 1 2" (a Gibberlink sender id); false: our own, or empty
+ * @param msg  the message, changed in place
+ * @return true if it is for us
+ */
 static bool take_message(char *msg)
 {
     if (strlen(msg) >= 3 && msg[2] == '$' && isalnum((unsigned char)msg[0]) && isalnum((unsigned char)msg[1])) {
@@ -132,6 +147,10 @@ static bool take_message(char *msg)
     return l > 0;
 }
 
+/**
+ * @brief The worker (core 0): reads the microphones and decodes, sends what's queued; ends when it's off and nothing is left to send.
+ * @param arg  unused
+ */
 static void worker(void *arg)
 {
     static int16_t raw[SPF * 2], mono[SPF];
@@ -157,7 +176,7 @@ static void worker(void *arg)
             deaf_until = esp_timer_get_time() + ECHO_MS * 1000;
             portENTER_CRITICAL(&s_mux);
             if (s_tx_count > 0) {
-                s_tx_count--;
+                s_tx_count = s_tx_count - 1;
             }
             portEXIT_CRITICAL(&s_mux);
             continue;
@@ -244,7 +263,9 @@ static void worker(void *arg)
     }
 }
 
-/* ------------------------------------------------------------- UI side */
+/**
+ * @brief The icon: shown while listening, lit for a while after a command.
+ */
 static void icon_update(void)
 {
     if (s_on && !s_icon) {
@@ -272,6 +293,7 @@ static void icon_update(void)
     }
 }
 
+/* (documented in gibberlink.h) */
 bool gibberlink_send(const char *text)
 {
     if (!s_txq) {
@@ -283,7 +305,7 @@ bool gibberlink_send(const char *text)
     char m[MSG_MAX];
     strlcpy(m, text, sizeof(m));
     portENTER_CRITICAL(&s_mux);
-    s_tx_count++;                                       /* (before the worker can see the queue empty and end) */
+    s_tx_count = s_tx_count + 1;                                       /* (before the worker can see the queue empty and end) */
     bool start = !s_task_up;
     if (start) {
         s_task_up = true;
@@ -303,19 +325,20 @@ bool gibberlink_send(const char *text)
     if (!ok) {
         portENTER_CRITICAL(&s_mux);
         if (s_tx_count > 0) {
-            s_tx_count--;
+            s_tx_count = s_tx_count - 1;
         }
         portEXIT_CRITICAL(&s_mux);
     }
     return ok;
 }
 
+/* (documented in gibberlink.h) */
 int gibberlink_sending(void)
 {
     return s_tx_count;
 }
 
-/* on: starts the worker (unless one runs); off: the worker stops listening, frees ggwave and ends */
+/* (documented in gibberlink.h) */
 void gibberlink_set_enabled(bool on)
 {
     if (on && !s_cmdq) {
@@ -341,12 +364,18 @@ void gibberlink_set_enabled(bool on)
     }
 }
 
+/* (documented in gibberlink.h) */
 bool is_gibberlink_enabled(void)
 {
     return s_on;
 }
 
-/* CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF): the optional "*XXXX" check */
+/**
+ * @brief CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF): the optional "*XXXX" check
+ * @param p  the text
+ * @param n  its length
+ * @return the CRC
+ */
 static uint16_t crc16(const char *p, size_t n)
 {
     uint16_t c = 0xFFFF;
@@ -359,7 +388,12 @@ static uint16_t crc16(const char *p, size_t n)
     return c;
 }
 
-/* "tap 1 2*ABCD": true if it ends in a check (removed); *ok: it matched */
+/**
+ * @brief "tap 1 2*ABCD": true if it ends in a check (removed); *ok: it matched
+ * @param msg  the message, changed in place
+ * @param ok  gets whether it matched
+ * @return true if it had a check
+ */
 static bool take_check(char *msg, bool *ok)
 {
     size_t l = strlen(msg);
@@ -377,6 +411,7 @@ static bool take_check(char *msg, bool *ok)
     return true;
 }
 
+/* (documented in gibberlink.h) */
 void gibberlink_poll(void)
 {
     icon_update();

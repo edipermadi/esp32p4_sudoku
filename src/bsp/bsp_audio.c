@@ -1,4 +1,8 @@
-/*
+/**
+ * @file bsp_audio.c
+ * @ingroup bsp
+ * @brief Speaker (ES8311 + NS4150) and microphones (ES7210) on I2S0.
+ *
  * Speaker output: ES8311 codec (I2C 0x18 on the shared GPIO7/8 bus) fed by
  * I2S0, followed by an NS4150 class-D amp enabled on GPIO53 (active high).
  *
@@ -11,6 +15,7 @@
  * slave-mode, MIC1+MIC2, 16-bit subset of esp_codec_dev's ES7210 driver
  * (Apache-2.0). The RX channel is created with TX but only enabled while
  * something listens (bsp_mic_start/stop).
+ *
  */
 #include "bsp_board.h"
 #include "esp_check.h"
@@ -21,36 +26,53 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
-static const char *TAG = "bsp_audio";
+static const char *TAG = "bsp_audio";   /**< the log's tag */
 
-#define ES8311_ADDR        0x18      /* CE pin low */
-#define ES8311_I2C_HZ      100000
-#define AUDIO_MCLK_MULT    I2S_MCLK_MULTIPLE_256
+#define ES8311_ADDR        0x18      /**< CE pin low */
+#define ES8311_I2C_HZ      100000       /**< the codec's I2C clock, Hz */
+#define AUDIO_MCLK_MULT    I2S_MCLK_MULTIPLE_256  /**< MCLK = 256 x the sample rate */
 
-#define ES7210_ADDR        0x40      /* AD0/AD1 low */
-#define ES7210_GAIN        10        /* 30 dB (3 dB a step) */
+#define ES7210_ADDR        0x40      /**< AD0/AD1 low */
+#define ES7210_GAIN        10        /**< 30 dB (3 dB a step) */
 
-static i2s_chan_handle_t s_tx = NULL;
-static i2s_chan_handle_t s_rx = NULL;
-static i2c_master_dev_handle_t s_adc = NULL;
-static bool s_mic_on = false;
-static i2c_master_dev_handle_t s_codec = NULL;
-static SemaphoreHandle_t s_owner = NULL;   /* one audio producer at a time (the MP3 player) */
-static uint32_t s_rate = 0;
+static i2s_chan_handle_t s_tx = NULL;   /**< the speaker's I2S channel */
+static i2s_chan_handle_t s_rx = NULL;   /**< the microphones' I2S channel (NULL: none) */
+static i2c_master_dev_handle_t s_adc = NULL;  /**< the mic ADC (ES7210) on I2C */
+static bool s_mic_on = false;           /**< the microphones are on (bsp_mic_start()) */
+static i2c_master_dev_handle_t s_codec = NULL;  /**< the codec (ES8311) on I2C */
+static SemaphoreHandle_t s_owner = NULL;   /**< one audio producer at a time (the MP3 player) */
+static uint32_t s_rate = 0;             /**< the sample rate, Hz */
 
-/* ---------------------------------------------------------------- ES8311 */
+/**
+ * @brief Writes a codec register.
+ * @param reg  the register
+ * @param val  its value
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es_wr(uint8_t reg, uint8_t val)
 {
     uint8_t buf[2] = { reg, val };
     return i2c_master_transmit(s_codec, buf, sizeof(buf), 100);
 }
 
+/**
+ * @brief Reads a codec register.
+ * @param reg  the register
+ * @param val  gets its value
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es_rd(uint8_t reg, uint8_t *val)
 {
     return i2c_master_transmit_receive(s_codec, &reg, 1, val, 1, 100);
 }
 
-/* Read-modify-write: reg = (reg & keep) | set */
+/**
+ * @brief Read-modify-write a codec register: the bits in keep kept, those in set set.
+ * @param reg  the register
+ * @param keep  the bits kept
+ * @param set  the bits set
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es_rmw(uint8_t reg, uint8_t keep, uint8_t set)
 {
     uint8_t v = 0;
@@ -58,9 +80,11 @@ static esp_err_t es_rmw(uint8_t reg, uint8_t keep, uint8_t set)
     return es_wr(reg, (v & keep) | set);
 }
 
-/* ES8311 clocking for MCLK = 256 * fs. Per Espressif's coefficient table, every
- * standard rate uses pre_div 1, x1, adc/dac_div 1, single speed, LRCK div 256,
- * BCLK div 4, adc_osr 0x10; only dac_osr differs (0x20 up to 16 kHz). */
+/**
+ * @brief A rate the codec's clocking supports.
+ * @param r  the rate, Hz
+ * @return true if so
+ */
 static bool is_rate_supported(uint32_t r)
 {
     static const uint32_t rates[] = { 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000 };
@@ -72,6 +96,11 @@ static bool is_rate_supported(uint32_t r)
     return false;
 }
 
+/**
+ * @brief
+ * @param rate  Hz
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es8311_set_clock(uint32_t rate)
 {
     esp_err_t r = ESP_OK;
@@ -85,6 +114,11 @@ static esp_err_t es8311_set_clock(uint32_t rate)
     return r == ESP_OK ? ESP_OK : ESP_FAIL;
 }
 
+/**
+ * @brief Brings up the codec: DAC only, slave mode, at the rate.
+ * @param sample_rate  Hz
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es8311_init(uint32_t sample_rate)
 {
     uint8_t id1 = 0, id2 = 0;
@@ -140,6 +174,7 @@ static esp_err_t es8311_init(uint32_t sample_rate)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 void bsp_audio_set_volume(int percent)
 {
     if (!s_codec) {
@@ -156,7 +191,7 @@ void bsp_audio_set_volume(int percent)
     es_wr(0x32, reg);
 }
 
-/* ------------------------------------------------------------------- I2S */
+/* (documented in bsp_board.h) */
 esp_err_t bsp_audio_init(uint32_t sample_rate)
 {
     if (s_tx) {
@@ -233,6 +268,7 @@ esp_err_t bsp_audio_init(uint32_t sample_rate)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_audio_write(const int16_t *stereo_frames, size_t frames, uint32_t timeout_ms)
 {
     ESP_RETURN_ON_FALSE(s_tx, ESP_ERR_INVALID_STATE, TAG, "audio not initialised");
@@ -240,6 +276,7 @@ esp_err_t bsp_audio_write(const int16_t *stereo_frames, size_t frames, uint32_t 
     return i2s_channel_write(s_tx, stereo_frames, frames * 2 * sizeof(int16_t), &written, timeout_ms);
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_audio_set_sample_rate(uint32_t sample_rate)
 {
     ESP_RETURN_ON_FALSE(s_tx, ESP_ERR_INVALID_STATE, TAG, "audio not initialised");
@@ -279,11 +316,13 @@ esp_err_t bsp_audio_set_sample_rate(uint32_t sample_rate)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 bool bsp_audio_acquire(uint32_t timeout_ms)
 {
     return s_owner && xSemaphoreTake(s_owner, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
 }
 
+/* (documented in bsp_board.h) */
 void bsp_audio_release(void)
 {
     if (s_owner) {
@@ -291,19 +330,36 @@ void bsp_audio_release(void)
     }
 }
 
-/* ------------------------------------------------------------- ES7210 mics */
+/**
+ * @brief Writes a mic ADC register.
+ * @param reg  the register
+ * @param val  its value
+ * @return ESP_OK, or why not
+ */
 static esp_err_t ad_wr(uint8_t reg, uint8_t val)
 {
     uint8_t buf[2] = { reg, val };
     return i2c_master_transmit(s_adc, buf, sizeof(buf), 100);
 }
 
+/**
+ * @brief Reads a mic ADC register.
+ * @param reg  the register
+ * @param val  gets its value
+ * @return ESP_OK, or why not
+ */
 static esp_err_t ad_rd(uint8_t reg, uint8_t *val)
 {
     return i2c_master_transmit_receive(s_adc, &reg, 1, val, 1, 100);
 }
 
-/* reg = (reg & ~mask) | (val & mask) */
+/**
+ * @brief Updates a mic ADC register: the bits in mask from val.
+ * @param reg  the register
+ * @param mask  the bits changed
+ * @param val  their values
+ * @return ESP_OK, or why not
+ */
 static esp_err_t ad_upd(uint8_t reg, uint8_t mask, uint8_t val)
 {
     uint8_t v = 0;
@@ -311,7 +367,10 @@ static esp_err_t ad_upd(uint8_t reg, uint8_t mask, uint8_t val)
     return ad_wr(reg, (uint8_t)((v & ~mask) | (val & mask)));
 }
 
-/* MIC1 and MIC2 on, at ES7210_GAIN, two slots (not TDM) */
+/**
+ * @brief MIC1 and MIC2 on, at ES7210_GAIN, two slots (not TDM).
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es7210_mics(void)
 {
     esp_err_t r = ESP_OK;
@@ -330,6 +389,10 @@ static esp_err_t es7210_mics(void)
     return r == ESP_OK ? ESP_OK : ESP_FAIL;
 }
 
+/**
+ * @brief Brings up the mic ADC (slave mode, 16-bit), powered down until es7210_start().
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es7210_init(void)
 {
     esp_err_t r = ESP_OK;
@@ -354,6 +417,10 @@ static esp_err_t es7210_init(void)
     return r == ESP_OK ? ESP_OK : ESP_FAIL;
 }
 
+/**
+ * @brief Powers the microphones up.
+ * @return ESP_OK, or why not
+ */
 static esp_err_t es7210_start(void)
 {
     esp_err_t r = ESP_OK;
@@ -371,6 +438,9 @@ static esp_err_t es7210_start(void)
     return r == ESP_OK ? ESP_OK : ESP_FAIL;
 }
 
+/**
+ * @brief Powers the microphones down.
+ */
 static void es7210_stop(void)
 {
     ad_wr(0x47, 0xFF);
@@ -384,6 +454,7 @@ static void es7210_stop(void)
     ad_wr(0x06, 0x07);
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_mic_start(void)
 {
     ESP_RETURN_ON_FALSE(s_tx && s_rx, ESP_ERR_INVALID_STATE, TAG, "audio not initialised");
@@ -408,6 +479,7 @@ esp_err_t bsp_mic_start(void)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 void bsp_mic_stop(void)
 {
     if (!s_mic_on) {
@@ -418,6 +490,7 @@ void bsp_mic_stop(void)
     s_mic_on = false;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_mic_read(int16_t *stereo_frames, size_t frames, size_t *got_frames, uint32_t timeout_ms)
 {
     ESP_RETURN_ON_FALSE(s_mic_on, ESP_ERR_INVALID_STATE, TAG, "microphones off");
@@ -429,6 +502,7 @@ esp_err_t bsp_mic_read(int16_t *stereo_frames, size_t frames, size_t *got_frames
     return err;
 }
 
+/* (documented in bsp_board.h) */
 uint32_t bsp_audio_sample_rate(void)
 {
     return s_rate;

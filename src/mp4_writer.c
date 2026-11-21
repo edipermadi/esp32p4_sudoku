@@ -1,33 +1,49 @@
-/* See mp4_writer.h. Box layout follows ISO/IEC 14496-12 and -15 (avcC). */
+/**
+ * @file mp4_writer.c
+ * @ingroup media
+ * @brief Writes an MP4 file from H.264 frames (box layout: ISO/IEC 14496-12 and -15, avcC).
+ */
 #include "mp4_writer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef ESP_PLATFORM
 #include "esp_heap_caps.h"
-#define BIG_ALLOC(n) heap_caps_malloc((n), MALLOC_CAP_SPIRAM)
+#define BIG_ALLOC(n) heap_caps_malloc((n), MALLOC_CAP_SPIRAM)   /**< the frame tables' memory: PSRAM */
 #else
-#define BIG_ALLOC(n) malloc(n)
+#define BIG_ALLOC(n) malloc(n)          /**< the frame tables' memory (PSRAM on the board) */
 #endif
 
-#define TIMESCALE_PER_FRAME 100          /* track timescale = fps * 100 */
+#define TIMESCALE_PER_FRAME 100          /**< track timescale = fps * 100 */
 
+/** @brief An MP4 file being written. */
 struct mp4w {
-    FILE *f;
-    char path[96];
-    int width, height, fps, max_frames;
-    uint32_t mdat_pos;                   /* offset of the mdat box */
-    uint32_t pos;                        /* bytes written */
-    uint32_t *sizes;                     /* per frame */
-    uint32_t *keys;                      /* 1-based frame numbers of IDR frames */
-    int n, nkeys;
-    uint8_t sps[64], pps[64];
-    int sps_len, pps_len;
-    bool failed;
+    FILE *f;                             /**< the file */
+    char path[96];                       /**< its path (to delete it) */
+    int width;                           /**< px */
+    int height;                          /**< px */
+    int fps;                             /**< frames a second */
+    int max_frames;                      /**< the sample table's room */
+    uint32_t mdat_pos;                   /**< offset of the mdat box */
+    uint32_t pos;                        /**< bytes written */
+    uint32_t *sizes;                     /**< per frame */
+    uint32_t *keys;                      /**< 1-based frame numbers of IDR frames */
+    int n;                               /**< frames written */
+    int nkeys;                           /**< IDR frames among them */
+    uint8_t sps[64];                     /**< the SPS (from the first key frame) */
+    uint8_t pps[64];                     /**< the PPS */
+    int sps_len;                         /**< its bytes */
+    int pps_len;                         /**< its bytes */
+    bool failed;                         /**< a write failed (the file is bad) */
 };
 
 /* ---------------------------------------------------------------- bytes */
 
+/**
+ * @brief Stores a big-endian 32-bit number.
+ * @param p  gets its bytes
+ * @param v  it
+ */
 static void put32(uint8_t *p, uint32_t v)
 {
     p[0] = v >> 24;
@@ -36,6 +52,12 @@ static void put32(uint8_t *p, uint32_t v)
     p[3] = v;
 }
 
+/**
+ * @brief Writes to the file (nothing once a write has failed).
+ * @param w  the writer
+ * @param data  the bytes
+ * @param n  how many
+ */
 static void wr(mp4w_t *w, const void *data, size_t n)
 {
     if (w->failed) {
@@ -48,13 +70,20 @@ static void wr(mp4w_t *w, const void *data, size_t n)
     w->pos += n;
 }
 
-/* a growing buffer for moov */
+/** @brief a growing buffer for moov */
 typedef struct {
-    uint8_t *p;
-    size_t len, cap;
-    bool oom;
+    uint8_t *p;                          /**< the bytes */
+    size_t len;                          /**< used */
+    size_t cap;                          /**< room */
+    bool oom;                            /**< it ran out of room (the box is bad) */
 } buf_t;
 
+/**
+ * @brief Adds bytes (nothing once out of room).
+ * @param b  the buffer
+ * @param d  the bytes
+ * @param n  how many
+ */
 static void b_put(buf_t *b, const void *d, size_t n)
 {
     if (b->len + n > b->cap) {
@@ -64,12 +93,37 @@ static void b_put(buf_t *b, const void *d, size_t n)
     memcpy(b->p + b->len, d, n);
     b->len += n;
 }
+/**
+ * @brief Adds a byte.
+ * @param b  the buffer
+ * @param v  it
+ */
 static void b_u8(buf_t *b, uint8_t v) { b_put(b, &v, 1); }
+/**
+ * @brief Adds a big-endian 16-bit number.
+ * @param b  the buffer
+ * @param v  it
+ */
 static void b_u16(buf_t *b, uint16_t v) { uint8_t t[2] = {v >> 8, v}; b_put(b, t, 2); }
+/**
+ * @brief Adds a big-endian 32-bit number.
+ * @param b  the buffer
+ * @param v  it
+ */
 static void b_u32(buf_t *b, uint32_t v) { uint8_t t[4]; put32(t, v); b_put(b, t, 4); }
+/**
+ * @brief Adds zeros.
+ * @param b  the buffer
+ * @param n  how many
+ */
 static void b_zero(buf_t *b, size_t n) { while (n--) b_u8(b, 0); }
 
-/* starts a box; returns where its size goes (patched by b_end) */
+/**
+ * @brief Starts a box (b_end() puts its size in).
+ * @param b  the buffer
+ * @param type  its 4-letter type
+ * @return where its size goes
+ */
 static size_t b_box(buf_t *b, const char *type)
 {
     size_t at = b->len;
@@ -77,12 +131,25 @@ static size_t b_box(buf_t *b, const char *type)
     b_put(b, type, 4);
     return at;
 }
+/**
+ * @brief Starts a full box (with a version and flags).
+ * @param b  the buffer
+ * @param type  its 4-letter type
+ * @param version  its version
+ * @param flags  its flags
+ * @return where its size goes
+ */
 static size_t b_fullbox(buf_t *b, const char *type, uint8_t version, uint32_t flags)
 {
     size_t at = b_box(b, type);
     b_u32(b, ((uint32_t)version << 24) | flags);
     return at;
 }
+/**
+ * @brief Ends a box: its size in.
+ * @param b  the buffer
+ * @param at  b_box()'s return
+ */
 static void b_end(buf_t *b, size_t at)
 {
     if (!b->oom) {
@@ -90,6 +157,10 @@ static void b_end(buf_t *b, size_t at)
     }
 }
 
+/**
+ * @brief Adds the identity transformation matrix (tkhd, mvhd).
+ * @param b  the buffer
+ */
 static void b_matrix(buf_t *b)
 {
     static const uint32_t m[9] = {0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000};
@@ -100,6 +171,7 @@ static void b_matrix(buf_t *b)
 
 /* ---------------------------------------------------------------- API */
 
+/* (documented in mp4_writer.h) */
 mp4w_t *mp4w_open(const char *path, int width, int height, int fps, int max_frames)
 {
     mp4w_t *w = calloc(1, sizeof(*w));
@@ -134,13 +206,20 @@ mp4w_t *mp4w_open(const char *path, int width, int height, int fps, int max_fram
     return w;
 }
 
+/* (documented in mp4_writer.h) */
 uint32_t mp4w_size(const mp4w_t *w)
 {
     return w ? w->pos : 0;
 }
 
-/* next NAL unit in an Annex-B buffer: returns its start (after the start
- * code) and length, or NULL at the end */
+/**
+ * @brief next NAL unit in an Annex-B buffer: returns its start (after the start
+ * code) and length, or NULL at the end
+ * @param p  where to look from
+ * @param end  the buffer's end
+ * @param len  gets its length
+ * @return its start, or NULL
+ */
 static const uint8_t *next_nal(const uint8_t *p, const uint8_t *end, size_t *len)
 {
     while (p + 3 <= end && !(p[0] == 0 && p[1] == 0 && p[2] == 1)) {
@@ -160,6 +239,7 @@ static const uint8_t *next_nal(const uint8_t *p, const uint8_t *end, size_t *len
     return s;
 }
 
+/* (documented in mp4_writer.h) */
 bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key)
 {
     if (!w || w->failed || w->n >= w->max_frames) {
@@ -209,6 +289,10 @@ bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key)
     return !w->failed;
 }
 
+/**
+ * @brief Frees the writer (not the file).
+ * @param w  it
+ */
 static void free_writer(mp4w_t *w)
 {
     free(w->sizes);
@@ -216,6 +300,7 @@ static void free_writer(mp4w_t *w)
     free(w);
 }
 
+/* (documented in mp4_writer.h) */
 void mp4w_abort(mp4w_t *w)
 {
     if (!w) {
@@ -226,6 +311,7 @@ void mp4w_abort(mp4w_t *w)
     free_writer(w);
 }
 
+/* (documented in mp4_writer.h) */
 bool mp4w_close(mp4w_t *w)
 {
     if (!w) {

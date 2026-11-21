@@ -1,4 +1,8 @@
-/*
+/**
+ * @file bsp_display.c
+ * @ingroup bsp
+ * @brief MIPI-DSI display bring-up: ST7703 or JD9365DA, found by its ID.
+ *
  * MIPI-DSI display bring-up for the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B.
  *
  * The 4B ships with one of two 720x720 panels; Waveshare's factory firmware
@@ -9,6 +13,7 @@
  * Init tables and timings are copied from Waveshare's sources
  * (esp_lcd_st7703 vendor_specific_init_default, MIT / Apache-2.0, and
  *  waveshare_boards jd9365_720_720_init.h, Apache-2.0).
+ *
  */
 #include <string.h>
 #include "bsp_board.h"
@@ -22,16 +27,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static const char *TAG = "bsp_display";
+static const char *TAG = "bsp_display"; /**< the log's tag */
 
+/** A panel init command: DCS command, its data, a delay after. */
 typedef struct {
-    uint8_t cmd;
-    const uint8_t *data;
-    uint8_t len;
-    uint16_t delay_ms;
+    uint8_t cmd;                        /**< the command */
+    const uint8_t *data;                /**< its data */
+    uint8_t len;                        /**< its length, bytes */
+    uint16_t delay_ms;                  /**< the wait after it, ms */
 } lcd_init_cmd_t;
 
-/* ------------------------------------------------------------ ST7703 init */
+/** ST7703's init sequence (Waveshare's) */
 static const lcd_init_cmd_t st7703_init_cmds[] = {
     {0xB9, (uint8_t[]){0xF1, 0x12, 0x83}, 3, 0},
     {0xB1, (uint8_t[]){0x00, 0x00, 0x00, 0xDA, 0x80}, 5, 0},
@@ -60,8 +66,9 @@ static const lcd_init_cmd_t st7703_init_cmds[] = {
 };
 
 /* ----------------------------------------------------------- JD9365 init */
-/* "LCD-4B 8904ANT 720x720 panel: preserve its power, gamma and GOA mapping." */
+/** @brief "LCD-4B 8904ANT 720x720 panel: preserve its power, gamma and GOA mapping." */
 #define R(c, v) {c, (uint8_t[]){v}, 1, 0}
+/** JD9365DA's init sequence (Waveshare's) */
 static const lcd_init_cmd_t jd9365_init_cmds[] = {
     /* Page 0: unlock + 2-lane */
     R(0xE0, 0x00), R(0xE1, 0x93), R(0xE2, 0x65), R(0xE3, 0xF8), R(0x80, 0x01),
@@ -113,12 +120,15 @@ static const lcd_init_cmd_t jd9365_init_cmds[] = {
 };
 #undef R
 
-static bsp_panel_kind_t s_panel_kind = BSP_PANEL_UNKNOWN;
-static esp_lcd_panel_handle_t s_panel = NULL;
-static esp_lcd_panel_io_handle_t s_io = NULL;     /* DBI commands (sleep in/out) */
+static bsp_panel_kind_t s_panel_kind = BSP_PANEL_UNKNOWN;  /**< the panel found */
+static esp_lcd_panel_handle_t s_panel = NULL;  /**< the panel */
+static esp_lcd_panel_io_handle_t s_io = NULL;     /**< DBI commands (sleep in/out) */
 
 bsp_panel_kind_t bsp_display_panel_kind(void) { return s_panel_kind; }
 
+/**
+ * @brief Resets the panel by its RST pin.
+ */
 static void panel_hw_reset(void)
 {
     gpio_config_t cfg = {
@@ -134,6 +144,11 @@ static void panel_hw_reset(void)
     vTaskDelay(pdMS_TO_TICKS(120));
 }
 
+/**
+ * @brief Finds the panel: ST7703 by its DCS ID, else JD9365 by its page-1 ID registers.
+ * @param io  the panel's DBI interface
+ * @return the panel, or BSP_PANEL_UNKNOWN
+ */
 static bsp_panel_kind_t panel_probe(esp_lcd_panel_io_handle_t io)
 {
     uint8_t id[3] = {0};
@@ -162,6 +177,13 @@ static bsp_panel_kind_t panel_probe(esp_lcd_panel_io_handle_t io)
     return BSP_PANEL_ST7703;
 }
 
+/**
+ * @brief Sends an init sequence.
+ * @param io  the panel's DBI interface
+ * @param cmds  the commands
+ * @param n  how many
+ * @return ESP_OK, or why not
+ */
 static esp_err_t send_init_cmds(esp_lcd_panel_io_handle_t io, const lcd_init_cmd_t *cmds, size_t n)
 {
     for (size_t i = 0; i < n; i++) {
@@ -174,6 +196,7 @@ static esp_err_t send_init_cmds(esp_lcd_panel_io_handle_t io, const lcd_init_cmd
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_display_new(esp_lcd_panel_handle_t *ret_panel)
 {
     ESP_RETURN_ON_FALSE(ret_panel, ESP_ERR_INVALID_ARG, TAG, "null arg");
@@ -277,10 +300,7 @@ esp_err_t bsp_display_new(esp_lcd_panel_handle_t *ret_panel)
     return ESP_OK;
 }
 
-/* Both controllers take the standard DCS commands for this (page 0 on the
- * JD9365, where the init leaves it). The DPI video stream keeps running: the
- * panel ignores it while asleep and shows it again on sleep-out. Waits as the
- * init tables do (sleep-out: 120 ms on the JD9365, 250 ms on the ST7703). */
+/* (documented in bsp_board.h) */
 void bsp_display_sleep(bool sleep)
 {
     if (!s_io) {

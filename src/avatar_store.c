@@ -1,4 +1,8 @@
-/* The avatars' pixels, from the flash's "avatars" partition (partitions.csv): 7 MB that both
+/**
+ * @file avatar_store.c
+ * @brief The avatars' pixels, read from the flash's "avatars" partition, and installing them from the card.
+ *
+ *  The avatars' pixels, from the flash's "avatars" partition (partitions.csv): 7 MB that both
  * app slots share, so each slot only holds the code and a firmware update from the card fits
  * (only the flash's first 16 MiB can be mapped: the core's bootloader addresses it with 24 bits).
  *
@@ -6,7 +10,8 @@
  * version, count, size, CRC-32 of the pixels), then the pixels. It's used when its header
  * matches this firmware's set (AVATAR_COUNT, AVATAR_SIZE, AVATAR_CRC). Otherwise the avatars
  * are blank, and if the card has avatars.bin in its root, avatars_install() writes it into the
- * partition (header last, so a cut-off install isn't taken for a good one) and checks it. */
+ * partition (header last, so a cut-off install isn't taken for a good one) and checks it.
+ */
 #include "avatar_store.h"
 #include "avatars.h"
 #include "bsp/bsp_board.h"
@@ -18,37 +23,50 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define AV_FILE    BSP_SD_MOUNT_POINT "/avatars.bin"
-#define AV_HEADER  16
-#define AV_ONE     (AVATAR_SIZE * AVATAR_SIZE * 3)  /* bytes per avatar: RGB565, then alpha */
-#define AV_BYTES   ((uint32_t)AVATAR_COUNT * AV_ONE)
-#define AV_CHUNK   (64 * 1024)
+#define AV_FILE    BSP_SD_MOUNT_POINT "/avatars.bin"  /**< the file an install reads */
+#define AV_HEADER  16                   /**< the header's size, bytes */
+#define AV_ONE     (AVATAR_SIZE * AVATAR_SIZE * 3)  /**< bytes per avatar: RGB565, then alpha */
+#define AV_BYTES   ((uint32_t)AVATAR_COUNT * AV_ONE)  /**< all the avatars' pixels, bytes */
+#define AV_CHUNK   (64 * 1024)          /**< bytes read and written at a time */
 
+/** avatars.bin's header (16 bytes) */
 typedef struct {
-    char magic[4];
-    uint16_t version, count, size, zero;
-    uint32_t crc;
+    char magic[4];                      /**< "AVTR" */
+    uint16_t version;                     /**< the format: 1 */
+    uint16_t count;                       /**< the avatars */
+    uint16_t size;                        /**< their size, px */
+    uint16_t zero;                        /**< 0 */
+    uint32_t crc;                       /**< CRC-32 of the pixels */
 } av_header_t;
 
-static lv_image_dsc_t *s_dsc;                       /* AVATAR_COUNT descriptors (PSRAM) */
-static uint8_t *s_blank;                            /* one transparent avatar */
-static const uint8_t *s_pixels;                     /* the mapped partition's pixels, NULL = none */
-static esp_partition_mmap_handle_t s_map;
-static volatile int s_install;                      /* 0 idle, 1 running, 2 done, 3 failed */
-static volatile uint32_t s_done;
+static lv_image_dsc_t *s_dsc;                       /**< AVATAR_COUNT descriptors (PSRAM) */
+static uint8_t *s_blank;                            /**< one transparent avatar */
+static const uint8_t *s_pixels;                     /**< the mapped partition's pixels, NULL = none */
+static esp_partition_mmap_handle_t s_map;  /**< the partition's mapping (with s_pixels) */
+static volatile int s_install;                      /**< 0 idle, 1 running, 2 done, 3 failed */
+static volatile uint32_t s_done;        /**< bytes written by the install so far */
 
+/**
+ * @brief The header matches this firmware's avatar set.
+ * @param h  the header
+ * @return true if so
+ */
 static bool is_header_ok(const av_header_t *h)
 {
     return !memcmp(h->magic, "AVTR", 4) && h->version == 1 && h->count == AVATAR_COUNT &&
            h->size == AVATAR_SIZE && h->crc == AVATAR_CRC;
 }
 
+/**
+ * @brief The flash's "avatars" partition.
+ * @return it, or NULL
+ */
 static const esp_partition_t *partition(void)
 {
     return esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "avatars");
 }
 
-/* each descriptor at its pixels, or all at the blank one */
+/** @brief each descriptor at its pixels, or all at the blank one */
 static void point_images(void)
 {
     for (int i = 0; i < AVATAR_COUNT; i++) {
@@ -56,7 +74,11 @@ static void point_images(void)
     }
 }
 
-/* maps the partition if it holds this firmware's avatars */
+/**
+ * @brief Maps the partition if it holds this firmware's avatars.
+ * @return true if it does
+ */
+/** @brief maps the partition if it holds this firmware's avatars */
 static bool map_avatars(void)
 {
     const esp_partition_t *p = partition();
@@ -72,6 +94,7 @@ static bool map_avatars(void)
     return true;
 }
 
+/* (documented in avatar_store.h) */
 bool avatars_init(void)
 {
     if (s_dsc) {
@@ -109,6 +132,11 @@ const lv_image_dsc_t *avatar_image(int i)
 
 bool is_avatars_ready(void) { return s_pixels != NULL; }
 
+/**
+ * @brief The install (a task on core 0): avatars.bin from the card into the partition, the header last, then
+ * mapped and checked.
+ * @param arg  unused
+ */
 static void install_task(void *arg)
 {
     const esp_partition_t *p = partition();
@@ -152,6 +180,7 @@ static void install_task(void *arg)
     vTaskDelete(NULL);
 }
 
+/* (documented in avatar_store.h) */
 bool is_avatars_installable(void)
 {
     if (s_pixels || s_install == 1 || !partition()) {
@@ -166,6 +195,7 @@ bool is_avatars_installable(void)
     return ok;
 }
 
+/* (documented in avatar_store.h) */
 bool avatars_install(void)
 {
     if (!is_avatars_installable()) {
@@ -180,6 +210,7 @@ bool avatars_install(void)
     return true;
 }
 
+/* (documented in avatar_store.h) */
 int avatars_install_poll(uint32_t *done, uint32_t *total)
 {
     if (done) {

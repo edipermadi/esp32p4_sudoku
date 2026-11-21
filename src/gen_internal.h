@@ -22,7 +22,11 @@
 
 /** @name Small helpers (static inline)
  *  @{ */
-/* the cells of row / column lu (0..17) as seen from its clue (the left, the top) */
+/**
+ * @brief the cells of row / column lu (0..17) as seen from its clue (the left, the top)
+ * @param lu  the row (0..8) or column (9..17)
+ * @param cells  gets its 9 cells
+ */
 static inline void line_cells(int lu, int cells[9])
 {
     for (int k = 0; k < 9; k++) {
@@ -30,7 +34,12 @@ static inline void line_cells(int lu, int cells[9])
     }
 }
 
-/* buildings seen along cells (the digits in vals, in order): a taller one hides those behind it */
+/**
+ * @brief buildings seen along cells (the digits in vals, in order): a taller one hides those behind it
+ * @param vals  the digits
+ * @param cells  the 9 cells, from the clue
+ * @return the buildings seen
+ */
 static inline int sky_seen(const uint8_t *vals, const int cells[9])
 {
     int seen = 0, top = 0;
@@ -43,7 +52,13 @@ static inline int sky_seen(const uint8_t *vals, const int cells[9])
     return seen;
 }
 
-/* the units of a cell (3, 4 or, at the centre of an X board, 5) */
+/**
+ * @brief the units of a cell (3, 4 or, at the centre of an X board, 5)
+ * @param G  the board
+ * @param cell  the cell
+ * @param out  gets its units
+ * @return how many
+ */
 static inline int cell_units(const sudoku_geom_t *G, int cell, int out[5])
 {
     int n = G->ncu[cell];
@@ -53,6 +68,13 @@ static inline int cell_units(const sudoku_geom_t *G, int cell, int out[5])
     return n;
 }
 
+/**
+ * @brief The cell is in the unit.
+ * @param G  the board
+ * @param cell  the cell
+ * @param u  the unit
+ * @return true if so
+ */
 static inline bool is_in_unit(const sudoku_geom_t *G, int cell, int u)
 {
     int us[5], n = cell_units(G, cell, us);
@@ -64,7 +86,12 @@ static inline bool is_in_unit(const sudoku_geom_t *G, int cell, int u)
     return false;
 }
 
-static inline uint32_t rnd(uint32_t *s)        /* xorshift32 */
+/**
+ * @brief A random number (xorshift32).
+ * @param s  the state (0: a fixed seed)
+ * @return the next number
+ */
+static inline uint32_t rnd(uint32_t *s)
 {
     uint32_t x = *s ? *s : 0x9E3779B9u;
     x ^= x << 13;
@@ -76,11 +103,11 @@ static inline uint32_t rnd(uint32_t *s)        /* xorshift32 */
 
 /** @brief The techniques' state: a board's digits and each empty cell's candidates. */
 typedef struct {
-    const sudoku_geom_t *G;
-    uint8_t v[81];
-    uint16_t cand[81];
-    int empty;
-    bool broken;
+    const sudoku_geom_t *G;             /**< the board */
+    uint8_t v[81];                      /**< the digits, 0 = empty */
+    uint16_t cand[81];                  /**< each empty cell's candidates (bit d = d) */
+    int empty;                          /**< the empty cells */
+    bool broken;                        /**< a cell has no candidate left (no solution this way) */
 } logic_t;
 
 /** @name gen_solver.c

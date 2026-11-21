@@ -6,6 +6,7 @@
  */
 /**
  * @defgroup generator Puzzle generator
+ * @ingroup topic_game
  * @brief Boards for every variant, solving and counting solutions, grading the way a person would,
  *        generating puzzles at a level, and hints; split by what it does:
  *
@@ -112,191 +113,398 @@
 extern "C" {
 #endif
 
-typedef enum { GEN_EASY = 0, GEN_MEDIUM, GEN_HARD, GEN_EXPERT, GEN_LEVELS } gen_level_t;
+/** @brief A puzzle's level (the generator's and the grader's). */
+typedef enum {
+    GEN_EASY = 0,                       /**< Easy */
+    GEN_MEDIUM,                         /**< Medium */
+    GEN_HARD,                           /**< Hard */
+    GEN_EXPERT,                         /**< Expert */
+    GEN_LEVELS                          /**< how many */
+} gen_level_t;
 
-const char *gen_level_name(int level);   /* 0..GEN_LEVELS-1: "Easy", "Medium", "Hard", "Expert" */
+/**
+ * @brief A level's name.
+ * @param level  0..GEN_LEVELS-1
+ * @return "Easy", "Medium", "Hard", "Expert"
+ */
+const char *gen_level_name(int level);
 
-/* the numbers are stored in sudoku.db (generated.variant): don't reorder */
-typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
-               VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_KING, VAR_NONCONSEC, VAR_DISJOINT,
-               VAR_ASTERISK, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
-               VAR_SKY, VAR_LK, VAR_COUNT
-             } sudoku_variant_t;
+/** @brief The variants. The numbers are stored in sudoku.db (generated.variant): don't reorder. */
+typedef enum {
+    VAR_CLASSIC = 0,                    /**< Classic */
+    VAR_X,                              /**< X-Sudoku: the diagonals too */
+    VAR_MINI,                           /**< Mini 6x6 */
+    VAR_HYPER,                          /**< Hyper: four windows too */
+    VAR_JIGSAW,                         /**< Jigsaw: regions instead of boxes */
+    VAR_KILLER,                         /**< Killer: cages and their sums */
+    VAR_KNIGHT,                         /**< Anti-Knight */
+    VAR_EVENODD,                        /**< Even-Odd */
+    VAR_CONSEC,                         /**< Consecutive */
+    VAR_THERMO,                         /**< Thermo */
+    VAR_SANDWICH,                       /**< Sandwich */
+    VAR_KIDS,                           /**< Kids 4x4 */
+    VAR_KING,                           /**< Anti-King */
+    VAR_NONCONSEC,                      /**< Non-Consecutive */
+    VAR_DISJOINT,                       /**< Disjoint Groups */
+    VAR_ASTERISK,                       /**< Asterisk */
+    VAR_KROPKI,                         /**< Kropki */
+    VAR_XV,                             /**< XV */
+    VAR_GT,                             /**< Greater-Than */
+    VAR_QUAD,                           /**< Quadruple */
+    VAR_ARROW,                          /**< Arrow */
+    VAR_RENBAN,                         /**< Renban */
+    VAR_WHISPER,                        /**< German Whispers */
+    VAR_SKY,                            /**< Skyscraper */
+    VAR_LK,                             /**< Little Killer */
+    VAR_COUNT                           /**< how many */
+} sudoku_variant_t;
 
-/* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
- * "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki",
- * "XV", "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers", "Skyscraper", "Little Killer" */
-const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku", ... */
-#define UNIT_DIAG_MAIN 27
-#define UNIT_DIAG_ANTI 28
-#define UNIT_WINDOW    29               /* 29..32 */
-#define UNIT_GROUP     33               /* 33..41: Disjoint groups */
-#define UNIT_ASTERISK  42
-#define UNITS_MAX      43
-#define CAGES_MAX      81               /* Killer: cages per board (1 cell each at most) */
-#define CAGE_NONE      0xFF
-#define THERMOS_MAX    16
-#define THERMO_NONE    0xFF
-enum { LINE_THERMO = 0, LINE_ARROW, LINE_RENBAN, LINE_WHISPER };
-#define LK_MAX         16
-#define LK_NONE        0xFF
-/* Little Killer: a diagonal's direction from its clue: a clue above a column points down-right or
+/**
+ * @brief A variant's name.
+ * @param variant  0..VAR_COUNT-1
+ * @return "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd",
+ *         "Consecutive", "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive",
+ *         "Disjoint Groups", "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow",
+ *         "Renban", "German Whispers", "Skyscraper", "Little Killer"
+ */
+const char *variant_name(int variant);
+
+/** @name Units: 0..8 rows, 9..17 columns, 18..26 boxes (or regions), then these
+ *  @{ */
+#define UNIT_DIAG_MAIN 27               /**< the top-left to bottom-right diagonal */
+#define UNIT_DIAG_ANTI 28               /**< the top-right to bottom-left diagonal */
+#define UNIT_WINDOW    29               /**< Hyper's windows: 29..32 */
+#define UNIT_GROUP     33               /**< Disjoint groups: 33..41 */
+#define UNIT_ASTERISK  42               /**< Asterisk's nine cells */
+#define UNITS_MAX      43               /**< units at most */
+/** @} */
+#define CAGES_MAX      81               /**< Killer: cages per board (1 cell each at most) */
+#define CAGE_NONE      0xFF             /**< a cell in no cage */
+#define THERMOS_MAX    16               /**< lines per board */
+#define THERMO_NONE    0xFF             /**< a cell on no line */
+/** @brief The kind of lines (sudoku_geom_t.line_kind). */
+enum {
+    LINE_THERMO = 0,                    /**< Thermo: digits rise from the bulb */
+    LINE_ARROW,                         /**< Arrow: the shaft adds up to the circle */
+    LINE_RENBAN,                        /**< Renban: a run of consecutive digits, any order */
+    LINE_WHISPER                        /**< German Whispers: neighbours differ by 5 or more */
+};
+#define LK_MAX         16               /**< Little Killer: diagonals per board */
+#define LK_NONE        0xFF             /**< a cell on no diagonal */
+/** @brief Little Killer: a diagonal's direction from its clue: a clue above a column points down-right or
  * down-left, one left of a row down-right or up-right. The board draws a clue on the line between
  * two cells, half a cell before its first cell (the generator keeps one clue per place). */
-enum { LK_DOWN_RIGHT = 0, LK_DOWN_LEFT, LK_UP_RIGHT };
-#define QUADS_MAX      32
-#define QUAD_NONE      0xFF
+enum {
+    LK_DOWN_RIGHT = 0,                  /**< down and right */
+    LK_DOWN_LEFT,                       /**< down and left */
+    LK_UP_RIGHT                         /**< up and right */
+};
+#define QUADS_MAX      32               /**< Quadruple: circles per board */
+#define QUAD_NONE      0xFF             /**< no circle */
 
-/* Kropki, XV, Greater-Than: the kind of edge marks, and the marks (sudoku_geom_t.edge) */
-enum { EDGE_NONE = 0, EDGE_KROPKI, EDGE_XV, EDGE_GT };
-enum { MARK_NONE = 0, MARK_WHITE = 1, MARK_BLACK = 2 };     /* Kropki: 1 apart, double */
-enum { MARK_V = 1, MARK_X = 2 };                            /* XV: sum 5, sum 10 */
-enum { MARK_LESS = 1, MARK_MORE = 2 };                      /* Greater-Than: the left / top cell is smaller, bigger */
-#define EDGE_RIGHT(e) ((e) & 3)                 /* the mark on the line to the right of a cell */
-#define EDGE_DOWN(e)  (((e) >> 2) & 3)          /* ... below it */
+/** @brief Kropki, XV, Greater-Than: the kind of edge marks (sudoku_geom_t.edge_kind). */
+enum {
+    EDGE_NONE = 0,                      /**< none */
+    EDGE_KROPKI,                        /**< Kropki's dots */
+    EDGE_XV,                            /**< XV's letters */
+    EDGE_GT                             /**< Greater-Than's signs */
+};
+/** @brief Kropki's marks. */
+enum {
+    MARK_NONE = 0,                      /**< no mark */
+    MARK_WHITE = 1,                     /**< a white dot: 1 apart */
+    MARK_BLACK = 2                      /**< a black dot: one is double the other */
+};
+/** @brief XV's marks. */
+enum {
+    MARK_V = 1,                         /**< V: they add up to 5 */
+    MARK_X = 2                          /**< X: they add up to 10 */
+};
+/** @brief Greater-Than's marks. */
+enum {
+    MARK_LESS = 1,                      /**< the left / top cell is smaller */
+    MARK_MORE = 2                       /**< the left / top cell is bigger */
+};
+#define EDGE_RIGHT(e) ((e) & 3)                 /**< the mark on the line to the right of a cell */
+#define EDGE_DOWN(e)  (((e) >> 2) & 3)          /**< ... below it */
 
+/** @brief A board: its size, units, peers and every variant's extras (cages, marks, lines, clues). */
 typedef struct {
-    uint8_t variant;                    /* sudoku_variant_t */
-    uint8_t n;                          /* digits and side: 9, 6 or 4 */
-    uint8_t box_h, box_w;               /* box size: 3x3, 2 rows x 3 columns (6x6) or 2x2 (4x4) */
-    bool diag;                          /* the two diagonals are units too */
-    bool windows;                       /* the four Hyper windows are units too */
-    uint8_t region[81];                 /* box (Jigsaw: region) of each cell, 0..n-1 */
-    uint16_t all;                       /* candidate bits 1..n */
-    uint8_t ncells;
-    uint8_t cells[81];                  /* the cells in use */
-    bool used[81];
-    uint8_t nunits;
-    uint8_t unit_ids[UNITS_MAX];        /* the units in use */
-    bool active[UNITS_MAX];
-    uint8_t unit[UNITS_MAX][9];         /* cells of each unit in use (n of them) */
-    uint8_t ncu[81];
-    uint8_t cu[81][5];                  /* units of each cell: row, column, box (+ diagonals, window, group...) */
-    uint8_t npeers[81];
-    uint8_t peers[81][32];              /* cells sharing a unit */
-    uint32_t peer_bits[81][3];          /* the same as bits (cell / 32, cell % 32) */
+    uint8_t variant;                    /**< sudoku_variant_t */
+    uint8_t n;                          /**< digits and side: 9, 6 or 4 */
+    uint8_t box_h;                      /**< a box's height: 3, or 2 (6x6, 4x4) */
+    uint8_t box_w;                      /**< a box's width: 3 (9x9, 6x6), or 2 (4x4) */
+    bool diag;                          /**< the two diagonals are units too */
+    bool windows;                       /**< the four Hyper windows are units too */
+    uint8_t region[81];                 /**< box (Jigsaw: region) of each cell, 0..n-1 */
+    uint16_t all;                       /**< candidate bits 1..n */
+    uint8_t ncells;                     /**< the cells in use */
+    uint8_t cells[81];                  /**< which */
+    bool used[81];                      /**< a cell is in use (Mini, Kids: the top-left n x n) */
+    uint8_t nunits;                     /**< the units in use */
+    uint8_t unit_ids[UNITS_MAX];        /**< which */
+    bool active[UNITS_MAX];             /**< a unit is in use */
+    uint8_t unit[UNITS_MAX][9];         /**< cells of each unit in use (n of them) */
+    uint8_t ncu[81];                    /**< units of each cell: how many */
+    uint8_t cu[81][5];                  /**< units of each cell: row, column, box (+ diagonals, window, group...) */
+    uint8_t npeers[81];                 /**< peers of each cell: how many */
+    uint8_t peers[81][32];              /**< cells sharing a unit */
+    uint32_t peer_bits[81][3];          /**< the same as bits (cell / 32, cell % 32) */
     /* Killer: cages (their cells are peers too: no digit twice in a cage) */
-    uint8_t ncages;
-    uint8_t cage_of[81];                /* CAGE_NONE = not in a cage */
-    uint8_t cage_sum[CAGES_MAX];
-    uint8_t cage_n[CAGES_MAX];
-    uint8_t cage_cell[CAGES_MAX][9];    /* cells of each cage, the top-left one first */
-    /* digits each cell may hold (candidate bits; Even-Odd narrows its marked cells) */
-    uint16_t allow[81];
-    uint8_t parity[81];                 /* Even-Odd: PARITY_NONE / _EVEN / _ODD */
-    /* Consecutive: bars, bit CONSEC_RIGHT = to the cell on the right, CONSEC_DOWN = below */
-    bool consec_on;
-    uint8_t consec[81];
-    /* peers that share no unit (Anti-Knight: the knight's moves; Anti-King: the touching cells) */
-    uint8_t nxpeers[81];
-    uint8_t xpeers[81][8];
+    uint8_t ncages;                     /**< Killer: cages */
+    uint8_t cage_of[81];                /**< each cell's cage, CAGE_NONE = not in a cage */
+    uint8_t cage_sum[CAGES_MAX];        /**< each cage's sum */
+    uint8_t cage_n[CAGES_MAX];          /**< each cage's cells: how many */
+    uint8_t cage_cell[CAGES_MAX][9];    /**< cells of each cage, the top-left one first */
+    uint16_t allow[81];                 /**< digits each cell may hold (candidate bits; Even-Odd narrows its marked cells) */
+    uint8_t parity[81];                 /**< Even-Odd: PARITY_NONE / _EVEN / _ODD */
+    bool consec_on;                     /**< Consecutive: the bars are rules */
+    uint8_t consec[81];                 /**< Consecutive: bars, bit CONSEC_RIGHT = to the cell on the right, CONSEC_DOWN = below */
+    uint8_t nxpeers[81];                /**< peers that share no unit (Anti-Knight: the knight's moves; Anti-King: the touching cells): how many */
+    uint8_t xpeers[81][8];              /**< which */
     /* Thermo, Arrow, Renban, German Whispers: lines, each a path of cells (side by side or
      * diagonal), of the kind line_kind: a thermometer from its bulb (digits rise along it), an
      * arrow from its circle (the rest, its shaft, adds up to it), a Renban or a Whispers line */
-    uint8_t line_kind;                  /* LINE_* */
-    uint8_t nthermos;
-    uint8_t thermo_n[THERMOS_MAX];
-    uint8_t thermo_cell[THERMOS_MAX][9];
-    uint8_t thermo_of[81];              /* THERMO_NONE = on none (a cell is on one at most) */
-    uint8_t thermo_pos[81];             /* place along it, 0 = the bulb */
-    /* Sandwich: per row (0..8) and column (9..17), the sum between its 1 and 9 */
-    bool sandwich;
-    uint8_t sandwich_sum[18];
-    /* Skyscraper: per row (0..8, seen from the left) and column (9..17, from the top), the
-     * buildings seen, 0 = no clue */
-    bool skyscraper;
-    uint8_t sky[18];
+    uint8_t line_kind;                  /**< the lines' kind, LINE_* */
+    uint8_t nthermos;                   /**< lines */
+    uint8_t thermo_n[THERMOS_MAX];      /**< each line's cells: how many */
+    uint8_t thermo_cell[THERMOS_MAX][9];/**< each line's cells, from its bulb (or circle) */
+    uint8_t thermo_of[81];              /**< each cell's line, THERMO_NONE = on none (a cell is on one at most) */
+    uint8_t thermo_pos[81];             /**< place along it, 0 = the bulb */
+    bool sandwich;                      /**< Sandwich: the sums are rules */
+    uint8_t sandwich_sum[18];           /**< per row (0..8) and column (9..17), the sum between its 1 and 9 */
+    bool skyscraper;                    /**< Skyscraper: the clues are rules */
+    uint8_t sky[18];                    /**< per row (0..8, seen from the left) and column (9..17, from the top), the buildings seen, 0 = no clue */
     /* Little Killer: diagonals, each from its first cell (on the top row or the left column) in
      * its direction (LK_*), with the sum of its cells; a cell is on two at most (lk_of: the
      * down-right one, then the other way) */
-    uint8_t nlk;
-    uint8_t lk_dir[LK_MAX], lk_sum[LK_MAX], lk_n[LK_MAX], lk_cell[LK_MAX][9];
-    bool lk_from_top[LK_MAX];           /* its clue above the column (else left of the row) */
-    uint8_t lk_of[81][2];
-    /* Kropki, XV, Greater-Than: EDGE_*, and per cell its marks (EDGE_RIGHT, EDGE_DOWN) */
-    uint8_t edge_kind;
-    uint8_t edge[81];
+    uint8_t nlk;                        /**< Little Killer: diagonals */
+    uint8_t lk_dir[LK_MAX];             /**< each one's direction, LK_* */
+    uint8_t lk_sum[LK_MAX];             /**< its sum */
+    uint8_t lk_n[LK_MAX];               /**< its cells: how many */
+    uint8_t lk_cell[LK_MAX][9];         /**< its cells, from the first */
+    bool lk_from_top[LK_MAX];           /**< its clue above the column (else left of the row) */
+    uint8_t lk_of[81][2];               /**< each cell's diagonals (the down-right one, then the other), LK_NONE padded */
+    uint8_t edge_kind;                  /**< Kropki, XV, Greater-Than: EDGE_* */
+    uint8_t edge[81];                   /**< per cell, its marks (EDGE_RIGHT, EDGE_DOWN) */
     /* Quadruple: circles, each at the corner where the 2x2 cells from quad_at meet, with
      * 1-4 digits (sorted) that must be among them */
-    uint8_t nquads;
-    uint8_t quad_at[QUADS_MAX];
-    uint8_t quad_n[QUADS_MAX];
-    uint8_t quad_dig[QUADS_MAX][4];
-    uint8_t quad_of[81][4];             /* the circles at a cell's corners, QUAD_NONE padded */
+    uint8_t nquads;                     /**< Quadruple: circles */
+    uint8_t quad_at[QUADS_MAX];         /**< each one's top-left cell (the circle at its bottom-right corner) */
+    uint8_t quad_n[QUADS_MAX];          /**< its digits: how many, 1-4 */
+    uint8_t quad_dig[QUADS_MAX][4];     /**< its digits, sorted */
+    uint8_t quad_of[81][4];             /**< the circles at a cell's corners, QUAD_NONE padded */
 } sudoku_geom_t;
 
-enum { PARITY_NONE = 0, PARITY_EVEN, PARITY_ODD };
-#define CONSEC_RIGHT 1
-#define CONSEC_DOWN  2
+/** @brief Even-Odd's marks (sudoku_geom_t.parity). */
+enum {
+    PARITY_NONE = 0,                    /**< no mark */
+    PARITY_EVEN,                        /**< even */
+    PARITY_ODD                          /**< odd */
+};
+#define CONSEC_RIGHT 1                  /**< Consecutive: a bar to the right */
+#define CONSEC_DOWN  2                  /**< Consecutive: a bar below */
 
-/* Builds the tables (once); call early, before tasks use them. */
+/** @brief Builds the tables (once); call early, before tasks use them. */
 void sudoku_geom_init(void);
-/* The fixed variants; unknown ones, and VAR_JIGSAW (which needs its regions), give classic. */
+/**
+ * @brief The fixed variants; unknown ones, and VAR_JIGSAW (which needs its regions), give classic.
+ * @param variant  sudoku_variant_t
+ * @return its board
+ */
 const sudoku_geom_t *sudoku_geom(int variant);
-/* A Jigsaw board from its region map (81 cells, region 0..8 each, 9 cells
- * per region) into out; false if the map isn't one. */
+/**
+ * @brief A Jigsaw board from its region map (81 cells, region 0..8 each, 9 cells
+ * per region) into out; false if the map isn't one.
+ * @param regions  the region of each cell
+ * @param out  gets the board
+ * @return false if the map isn't one
+ */
 bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
-/* A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
+/**
+ * @brief A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
  * (cells 0..80 row by row, each in one cage at most), into out; false if
- * the text isn't one. sudoku_cages_text() writes it (false: buf too small). */
+ * the text isn't one. sudoku_cages_text() writes it (false: buf too small).
+ * @param text  the cages
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Killer board's cages as text (sudoku_geom_killer_text()'s form).
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
 bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
-/* Even-Odd / Consecutive / Kropki / XV / Greater-Than boards from their marks
+/**
+ * @brief Even-Odd / Consecutive / Kropki / XV / Greater-Than boards from their marks
  * as text, 81 characters row by row: Even-Odd '.', 'e' (even) or 'o' (odd);
  * Consecutive '0'-'3' (bit 1 = a bar to the right, bit 2 = a bar below);
  * Kropki, XV, Greater-Than '0'-'8': the mark to the right + 3 x the mark below
- * (MARK_*). sudoku_marks_text() writes it (buf: at least 82). */
+ * (MARK_*). sudoku_marks_text() writes it (buf: at least 82).
+ * @param variant  VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV or VAR_GT
+ * @param text  the marks
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out);
+/**
+ * @brief A board's marks as text (sudoku_geom_marks()'s form).
+ * @param g  the board
+ * @param buf  gets it (82 at least)
+ * @param len  its size
+ * @return false: buf too small
+ */
 bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
-/* A Thermo board from its thermometers as text: "cell,cell,...;cell,..."
+/**
+ * @brief A Thermo board from its thermometers as text: "cell,cell,...;cell,..."
  * (each from its bulb; cells 0..80, side by side or diagonal neighbours, on
- * one thermometer at most); sudoku_thermos_text() writes it. */
+ * one thermometer at most); sudoku_thermos_text() writes it.
+ * @param text  the thermometers
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
-/* The same for any line variant (Thermo, Arrow: its circle first, Renban, German Whispers);
- * sudoku_thermos_text() writes them all */
+/**
+ * @brief The same for any line variant (Thermo, Arrow: its circle first, Renban, German Whispers);
+ * sudoku_thermos_text() writes them all
+ * @param variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN or VAR_WHISPER
+ * @param text  the lines
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out);
+/**
+ * @brief A board's lines as text (sudoku_geom_lines_text()'s form).
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
-/* A Sandwich board from its clues as text: 18 numbers 0..35, the rows top
+/**
+ * @brief A Sandwich board from its clues as text: 18 numbers 0..35, the rows top
  * to bottom then the columns left to right, comma-separated;
- * sudoku_sandwich_text() writes it. */
+ * sudoku_sandwich_text() writes it.
+ * @param text  the clues
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Sandwich board's clues as text.
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
 bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len);
-/* A Skyscraper board from its clues as text: 18 numbers 0..9 (0: no clue), the rows from the
+/**
+ * @brief A Skyscraper board from its clues as text: 18 numbers 0..9 (0: no clue), the rows from the
  * left top to bottom, then the columns from the top left to right, comma-separated (kept in
- * marks); sudoku_sky_text() writes it. */
+ * marks); sudoku_sky_text() writes it.
+ * @param text  the clues
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Skyscraper board's clues as text.
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
 bool sudoku_sky_text(const sudoku_geom_t *g, char *buf, int len);
-/* A Little Killer board from its clues as text: "top|left index,direction,sum;..." e.g.
+/**
+ * @brief A Little Killer board from its clues as text: "top|left index,direction,sum;..." e.g.
  * "t3,r,21;l5,u,14" (t: above column 0..8, l: left of row 0..8; r down-right, l down-left
  * (from the top only), u up-right (from the left only)), kept where Killer keeps its cages;
- * sudoku_lk_text() writes it. */
+ * sudoku_lk_text() writes it.
+ * @param text  the clues
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_lk_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Little Killer board's clues as text.
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
 bool sudoku_lk_text(const sudoku_geom_t *g, char *buf, int len);
-/* A Quadruple board from its circles as text: "cell:digits;cell:digits;..." (cell
+/**
+ * @brief A Quadruple board from its circles as text: "cell:digits;cell:digits;..." (cell
  * 0..79 the top-left of the four, not in the last column; 1-4 digits 1-9 each);
- * sudoku_quads_text() writes it. Kept where Killer keeps its cages. */
+ * sudoku_quads_text() writes it. Kept where Killer keeps its cages.
+ * @param text  the circles
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
 bool sudoku_geom_quad_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Quadruple board's circles as text.
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
 bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len);
 
-/* Kropki, XV, Greater-Than: may a (the left / top cell) and b (its neighbour) stand
- * with that mark between them? */
+/**
+ * @brief Kropki, XV, Greater-Than: may a (the left / top cell) and b (its neighbour) stand
+ * with that mark between them?
+ * @param kind  EDGE_*
+ * @param mark  MARK_* (0: none)
+ * @param a  the left / top cell's digit
+ * @param b  its neighbour's
+ * @return true if they may
+ */
 bool is_sudoku_edge_ok(int kind, int mark, int a, int b);
-/* Quadruple: how many of circle q's digits the filled cells of vals still miss
- * (*empty: its empty cells) */
+/**
+ * @brief Quadruple: how many of circle q's digits the filled cells of vals still miss
+ * (*empty: its empty cells)
+ * @param g  the board
+ * @param q  the circle
+ * @param vals  the cells, 0 = empty
+ * @param empty  gets its empty cells
+ * @return the digits missed
+ */
 int sudoku_quad_missing(const sudoku_geom_t *g, int q, const uint8_t vals[81], int *empty);
 
+/**
+ * @brief Two cells share a unit (or a cage).
+ * @param g  the board
+ * @param a  a cell
+ * @param b  another
+ * @return true if so
+ */
 static inline bool is_sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 {
     return (g->peer_bits[a][b >> 5] >> (b & 31)) & 1u;
 }
 
+/**
+ * @brief A cell is on a diagonal that is a unit (X-Sudoku).
+ * @param g  the board
+ * @param cell  the cell
+ * @return true if so
+ */
 static inline bool is_sudoku_geom_on_diag(const sudoku_geom_t *g, int cell)
 {
     int r = cell / 9, c = cell % 9;
     return g->diag && (r == c || r + c == g->n - 1);
 }
 
-/* in a Hyper window: -1, or the window 0..3 */
+/**
+ * @brief in a Hyper window: -1, or the window 0..3
+ * @param g  the board
+ * @param cell  the cell
+ * @return -1, or the window 0..3
+ */
 static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
 {
     int r = cell / 9, c = cell % 9;
@@ -306,7 +514,12 @@ static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
     return (r > 4) * 2 + (c > 4);
 }
 
-/* on the Asterisk (9x9: rows and columns 1, 2, 4, 6, 7 around the centre) */
+/**
+ * @brief on the Asterisk (9x9: rows and columns 1, 2, 4, 6, 7 around the centre)
+ * @param g  the board
+ * @param cell  the cell
+ * @return true if so
+ */
 static inline bool is_sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
 {
     if (g->variant != VAR_ASTERISK) {
@@ -328,7 +541,12 @@ static inline bool is_sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
     }
 }
 
-/* the cells drawn tinted: X diagonals, Hyper windows, the Asterisk */
+/**
+ * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk
+ * @param g  the board
+ * @param cell  the cell
+ * @return true if so
+ */
 static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 {
     return is_sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || is_sudoku_geom_on_asterisk(g, cell);
@@ -336,101 +554,213 @@ static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 
 /* ---------------------------------------------------------------- generating */
 
-/* A hook the generator and solver call now and then in their long loops: weak, a no-op unless
+/** @brief A hook the generator and solver call now and then in their long loops: weak, a no-op unless
  * the program defines its own (the firmware: a tick for the idle task, against the task watchdog). */
 void sudoku_gen_yield(void);
 
-/* Fills givens (81, 0 = empty) with a new puzzle of that variant and level.
+/**
+ * @brief Fills givens (81, 0 = empty) with a new puzzle of that variant and level.
  * seed: any random number. board (may be NULL) gets the puzzle's geometry:
  * for Jigsaw its regions (board->region), for Killer its cages
  * (sudoku_cages_text()). Gives up after a number of tries and returns the
  * closest one found (*got_level says what it is). False only if out of
  * tries for anything at all (shouldn't happen). Not reentrant: one
- * generator at a time. */
+ * generator at a time.
+ * @param variant  sudoku_variant_t
+ * @param level  the level
+ * @param seed  any random number
+ * @param givens  gets the puzzle
+ * @param board  gets its board, or NULL
+ * @param got_level  gets the level it is
+ * @return false only if out of tries for anything at all
+ */
 bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], sudoku_geom_t *board,
                      gen_level_t *got_level);
 
-/* Level of a puzzle by the techniques it needs; -1 if it doesn't have
- * exactly one solution. (Generator task.) */
+/**
+ * @brief Level of a puzzle by the techniques it needs; -1 if it doesn't have
+ * exactly one solution. (Generator task.)
+ * @param g  the board
+ * @param givens  the puzzle
+ * @return gen_level_t, or -1
+ */
 int sudoku_grade(const sudoku_geom_t *g, const uint8_t givens[81]);
 
-/* Number of solutions, counting up to limit. (Generator task.) */
+/**
+ * @brief Number of solutions, counting up to limit. (Generator task.)
+ * @param g  the board
+ * @param cells  the puzzle
+ * @param limit  stop counting there
+ * @return the solutions, at most limit
+ */
 int sudoku_count_solutions(const sudoku_geom_t *g, const uint8_t cells[81], int limit);
-/* A classic puzzle has exactly one solution (its own scratch: for the
- * database task, which checks imported puzzles while the generator may run). */
+/**
+ * @brief A classic puzzle has exactly one solution (its own scratch: for the
+ * database task, which checks imported puzzles while the generator may run).
+ * @param cells  the puzzle
+ * @return true if so
+ */
 bool is_sudoku_classic_unique(const uint8_t cells[81]);
-/* The same on any board (its own work space, like is_sudoku_classic_unique: for the
+/**
+ * @brief The same on any board (its own work space, like is_sudoku_classic_unique: for the
  * database task's import, alongside the UI's own solving); gives up (false) on a
- * puzzle that takes too long. */
+ * puzzle that takes too long.
+ * @param g  the board
+ * @param cells  the puzzle
+ * @return true if so
+ */
 bool is_sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
 
-/* Digit d may go in the empty cell by every rule of the board, as far as the digits in vals
+/**
+ * @brief Digit d may go in the empty cell by every rule of the board, as far as the digits in vals
  * (filled, 0 = empty) tell: no solving ahead, just the rules against what's there (the
- * variant pages' worked examples, tools/variant_examples.c). */
+ * variant pages' worked examples, tools/variant_examples.c).
+ * @param g  the board
+ * @param vals  the cells, 0 = empty
+ * @param cell  the cell
+ * @param d  the digit
+ * @return true if it fits
+ */
 bool is_sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
-/* The same, and which rule says no: FIT_OK (it fits), or the first rule that rules d out */
-enum { FIT_OK = 0, FIT_FILLED, FIT_BROKEN, FIT_UNIT, FIT_XPEER, FIT_ALLOW, FIT_CONSEC, FIT_EDGE, FIT_QUAD,
-       FIT_SANDWICH_ROW, FIT_SANDWICH_COL, FIT_THERMO, FIT_CAGE, FIT_SKY_ROW, FIT_SKY_COL, FIT_LK
-     };
+/** @brief The same, and which rule says no: FIT_OK (it fits), or the first rule that rules d out */
+enum {
+    FIT_OK = 0,                         /**< it fits */
+    FIT_FILLED,                         /**< the cell isn't empty */
+    FIT_BROKEN,                         /**< not a cell of the board, or not a digit */
+    FIT_UNIT,                           /**< a row, column, box or other unit has d */
+    FIT_XPEER,                          /**< Anti-Knight, Anti-King: a cell that sees it has d */
+    FIT_ALLOW,                          /**< Even-Odd: the cell's mark */
+    FIT_CONSEC,                         /**< Consecutive, Non-Consecutive: a neighbour */
+    FIT_EDGE,                           /**< Kropki, XV, Greater-Than: a mark */
+    FIT_QUAD,                           /**< Quadruple: a circle's digits */
+    FIT_SANDWICH_ROW,                   /**< Sandwich: the row's sum */
+    FIT_SANDWICH_COL,                   /**< Sandwich: the column's sum */
+    FIT_THERMO,                         /**< a line (Thermo, Arrow, Renban, Whispers) */
+    FIT_CAGE,                           /**< Killer: the cage's sum */
+    FIT_SKY_ROW,                        /**< Skyscraper: the row's clue */
+    FIT_SKY_COL,                        /**< Skyscraper: the column's clue */
+    FIT_LK                              /**< Little Killer: a diagonal's sum */
+};
+/**
+ * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
+ * @param g  the board
+ * @param vals  the cells, 0 = empty
+ * @param cell  the cell
+ * @param d  the digit
+ * @return FIT_OK, or the first rule that rules d out
+ */
 int sudoku_fits_why(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
 
-/* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
- * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.) */
+/**
+ * @brief Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
+ * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.)
+ * @param g  the board
+ * @param cells  the puzzle
+ * @param out  gets the solution
+ * @return false if the givens break a rule or there is no solution
+ */
 bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[81]);
 
-/* ---------------------------------------------------------------- hints */
-int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cell (0..n-1) of a unit, or -1 */
+/**
+ * @brief A unit's cell.
+ * @param g  the board
+ * @param unit  the unit
+ * @param k  0..n-1
+ * @return its k-th cell, or -1
+ */
+int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);
 
-/* The last four are for hints and Learn only: grading (sudoku_grade) doesn't use them, so Hard
- * still means "pairs or locked candidates" and Expert "more than that". */
-typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
-               TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH,
-               TECH_NAKED_TRIPLE, TECH_X_WING, TECH_SWORDFISH, TECH_XY_WING,
-               TECH_EDGE, TECH_QUAD, TECH_LINE, TECH_SKY, TECH_LK
-             } tech_kind_t;
+/** @brief The techniques hints explain. Naked triple, X-Wing, Swordfish and XY-Wing are for hints and Learn
+ * only: grading (sudoku_grade) doesn't use them, so Hard still means "pairs or locked candidates" and
+ * Expert "more than that". */
+typedef enum {
+    TECH_NONE = 0,           /**< none */
+    TECH_POINTING,           /**< pointing: a box's digit in one line */
+    TECH_CLAIMING,           /**< claiming: a line's digit in one box */
+    TECH_NAKED_PAIR,         /**< naked pair */
+    TECH_HIDDEN_PAIR,        /**< hidden pair */
+    TECH_CAGE,               /**< Killer: a cage's sum */
+    TECH_CONSEC,             /**< Consecutive: the bars */
+    TECH_THERMO,             /**< Thermo: a thermometer */
+    TECH_SANDWICH,           /**< Sandwich: a sum */
+    TECH_NAKED_TRIPLE,       /**< naked triple (hints and Learn only) */
+    TECH_X_WING,             /**< X-Wing (hints and Learn only) */
+    TECH_SWORDFISH,          /**< Swordfish (hints and Learn only) */
+    TECH_XY_WING,            /**< XY-Wing (hints and Learn only) */
+    TECH_EDGE,               /**< Kropki, XV, Greater-Than: the marks */
+    TECH_QUAD,               /**< Quadruple: a circle */
+    TECH_LINE,               /**< Arrow, Renban, Whispers: a line */
+    TECH_SKY,                /**< Skyscraper: a clue */
+    TECH_LK                  /**< Little Killer: a diagonal */
+} tech_kind_t;
+/** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {
-    int kind;                /* tech_kind_t */
-    int unit, unit2, unit3;  /* pointing: box, line; claiming: line, box; pairs, triple: the unit; cage: the
-                                cage; consecutive: the cell whose candidates its neighbours narrowed;
-                                thermo: the thermometer; sandwich: the row or column; edge (Kropki, XV,
-                                Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
-                                the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
-                                sky: the row or column (0..17), cell1 the cell; lk: the diagonal, cell1;
-                                X-Wing, Swordfish:
-                                the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
-    int digit, digit2;       /* pointing/claiming, X-Wing, Swordfish: digit; pairs: the two digits; triple:
-                                bit mask of its three digits; cage: bit mask of the digits its sum still
-                                allows in its empty cells; X-Wing, Swordfish: digit2 = bit mask of the
-                                cover lines' indexes (columns, or rows, 0..8); XY-Wing: digit = the one
-                                ruled out (z), digit2 = the pivot's two digits (bit mask) */
-    int cell1, cell2;        /* pairs: the two cells; XY-Wing: the two pincers' digits (bit masks) */
-    int ncells;              /* triple, X-Wing, Swordfish, XY-Wing: the cells that make it (XY-Wing: the
-                                pivot first, then the two pincers) */
-    uint8_t cells[9];
+    int kind;                /**< tech_kind_t */
+    /** pointing: box, line; claiming: line, box; pairs, triple: the unit; cage: the
+     *  cage; consecutive: the cell whose candidates its neighbours narrowed;
+     *  thermo: the thermometer; sandwich: the row or column; edge (Kropki, XV,
+     *  Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
+     *  the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
+     *  sky: the row or column (0..17), cell1 the cell; lk: the diagonal, cell1;
+     *  X-Wing, Swordfish: the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
+    int unit;
+    int unit2;               /**< the second unit (see unit) */
+    int unit3;               /**< the third (see unit) */
+    /** pointing/claiming, X-Wing, Swordfish: digit; pairs: the two digits; triple:
+     *  bit mask of its three digits; cage: bit mask of the digits its sum still
+     *  allows in its empty cells; X-Wing, Swordfish: digit2 = bit mask of the
+     *  cover lines' indexes (columns, or rows, 0..8); XY-Wing: digit = the one
+     *  ruled out (z), digit2 = the pivot's two digits (bit mask) */
+    int digit;
+    int digit2;              /**< the second digit (see digit) */
+    int cell1;               /**< pairs: the first cell; XY-Wing: a pincer's digits (bit mask) */
+    int cell2;               /**< pairs: the second cell; XY-Wing: the other pincer's digits */
+    /** triple, X-Wing, Swordfish, XY-Wing: the cells that make it (XY-Wing: the
+     *  pivot first, then the two pincers) */
+    int ncells;
+    uint8_t cells[9];        /**< those cells */
 } sudoku_tech_t;
 
+/** @brief What a step is. */
 typedef enum {
-    STEP_NONE = 0,           /* no simple step: cell/digit is just the answer for the easiest cell */
-    STEP_WRONG,              /* cell holds a wrong digit */
-    STEP_HIDDEN_SINGLE,      /* digit fits only cell within unit */
-    STEP_NAKED_SINGLE,       /* cell can only take digit */
+    STEP_NONE = 0,           /**< no simple step: cell/digit is just the answer for the easiest cell */
+    STEP_WRONG,              /**< cell holds a wrong digit */
+    STEP_HIDDEN_SINGLE,      /**< digit fits only cell within unit */
+    STEP_NAKED_SINGLE,       /**< cell can only take digit */
 } step_kind_t;
+/** @brief The next step a person would take: a cell, its digit, and the technique before it. */
 typedef struct {
-    int kind;                /* step_kind_t */
-    int cell, digit;
-    int unit;                /* hidden single: the unit */
-    sudoku_tech_t tech;      /* before the single, if a technique was needed (kind != TECH_NONE) */
+    int kind;                /**< step_kind_t */
+    int cell;                /**< the cell */
+    int digit;               /**< its digit */
+    int unit;                /**< hidden single: the unit */
+    sudoku_tech_t tech;      /**< before the single, if a technique was needed (kind != TECH_NONE) */
 } sudoku_step_t;
 
-/* The next step a person would take on the board vals (81, 0 = empty;
- * givens included), knowing the solution. False if the board is full. */
+/**
+ * @brief The next step a person would take on the board vals (81, 0 = empty;
+ * givens included), knowing the solution. False if the board is full.
+ * @param g  the board
+ * @param vals  the cells, 0 = empty
+ * @param solution  the solution
+ * @param out  gets the step
+ * @return false if the board is full
+ */
 bool sudoku_next_step(const sudoku_geom_t *g, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out);
 
-/* For Learn: true if, on the board vals, the technique `tech` (TECH_POINTING ...
+/**
+ * @brief For Learn: true if, on the board vals, the technique `tech` (TECH_POINTING ...
  * TECH_XY_WING) opens up a single that wasn't there before: no single is left
  * now, and after that technique (and nothing else) one appears. *out is then that
  * single with the technique in out->tech, like sudoku_next_step() gives it. The
- * technique may not be the only way forward; it is one that works there. */
+ * technique may not be the only way forward; it is one that works there.
+ * @param g  the board
+ * @param vals  the cells, 0 = empty
+ * @param solution  the solution
+ * @param tech  tech_kind_t
+ * @param out  gets the single
+ * @return true if it opens one up
+ */
 bool sudoku_step_with(const sudoku_geom_t *g, const uint8_t vals[81], const uint8_t solution[81], int tech,
                       sudoku_step_t *out);
 

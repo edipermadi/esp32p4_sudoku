@@ -1,6 +1,10 @@
-/*
+/**
+ * @file usb_msc.cpp
+ * @brief The microSD card as a USB drive (TinyUSB mass storage on the OTG port).
+ *
  * microSD card -> USB mass storage (see usb_msc.h), using the Arduino core's
  * TinyUSB USBMSC class. TinyUSB on the P4 runs on the OTG high-speed port.
+ *
  */
 #include "usb_msc.h"
 #include "bsp/bsp_board.h"
@@ -12,17 +16,25 @@
 #error "Set Tools > USB Mode to \"USB-OTG (TinyUSB)\" for the USB drive"
 #endif
 
-static const char *TAG = "usb_msc";
+[[maybe_unused]] static const char *TAG = "usb_msc";   /**< (ESP_LOGE compiles out at a low log level) */
 
-static USBMSC s_msc;
-static uint32_t s_sector_size = 512;
-static bool s_started;
-static volatile bool s_enabled;          /* checked by the TinyUSB callbacks */
-static volatile bool s_ejected;
-static volatile bool s_suspended;         /* bus suspended: unplugged, or the host sleeps */
-static volatile uint32_t s_suspended_ms;  /* millis() when it was */
+static USBMSC s_msc;                    /**< the drive */
+static uint32_t s_sector_size = 512;    /**< the card's sector size, bytes */
+static bool s_started;                  /**< usb_msc_start() has run */
+static volatile bool s_enabled;          /**< checked by the TinyUSB callbacks */
+static volatile bool s_ejected;         /**< the computer ejected the drive */
+static volatile bool s_suspended;         /**< bus suspended: unplugged, or the host sleeps */
+static volatile uint32_t s_suspended_ms;  /**< millis() when it was */
 
-/* TinyUSB passes whole sectors in practice (bufsize = n * 512, offset = 0);
+/**
+ * @brief
+ * @param lba  the first sector
+ * @param offset  into it (0)
+ * @param buffer  gets the data
+ * @param bufsize  bytes
+ * @return bufsize, or -1
+ */
+/** @brief TinyUSB passes whole sectors in practice (bufsize = n * 512, offset = 0);
  * reject anything else rather than silently corrupting the card. */
 static int32_t on_read(uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize)
 {
@@ -37,6 +49,14 @@ static int32_t on_read(uint32_t lba, uint32_t offset, void *buffer, uint32_t buf
     return (int32_t)bufsize;
 }
 
+/**
+ * @brief Writes whole sectors to the card for the computer (anything else is refused).
+ * @param lba  the first sector
+ * @param offset  into it (0)
+ * @param buffer  the data
+ * @param bufsize  bytes
+ * @return bufsize, or -1
+ */
 static int32_t on_write(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize)
 {
     if (!s_enabled || offset != 0 || bufsize % s_sector_size) {
@@ -50,6 +70,13 @@ static int32_t on_write(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t
     return (int32_t)bufsize;
 }
 
+/**
+ * @brief The computer starts or stops the drive; an eject reports "no media" from then on.
+ * @param power_condition  unused
+ * @param start  start (else stop)
+ * @param load_eject  load or eject
+ * @return true
+ */
 static bool on_start_stop(uint8_t power_condition, bool start, bool load_eject)
 {
     if (load_eject && !start) {                /* "Eject" / "Safely remove" on the computer */
@@ -60,6 +87,13 @@ static bool on_start_stop(uint8_t power_condition, bool start, bool load_eject)
     return true;
 }
 
+/**
+ * @brief USB events: the bus suspended or resumed, the port plugged or unplugged.
+ * @param arg  unused
+ * @param base  the event base
+ * @param id  the event
+ * @param data  unused
+ */
 static void on_usb_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     switch (id) {
@@ -80,6 +114,7 @@ static void on_usb_event(void *arg, esp_event_base_t base, int32_t id, void *dat
     }
 }
 
+/* (documented in usb_msc.h) */
 extern "C" esp_err_t usb_msc_start(void)
 {
     if (s_started) {
@@ -106,11 +141,13 @@ extern "C" esp_err_t usb_msc_start(void)
     return ESP_OK;
 }
 
+/* (documented in usb_msc.h) */
 extern "C" bool is_usb_msc_host_connected(void)
 {
     return s_started && (bool)USB && !s_suspended;
 }
 
+/* (documented in usb_msc.h) */
 extern "C" esp_err_t usb_msc_set_enabled(bool on)
 {
     if (on) {
@@ -132,11 +169,13 @@ extern "C" esp_err_t usb_msc_set_enabled(bool on)
     return ESP_OK;
 }
 
+/* (documented in usb_msc.h) */
 extern "C" bool is_usb_msc_ejected(void)
 {
     return s_ejected;
 }
 
+/* (documented in usb_msc.h) */
 extern "C" bool is_usb_msc_unplugged(void)
 {
     if (!s_started || !s_enabled) {

@@ -25,7 +25,7 @@ npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 52 --font $FONT \
 
 ## Changing the colours
 
-Both colour schemes are tables at the top of `src/ui_sudoku.c`: `PAL_DARK` and `PAL_LIGHT`. They set the background, text, grid lines and each cell highlight state.
+Both colour schemes are tables at the top of `src/ui_common.c`: `PAL_DARK` and `PAL_LIGHT`. They set the background, text, grid lines and each cell highlight state.
 
 ## Tuning the sounds
 
@@ -37,7 +37,7 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 
 ## Code documentation
 
-`make doxygen` builds HTML documentation of the firmware's code into `build/doxygen/html/index.html` (Doxygen with Graphviz: `apt install doxygen graphviz`; settings in `Doxyfile`). Every source file, function and structure is there with its code, documented or not. The main page (`src/mainpage.dox`) says what the firmware does, where to start, how it runs, the conventions and the build commands. Under **Topics** (`src/topics.dox`) each screen's UI and core files are bundled: Puzzles, Statistics, History, Gameplays and Replay, Trophies, Players, Files, Settings, System monitor; with the database (`stats_db`), devctl and the serial port, these are fully documented in Doxygen's `/** ... */` style, with `@brief`, `@param` and `@return`. A new screen's UI and core go under a topic of their own: a `@defgroup` in `topics.dox` and an `@ingroup` line in each. Vendored and generated code is left out, as in `make format`. Warnings (a documented function missing a parameter, a malformed tag) go to `build/doxygen/warnings.log`, and `make doxygen` prints how many.
+`make doxygen` builds HTML documentation of the firmware's code into `build/doxygen/html/index.html` (Doxygen with Graphviz: `apt install doxygen graphviz`; settings in `Doxyfile`). Every source file, function and structure is there with its code, documented or not. The main page (`src/mainpage.dox`) says what the firmware does, where to start, how it runs, the conventions and the build commands. Under **Topics** (`src/topics.dox`) each screen's UI and core files are bundled: Game, Puzzles, Statistics, History, Gameplays and Replay, Trophies, Players, Files, Settings, System monitor, Lock screen; next to them the UI's start-up, Media and Board support. All of the firmware's own code is documented in Doxygen's `/** ... */` style: every file, function (`@brief`, `@param`, `@return`), structure, member, variable and macro. A new screen's UI and core go under a topic of their own: a `@defgroup` in `topics.dox` and an `@ingroup` line in each. Vendored and generated code is left out, as in `make format`. Warnings (a documented function missing a parameter, a malformed tag) go to `build/doxygen/warnings.log`, and `make doxygen` prints how many.
 
 ## Tests
 
@@ -109,7 +109,12 @@ The P4's internal RAM (768 KB) is the tight resource; PSRAM (32 MB) is plenty. S
 
 ```
 esp32p4_sudoku.ino      setup/loop
-src/ui_sudoku.c         the UI's start-up and public functions (ui_sudoku.h), theme, notices, lock screen, screen saver
+src/ui_sudoku.c         the UI's start-up: the card and sudoku.db read, the settings applied, the screens and timers
+src/ui_notice.c         notices: a banner for a while, or one that stays while something runs (a file from the computer)
+src/ui_saver.c          the screen saver: the dim clock, dark, power saving, the waking tap
+src/ui_lock.c           the lock screen (Swipe or PIN) and Settings' PIN setup
+src/lock_core.c         the lock's PIN without LVGL: right or wrong, tries, the wait, setting a new one
+src/ui_remote.c         what serial control asks of the UI: fill, state, the screen's name, what uses the card, Benchmarking
 src/ui_internal.h       what the UI files share: includes, macros, types, and the functions and variables used by more than one
 src/ui_common.c         palette, widgets and helpers, the generated-puzzle cache, context menus
 src/ui_game.c           the game: rules check, saving, the board, confetti, input, building its screen

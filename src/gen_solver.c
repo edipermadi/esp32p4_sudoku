@@ -12,7 +12,8 @@
 /* Kropki, XV, Greater-Than: [kind][mark][a] = the digits b may be when the left / top
  * cell is a (s_edge_fwd), and the digits a may be when the right / bottom one is b
  * (s_edge_bwd) */
-static uint16_t s_edge_fwd[4][3][10], s_edge_bwd[4][3][10];
+static uint16_t s_edge_fwd[4][3][10];       /**< [kind][mark][a]: the digits the right / bottom cell may be */
+static uint16_t s_edge_bwd[4][3][10];       /**< [kind][mark][b]: the digits the left / top cell may be */
 
 /* (documented in gen_internal.h) */
 void gen_edge_tables(void)
@@ -65,16 +66,21 @@ uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const u
     return free;
 }
 
+/** @name gen_line_allow()'s helpers (v, cand: its arguments)
+ *  @{ */
+#define LMASK(c) ((uint16_t)(v[c] ? (1u << v[c]) : cand ? cand[c] : 0x3FE))   /**< cell c's digits: its digit, else its candidates (all without them) */
+#define LO(m) (__builtin_ctz(m))                    /**< the smallest digit in a mask */
+#define HI(m) (31 - __builtin_clz(m))               /**< the largest digit in a mask */
+/** the digits a..b as a mask (clamped to 1..9; empty when a > b) */
+#define RANGE(a, b) ((uint16_t)((a) > (b) || (b) < 1 || (a) > 9 ? 0 : \
+                     (((1u << ((b) > 9 ? 10 : (b) + 1)) - 1) & ~((1u << ((a) < 1 ? 1 : (a))) - 1))))
+/** @} */
+
 /* (documented in gen_internal.h) */
 uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, const uint16_t *cand)
 {
     const int n = G->thermo_n[t];
     const uint8_t *cell = G->thermo_cell[t];
-#define LMASK(c) ((uint16_t)(v[c] ? (1u << v[c]) : cand ? cand[c] : 0x3FE))
-#define LO(m) (__builtin_ctz(m))
-#define HI(m) (31 - __builtin_clz(m))
-#define RANGE(a, b) ((uint16_t)((a) > (b) || (b) < 1 || (a) > 9 ? 0 : \
-                     (((1u << ((b) > 9 ? 10 : (b) + 1)) - 1) & ~((1u << ((a) < 1 ? 1 : (a))) - 1))))
     uint16_t free = 0x3FE;
     switch (G->line_kind) {
     case LINE_THERMO:                               /* above the cell before it, below the one after */
@@ -181,6 +187,7 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
     return free;
 }
 
+/* (documented in generator.h) */
 int sudoku_quad_missing(const sudoku_geom_t *g, int q, const uint8_t vals[81], int *empty)
 {
     int need[10] = {0}, miss = 0, at = g->quad_at[q];
@@ -203,7 +210,7 @@ int sudoku_quad_missing(const sudoku_geom_t *g, int q, const uint8_t vals[81], i
     return miss;
 }
 
-/* sums of k distinct digits from 2..8: bit s set if s can be made (k 0..7) */
+/** @brief sums of k distinct digits from 2..8: bit s set if s can be made (k 0..7) */
 static uint64_t s_bread[8];
 
 /* (documented in gen_internal.h) */
@@ -225,25 +232,34 @@ void gen_bread_tables(void)
 
 /* ---------------------------------------------------------------- counting / filling */
 
-/* Called now and then from the long loops (each attempt, each clue tried, every 4096 search
+/** @brief Called now and then from the long loops (each attempt, each clue tried, every 4096 search
  * nodes). A no-op here (and on a PC); the firmware's own gives the idle task a turn, since a
  * puzzle can take more than the task watchdog's 5 s (Greater-Than Expert did, on core 0). */
 __attribute__((weak)) void sudoku_gen_yield(void) {}
 
-static uint32_t s_yield_nodes;
+static uint32_t s_yield_nodes;              /**< search nodes, for sudoku_gen_yield() every 4096 */
 
+/** @brief The search's board: digits, each unit's digits used, and the cages. */
 typedef struct {
-    const sudoku_geom_t *G;
-    uint8_t v[81];
-    uint16_t um[UNITS_MAX];             /* bit d = digit d used in the unit */
-    int8_t units[81][5];                /* the cell's units, -1 terminated */
-    uint32_t nodes, node_limit;         /* node_limit 0 = no limit; reached: aborted */
-    bool aborted;
+    const sudoku_geom_t *G;             /**< the board */
+    uint8_t v[81];                      /**< the digits, 0 = empty */
+    uint16_t um[UNITS_MAX];             /**< bit d = digit d used in the unit */
+    int8_t units[81][5];                /**< the cell's units, -1 terminated */
+    uint32_t nodes;                     /**< the nodes searched */
+    uint32_t node_limit;                /**< at most (0 = no limit); reached: aborted */
+    bool aborted;                       /**< the node limit was reached */
     /* Killer: per cage, the digits in it, what's left of its sum, its empty cells */
-    uint16_t cage_used[CAGES_MAX];
-    int8_t cage_left[CAGES_MAX], cage_empty[CAGES_MAX];
+    uint16_t cage_used[CAGES_MAX];      /**< Killer: each cage's digits */
+    int8_t cage_left[CAGES_MAX];        /**< what's left of its sum */
+    int8_t cage_empty[CAGES_MAX];       /**< its empty cells */
 } grid_t;
 
+/**
+ * @brief Puts a digit in a cell: its units and cage take it.
+ * @param g  the search's board
+ * @param i  the cell
+ * @param d  the digit
+ */
 static void grid_set(grid_t *g, int i, int d)
 {
     uint16_t m = (uint16_t)(1u << d);
@@ -259,6 +275,12 @@ static void grid_set(grid_t *g, int i, int d)
     }
 }
 
+/**
+ * @brief Takes a digit out of a cell (undoes grid_set()).
+ * @param g  the search's board
+ * @param i  the cell
+ * @param d  the digit
+ */
 static void grid_clear(grid_t *g, int i, int d)
 {
     uint16_t m = (uint16_t)(1u << d);
@@ -274,7 +296,13 @@ static void grid_clear(grid_t *g, int i, int d)
     }
 }
 
-/* smallest and largest sums of k distinct digits from mask */
+/**
+ * @brief smallest and largest sums of k distinct digits from mask
+ * @param mask  the digits (bit d = d)
+ * @param k  how many
+ * @param lo  gets the smallest sum (0: fewer than k digits)
+ * @param hi  gets the largest
+ */
 static void mask_k_range(uint16_t mask, int k, int *lo, int *hi)
 {
     *lo = *hi = 0;
@@ -312,14 +340,24 @@ bool is_gen_sky_line_ok(const uint8_t x[9], int c)
     return seen < c && seen + more >= c;            /* (the 9, still to come, is seen) */
 }
 
-/* sudoku_fits_why(): which rule took the digit asked about out of grid_free()'s result (NULL:
+/** @brief sudoku_fits_why(): which rule took the digit asked about out of grid_free()'s result (NULL:
  * nobody asks, the usual case: one predictable branch per rule) */
-typedef struct { int d, code; } why_t;   /* (one type for both ends: no aliasing surprise) */
+typedef struct {
+    int d;                              /**< the digit asked about */
+    int code;                           /**< FIT_*: the first rule that took it out (FIT_OK: none) */
+} why_t;                                /* (one type for both ends: no aliasing surprise) */
 
-static why_t *s_why;
+static why_t *s_why;                    /**< the question, or NULL */
 
+/** a rule (FIT_*) took the digit asked about out of free */
 #define WHY(c) do { if (s_why && !s_why->code && !(free >> s_why->d & 1)) s_why->code = (c); } while (0)
 
+/**
+ * @brief The digits a cell may still take, by every rule of the board.
+ * @param g  the search's board
+ * @param i  the cell
+ * @return them (bit d = d)
+ */
 static uint16_t grid_free(const grid_t *g, int i)
 {
     uint16_t used = 0;
@@ -528,6 +566,13 @@ static uint16_t grid_free(const grid_t *g, int i)
     return free;
 }
 
+/**
+ * @brief Loads a puzzle into the search's board.
+ * @param g  gets it
+ * @param G  the board
+ * @param cells  the digits, 0 = empty
+ * @return false if a given breaks a rule
+ */
 static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
 {
     memset(g, 0, sizeof(*g));
@@ -559,7 +604,13 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
     return true;
 }
 
-/* counts solutions up to limit; with rng, fills g with a random solution */
+/**
+ * @brief counts solutions up to limit; with rng, fills g with a random solution
+ * @param g  the search's board
+ * @param limit  stop counting there
+ * @param rng  a random state, or NULL
+ * @return the solutions found, at most limit
+ */
 static int search(grid_t *g, int limit, uint32_t *rng)
 {
     const sudoku_geom_t *G = g->G;
@@ -634,11 +685,13 @@ int gen_count_bounded(const sudoku_geom_t *G, const uint8_t cells[81], int limit
     return g.aborted ? -1 : n;
 }
 
+/* (documented in generator.h) */
 int sudoku_count_solutions(const sudoku_geom_t *G, const uint8_t cells[81], int limit)
 {
     return gen_count_bounded(G, cells, limit, 0);
 }
 
+/* (documented in generator.h) */
 bool is_sudoku_classic_unique(const uint8_t cells[81])
 {
     static grid_t g;                                 /* its own: another task than the generator's */
@@ -649,6 +702,7 @@ bool is_sudoku_classic_unique(const uint8_t cells[81])
     return search(&g, 2, NULL) == 1 && !g.aborted;
 }
 
+/* (documented in generator.h) */
 bool is_sudoku_unique(const sudoku_geom_t *G, const uint8_t cells[81])
 {
     static grid_t g;                                 /* its own (the import's task) */
@@ -659,6 +713,7 @@ bool is_sudoku_unique(const sudoku_geom_t *G, const uint8_t cells[81])
     return search(&g, 2, NULL) == 1 && !g.aborted;
 }
 
+/* (documented in generator.h) */
 bool sudoku_solve(const sudoku_geom_t *G, const uint8_t cells[81], uint8_t out[81])
 {
     static grid_t g;                                 /* off the (small) LVGL task stack */
@@ -672,6 +727,7 @@ bool sudoku_solve(const sudoku_geom_t *G, const uint8_t cells[81], uint8_t out[8
     return true;
 }
 
+/* (documented in generator.h) */
 int sudoku_fits_why(const sudoku_geom_t *G, const uint8_t vals[81], int cell, int d)
 {
     static grid_t g;
@@ -691,6 +747,7 @@ int sudoku_fits_why(const sudoku_geom_t *G, const uint8_t vals[81], int cell, in
     return w.code;
 }
 
+/* (documented in generator.h) */
 bool is_sudoku_fits(const sudoku_geom_t *G, const uint8_t vals[81], int cell, int d)
 {
     static grid_t g;

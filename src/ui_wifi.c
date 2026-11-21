@@ -1,5 +1,9 @@
-/*
+/**
+ * @file ui_wifi.c
+ * @brief The Wi-Fi page: networks, connecting, forgetting.
+ *
  * Wi-Fi page (see ui_wifi.h). Polls wifi_mgr every 400 ms while shown.
+ *
  */
 #include "ui_wifi.h"
 #include "wifi_mgr.h"
@@ -7,24 +11,40 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_ROWS 32
+#define MAX_ROWS 32                     /**< networks listed at most */
 
-static lv_obj_t *s_scr, *s_body, *s_switch, *s_state_icon, *s_state_lbl, *s_state_sub, *s_forget;
-static lv_obj_t *s_list_hdr, *s_scan_lbl, *s_list, *s_refresh;
-static lv_timer_t *s_timer;
-static wifi_ap_t s_aps[MAX_ROWS];
-static int s_aps_n;
-static uint32_t s_shown_scan = UINT32_MAX;
-static wifi_state_t s_shown_state = (wifi_state_t)-1;
-static char s_shown_ssid[33];
+static lv_obj_t *s_scr;                         /**< the page's screen */
+static lv_obj_t *s_body;                        /**< its scrolling column */
+static lv_obj_t *s_switch;                      /**< Wi-Fi on/off */
+static lv_obj_t *s_state_icon;                  /**< the status card's icon */
+static lv_obj_t *s_state_lbl;                   /**< its main line (the network, "Off", ...) */
+static lv_obj_t *s_state_sub;                   /**< its second line (IP, signal, why it failed) */
+static lv_obj_t *s_forget;                      /**< Forget (the saved network) */
+static lv_obj_t *s_list_hdr;                    /**< the networks' header row */
+static lv_obj_t *s_scan_lbl;                    /**< "Scanning..." */
+static lv_obj_t *s_list;                        /**< the networks found */
+static lv_obj_t *s_refresh;                     /**< scan again */
+static lv_timer_t *s_timer;             /**< the status poll, every 400 ms while shown */
+static wifi_ap_t s_aps[MAX_ROWS];       /**< the networks listed */
+static int s_aps_n;                     /**< how many */
+static uint32_t s_shown_scan = UINT32_MAX;  /**< the scan shown (wifi_status_t.scan_serial) */
+static wifi_state_t s_shown_state = (wifi_state_t)-1;  /**< the state shown */
+static char s_shown_ssid[33];           /**< the network shown */
 
-/* password dialog */
-static lv_obj_t *s_dlg, *s_dlg_title, *s_ta, *s_eye;
-static char s_dlg_ssid[33];
+/* the password dialog */
+static lv_obj_t *s_dlg;                         /**< the password dialog (hidden when not used) */
+static lv_obj_t *s_dlg_title;                   /**< its title: "Join <network>" */
+static lv_obj_t *s_ta;                          /**< the password */
+static lv_obj_t *s_eye;                         /**< show / hide it */
+static char s_dlg_ssid[33];             /**< the network the dialog joins */
 
-static char s_summary[48];
+static char s_summary[48];              /**< wifi_ui_summary()'s text */
 
-/* ------------------------------------------------------------- helpers */
+/**
+ * @brief A transparent full-width row.
+ * @param parent  where
+ * @return it
+ */
 static lv_obj_t *plain_row(lv_obj_t *parent)
 {
     lv_obj_t *row = lv_obj_create(parent);
@@ -35,6 +55,11 @@ static lv_obj_t *plain_row(lv_obj_t *parent)
     return row;
 }
 
+/**
+ * @brief A card (rounded, the card colour, a column).
+ * @param parent  where
+ * @return it
+ */
 static lv_obj_t *card(lv_obj_t *parent)
 {
     lv_obj_t *c = lv_obj_create(parent);
@@ -51,6 +76,14 @@ static lv_obj_t *card(lv_obj_t *parent)
     return c;
 }
 
+/**
+ * @brief A rounded text button.
+ * @param parent  where
+ * @param txt  its text
+ * @param primary  in the accent colour
+ * @param cb  a tap
+ * @return it
+ */
 static lv_obj_t *pill_btn(lv_obj_t *parent, const char *txt, bool primary, lv_event_cb_t cb)
 {
     lv_obj_t *b = lv_button_create(parent);
@@ -68,6 +101,13 @@ static lv_obj_t *pill_btn(lv_obj_t *parent, const char *txt, bool primary, lv_ev
     return b;
 }
 
+/**
+ * @brief A round icon button.
+ * @param parent  where
+ * @param sym  its icon
+ * @param cb  a tap
+ * @return it
+ */
 static lv_obj_t *round_btn(lv_obj_t *parent, const char *sym, lv_event_cb_t cb)
 {
     lv_obj_t *b = lv_button_create(parent);
@@ -84,17 +124,29 @@ static lv_obj_t *round_btn(lv_obj_t *parent, const char *sym, lv_event_cb_t cb)
     return b;
 }
 
+/**
+ * @brief A signal's colour: strong green, fair the text's, weak muted.
+ * @param rssi  dBm
+ * @return the colour
+ */
 static lv_color_t signal_color(int rssi)
 {
     return rssi >= -60 ? C_GREEN : (rssi >= -75 ? C_TEXT : C_MUTED);
 }
 
+/**
+ * @brief Hides or shows an object.
+ * @param o  it
+ * @param hidden  hidden
+ */
 static void set_hidden(lv_obj_t *o, bool hidden)
 {
     lv_obj_set_hidden(o, hidden);
 }
 
-/* ------------------------------------------------------ password dialog */
+/**
+ * @brief Closes the password dialog (and clears the password).
+ */
 static void dlg_close(void)
 {
     if (s_dlg) {
@@ -103,6 +155,9 @@ static void dlg_close(void)
     }
 }
 
+/**
+ * @brief Joins the dialog's network with the password typed (8 characters at least).
+ */
 static void dlg_join(void)
 {
     const char *pass = lv_textarea_get_text(s_ta);
@@ -114,9 +169,21 @@ static void dlg_join(void)
     dlg_close();
 }
 
+/**
+ * @brief The dialog's Cancel.
+ * @param e  the event
+ */
 static void on_dlg_cancel(lv_event_t *e) { dlg_close(); }
+/**
+ * @brief The dialog's Join.
+ * @param e  the event
+ */
 static void on_dlg_join(lv_event_t *e)   { dlg_join(); }
 
+/**
+ * @brief The keyboard: its Enter joins, its close cancels.
+ * @param e  the event
+ */
 static void on_kb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -127,6 +194,10 @@ static void on_kb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief Shows or hides the password.
+ * @param e  the event
+ */
 static void on_eye(lv_event_t *e)
 {
     bool hide = !lv_textarea_get_password_mode(s_ta);
@@ -134,6 +205,9 @@ static void on_eye(lv_event_t *e)
     lv_label_set_text(lv_obj_get_child(s_eye, 0), hide ? LV_SYMBOL_EYE_OPEN : LV_SYMBOL_EYE_CLOSE);
 }
 
+/**
+ * @brief Builds the password dialog (hidden) on the top layer.
+ */
 static void build_dialog(void)
 {
     /* On the top layer so the page's scrolling doesn't move it (the screen
@@ -216,6 +290,10 @@ static void build_dialog(void)
     lv_obj_set_hidden(s_dlg, true);
 }
 
+/**
+ * @brief Opens the password dialog for a network.
+ * @param ssid  the network
+ */
 static void dlg_open(const char *ssid)
 {
     strlcpy(s_dlg_ssid, ssid, sizeof(s_dlg_ssid));
@@ -227,15 +305,30 @@ static void dlg_open(const char *ssid)
     lv_obj_set_hidden(s_dlg, false);
 }
 
-/* ---------------------------------------------------------------- events */
+/**
+ * @brief The Wi-Fi switch.
+ * @param e  the event
+ */
 static void on_switch(lv_event_t *e)
 {
     wifi_mgr_set_enabled(lv_obj_has_state(s_switch, LV_STATE_CHECKED));
 }
 
+/**
+ * @brief Scans again.
+ * @param e  the event
+ */
 static void on_refresh(lv_event_t *e) { wifi_mgr_scan(); }
+/**
+ * @brief Forgets the saved network.
+ * @param e  the event
+ */
 static void on_forget(lv_event_t *e)  { wifi_mgr_forget(); }
 
+/**
+ * @brief A network tapped: joins it (the saved one, an open one) or asks for its password.
+ * @param e  the event (user data: its row)
+ */
 static void on_ap(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
@@ -255,7 +348,10 @@ static void on_ap(lv_event_t *e)
     }
 }
 
-/* ---------------------------------------------------------------- view */
+/**
+ * @brief Lists the networks found (or why none: off, scanning).
+ * @param st  Wi-Fi now
+ */
 static void rebuild_list(const wifi_status_t *st)
 {
     lv_obj_clean(s_list);
@@ -315,6 +411,10 @@ static void rebuild_list(const wifi_status_t *st)
     }
 }
 
+/**
+ * @brief The status card: the network, the state, the IP or why it failed; the switch and Forget.
+ * @param st  Wi-Fi now
+ */
 static void show_status(const wifi_status_t *st)
 {
     char sub[64] = "";
@@ -372,6 +472,10 @@ static void show_status(const wifi_status_t *st)
     lv_label_set_text(s_scan_lbl, st->scanning ? "Scanning..." : "");
 }
 
+/**
+ * @brief The page's poll: the status, and the list when a scan or the state changed.
+ * @param t  the timer
+ */
 static void tick(lv_timer_t *t)
 {
     wifi_status_t st;
@@ -386,7 +490,7 @@ static void tick(lv_timer_t *t)
     }
 }
 
-/* ---------------------------------------------------------------- build */
+/* (documented in ui_wifi.h) */
 void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
 {
     /* rebuilt on a theme change: drop the previous page's dialog and timer */
@@ -495,6 +599,7 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_timer_pause(s_timer);
 }
 
+/* (documented in ui_wifi.h) */
 void wifi_ui_set_shown(bool shown)
 {
     if (shown) {
@@ -512,6 +617,7 @@ void wifi_ui_set_shown(bool shown)
     }
 }
 
+/* (documented in ui_wifi.h) */
 const char *wifi_ui_summary(void)
 {
     wifi_status_t st;

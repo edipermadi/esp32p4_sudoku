@@ -35,6 +35,7 @@
  *
  * | Topic | The screen, and what its core does |
  * |-------|------------------------------------|
+ * | @ref topic_game | the game screen, hints, New puzzle, the daily puzzle, Learn; the puzzle generator, solver and grader |
  * | @ref topic_puzzles | the collections, the grid of numbers or rows, Starred; selection, solved counts, the player's collections |
  * | @ref topic_statistics | levels, the table and progress chart; the view from sudoku.db or RAM, totals, trends |
  * | @ref topic_history | the calendar and a day's games; the month asked for, the badges, the day picked |
@@ -44,6 +45,7 @@
  * | @ref topic_files | the card's folders and files; reading a folder, rename, the Recycle bin, a puzzle file's preview |
  * | @ref topic_settings | the five Settings tabs; firmware update, the microSD card, factory reset, the USB drive |
  * | @ref topic_sysmon | the system monitor's tabs; the chip, CPU load, memory, storage, tasks, the last hour |
+ * | @ref topic_lock | the lock screen and PIN setup; the PIN, the tries and the wait |
  *
  * Besides those:
  *
@@ -54,10 +56,16 @@
  *   documentation and testing, driven by `tools/devctl.py`; @ref serial_port is Arduino's Serial
  *   for it, from C.
  * - @ref ui_home_menu : how Home lays out its menu buttons.
- * - The rest of the UI (start-up, Home, the game screen, hints, New puzzle, Learn, dialogs) is in
- *   `ui_sudoku.c` and the other `ui_*.c` files, which share `ui_internal.h`. The puzzle generator, solver,
- *   grader and hints are the @ref generator (the `gen_*.c` files); the RAM copy of the settings and
- *   statistics is in `store.c`, the `.sdx` puzzle format in `sdx.c`.
+ * - @ref ui_sudoku : the UI's start-up, notices, the screen saver, and what devctl asks of it. Home
+ *   is `ui_home.c`; what all the UI files share (the palette, layout, widgets, the game's state) is
+ *   in `ui_internal.h` and `ui_common.c`.
+ * - @ref media : the picture and video viewer, and MP4 files read and written (replay export).
+ * - @ref bsp : the board itself: display, touch, backlight, speaker and microphones, the microSD
+ *   slot, power off.
+ * - The RAM copy of the settings and statistics is in `store.cpp`, the `.sdx` puzzle format in
+ *   `sdx.c`, Wi-Fi in `wifi_mgr.cpp` (its page: `ui_wifi.c`), sound effects in `sfx.c`, remote
+ *   control by sound in `gibberlink.cpp`, the USB drive in `usb_msc.cpp`, SQLite's VFS in
+ *   `sqlite/sqlite3_esp.c`.
  *
  * @section mp_running How it runs
  *

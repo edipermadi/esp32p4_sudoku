@@ -1,3 +1,8 @@
+/**
+ * @file ui_media_view.h
+ * @ingroup media
+ * @brief The picture and video viewer (Files).
+ */
 #pragma once
 /*
  * Full-screen viewer for pictures and videos on the microSD card, opened from
@@ -15,19 +20,41 @@
 extern "C" {
 #endif
 
-enum { MEDIA_NONE = 0, MEDIA_IMAGE, MEDIA_VIDEO };
+/** @brief What a file is (media_view_kind()). */
+enum {
+    MEDIA_NONE = 0,                     /**< neither */
+    MEDIA_IMAGE,                        /**< a picture (.jpg, .jpeg) */
+    MEDIA_VIDEO                         /**< a video (.mp4, .m4v) */
+};
 
-/* What a file is, by its name's extension. */
+/**
+ * @brief
+ * @param name  the file's name
+ * @return MEDIA_NONE, MEDIA_IMAGE or MEDIA_VIDEO
+ */
+/** @brief What a file is, by its name's extension. */
 int media_view_kind(const char *name);
 
-/* Opens the viewer over parent (a screen) on names[index]; names are the
+/**
+ * @brief
+ * @param parent  the screen
+ * @param dir  the folder
+ * @param names  its viewable files
+ * @param count  how many
+ * @param index  the one shown
+ */
+/** @brief Opens the viewer over parent (a screen) on names[index]; names are the
  * viewable files of folder dir, in the order Prev / Next go through them
  * (copied). */
 void media_view_open(lv_obj_t *parent, const char *dir, const char *const *names, int count, int index);
 
-/* Closes it (if open) and stops any decoding. */
+/** @brief Closes it (if open) and stops any decoding. */
 void media_view_close(void);
 
+/**
+ * @brief The viewer is open.
+ * @return true if so
+ */
 bool media_view_is_open(void);
 
 #ifdef __cplusplus

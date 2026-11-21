@@ -1,7 +1,12 @@
-/*
+/**
+ * @file bsp_power.c
+ * @ingroup bsp
+ * @brief Power off: deep sleep with no wake-up source but RESET; the screen-off power saving.
+ *
  * Power off: everything we drive is switched off and held there, then the
  * ESP32-P4 goes into deep sleep with no wake-up source. Only the RESET (EN)
  * button, or removing power, starts it again (a normal boot).
+ *
  */
 #include "bsp_board.h"
 #include "driver/gpio.h"
@@ -10,9 +15,13 @@
 #include "esp32-hal-cpu.h"
 #include <stdio.h>
 
-/* Drives a pin to a level and keeps it there through deep sleep. The pad hold
+/**
+ * @brief Drives a pin to a level and keeps it there through deep sleep. The pad hold
  * latches whatever the pad outputs; gpio_config() also takes the pin back from
- * a peripheral (LEDC on the backlight) to plain GPIO output. */
+ * a peripheral (LEDC on the backlight) to plain GPIO output.
+ * @param gpio  the pin
+ * @param level  0 or 1
+ */
 static void drive_and_hold(int gpio, int level)
 {
     gpio_hold_dis((gpio_num_t)gpio);
@@ -28,6 +37,7 @@ static void drive_and_hold(int gpio, int level)
     gpio_hold_en((gpio_num_t)gpio);
 }
 
+/* (documented in bsp_board.h) */
 void bsp_power_off(void)
 {
     drive_and_hold(BSP_LCD_BACKLIGHT_GPIO, 1);   /* active low: off */
@@ -49,9 +59,10 @@ void bsp_power_off(void)
 }
 
 /* ------------------------------------------------------- screen-off saving */
-static bool s_saving;
-static uint32_t s_full_mhz;
+static bool s_saving;                   /**< power saving is on */
+static uint32_t s_full_mhz;             /**< the CPU's full speed, MHz (before saving) */
 
+/* (documented in bsp_board.h) */
 void bsp_power_save(bool on)
 {
     if (on == s_saving) {
@@ -75,6 +86,7 @@ void bsp_power_save(bool on)
 
 bool is_bsp_power_saving(void) { return s_saving; }
 
+/* (documented in bsp_board.h) */
 void bsp_power_cpu_full(bool on)
 {
     if (!s_saving || !s_full_mhz) {

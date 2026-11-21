@@ -115,6 +115,26 @@ static bool import_collection(const char *name, const char *file, int first, int
 }
 
 /**
+ * @brief A collection's name with a number after it ("base 2"), the name shortened so the number
+ *        always fits.
+ * @param name  gets it
+ * @param n     its size
+ * @param base  the name
+ * @param k     the number
+ */
+static void numbered_name(char *name, size_t n, const char *base, int k)
+{
+    char num[16];
+    size_t sl = (size_t)snprintf(num, sizeof(num), " %d", k);
+    size_t keep = strlen(base);
+    if (keep > n - 1 - sl) {
+        keep = n - 1 - sl;
+    }
+    memcpy(name, base, keep);
+    memcpy(name + keep, num, sl + 1);
+}
+
+/**
  * @brief Reads an .sdx file into generated and imported (in the caller's transaction).
  * @param path  the file
  * @param file  its name, kept to skip it next time
@@ -180,7 +200,7 @@ static int import_sdx(const char *path, const char *file, const char *base, int 
         if (in_chunk == 0) {
             chunk++;
             if (numbered) {
-                snprintf(name, sizeof(name), "%.*s %d", (int)sizeof(name) - 5, base, chunk);
+                numbered_name(name, sizeof(name), base, chunk);
             } else {
                 snprintf(name, sizeof(name), "%s", base);
             }
@@ -284,7 +304,7 @@ static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], in
         if (chunks == 1) {
             snprintf(name, sizeof(name), "%s", base);
         } else {
-            snprintf(name, sizeof(name), "%.*s %d", (int)sizeof(name) - 5, base, k + 1);
+            numbered_name(name, sizeof(name), base, k + 1);
         }
         for (int i = 0; ok && i < cnt; i++) {
             sqlite3_stmt *st;
@@ -365,7 +385,7 @@ void sdb_do_import(void)
         }
     }
     closedir(dir);
-    char msg[96];
+    char msg[160];
     if (added) {
         snprintf(msg, sizeof(msg), "Imported %d puzzle%s from %d file%s%s.", added, added == 1 ? "" : "s", files,
                  files == 1 ? "" : "s", bad ? " (some had no single solution and were left out)" : "");

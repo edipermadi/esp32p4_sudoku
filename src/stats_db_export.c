@@ -208,7 +208,7 @@ void sdb_do_backup(void)
     for (int n = 2; stat(path, &st) == 0 && n < 100; n++) {
         snprintf(path, sizeof(path), BACKUP_DIR "/sudoku_%lld_%d.db", ts, n);
     }
-    char msg[128];
+    char msg[160];                                  /* (the longest: "Backup failed: ..." with a 95-byte name) */
     sqlite3_stmt *q = NULL;
     int rc = sqlite3_prepare_v2(sdb_db(), "VACUUM INTO ?", -1, &q, NULL);
     if (rc == SQLITE_OK) {

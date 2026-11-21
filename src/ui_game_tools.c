@@ -1,4 +1,8 @@
-/* ui_sudoku.c split: time attack, the rules card, Share (QR code), Send by sound, save to a collection. See ui_sudoku.c for the whole. */
+/**
+ * @file ui_game_tools.c
+ * @ingroup ui_game
+ * @brief The game's tools: time attack, the rules card, Share (QR code), Send by sound, save to a collection.
+ */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -24,13 +28,15 @@ static void sv_new_done(const char *text);
 static void sv_new_cb(lv_event_t *e);
 static void sv_open(void);
 
-static uint32_t atk_used_ms;      /* the run's earlier puzzles */
-static int      atk_solved, atk_mistakes;
-static uint16_t atk_last;
-static int s_nsaved;
+static uint32_t atk_used_ms;      /**< the run's earlier puzzles */
+static int      atk_solved;       /**< puzzles solved in the run */
+static int      atk_mistakes;     /**< the run's mistakes */
+static uint16_t atk_last;         /**< the run's last puzzle (the next one is another) */
+static int s_nsaved;              /**< the saved collections (Puzzles > Saved) */
 
 /* ------------------------------------------------------------- time attack */
 
+/* (documented in ui_internal.h) */
 void atk_open_next(void)
 {
     if (!is_game_attack()) {
@@ -52,6 +58,9 @@ void atk_open_next(void)
     update_header();
 }
 
+/**
+ * @brief Starts a time attack run: the clock, the counts, the first puzzle.
+ */
 static void atk_start(void)
 {
     atk_used_ms = 0;
@@ -61,6 +70,10 @@ static void atk_start(void)
     atk_open_next();
 }
 
+/**
+ * @brief The time attack leaderboard into a card.
+ * @param c  the card
+ */
 static void atk_board_fill(lv_obj_t *c)
 {
     stats_attack_row_t rows[STATS_ATTACK_ROWS];
@@ -90,19 +103,27 @@ static void atk_board_fill(lv_obj_t *c)
     }
 }
 
+/**
+ * @brief Start (the time attack's dialog).
+ * @param e  the event (user data: the dialog)
+ */
 static void atk_go_cb(lv_event_t *e)
 {
     lv_msgbox_close(lv_event_get_user_data(e));
     atk_start();
 }
 
+/**
+ * @brief Back to Home (the time attack's dialog).
+ * @param e  the event (user data: the dialog)
+ */
 static void atk_home_cb(lv_event_t *e)
 {
     lv_msgbox_close(lv_event_get_user_data(e));
     show_home();
 }
 
-/* Home > Time attack: the rules, the leaderboard, Start */
+/* (documented in ui_internal.h) */
 void attack_cb(lv_event_t *e)
 {
     lv_obj_t *m = make_msgbox(LV_SYMBOL_CHARGE "  Time attack", NULL);
@@ -119,7 +140,7 @@ void attack_cb(lv_event_t *e)
     msgbox_button(m, "Start", atk_go_cb, true);
 }
 
-/* the 10 minutes are up: the run's result, recorded, and the leaderboard */
+/* (documented in ui_internal.h) */
 void atk_finish(void)
 {
     game_set_solved(true);                                /* (g_attack stays: the header and 0:00 stay too) */                                /* (the board can't be changed now) */
@@ -142,19 +163,20 @@ void atk_finish(void)
     update_header();
 }
 
-/* cell size: a whole 9x9 board (Asterisk) smaller, so the dialog fits */
+/** @brief cell size: a whole 9x9 board (Asterisk) smaller, so the dialog fits */
 #define RULES_PIC_CS(p) ((p)->h > 6 ? 28 : 40)
 
-static const uint8_t PIC_KROPKI[] = {0, MARK_WHITE, 1, MARK_BLACK, 0xFF};   /* 3 4 8 2 */
-static const uint8_t PIC_XV[] = {0, MARK_V, 1, MARK_X, 0xFF};               /* 2 3 7 9 */
-static const uint8_t PIC_GT[] = {0, MARK_LESS, 1, MARK_MORE, 2, MARK_LESS, 0xFF};   /* 2 < 5 > 4 < 9 */
-static const uint8_t PIC_BARS[] = {0, 1, 0xFF};    /* 4|5: a bar; 5 3 and 3 7: none */
-static const uint8_t PIC_THERMO[] = {0, 1, 2, 3, 0xFF};
-static const uint8_t PIC_ARROW[] = {0, 1, 2, 0xFF};         /* 7: 4 + 3 */
-static const uint8_t PIC_RENBAN[] = {0, 1, 2, 3, 0xFF};     /* 5 3 6 4 */
-static const uint8_t PIC_WHISPER[] = {0, 1, 2, 3, 0xFF};    /* 2 8 1 6 */
-static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /* 9 + 2 = 11, and an empty 8 */
+static const uint8_t PIC_KROPKI[] = {0, MARK_WHITE, 1, MARK_BLACK, 0xFF};   /**< 3 4 8 2 */
+static const uint8_t PIC_XV[] = {0, MARK_V, 1, MARK_X, 0xFF};               /**< 2 3 7 9 */
+static const uint8_t PIC_GT[] = {0, MARK_LESS, 1, MARK_MORE, 2, MARK_LESS, 0xFF};   /**< 2 < 5 > 4 < 9 */
+static const uint8_t PIC_BARS[] = {0, 1, 0xFF};    /**< 4|5: a bar; 5 3 and 3 7: none */
+static const uint8_t PIC_THERMO[] = {0, 1, 2, 3, 0xFF};     /**< 2 4 5 8 */
+static const uint8_t PIC_ARROW[] = {0, 1, 2, 0xFF};         /**< 7: 4 + 3 */
+static const uint8_t PIC_RENBAN[] = {0, 1, 2, 3, 0xFF};     /**< 5 3 6 4 */
+static const uint8_t PIC_WHISPER[] = {0, 1, 2, 3, 0xFF};    /**< 2 8 1 6 */
+static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 
+/** @brief Each variant's rules card picture. */
 static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     /* w, h, box w, box h, digits, tint, regions, parity, cross, bars, thermo, cages, sandwich clue */
     [VAR_CLASSIC] = {3, 3, 3, 3, "591763842", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
@@ -210,6 +232,7 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     },
 };
 
+/** each variant's rules, for its rules card */
 static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_CLASSIC] = "Fill the grid so that every row, every column and every 3x3 box holds the digits 1 to 9, each "
     "once. The given digits can't be changed.",
@@ -263,6 +286,10 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "diagonal: 3 + 1 + 4 + 2 = 10. Digits can repeat on a diagonal where the boxes allow it.",
 };
 
+/**
+ * @brief Draws a rules card's picture.
+ * @param e  the draw event (the object's user data: the rules_pic_t)
+ */
 static void rules_pic_draw_cb(lv_event_t *e)
 {
     lv_obj_t *obj = lv_event_get_current_target_obj(e);
@@ -479,6 +506,10 @@ static void rules_pic_draw_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief Shows a variant's rules card.
+ * @param variant  sudoku_variant_t
+ */
 static void rules_show(int variant)
 {
     if (variant < 0 || variant >= VAR_COUNT) {
@@ -499,12 +530,13 @@ static void rules_show(int variant)
     msgbox_button(m, "OK", mbox_close_cb, true);
 }
 
+/* (documented in ui_internal.h) */
 void rules_cb(lv_event_t *e)
 {
     rules_show(game_var());
 }
 
-/* the first time a variant is played: its rules */
+/* (documented in ui_internal.h) */
 void rules_first_time(void)
 {
     uint32_t seen = store_rules_seen();
@@ -516,16 +548,21 @@ void rules_first_time(void)
 }
 
 /* ------------------------------------------------------------- share (QR code) */
-/*
- * The Share button: the puzzle as a QR code to scan with a phone. A Classic
+/**
+ * @brief The Share button: the puzzle as a QR code to scan with a phone. A Classic
  * (or imported) puzzle is the usual 81-digit string, givens row by row with 0
  * for empty, which most Sudoku apps can import; a variant is its name, the
  * givens and its layout, in the text forms sudoku.db keeps them in.
  */
-static uint8_t *qr_code;                            /* qrcodegen_BUFFER_LEN_MAX each, PSRAM */
-static uint8_t *qr_temp;
+static uint8_t *qr_code;                            /**< qrcodegen_BUFFER_LEN_MAX each, PSRAM */
+static uint8_t *qr_temp;                            /**< qrcodegen's work space, PSRAM */
 
-/* the text in the code; false if it doesn't fit buf */
+/**
+ * @brief the text in the code; false if it doesn't fit buf
+ * @param buf  gets the text
+ * @param n  its size
+ * @return false if it doesn't fit
+ */
 static bool share_text(char *buf, size_t n)
 {
     const sudoku_geom_t *G = game_geo();
@@ -592,7 +629,10 @@ static bool share_text(char *buf, size_t n)
     return (size_t)len < n;
 }
 
-/* the code: black modules on white (whatever the theme), with a quiet zone of 3 */
+/**
+ * @brief the code: black modules on white (whatever the theme), with a quiet zone of 3
+ * @param e  the draw event
+ */
 static void qr_draw_cb(lv_event_t *e)
 {
     lv_obj_t *obj = lv_event_get_current_target_obj(e);
@@ -630,7 +670,7 @@ static void qr_draw_cb(lv_event_t *e)
     }
 }
 
-/* a QR code of text in a dialog, the note under it, then the text itself */
+/* (documented in ui_internal.h) */
 lv_obj_t *qr_dialog(const char *title, const char *text, const char *note)
 {
     if (!qr_code) {
@@ -659,6 +699,12 @@ lv_obj_t *qr_dialog(const char *title, const char *text, const char *note)
     return m;
 }
 
+/**
+ * @brief CRC-16/CCITT-FALSE, the parts' check.
+ * @param p  the text
+ * @param n  its length
+ * @return the CRC
+ */
 static uint16_t pz_crc16(const char *p, size_t n)
 {
     uint16_t c = 0xFFFF;
@@ -671,7 +717,12 @@ static uint16_t pz_crc16(const char *p, size_t n)
     return c;
 }
 
-/* the puzzle on screen as that line (sdx_format, the givens packed); its length, 0 if it doesn't fit */
+/**
+ * @brief the puzzle on screen as that line (sdx_format, the givens packed); its length, 0 if it doesn't fit
+ * @param buf  gets the line
+ * @param n  its size
+ * @return its length, 0 if it doesn't fit
+ */
 static int pz_line(char *buf, size_t n)
 {
     const sudoku_geom_t *G = game_geo();
@@ -740,8 +791,12 @@ static int pz_line(char *buf, size_t n)
     return len < 0 ? 0 : len;
 }
 
-static lv_timer_t *pz_send_timer;
+static lv_timer_t *pz_send_timer;       /**< waits until the parts are sent */
 
+/**
+ * @brief Once the parts are sent: says so.
+ * @param t  the timer
+ */
 static void pz_send_poll(lv_timer_t *t)
 {
     if (gibberlink_sending()) {
@@ -752,6 +807,10 @@ static void pz_send_poll(lv_timer_t *t)
     sudoku_ui_notice("Sent by sound.", 2500);
 }
 
+/**
+ * @brief Send by sound: the puzzle's parts queued for Gibberlink.
+ * @param e  the event (user data: the dialog)
+ */
 static void pz_send_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
@@ -786,30 +845,44 @@ static void pz_send_cb(lv_event_t *e)
 }
 
 /* ---- receiving: the parts gathered (devctl "pz"), then checked off the LVGL task */
+/** @brief The parts of a puzzle coming by sound. */
 static struct {
-    int id, n;                                    /* id -1: nothing coming */
-    uint32_t got;                                 /* bit i-1: part i is here */
-    uint32_t start;                               /* lv_tick of the first part */
-    char part[PZ_MAX_PARTS][PZ_PART + 1];
+    int id;                                       /**< the puzzle's id, -1: nothing coming */
+    int n;                                        /**< its parts */
+    uint32_t got;                                 /**< bit i-1: part i is here */
+    uint32_t start;                               /**< lv_tick of the first part */
+    char part[PZ_MAX_PARTS][PZ_PART + 1];         /**< the parts */
 } pz_rx = {.id = -1};
-static pz_got_t *pz_got;                          /* PSRAM */
-static lv_timer_t *pz_check_timer;
-static TaskHandle_t pz_check_task;
+static pz_got_t *pz_got;                          /**< PSRAM */
+static lv_timer_t *pz_check_timer;                /**< waits for the check */
+static TaskHandle_t pz_check_task;                /**< the check (sudoku_grade) */
 
+/**
+ * @brief The received puzzle's check (its own task): graded, then it waits to be deleted.
+ * @param arg  unused
+ */
 static void pz_check_fn(void *arg)
 {
     pz_got->graded = sudoku_grade(&pz_got->geom, pz_got->givens);
     vTaskSuspend(NULL);                           /* (deleted by pz_check_poll) */
 }
 
-static uint16_t pz_play_id;                       /* the one just received (its dialog's Play) */
+static uint16_t pz_play_id;                       /**< the one just received (its dialog's Play) */
 
+/**
+ * @brief Play (the received puzzle's dialog).
+ * @param e  the event (user data: the dialog)
+ */
 static void pz_play_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
     open_puzzle(pz_play_id);
 }
 
+/**
+ * @brief The received puzzle's check is done: kept in Puzzles > Saved > "Received" and offered to play, or why not.
+ * @param t  the timer
+ */
 static void pz_check_poll(lv_timer_t *t)
 {
     if (pz_got->graded == -2 || eTaskGetState(pz_check_task) != eSuspended) {
@@ -859,7 +932,13 @@ static void pz_check_poll(lv_timer_t *t)
     msgbox_button(m, LV_SYMBOL_PLAY "  Play", pz_play_cb, true);
 }
 
-/* the whole line: its fields read (sdx_parse), the board made, the check started; why on failure */
+/**
+ * @brief the whole line: its fields read (sdx_parse), the board made, the check started; why on failure
+ * @param line  the line
+ * @param why  gets why not
+ * @param n  its size
+ * @return true if the check started
+ */
 static bool pz_take(char *line, char *why, size_t n)
 {
     if (pz_check_timer) {
@@ -898,6 +977,7 @@ static bool pz_take(char *line, char *why, size_t n)
     return true;
 }
 
+/* (documented in ui_sudoku.h) */
 bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n)
 {
     unsigned id;
@@ -949,6 +1029,7 @@ bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n)
     return true;
 }
 
+/* (documented in ui_internal.h) */
 void share_cb(lv_event_t *e)
 {
     if (game_id() == STORE_NO_GAME) {
@@ -976,14 +1057,18 @@ void share_cb(lv_event_t *e)
 /* ------------------------------------------------------------- bookmarks */
 
 /* ------------------------------------------------------------- save to a collection */
-/*
- * The game screen's Save (generated and typed-in puzzles): a dialog lists the saved
+/**
+ * @brief The game screen's Save (generated and typed-in puzzles): a dialog lists the saved
  * collections, ticked where the puzzle is; a tap puts it in or takes it out, and
  * "New collection..." asks for a name (the keyboard) and puts it there. They show in
  * Puzzles > Saved. A collection goes when its last puzzle is taken out.
  */
 static lv_obj_t *sv_box;
 
+/**
+ * @brief Closes the Save dialog.
+ * @param e  the event (NULL from code)
+ */
 static void sv_close_cb(lv_event_t *e)
 {
     if (sv_box) {
@@ -992,7 +1077,7 @@ static void sv_close_cb(lv_event_t *e)
     sv_box = NULL;
 }
 
-/* after a change: the collections again, a new or gone one in Puzzles' row */
+/* (documented in ui_internal.h) */
 void sv_changed(void)
 {
     int before = s_nsaved;
@@ -1004,6 +1089,10 @@ void sv_changed(void)
     update_header();
 }
 
+/**
+ * @brief A collection tapped: the puzzle put in or taken out.
+ * @param e  the event (user data: the collection)
+ */
 static void sv_toggle_cb(lv_event_t *e)
 {
     int k = (int)(intptr_t)lv_event_get_user_data(e);
@@ -1028,6 +1117,10 @@ static void sv_toggle_cb(lv_event_t *e)
     sv_open();                                      /* (the ticks again) */
 }
 
+/**
+ * @brief The new collection's name typed: made, with the puzzle in it.
+ * @param text  the name
+ */
 static void sv_new_done(const char *text)
 {
     char name[STATS_IMPORT_NAME];
@@ -1058,12 +1151,19 @@ static void sv_new_done(const char *text)
     sudoku_ui_notice(msg, 2500);
 }
 
+/**
+ * @brief New collection...: asks for its name.
+ * @param e  the event
+ */
 static void sv_new_cb(lv_event_t *e)
 {
     sv_close_cb(NULL);
     nd_open_ex("New collection", "", STATS_IMPORT_NAME - 1, "Save", sv_new_done);
 }
 
+/**
+ * @brief Opens the Save dialog: the saved collections, ticked where the puzzle is.
+ */
 static void sv_open(void)
 {
     lv_obj_t *m = make_msgbox(LV_SYMBOL_SAVE "  Save to a collection", NULL);
@@ -1098,6 +1198,7 @@ static void sv_open(void)
     msgbox_button(m, "Close", sv_close_cb, false);
 }
 
+/* (documented in ui_internal.h) */
 void save_cb(lv_event_t *e)
 {
     if (game_practice() >= 0 || !puzzle_is_generated(game_id()) || game_id() >= PUZZLE_GEN_RAM_BASE) {

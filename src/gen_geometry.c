@@ -9,8 +9,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/** the levels' names */
 static const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
 
+/** the variants' names, sudoku_variant_t in order */
 static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
                                                      "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich",
                                                      "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups",
@@ -22,6 +24,7 @@ const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
 
 const char *variant_name(int variant) { return VARIANT_NAMES[variant]; }
 
+/* (documented in generator.h) */
 bool is_sudoku_edge_ok(int kind, int mark, int a, int b)
 {
     switch (kind) {
@@ -40,11 +43,21 @@ bool is_sudoku_edge_ok(int kind, int mark, int a, int b)
 
 /* ---------------------------------------------------------------- geometry */
 
-/* ~25 KB: from malloc, which the sketch sends to PSRAM (internal RAM is
+/** @brief ~25 KB: from malloc, which the sketch sends to PSRAM (internal RAM is
  * kept for Wi-Fi and the video encoder) */
 static sudoku_geom_t *s_geom;
 
-/* regions: Jigsaw's region map, NULL = boxes of box_h x box_w */
+/**
+ * @brief Builds a board: its cells, units, peers and tables.
+ * @param g  gets it
+ * @param variant  sudoku_variant_t
+ * @param n  digits and side: 9, 6 or 4
+ * @param box_h  a box's height
+ * @param box_w  a box's width
+ * @param diag  the diagonals are units
+ * @param windows  the Hyper windows are units
+ * @param regions  Jigsaw's region map, NULL = boxes of box_h x box_w
+ */
 static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_w, bool diag, bool windows,
                        const uint8_t *regions)
 {
@@ -131,6 +144,7 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
     }
 }
 
+/* (documented in generator.h) */
 void sudoku_geom_init(void)
 {
     gen_bread_tables();                                 /* (Sandwich sums; before any task uses them) */
@@ -200,6 +214,7 @@ void sudoku_geom_init(void)
     s_geom = g;
 }
 
+/* (documented in generator.h) */
 const sudoku_geom_t *sudoku_geom(int variant)
 {
     sudoku_geom_init();
@@ -213,6 +228,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
     return &s_geom[variant];
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
 {
     const int ek = variant == VAR_KROPKI ? EDGE_KROPKI : variant == VAR_XV ? EDGE_XV : variant == VAR_GT ? EDGE_GT : 0;
@@ -304,7 +320,11 @@ bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
     return true;
 }
 
-/* Thermo: a classic board plus thermometers (cells from the bulb) */
+/**
+ * @brief The kind of lines a variant has.
+ * @param variant  sudoku_variant_t
+ * @return LINE_*
+ */
 static int line_kind_of(int variant)
 {
     return variant == VAR_ARROW ? LINE_ARROW : variant == VAR_RENBAN ? LINE_RENBAN :
@@ -354,11 +374,13 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out)
 {
     return sudoku_geom_lines_text(VAR_THERMO, text, out);
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out)
 {
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX];
@@ -393,6 +415,7 @@ bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out)
     return gen_geom_lines(variant, cells, lens, n, out);
 }
 
+/* (documented in generator.h) */
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len)
 {
     int pos = 0;
@@ -463,6 +486,7 @@ bool gen_geom_sky(const uint8_t clues[18], sudoku_geom_t *out)
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out)
 {
     uint8_t clues[18];
@@ -485,6 +509,7 @@ bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out)
     return *p == 0 && gen_geom_sky(clues, out);
 }
 
+/* (documented in generator.h) */
 bool sudoku_sky_text(const sudoku_geom_t *g, char *buf, int len)
 {
     int pos = 0;
@@ -536,6 +561,7 @@ bool gen_geom_lk(int n, const bool *top, const uint8_t *idx, const uint8_t *dir,
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_lk_text(const char *text, sudoku_geom_t *out)
 {
     bool top[LK_MAX];
@@ -577,6 +603,7 @@ bool sudoku_geom_lk_text(const char *text, sudoku_geom_t *out)
     return n > 0 && gen_geom_lk(n, top, idx, dir, sum, out);
 }
 
+/* (documented in generator.h) */
 bool sudoku_lk_text(const sudoku_geom_t *g, char *buf, int len)
 {
     int pos = 0;
@@ -596,6 +623,7 @@ bool sudoku_lk_text(const sudoku_geom_t *g, char *buf, int len)
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out)
 {
     gen_bread_tables();
@@ -619,6 +647,7 @@ bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out)
     return *p == 0 && gen_geom_sandwich(sums, out);
 }
 
+/* (documented in generator.h) */
 bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len)
 {
     int pos = 0;
@@ -632,6 +661,7 @@ bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len)
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len)
 {
     if (len < 82) {
@@ -705,6 +735,7 @@ bool gen_geom_quad(const uint8_t *at, const uint8_t *n, const uint8_t (*dig)[4],
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_quad_text(const char *text, sudoku_geom_t *out)
 {
     uint8_t at[QUADS_MAX], n[QUADS_MAX], dig[QUADS_MAX][4];
@@ -742,6 +773,7 @@ bool sudoku_geom_quad_text(const char *text, sudoku_geom_t *out)
     return nq > 0 && gen_geom_quad(at, n, (const uint8_t (*)[4])dig, nq, out);
 }
 
+/* (documented in generator.h) */
 bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len)
 {
     int pos = 0;
@@ -805,6 +837,7 @@ bool gen_geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncages,
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out)
 {
     uint8_t cage_of[81], sums[CAGES_MAX];
@@ -846,6 +879,7 @@ bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out)
     return gen_geom_killer(cage_of, sums, n, out);
 }
 
+/* (documented in generator.h) */
 bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len)
 {
     int pos = 0;
@@ -870,6 +904,7 @@ bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len)
     return true;
 }
 
+/* (documented in generator.h) */
 bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out)
 {
     int count[9] = {0};

@@ -1,3 +1,7 @@
+/**
+ * @file ui_wifi.h
+ * @brief The Wi-Fi page (Settings > Network).
+ */
 #pragma once
 /*
  * Wi-Fi screen: on/off switch, the current connection (with Forget), and the
@@ -12,15 +16,28 @@
 extern "C" {
 #endif
 
-/* Builds the page into scr (an empty screen). back_cb runs on the back button.
+/**
+ * @brief
+ * @param scr  the screen
+ * @param back_cb  the back button
+ */
+/** @brief Builds the page into scr (an empty screen). back_cb runs on the back button.
  * Can be called again after a theme change: the previous page's dialog and
  * timer are dropped (the caller deletes the old screen). */
 void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb);
 
-/* Call when the page is loaded (true) or left (false). */
+/**
+ * @brief
+ * @param shown  loaded (true) or left
+ */
+/** @brief Call when the page is loaded (true) or left (false). */
 void wifi_ui_set_shown(bool shown);
 
-/* One-line summary for the Settings page, e.g. "MyNetwork" or "Off". */
+/**
+ * @brief
+ * @return the text
+ */
+/** @brief One-line summary for the Settings page, e.g. "MyNetwork" or "Off". */
 const char *wifi_ui_summary(void);
 
 #ifdef __cplusplus

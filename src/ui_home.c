@@ -1,4 +1,7 @@
-/* ui_sudoku.c split: Home: the week, Continue and unfinished games, building the menu. See ui_sudoku.c for the whole. */
+/**
+ * @file ui_home.c
+ * @brief Home: the week, Continue and unfinished games, the menu.
+ */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -22,23 +25,35 @@ static void discard_confirm_cb(lv_event_t *e);
 static void resume_other_cb(lv_event_t *e);
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub);
 
-static lv_obj_t *h_menu;                  /* the pages, side by side: swipe between them */
-static lv_obj_t *h_page[HOME_PAGES_MAX], *h_dots;
-static lv_obj_t *h_total, *h_continue, *h_continue_sub, *h_clock, *h_date, *h_player, *h_daily_sub, *h_daily;
-static lv_obj_t *h_player_title, *h_player_avatar;   /* the Players button's title: the avatar, or the icon */
-static bool      st_wifi_reveal;            /* name shown; hidden again each time Settings opens */
-static uint16_t  l_pending_id;
-/* the current player's unfinished games in sudoku.db (most recent first), refreshed with the list and home */
+static lv_obj_t *h_menu;                  /**< the pages, side by side: swipe between them */
+static lv_obj_t *h_page[HOME_PAGES_MAX];  /**< the menu's pages */
+static lv_obj_t *h_dots;                  /**< the page dots */
+static lv_obj_t *h_total;                 /**< "19 of 1600 puzzles solved" (and the week) */
+static lv_obj_t *h_continue;              /**< Continue */
+static lv_obj_t *h_continue_sub;          /**< its line: the game in progress */
+static lv_obj_t *h_clock;                 /**< the clock */
+static lv_obj_t *h_date;                  /**< the date (or why there's no clock) */
+static lv_obj_t *h_player;                /**< Players' line: who plays */
+static lv_obj_t *h_daily_sub;             /**< Daily puzzle's line */
+static lv_obj_t *h_daily;                 /**< Daily puzzle */
+static lv_obj_t *h_player_title;          /**< the Players button's title */
+static lv_obj_t *h_player_avatar;         /**< its avatar (else the icon) */
+static bool      st_wifi_reveal;            /**< name shown; hidden again each time Settings opens */
+static uint16_t  l_pending_id;            /**< the puzzle to open once another game in progress is dealt with */
+/** @brief the current player's unfinished games in sudoku.db (most recent first), refreshed with the list and home */
 static stats_game_row_t s_games[STATS_MAX_GAMES];
-static int s_ngames;
+static int s_ngames;                      /**< how many */
 
 /* ------------------------------------------------------------- the week (Home) */
-/* The "puzzles solved" line also says how this week is going; a tap compares it
+/** @brief The "puzzles solved" line also says how this week is going; a tap compares it
  * with last week (stats_db_query_weeksum: needs the clock, so only once it's set). */
 static stats_weeksum_t h_week;
-static bool h_week_ok;
-static unsigned h_total_n;
+static bool h_week_ok;                  /**< h_week holds this week and last (once the clock is set) */
+static unsigned h_total_n;              /**< puzzles solved */
 
+/**
+ * @brief The "puzzles solved" line: the count, and how this week is going.
+ */
 static void home_total_text(void)
 {
     char t[16], line[128];
@@ -54,6 +69,14 @@ static void home_total_text(void)
     lv_label_set_text(h_total, line);
 }
 
+/**
+ * @brief A row of the week's comparison.
+ * @param parent  where
+ * @param name  the row's name
+ * @param a  this week
+ * @param b  last week
+ * @param head  the header row
+ */
 static void week_row(lv_obj_t *parent, const char *name, const char *a, const char *b, bool head)
 {
     lv_obj_t *r = lv_obj_create(parent);
@@ -71,6 +94,10 @@ static void week_row(lv_obj_t *parent, const char *name, const char *a, const ch
     lv_obj_align(y, LV_ALIGN_RIGHT_MID, 0, 0);
 }
 
+/**
+ * @brief The solved line tapped: this week against last.
+ * @param e  the event
+ */
 static void week_cb(lv_event_t *e)
 {
     if (!h_week_ok) {
@@ -136,8 +163,7 @@ static void week_cb(lv_event_t *e)
     msgbox_button(m, "Close", mbox_close_cb, false);
 }
 
-/* Home's Players button: the avatar of who plays now (from the player list; asked for once
- * when there isn't one yet), else the person icon */
+/* (documented in ui_internal.h) */
 void home_player_update(void)
 {
     if (!h_player_title) {
@@ -161,6 +187,7 @@ void home_player_update(void)
     lv_label_set_text(h_player_title, av ? "Players" : SYMBOL_USER "  Players");
 }
 
+/* (documented in ui_internal.h) */
 void refresh_home(void)
 {
     uint16_t total = 0;
@@ -210,17 +237,23 @@ void refresh_home(void)
     home_layout();
 }
 
+/* (documented in ui_internal.h) */
 void show_home(void)
 {
     refresh_home();
     lv_screen_load(screen_home());
 }
 
+/* (documented in ui_internal.h) */
 void home_cb(lv_event_t *e)
 {
     show_home();
 }
 
+/**
+ * @brief Home > Puzzles.
+ * @param e  the event
+ */
 static void puzzles_cb(lv_event_t *e)
 {
     refresh_list();
@@ -228,9 +261,7 @@ static void puzzles_cb(lv_event_t *e)
     lv_screen_load(screen_list());
 }
 
-/* The Wi-Fi row's text: the state, or once connected the network's name,
- * which stays hidden ("Connected  ******") until the eye button shows it, so
- * a photo or screenshot of Settings doesn't give it away. */
+/* (documented in ui_internal.h) */
 void st_wifi_update(void)
 {
     wifi_status_t ws;
@@ -244,12 +275,17 @@ void st_wifi_update(void)
     lv_label_set_text(lv_obj_get_child(settings_wifi_eye(), 0), st_wifi_reveal ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
 }
 
+/* (documented in ui_internal.h) */
 void st_wifi_eye_cb(lv_event_t *e)
 {
     st_wifi_reveal = !st_wifi_reveal;
     st_wifi_update();
 }
 
+/**
+ * @brief Home > Settings (the Network tab, the network's name hidden).
+ * @param e  the event
+ */
 static void settings_cb(lv_event_t *e)
 {
     st_wifi_reveal = false;                         /* the network's name hidden again */
@@ -258,13 +294,14 @@ static void settings_cb(lv_event_t *e)
     lv_screen_load(screen_settings());
 }
 
+/* (documented in ui_internal.h) */
 void wifi_back_cb(lv_event_t *e)
 {
     wifi_ui_set_shown(false);
     settings_cb(e);
 }
 
-/* home clock and the Settings Wi-Fi line; runs every second */
+/* (documented in ui_internal.h) */
 void clock_cb(lv_timer_t *t)
 {
     static char last_clock[8], last_date[64];
@@ -329,8 +366,12 @@ void clock_cb(lv_timer_t *t)
     }
 }
 
-/* Resumes one of the current player's unfinished games (from RAM, or loaded
- * from sudoku.db with its move log). False if it isn't there any more. */
+/**
+ * @brief Resumes one of the current player's unfinished games (from RAM, or loaded
+ * from sudoku.db with its move log). False if it isn't there any more.
+ * @param id  the puzzle
+ * @return false if it isn't there any more
+ */
 static bool resume_game(uint16_t id)
 {
     if (store_saved_game()->id != id) {
@@ -346,8 +387,11 @@ static bool resume_game(uint16_t id)
 }
 
 /* ---- the Unfinished games dialog (Continue with more than one) */
-static lv_obj_t *ug_box;
+static lv_obj_t *ug_box;                /**< the Unfinished games dialog */
 
+/**
+ * @brief Closes it.
+ */
 static void ug_close(void)
 {
     if (ug_box) {
@@ -356,11 +400,19 @@ static void ug_close(void)
     ug_box = NULL;
 }
 
+/**
+ * @brief Its Close.
+ * @param e  the event
+ */
 static void ug_close_cb(lv_event_t *e)
 {
     ug_close();
 }
 
+/**
+ * @brief An unfinished game tapped: resumed.
+ * @param e  the event (user data: the puzzle)
+ */
 static void ug_resume_cb(lv_event_t *e)
 {
     uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
@@ -370,6 +422,10 @@ static void ug_resume_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief An unfinished game's Discard.
+ * @param e  the event (user data: the puzzle)
+ */
 static void ug_discard_cb(lv_event_t *e)
 {
     uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
@@ -392,6 +448,9 @@ static void ug_discard_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief Opens the Unfinished games dialog: each game, to resume or discard.
+ */
 static void ug_open(void)
 {
     ug_close();
@@ -433,6 +492,10 @@ static void ug_open(void)
     msgbox_button(m, "Close", ug_close_cb, false);
 }
 
+/**
+ * @brief Continue: the game in progress, or the dialog when there are more.
+ * @param e  the event
+ */
 static void continue_cb(lv_event_t *e)
 {
     games_refresh();
@@ -447,6 +510,10 @@ static void continue_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief Another game in progress: discard it and start the new one.
+ * @param e  the event (user data: the dialog)
+ */
 static void discard_confirm_cb(lv_event_t *e)
 {
     store_clear_game();
@@ -454,12 +521,17 @@ static void discard_confirm_cb(lv_event_t *e)
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
 }
 
+/**
+ * @brief Another game in progress: resume that one instead.
+ * @param e  the event (user data: the dialog)
+ */
 static void resume_other_cb(lv_event_t *e)
 {
     start_game(store_saved_game()->id, true);
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
 }
 
+/* (documented in ui_internal.h) */
 void open_puzzle(uint16_t id)
 {
     const saved_game_t *s = store_saved_game();
@@ -491,7 +563,14 @@ void open_puzzle(uint16_t id)
     msgbox_button(m, "Discard", discard_confirm_cb, true);
 }
 
-/* big menu button: icon + title, optional muted subtitle below */
+/**
+ * @brief big menu button: icon + title, optional muted subtitle below
+ * @param parent  where
+ * @param text  the title
+ * @param cb  a tap
+ * @param sub  gets the subtitle, or NULL for none
+ * @return the button
+ */
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub)
 {
     lv_obj_t *b = make_btn(parent, 0, 0, HOME_COL_W, HOME_BTN_H, NULL, NULL, cb, NULL);
@@ -514,6 +593,7 @@ static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, 
     return b;
 }
 
+/* (documented in ui_internal.h) */
 void build_home(void)
 {
     screen_set_home(make_screen());
@@ -634,7 +714,7 @@ void build_home(void)
     lv_obj_align(src, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
 
-/* the Daily puzzle button: its line, and greyed out (not tappable) until
+/** @brief the Daily puzzle button: its line, and greyed out (not tappable) until
  * the clock is set (Wi-Fi connected, time fetched) */
 static void daily_btn_update(void)
 {
@@ -646,13 +726,17 @@ static void daily_btn_update(void)
 }
 
 
-/* the unfinished games, from sudoku.db (without it: just the one in RAM) */
+/* (documented in ui_internal.h) */
 void games_refresh(void)
 {
     int n = is_stats_db_ready() ? stats_db_list_games(s_games) : -1;
     s_ngames = n < 0 ? 0 : n;
 }
 
+/**
+ * @brief Home > Statistics.
+ * @param e  the event
+ */
 static void stats_cb(lv_event_t *e)
 {
     if (is_stats_db_ready()) {
@@ -662,12 +746,20 @@ static void stats_cb(lv_event_t *e)
     lv_screen_load(screen_stats());
 }
 
+/**
+ * @brief Home > Gameplays.
+ * @param e  the event
+ */
 static void plays_cb(lv_event_t *e)
 {
     plays_ask(0);
     lv_screen_load(screen_plays());
 }
 
+/**
+ * @brief Home > Players.
+ * @param e  the event
+ */
 static void profile_cb(lv_event_t *e)
 {
     render_players();
@@ -677,12 +769,14 @@ static void profile_cb(lv_event_t *e)
     lv_screen_load(screen_profile());
 }
 
+/* (documented in ui_internal.h) */
 void sysmon_open_cb(lv_event_t *e)
 {
     lv_screen_load(screen_sysmon());
     sysmon_ui_set_shown(true);
 }
 
+/* (documented in ui_internal.h) */
 void files_open_cb(lv_event_t *e)
 {
     lv_screen_load(screen_files());

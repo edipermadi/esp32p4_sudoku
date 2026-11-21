@@ -1,23 +1,29 @@
-/*
+/**
+ * @file bsp_touch.c
+ * @ingroup bsp
+ * @brief GT911 touch, polled over I2C.
+ *
  * GT911 capacitive touch, polled over the shared I2C bus (GPIO7/8).
  * INT is not routed on the 4B, and Waveshare's own Arduino helper does not
  * drive the reset line, so the controller can come up at either address.
+ *
  */
 #include "bsp_board.h"
 #include "esp_check.h"
 #include "esp_log.h"
 
-static const char *TAG = "bsp_touch";
+static const char *TAG = "bsp_touch";   /**< the log's tag */
 
-#define GT911_ADDR_PRIMARY   0x5D
-#define GT911_ADDR_BACKUP    0x14
-#define GT911_REG_PRODUCT_ID 0x8140
-#define GT911_REG_STATUS     0x814E
-#define GT911_REG_POINT1     0x814F
+#define GT911_ADDR_PRIMARY   0x5D       /**< GT911's I2C address (one of two, set at reset) */
+#define GT911_ADDR_BACKUP    0x14       /**< its other address */
+#define GT911_REG_PRODUCT_ID 0x8140     /**< the product ID register */
+#define GT911_REG_STATUS     0x814E     /**< the status register (touch count, buffer ready) */
+#define GT911_REG_POINT1     0x814F     /**< the first point's register */
 
-static i2c_master_bus_handle_t s_bus = NULL;
-static i2c_master_dev_handle_t s_tp = NULL;
+static i2c_master_bus_handle_t s_bus = NULL;  /**< the shared I2C bus */
+static i2c_master_dev_handle_t s_tp = NULL;  /**< the touch controller */
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_i2c_init(i2c_master_bus_handle_t *ret_bus)
 {
     if (!s_bus) {
@@ -37,18 +43,32 @@ esp_err_t bsp_i2c_init(i2c_master_bus_handle_t *ret_bus)
     return ESP_OK;
 }
 
+/**
+ * @brief Reads GT911 registers.
+ * @param reg  the first
+ * @param buf  gets them
+ * @param len  how many
+ * @return ESP_OK, or why not
+ */
 static esp_err_t gt911_read(uint16_t reg, uint8_t *buf, size_t len)
 {
     uint8_t r[2] = {reg >> 8, reg & 0xFF};
     return i2c_master_transmit_receive(s_tp, r, 2, buf, len, 50);
 }
 
+/**
+ * @brief Writes a GT911 register.
+ * @param reg  the register
+ * @param val  its value
+ * @return ESP_OK, or why not
+ */
 static esp_err_t gt911_write_u8(uint16_t reg, uint8_t val)
 {
     uint8_t w[3] = {reg >> 8, reg & 0xFF, val};
     return i2c_master_transmit(s_tp, w, 3, 50);
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_touch_init(void)
 {
     if (s_tp) {
@@ -79,6 +99,7 @@ esp_err_t bsp_touch_init(void)
     return ESP_OK;
 }
 
+/* (documented in bsp_board.h) */
 bool bsp_touch_read(uint16_t *x, uint16_t *y)
 {
     static bool last_pressed = false;

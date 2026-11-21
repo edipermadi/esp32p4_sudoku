@@ -1,3 +1,7 @@
+/**
+ * @file gibberlink.h
+ * @brief Gibberlink: serial control (devctl) by sound, through the microphones and the speaker.
+ */
 #pragma once
 /*
  * Gibberlink: remote control by sound. The board's microphones (ES7210) listen
@@ -29,19 +33,36 @@
 extern "C" {
 #endif
 
-/* Turns listening on or off (starts the worker on first use). */
+/**
+ * @brief
+ * @param on  on
+ */
+/** @brief Turns listening on or off (starts the worker on first use). */
 void gibberlink_set_enabled(bool on);
+/**
+ * @brief Listening is on.
+ * @return true if so
+ */
 bool is_gibberlink_enabled(void);
 
-/* Call from loop() (the LVGL task): runs a received command, if any. */
+/** @brief Call from loop() (the LVGL task): runs a received command, if any. */
 void gibberlink_poll(void);
 
-/* Sends text (up to 140 bytes, a Gibberlink id first: "SU$pz ...") as sound,
+/**
+ * @brief
+ * @param text  the message
+ * @return true if queued
+ */
+/** @brief Sends text (up to 140 bytes, a Gibberlink id first: "SU$pz ...") as sound,
  * ggwave audible Fast, after what's queued already, with a short gap between
  * messages; works whether listening is on or not (the worker starts for it and
  * ends after). false: no room or no memory. gibberlink_sending(): how many are
  * still to play (0: done). */
 bool gibberlink_send(const char *text);
+/**
+ * @brief The messages still to play.
+ * @return how many (0: done)
+ */
 int gibberlink_sending(void);
 
 #ifdef __cplusplus

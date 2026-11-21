@@ -1,4 +1,8 @@
-/*
+/**
+ * @file bsp_lvgl.c
+ * @ingroup bsp
+ * @brief The LVGL port: draw buffers, the flush to the panel, rotation, the touch input.
+ *
  * LVGL v9 port: partial rendering into two full-screen PSRAM draw buffers, copied
  * to the DPI frame buffer by DMA2D. Flush completion is signalled from the DPI
  * "color transfer done" callback, as in ESP-IDF's mipi_dsi LVGL example.
@@ -6,6 +10,7 @@
  * Rotation (lv_display_set_rotation): LVGL renders in the rotated coordinate
  * system; the flush callback turns each strip the right way round into a
  * spare buffer before it goes to the panel. Touch points are rotated by LVGL.
+ *
  */
 #include "bsp_board.h"
 #include <lvgl.h>
@@ -16,7 +21,7 @@
 #include "esp_lcd_mipi_dsi.h"
 #include "esp_cache.h"
 
-static const char *TAG = "bsp_lvgl";
+static const char *TAG = "bsp_lvgl";    /**< the log's tag */
 
 /* Draw buffers: lines per strip, and where (1 = internal SRAM, 0 = PSRAM). Overridable
  * with -D for measuring (devctl "bench"). The whole screen: LVGL walks the objects and
@@ -26,19 +31,29 @@ static const char *TAG = "bsp_lvgl";
  * strips in internal SRAM were slower still (20 lines: up to 106 ms) and take the
  * internal RAM MP4 export needs. Costs 2 x 1 MB of PSRAM (and the rotation buffer). */
 #ifndef DRAW_BUF_LINES
-#define DRAW_BUF_LINES BSP_LCD_V_RES
+#define DRAW_BUF_LINES BSP_LCD_V_RES    /**< lines per draw buffer strip (the whole screen) */
 #endif
 #ifndef DRAW_BUF_INTERNAL
-#define DRAW_BUF_INTERNAL 0
+#define DRAW_BUF_INTERNAL 0             /**< 1: the draw buffers in internal SRAM, 0: PSRAM */
 #endif
 
-static void *s_rot_buf;                 /* rotated copy of the strip being flushed */
+static void *s_rot_buf;                 /**< rotated copy of the strip being flushed */
 
+/**
+ * @brief LVGL's tick.
+ * @return ms since boot
+ */
 static uint32_t lvgl_tick_cb(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
+/**
+ * @brief LVGL's flush: the strip into the frame buffer (rotated if the display is).
+ * @param disp  the display
+ * @param area  where
+ * @param px_map  the pixels
+ */
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
     esp_lcd_panel_handle_t panel = (esp_lcd_panel_handle_t)lv_display_get_user_data(disp);
@@ -58,6 +73,13 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
     esp_lcd_panel_draw_bitmap(panel, a.x1, a.y1, a.x2 + 1, a.y2 + 1, px_map);
 }
 
+/**
+ * @brief The DPI's "colour transfer done": the flush is ready.
+ * @param panel  the panel
+ * @param edata  unused
+ * @param ctx  the display
+ * @return false (no task to wake)
+ */
 static bool color_trans_done_cb(esp_lcd_panel_handle_t panel,
                                 esp_lcd_dpi_panel_event_data_t *edata, void *ctx)
 {
@@ -65,9 +87,12 @@ static bool color_trans_done_cb(esp_lcd_panel_handle_t panel,
     return false;
 }
 
-static volatile bool s_sim_on, s_sim_pressed;
-static volatile uint16_t s_sim_x, s_sim_y;
+static volatile bool s_sim_on;          /**< a simulated touch drives the pointer (bsp_touch_sim()) */
+static volatile bool s_sim_pressed;     /**< it is pressed */
+static volatile uint16_t s_sim_x;       /**< where, px */
+static volatile uint16_t s_sim_y;       /**< where, px */
 
+/* (documented in bsp_board.h) */
 void bsp_touch_sim(bool on, bool pressed, uint16_t x, uint16_t y)
 {
     s_sim_x = x;
@@ -76,6 +101,11 @@ void bsp_touch_sim(bool on, bool pressed, uint16_t x, uint16_t y)
     s_sim_on = on;
 }
 
+/**
+ * @brief LVGL's touch read: the panel, or the simulated touch.
+ * @param indev  the input device
+ * @param data  gets the point and state
+ */
 static void lvgl_touch_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
     uint16_t x, y;
@@ -94,6 +124,7 @@ static void lvgl_touch_cb(lv_indev_t *indev, lv_indev_data_t *data)
     }
 }
 
+/* (documented in bsp_board.h) */
 const uint16_t *bsp_display_frame(void)
 {
     lv_display_t *disp = lv_display_get_default();
@@ -107,6 +138,7 @@ const uint16_t *bsp_display_frame(void)
     return (const uint16_t *)fb;
 }
 
+/* (documented in bsp_board.h) */
 esp_err_t bsp_lvgl_start(void)
 {
     esp_lcd_panel_handle_t panel = NULL;

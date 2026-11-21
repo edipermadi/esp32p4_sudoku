@@ -1,21 +1,65 @@
-/* See mp4_reader.h. */
+/**
+ * @file mp4_reader.c
+ * @ingroup media
+ * @brief Reads an MP4 file (H.264): where each frame is, its time, the decoder setup.
+ */
 #include "mp4_reader.h"
 #include <stdlib.h>
 #include <string.h>
 
-#define MOOV_MAX (8u * 1024 * 1024)    /* bigger than any index we'd want to hold */
+#define MOOV_MAX (8u * 1024 * 1024)    /**< bigger than any index we'd want to hold */
 
+/**
+ * @brief A big-endian 32-bit number.
+ * @param p  its bytes
+ * @return it
+ */
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
+/**
+ * @brief A big-endian 16-bit number.
+ * @param p  its bytes
+ * @return it
+ */
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
+/**
+ * @brief A big-endian 64-bit number.
+ * @param p  its bytes
+ * @return it
+ */
 static uint64_t rd64(const uint8_t *p) { return (uint64_t)rd32(p) << 32 | rd32(p + 4); }
 
-/* the boxes of one track that matter */
+/** @brief the boxes of one track that matter */
 typedef struct {
-    const uint8_t *stsd, *stts, *stsz, *stsc, *stco, *co64, *stss, *mdhd, *hdlr;
-    size_t stsd_n, stts_n, stsz_n, stsc_n, stco_n, co64_n, stss_n, mdhd_n, hdlr_n;
+    const uint8_t *stsd;        /**< sample descriptions (avc1: size, SPS, PPS) */
+    const uint8_t *stts;        /**< decode times */
+    const uint8_t *stsz;        /**< frame sizes */
+    const uint8_t *stsc;        /**< frames per chunk */
+    const uint8_t *stco;        /**< chunk offsets, 32-bit */
+    const uint8_t *co64;        /**< chunk offsets, 64-bit */
+    const uint8_t *stss;        /**< key frames */
+    const uint8_t *mdhd;        /**< the media header (timescale, duration) */
+    const uint8_t *hdlr;        /**< the handler (video or not) */
+    size_t stsd_n;              /**< stsd's bytes */
+    size_t stts_n;              /**< stts's bytes */
+    size_t stsz_n;              /**< stsz's bytes */
+    size_t stsc_n;              /**< stsc's bytes */
+    size_t stco_n;              /**< stco's bytes */
+    size_t co64_n;              /**< co64's bytes */
+    size_t stss_n;              /**< stss's bytes */
+    size_t mdhd_n;              /**< mdhd's bytes */
+    size_t hdlr_n;              /**< hdlr's bytes */
 } trak_t;
 
-/* Walks the boxes in [p, p+n); containers are entered. Payload pointers go into t. */
+/** The box's type (ty, in walk()) is s. */
+#define IS(s) (memcmp(ty, s, 4) == 0)
+
+/**
+ * @brief Walks the boxes in [p, p+n); containers are entered. Payload pointers go into t.
+ * @param p  the boxes
+ * @param n  their bytes
+ * @param t  gets the track's boxes
+ * @param depth  how deep (0: the file)
+ */
 static void walk(const uint8_t *p, size_t n, trak_t *t, int depth)
 {
     while (n >= 8 && depth < 8) {
@@ -36,7 +80,6 @@ static void walk(const uint8_t *p, size_t n, trak_t *t, int depth)
         const uint8_t *body = p + hdr;
         size_t bn = (size_t)sz - hdr;
         const char *ty = (const char *)p + 4;
-#define IS(s) (memcmp(ty, s, 4) == 0)
         if (IS("mdia") || IS("minf") || IS("stbl")) {
             walk(body, bn, t, depth + 1);
         } else if (IS("stsd")) {
@@ -73,9 +116,16 @@ static void walk(const uint8_t *p, size_t n, trak_t *t, int depth)
     }
 }
 
-#define FAIL(msg) do { snprintf(err, errn, "%s", msg); goto fail; } while (0)
+#define FAIL(msg) do { snprintf(err, errn, "%s", msg); goto fail; } while (0)  /**< err gets msg, and the reading stops */
 
-/* avc1/avc3 sample entry -> size, NAL length size, SPS/PPS */
+/**
+ * @brief avc1/avc3 sample entry -> size, NAL length size, SPS/PPS
+ * @param t  the track's boxes
+ * @param m  gets them
+ * @param err  gets why not
+ * @param errn  its size
+ * @return false: not H.264
+ */
 static bool parse_stsd(const trak_t *t, mp4r_t *m, char *err, size_t errn)
 {
     const uint8_t *p = t->stsd;
@@ -140,6 +190,14 @@ fail:
     return false;
 }
 
+/**
+ * @brief Reads a track's tables into m: the frames' places, sizes, times and key frames.
+ * @param t  the track's boxes
+ * @param m  gets them
+ * @param err  gets why not
+ * @param errn  its size
+ * @return false: not a video track it can read
+ */
 static bool parse_trak(const trak_t *t, mp4r_t *m, char *err, size_t errn)
 {
     if (!t->mdhd || t->mdhd_n < 24) {
@@ -248,6 +306,7 @@ fail:
     return false;
 }
 
+/* (documented in mp4_reader.h) */
 bool mp4r_open(FILE *f, mp4r_t *m, char *err, size_t errn)
 {
     memset(m, 0, sizeof(*m));
@@ -335,6 +394,7 @@ fail:
     return false;
 }
 
+/* (documented in mp4_reader.h) */
 void mp4r_free(mp4r_t *m)
 {
     free(m->off);
@@ -345,6 +405,7 @@ void mp4r_free(mp4r_t *m)
     memset(m, 0, sizeof(*m));
 }
 
+/* (documented in mp4_reader.h) */
 uint32_t mp4r_key_before(const mp4r_t *m, uint32_t i)
 {
     if (i >= m->n) {
@@ -356,12 +417,14 @@ uint32_t mp4r_key_before(const mp4r_t *m, uint32_t i)
     return i;
 }
 
+/* (documented in mp4_reader.h) */
 size_t mp4r_annexb_cap(const mp4r_t *m)
 {
     int l = m->nal_len ? m->nal_len : 4;
     return (size_t)m->max_size + (size_t)m->max_size * (4 - l) / (l + 1) + 64;
 }
 
+/* (documented in mp4_reader.h) */
 size_t mp4r_read_annexb(FILE *f, const mp4r_t *m, uint32_t i, uint8_t *out, size_t cap)
 {
     if (i >= m->n) {

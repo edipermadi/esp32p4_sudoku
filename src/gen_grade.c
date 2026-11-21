@@ -9,9 +9,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-/* sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
+/** @brief sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
 static uint8_t s_mask_sum[1024];
 
+/**
+ * @brief Places a digit: the peers lose it as a candidate.
+ * @param L  the techniques' state
+ * @param c  the cell
+ * @param d  the digit
+ */
 static void place(logic_t *L, int c, int d)
 {
     const sudoku_geom_t *G = L->G;
@@ -79,9 +85,19 @@ bool gen_singles(logic_t *L)
     return false;
 }
 
-/* the first technique used while looking for the next step (sudoku_next_step) */
+/** @brief the first technique used while looking for the next step (sudoku_next_step) */
 static sudoku_tech_t *s_trace;
 
+/**
+ * @brief Notes the first technique used (sudoku_next_step()'s, when s_trace is set).
+ * @param kind  TECH_*
+ * @param unit  its unit
+ * @param unit2  its second unit
+ * @param d1  its digit
+ * @param d2  its second digit
+ * @param c1  its first cell
+ * @param c2  its second cell
+ */
 static void trace(int kind, int unit, int unit2, int d1, int d2, int c1, int c2)
 {
     if (!s_trace || s_trace->kind != TECH_NONE) {
@@ -98,7 +114,17 @@ static void trace(int kind, int unit, int unit2, int d1, int d2, int c1, int c2)
     s_trace->ncells = 0;
 }
 
-/* the same, with a third line and the cells that make the pattern */
+/**
+ * @brief the same, with a third line and the cells that make the pattern
+ * @param kind  TECH_*
+ * @param unit  its unit
+ * @param unit2  its second unit
+ * @param unit3  its third
+ * @param d1  its digit
+ * @param d2  its second digit
+ * @param cells  the cells
+ * @param n  how many
+ */
 static void trace_cells(int kind, int unit, int unit2, int unit3, int d1, int d2, const int *cells, int n)
 {
     if (!s_trace || s_trace->kind != TECH_NONE) {
@@ -112,6 +138,13 @@ static void trace_cells(int kind, int unit, int unit2, int unit3, int d1, int d2
     }
 }
 
+/**
+ * @brief Removes candidates from a cell.
+ * @param L  the techniques' state
+ * @param c  the cell
+ * @param bits  the candidates (bit d = d)
+ * @return true if any went (no candidate left: L->broken)
+ */
 static bool eliminate(logic_t *L, int c, uint16_t bits)
 {
     if (L->v[c] || !(L->cand[c] & bits)) {
@@ -733,13 +766,15 @@ bool gen_naked_triple(logic_t *L)
     return false;
 }
 
+/** gen_fish(): the cell at a base line's position (orient: base rows, or base columns) */
+#define FISH_CELL(line, pos) (orient ? (pos) * 9 + (line) : (line) * 9 + (pos))
+
 /* (documented in gen_internal.h) */
 bool gen_fish(logic_t *L, int size)
 {
     const sudoku_geom_t *G = L->G;
     const int n = G->n;
     for (int orient = 0; orient < 2; orient++) {   /* 0: base rows, cover columns; 1: the other way */
-#define FISH_CELL(line, pos) (orient ? (pos) * 9 + (line) : (line) * 9 + (pos))
         for (int d = 1; d <= n; d++) {
             const uint16_t m = (uint16_t)(1u << d);
             int line[9], nl = 0;
@@ -948,6 +983,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     return G->n == 9 ? 36 : G->n == 6 ? 16 : 8;   /* (4x4: half its 16 cells; Medium digs to the minimum, ~5) */
 }
 
+/* (documented in generator.h) */
 int sudoku_grade(const sudoku_geom_t *G, const uint8_t givens[81])
 {
     /* solved by the logic alone (tier 1 or 2): one solution, proven; otherwise an exact count

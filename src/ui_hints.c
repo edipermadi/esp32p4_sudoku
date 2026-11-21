@@ -1,4 +1,8 @@
-/* ui_sudoku.c split: hints (the next step and its explanation) and the game screen tour. See ui_sudoku.c for the whole. */
+/**
+ * @file ui_hints.c
+ * @ingroup ui_game
+ * @brief Hints (the next step and its explanation) and the game screen tour.
+ */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -21,15 +25,16 @@ static void tour_dim(int x1, int y1, int x2, int y2);
 static void tour_show(int step);
 static void tour_check_cb(lv_timer_t *t);
 
-static uint8_t  h_mark[81];      /* hint highlight: 0, 1 = where to look, 2 = the cell */
-static lv_obj_t *tour_ovl;        /* the game screen's tour, while it's up */
-static bool      g_layout_left;         /* ... and on which side the pad is (Left-handed) */
+static uint8_t  h_mark[81];      /**< hint highlight: 0, 1 = where to look, 2 = the cell */
+static lv_obj_t *tour_ovl;        /**< the game screen's tour, while it's up */
+static bool      g_layout_left;         /**< ... and on which side the pad is (Left-handed) */
 
 /* ------------------------------------------------------------- hints */
-/*
- * Hint: the next step a person would take (gen_hints.c, sudoku_next_step),
- * in two steps: first where to look, then (More) the cell and why, then
- * Place it. A wrong digit is pointed out first. Each hint opened counts once.
+/**
+ * @brief A unit's name: "row 3", "column 5", "box 2" ("region 2"), "the top-left diagonal", "the top-left window", ...
+ * @param u  the unit
+ * @param buf  gets it
+ * @param n  its size
  */
 static void unit_name(int u, char *buf, size_t n)
 {
@@ -54,7 +59,10 @@ static void unit_name(int u, char *buf, size_t n)
     }
 }
 
-/* "row, column or box" (and diagonal, window, or region for a Jigsaw) */
+/**
+ * @brief "row, column or box" (and diagonal, window, or region for a Jigsaw)
+ * @return the words
+ */
 static const char *units_word(void)
 {
     if (game_geo()->diag) {
@@ -87,7 +95,13 @@ static const char *units_word(void)
     return "row, column or box";
 }
 
-/* "1, 4 or 7" from a candidate bit mask */
+/**
+ * @brief "1, 4 or 7" from a candidate bit mask
+ * @param mask  the digits (bit d = d)
+ * @param last_word  before the last one: "or", "and"
+ * @param buf  gets it
+ * @param n  its size
+ */
 static void digit_list(int mask, const char *last_word, char *buf, size_t n)
 {
     int ds[9], k = 0;
@@ -106,6 +120,11 @@ static void digit_list(int mask, const char *last_word, char *buf, size_t n)
     }
 }
 
+/**
+ * @brief Highlights a unit's cells (keeping a higher mark already there).
+ * @param u  the unit
+ * @param v  1 = where to look, 2 = the cell
+ */
 static void mark_unit(int u, uint8_t v)
 {
     for (int k = 0; k < game_geo()->n; k++) {
@@ -117,12 +136,13 @@ static void mark_unit(int u, uint8_t v)
 }
 
 /* closes the hint without redrawing (the caller does) */
-/* Settings > Game > Hints: Nudge only: where to look, nothing more (Learn keeps the full hint) */
+/* (documented in ui_internal.h) */
 bool is_hint_nudge(void)
 {
     return is_store_hint_nudge() && game_practice() < 0;
 }
 
+/* (documented in ui_internal.h) */
 void hint_drop(void)
 {
     if (!hint_step()) {
@@ -133,11 +153,12 @@ void hint_drop(void)
     lv_obj_set_hidden(hint_card(), true);
 }
 
+/* (documented in ui_internal.h) */
 void hint_render(void)
 {
     const sudoku_step_t *h = hint_info();
     const sudoku_tech_t *t = &h->tech;
-    char text[360], u1[48], u2[24], tech[260] = "";
+    char text[640], u1[48], u2[24], tech[260] = "";   /* (text: a technique's sentence and the step's) */
     int r = h->cell / 9 + 1, c = h->cell % 9 + 1;
     memset(h_mark, 0, sizeof(h_mark));
 
@@ -440,6 +461,10 @@ void hint_render(void)
     refresh_board();
 }
 
+/**
+ * @brief Restart confirmed: the game back to its givens.
+ * @param e  the event (user data: the dialog)
+ */
 static void restart_confirm_cb(lv_event_t *e)
 {
     lv_obj_t *mbox = (lv_obj_t *)lv_event_get_user_data(e);
@@ -450,11 +475,13 @@ static void restart_confirm_cb(lv_event_t *e)
     lv_msgbox_close_async(mbox);
 }
 
+/* (documented in ui_internal.h) */
 void mbox_close_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
 }
 
+/* (documented in ui_internal.h) */
 lv_obj_t *make_msgbox(const char *title, const char *text)
 {
     lv_obj_t *m = lv_msgbox_create(NULL);
@@ -468,6 +495,7 @@ lv_obj_t *make_msgbox(const char *title, const char *text)
     return m;
 }
 
+/* (documented in ui_internal.h) */
 void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary)
 {
     lv_obj_t *b = lv_msgbox_add_footer_button(m, text);
@@ -486,6 +514,7 @@ void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary
     lv_obj_set_style_pad_bottom(foot, 18, 0);                  /* room under the buttons */
 }
 
+/* (documented in ui_internal.h) */
 void restart_cb(lv_event_t *e)
 {
     if (!is_game_solved() && !has_progress()) {
@@ -497,6 +526,10 @@ void restart_cb(lv_event_t *e)
     msgbox_button(m, "Restart", restart_confirm_cb, true);
 }
 
+/**
+ * @brief The time attack's Stop: the run ends (not recorded).
+ * @param e  the event (user data: the dialog)
+ */
 static void atk_stop_cb(lv_event_t *e)
 {
     lv_msgbox_close(lv_event_get_user_data(e));
@@ -505,12 +538,17 @@ static void atk_stop_cb(lv_event_t *e)
     show_home();
 }
 
+/**
+ * @brief The time attack's Keep going: back to the puzzle.
+ * @param e  the event (user data: the dialog)
+ */
 static void atk_keep_cb(lv_event_t *e)
 {
     lv_msgbox_close(lv_event_get_user_data(e));
     set_paused(false);
 }
 
+/* (documented in ui_internal.h) */
 void back_cb(lv_event_t *e)
 {
     if (is_game_attack() && !is_game_solved()) {
@@ -525,6 +563,7 @@ void back_cb(lv_event_t *e)
     show_list();
 }
 
+/* (documented in ui_internal.h) */
 void tick_cb(lv_timer_t *t)
 {
     uint32_t now = lv_tick_get();
@@ -539,8 +578,13 @@ void tick_cb(lv_timer_t *t)
     game_set_last_tick(now);
 }
 
-/* Killer: each cage outlined with a dashed line just inside its cells, and
- * its sum small in its top-left cell (cells: the grid's children 9..89) */
+/**
+ * @brief Killer: each cage outlined with a dashed line just inside its cells, and
+ * its sum small in its top-left cell (cells: the grid's children 9..89)
+ * @param grid  the board
+ * @param geo  its board
+ * @param layer  where
+ */
 static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
     const int in = 4;                               /* the outline's inset from the cell edge */
@@ -610,8 +654,13 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
 
 /* Over the cells: Jigsaw's thick lines between regions, Killer's cages (the
  * grid's children: the 9 boxes, then the 81 cells) */
-/* Even-Odd: a ring in each odd cell (even ones are shaded, cell_base_bg);
- * Consecutive: a bar across the line between two cells 1 apart */
+/**
+ * @brief Even-Odd: a ring in each odd cell (even ones are shaded, cell_base_bg);
+ * Consecutive: a bar across the line between two cells 1 apart
+ * @param grid  the board
+ * @param geo  its board
+ * @param layer  where
+ */
 static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
     lv_draw_rect_dsc_t d;
@@ -653,9 +702,7 @@ static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     }
 }
 
-/* Kropki: a white or black dot; XV: an X or a V; Greater-Than: a chevron whose point
- * faces the smaller digit; centred on (cx, cy), on a line between two cells (down: the
- * line below a cell, else the one to its right). Also the rules card's picture. */
+/* (documented in ui_internal.h) */
 void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy)
 {
     if (kind == EDGE_KROPKI) {
@@ -712,7 +759,7 @@ void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int c
     }
 }
 
-/* Quadruple: a circle centred on (cx, cy) with its 1-4 digits, two to a line */
+/* (documented in ui_internal.h) */
 void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n)
 {
     const int rad = 16;
@@ -747,6 +794,12 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
     lv_draw_label(layer, &l, &t);
 }
 
+/**
+ * @brief Kropki, XV, Greater-Than: each mark on the line between its two cells.
+ * @param grid  the board
+ * @param geo  its board
+ * @param layer  where
+ */
 static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
     for (int i = 0; i < 81; i++) {
@@ -764,6 +817,12 @@ static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     }
 }
 
+/**
+ * @brief Quadruple: each circle with its digits, where its four cells meet.
+ * @param grid  the board
+ * @param geo  its board
+ * @param layer  where
+ */
 static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
     for (int q = 0; q < geo->nquads; q++) {
@@ -774,10 +833,7 @@ static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     }
 }
 
-/* A line through cell centres pts[0..n-1] (cs: the cell size), as its kind is drawn, under the
- * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey
- * ring (the circle) and a thin shaft from its edge with an arrowhead at the end; LINE_RENBAN a
- * wide purple band; LINE_WHISPER a narrow green line. Also the rules card's picture. */
+/* (documented in ui_internal.h) */
 void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, int cs)
 {
     lv_draw_line_dsc_t ld;
@@ -853,7 +909,12 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
     }
 }
 
-/* the board's lines (Thermo, Arrow, Renban, Whispers) through the cells' centres */
+/**
+ * @brief the board's lines (Thermo, Arrow, Renban, Whispers) through the cells' centres
+ * @param grid  the board
+ * @param geo  its board
+ * @param layer  where
+ */
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
     for (int t = 0; t < geo->nthermos; t++) {
@@ -870,6 +931,7 @@ static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_laye
     }
 }
 
+/* (documented in ui_internal.h) */
 void board_regions_draw_cb(lv_event_t *e)
 {
     lv_obj_t *grid = lv_event_get_current_target_obj(e);
@@ -913,7 +975,7 @@ void board_regions_draw_cb(lv_event_t *e)
     }
 }
 
-/* Little Killer: a small arrow along direction dir (LK_*) from (x, y), about len long */
+/* (documented in ui_internal.h) */
 void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len)
 {
     int dx = dir == LK_DOWN_LEFT ? -1 : 1, dy = dir == LK_UP_RIGHT ? -1 : 1;
@@ -938,7 +1000,10 @@ void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len)
     lv_draw_line(layer, &l);
 }
 
-/* a Little Killer clue's label draws its arrow, toward its diagonal's first cell */
+/**
+ * @brief a Little Killer clue's label draws its arrow, toward its diagonal's first cell
+ * @param e  the draw event (the label's user data: its direction + 1, 0: none)
+ */
 static void lk_clue_draw_cb(lv_event_t *e)
 {
     lv_obj_t *l = lv_event_get_current_target_obj(e);
@@ -953,8 +1018,7 @@ static void lk_clue_draw_cb(lv_event_t *e)
     draw_lk_arrow(lv_event_get_layer(e), cx + dx * 11, cy + dy * 6, dir, 7);
 }
 
-/* clues: BOARD_CLUES labels on the board's screen for a Sandwich's sums, a Skyscraper's clues (rows, then
- * columns) or a Little Killer's sums, hidden for the other variants; may be NULL */
+/* (documented in ui_internal.h) */
 void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
                      lv_obj_t *const *clues, int x0, int y0, int size_all)
 {
@@ -1058,13 +1122,14 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     }
 }
 
+/* (documented in ui_internal.h) */
 void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
                   lv_obj_t *const *clues, int x0)
 {
     board_layout_at(geo, grid, boxes, cells, clues, x0, GRID_Y, GRID_SIZE);
 }
 
-/* the game screen's board and number pad (1..n, as tall as the board) for g_var */
+/* (documented in ui_internal.h) */
 void game_layout(void)
 {
     if (!game_geo()) {
@@ -1102,8 +1167,13 @@ void game_layout(void)
         lv_obj_set_size(b, GAME_PAD_W, h);
     }
 }
-static int tour_step;
+static int tour_step;                    /**< the tour's step shown */
 
+/**
+ * @brief The screen area a tour step lights up.
+ * @param step  the step
+ * @param a  gets it
+ */
 static void tour_area(int step, lv_area_t *a)
 {
     lv_obj_t *o[4] = {NULL};
@@ -1149,6 +1219,9 @@ static void tour_area(int step, lv_area_t *a)
     lv_area_increase(a, 4, 4);
 }
 
+/**
+ * @brief Ends the tour (the clock runs again).
+ */
 static void tour_end(void)
 {
     if (!tour_ovl) {
@@ -1160,6 +1233,10 @@ static void tour_end(void)
     game_set_last_tick(lv_tick_get());                    /* (the clock goes on from now) */
 }
 
+/**
+ * @brief Next (the last step ends the tour).
+ * @param e  the event
+ */
 static void tour_next_cb(lv_event_t *e)
 {
     if (tour_step + 1 >= TOUR_STEPS) {
@@ -1169,11 +1246,22 @@ static void tour_next_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief Skip: ends the tour.
+ * @param e  the event
+ */
 static void tour_skip_cb(lv_event_t *e)
 {
     tour_end();
 }
 
+/**
+ * @brief Dims a rectangle of the screen (the tour's cover around what is lit).
+ * @param x1  left, px
+ * @param y1  top
+ * @param x2  right
+ * @param y2  bottom
+ */
 static void tour_dim(int x1, int y1, int x2, int y2)
 {
     if (x2 <= x1 || y2 <= y1) {
@@ -1185,9 +1273,13 @@ static void tour_dim(int x1, int y1, int x2, int y2)
     lv_obj_set_size(r, x2 - x1, y2 - y1);
     lv_obj_set_style_bg_color(r, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(r, LV_OPA_60, 0);
-    lv_obj_remove_flag(r, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(r, false);
 }
 
+/**
+ * @brief Shows a tour step: what it lights up, its title and text.
+ * @param step  the step
+ */
 static void tour_show(int step)
 {
     static const char *const TITLE[TOUR_STEPS] = {"The board", "The number pad", "Tools", "Hint", "The top bar",
@@ -1211,7 +1303,7 @@ static void tour_show(int step)
         tour_ovl = lv_obj_create(lv_layer_top());
         lv_obj_remove_style_all(tour_ovl);
         lv_obj_set_size(tour_ovl, SCR_W, SCR_W);
-        lv_obj_add_flag(tour_ovl, LV_OBJ_FLAG_CLICKABLE);   /* nothing under it takes a tap */
+        lv_obj_set_clickable(tour_ovl, true);   /* nothing under it takes a tap */
         lv_obj_set_scrollable(tour_ovl, false);
     }
     lv_obj_clean(tour_ovl);
@@ -1228,7 +1320,7 @@ static void tour_show(int step)
     lv_obj_set_style_border_color(ring, C_ACCENT, 0);
     lv_obj_set_style_border_width(ring, 3, 0);
     lv_obj_set_style_radius(ring, 8, 0);
-    lv_obj_remove_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(ring, false);
 
     lv_obj_t *card = lv_obj_create(tour_ovl);
     lv_obj_set_width(card, 560);
@@ -1277,6 +1369,10 @@ static void tour_show(int step)
     lv_obj_set_pos(card, (SCR_W - 560) / 2, y);
 }
 
+/**
+ * @brief Starts the tour on the game screen, once per player (not in Learn, a time attack, or a solved game).
+ * @param t  the timer
+ */
 static void tour_check_cb(lv_timer_t *t)
 {
     if (tour_ovl || lv_screen_active() != screen_game() || game_practice() >= 0 || is_game_attack() || is_game_solved() || !is_stats_db_ready()) {
@@ -1295,12 +1391,14 @@ static void tour_check_cb(lv_timer_t *t)
     tour_show(0);
 }
 
+/* (documented in ui_internal.h) */
 void tour_maybe(void)
 {
     lv_timer_t *t = lv_timer_create(tour_check_cb, 500, NULL);   /* (after Learn / Time attack set their flags) */
     lv_timer_set_repeat_count(t, 1);
 }
 
+/* (documented in ui_internal.h) */
 void mark_started(void)
 {
     time_t now = time(NULL);

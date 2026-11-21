@@ -55,11 +55,7 @@ static bool fb_dark;                                /**< the screen is dark for 
  */
 static void fb_keep_cb(lv_timer_t *t) { lv_display_trigger_activity(NULL); }
 
-/**
- * @brief Covers the screen with a card that takes every tap, before the flash is written.
- * @param title  the card's title
- * @param text   what is happening (and that the screen goes dark)
- */
+/* (documented in ui_sudoku.h) */
 void sudoku_ui_flash_busy(const char *title, const char *text)
 {
     if (fb_ovl) {

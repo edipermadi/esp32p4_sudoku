@@ -1,11 +1,21 @@
-/* See sdx.h. */
+/**
+ * @file sdx.c
+ * @brief The .sdx puzzle format: a line read into its fields, and written back.
+ */
 #include "sdx.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-/* a name (any case) or its number; -1: neither */
+/**
+ * @brief A name (any case) or its number.
+ * @param s  the text
+ * @param name  a name by number
+ * @param n  the names
+ * @return the number; -1: neither
+ */
+/** @brief a name (any case) or its number; -1: neither */
 static int name_index(const char *s, const char *(*name)(int), int n)
 {
     for (int i = 0; i < n; i++) {
@@ -18,11 +28,12 @@ static int name_index(const char *s, const char *(*name)(int), int n)
     return *s && !*end && v >= 0 && v < n ? (int)v : -1;
 }
 
+/* (documented in sdx.h) */
 bool sdx_parse(char *line, sdx_puzzle_t *p)
 {
     memset(p, 0, sizeof(*p));
     p->regions = p->cages = p->marks = p->thermos = "";
-    char *fld[7] = {0};
+    const char *fld[7] = {0};
     int nf = 0;
     if (!strchr(line, '|')) {                       /* just the givens (an .sdm line): Classic, no level */
         while (*line == ' ' || *line == '\t') {
@@ -102,6 +113,7 @@ bool sdx_parse(char *line, sdx_puzzle_t *p)
     return true;
 }
 
+/* (documented in sdx.h) */
 bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
 {
     switch (p->variant) {
@@ -149,6 +161,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     }
 }
 
+/* (documented in sdx.h) */
 int sdx_pack_givens(const uint8_t givens[81], char *out, size_t n)
 {
     size_t k = 0;
@@ -171,6 +184,7 @@ int sdx_pack_givens(const uint8_t givens[81], char *out, size_t n)
     return (int)k;
 }
 
+/* (documented in sdx.h) */
 int sdx_format(int variant, int level, const uint8_t givens[81], const char *regions, const char *cages,
                const char *marks, const char *thermos, bool pack, char *out, size_t n)
 {

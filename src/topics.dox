@@ -50,3 +50,31 @@
  * @defgroup topic_players Players
  * @brief Players: the screen and its avatar picker (@ref ui_players) and its data (@ref players_core).
  */
+
+/**
+ * @defgroup topic_lock Lock screen
+ * @brief The lock screen: its screens (@ref ui_lock) and its PIN (@ref lock_core).
+ */
+
+/**
+ * @defgroup topic_game Game
+ * @brief Playing a puzzle: the game screen (@ref ui_game) and the puzzles it plays (@ref generator).
+ */
+
+/**
+ * @defgroup ui_game Game screen
+ * @ingroup topic_game
+ * @brief The game screen and what opens it: the board, input, hints, the tools, New puzzle, the
+ *        daily puzzle, Learn, Enter a puzzle. The files share ui_internal.h.
+ */
+
+/**
+ * @defgroup media Media
+ * @brief Pictures and videos: the viewer in Files, and MP4 files read and written (replay export).
+ */
+
+/**
+ * @defgroup bsp Board support
+ * @brief The Waveshare ESP32-P4-WIFI6-Touch-LCD-4B: the display, touch, backlight, speaker and
+ *        microphones, the microSD slot, power off. bsp_board.h declares it all.
+ */

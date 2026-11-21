@@ -1,4 +1,8 @@
-/* ui_sudoku.c split: New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle. See ui_sudoku.c for the whole. */
+/**
+ * @file ui_newpuzzle.c
+ * @ingroup ui_game
+ * @brief New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle.
+ */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -37,6 +41,7 @@ static void ed_check_done(lv_timer_t *t);
 static void ed_play_cb(lv_event_t *e);
 static void enter_cb(lv_event_t *e);
 
+/** Learn's techniques' names, LEARN_* in order. */
 static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
                                                      "Naked pair", "Hidden pair", "Naked triple", "X-Wing",
                                                      "Swordfish", "XY-Wing", "Killer cage", "Thermometer",
@@ -44,16 +49,16 @@ static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked sin
                                                     };
 
 /* ------------------------------------------------------------- new puzzle (generator) */
-/*
- * New puzzle: pick a level, a worker task runs the generator (gen_make.c)
+/**
+ * @brief New puzzle: pick a level, a worker task runs the generator (gen_make.c)
  * while a dialog says so, then the puzzle is stored (sudoku.db, or RAM
  * without a card) and opened like any other.
  */
-static lv_obj_t *gen_box;                           /* the "Generating..." dialog */
-static lv_obj_t *gen_bar;                           /* ... its progress bar */
-static int64_t gen_t0;                              /* when it started (esp_timer, us) */
+static lv_obj_t *gen_box;                           /**< the "Generating..." dialog */
+static lv_obj_t *gen_bar;                           /**< ... its progress bar */
+static int64_t gen_t0;                              /**< when it started (esp_timer, us) */
 
-/* About how long a puzzle takes on the board, ms: the averages of devctl "genbench all all 10"
+/** @brief About how long a puzzle takes on the board, ms: the averages of devctl "genbench all all 10"
  * (docs/development.md, 2026-11-21), by variant (generator.h's order) and level. The progress
  * bar is a guess from these: the generator can't tell how many attempts it will need. Update
  * them with the table when the generator gets faster or slower. */
@@ -84,22 +89,20 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {38, 159, 677, 304},    /* Skyscraper */
     {15, 471, 1102, 1225},  /* Little Killer */
 };
-static lv_timer_t *gen_timer;
-static volatile bool gen_done;
-static int gen_var_req;                             /* variant being made (generator.h) */
-static int gen_level_req, gen_level_got;
-static uint8_t gen_givens[81];
-static sudoku_geom_t *gen_board;                    /* the puzzle's board (Jigsaw regions, Killer cages), PSRAM */
-static char *gen_cages;                             /* STATS_CAGES_LEN, PSRAM */
-static char gen_marks[82];
-static char *gen_thermos;                           /* STATS_THERMOS_LEN, PSRAM */
-static uint32_t gen_seed;                           /* 0 = random */
-static char gen_day[12];                            /* making a daily puzzle: its date */
+static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
+static volatile bool gen_done;          /**< the generator is done */
+static int gen_var_req;                             /**< variant being made (generator.h) */
+static int gen_level_req;                           /**< the level asked for */
+static int gen_level_got;                           /**< the level it is */
+static uint8_t gen_givens[81];          /**< the puzzle made */
+static sudoku_geom_t *gen_board;                    /**< the puzzle's board (Jigsaw regions, Killer cages), PSRAM */
+static char *gen_cages;                             /**< STATS_CAGES_LEN, PSRAM */
+static char gen_marks[82];              /**< its marks (Even-Odd, Consecutive, Kropki, ...) */
+static char *gen_thermos;                           /**< STATS_THERMOS_LEN, PSRAM */
+static uint32_t gen_seed;                           /**< 0 = random */
+static char gen_day[12];                            /**< making a daily puzzle: its date */
 
-/* generator.h's hook: the generator and solver run for seconds on core 0 (Greater-Than
- * Expert: 5 s+ at times), and the task watchdog restarts the board when core 0's idle task
- * hasn't run for 5 s. A tick every 100 ms or so lets it. (Any task: the UI's own solving
- * calls it too, where a rare 1-tick pause doesn't matter.) */
+/* (documented in generator.h) */
 void sudoku_gen_yield(void)
 {
     static int64_t last;
@@ -111,6 +114,10 @@ void sudoku_gen_yield(void)
     vTaskDelay(1);
 }
 
+/**
+ * @brief The generator task (core 0): makes the puzzle, then sets gen_done.
+ * @param arg  unused
+ */
 static void gen_task(void *arg)
 {
     gen_level_t got = (gen_level_t)gen_level_req;
@@ -153,6 +160,10 @@ static void gen_task(void *arg)
     vTaskDelete(NULL);
 }
 
+/**
+ * @brief While a puzzle is made: the progress bar; once done, the puzzle kept (sudoku.db, or the RAM cache) and opened.
+ * @param t  the timer
+ */
 static void gen_poll_cb(lv_timer_t *t)
 {
     if (!gen_done) {
@@ -197,11 +208,11 @@ static void gen_poll_cb(lv_timer_t *t)
     open_puzzle(id);
 }
 
-/* seed 0 = a random puzzle; a daily one (always classic) has its date as the seed and day set */
-static lv_timer_t *learn_timer;                     /* (Learn: its variant lessons use the generator too) */
-static bool gen_bench;                              /* devctl genbench has the generator */
+/** @brief seed 0 = a random puzzle; a daily one (always classic) has its date as the seed and day set */
+static lv_timer_t *learn_timer;                     /**< (Learn: its variant lessons use the generator too) */
+static bool gen_bench;                              /**< devctl genbench has the generator */
 
-/* devctl genbench: the generator to itself (false: New puzzle or Learn is using it) */
+/* (documented in ui_sudoku.h) */
 bool gen_bench_begin(void)
 {
     if (gen_timer || learn_timer || gen_bench) {
@@ -211,11 +222,19 @@ bool gen_bench_begin(void)
     return true;
 }
 
+/* (documented in ui_sudoku.h) */
 void gen_bench_end(void)
 {
     gen_bench = false;
 }
 
+/**
+ * @brief Makes a new puzzle in the background (one at a time), with a progress dialog.
+ * @param variant  sudoku_variant_t
+ * @param level  gen_level_t
+ * @param seed  the generator's seed, 0: random
+ * @param day  a daily puzzle's date, or NULL
+ */
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
 {
     if (gen_timer || learn_timer || gen_bench) {
@@ -265,14 +284,15 @@ static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
     gen_timer = lv_timer_create(gen_poll_cb, 50, NULL);
 }
 
+/* (documented in ui_internal.h) */
 void gen_start(int variant, int level)
 {
     gen_start_ex(variant, level, 0, NULL);
 }
 
 /* ------------------------------------------------------------- daily puzzle */
-/*
- * One puzzle a day, the same for every player: made from the date (its seed),
+/**
+ * @brief One puzzle a day, the same for every player: made from the date (its seed),
  * with a variant and level by weekday (DAILY_*): Mon Classic Easy, Tue Mini
  * Medium, Wed X-Sudoku Medium, Thu Hyper Hard, Fri Killer Medium, Sat Jigsaw
  * Hard, Sun Classic Expert. Stored like any generated puzzle, with its date
@@ -280,9 +300,16 @@ void gen_start(int variant, int level)
  * counts days in a row with the daily solved (stats_db).
  */
 static const uint8_t DAILY_LEVEL[7] = {GEN_EXPERT, GEN_EASY, GEN_MEDIUM, GEN_MEDIUM, GEN_HARD, GEN_MEDIUM, GEN_HARD};
+/** each weekday's daily variant (Sunday first) */
 static const uint8_t DAILY_VARIANT[7] = {VAR_CLASSIC, VAR_CLASSIC, VAR_MINI, VAR_X, VAR_HYPER, VAR_KILLER, VAR_JIGSAW};
 
-/* today's date, level and variant; false while the clock isn't set */
+/**
+ * @brief Today's date, level and variant.
+ * @param day  gets the date
+ * @param level  gets the level
+ * @param variant  gets the variant
+ * @return false while the clock isn't set
+ */
 static bool daily_today_v(char day[12], int *level, int *variant)
 {
     time_t now = time(NULL);
@@ -299,13 +326,14 @@ static bool daily_today_v(char day[12], int *level, int *variant)
     return true;
 }
 
+/* (documented in ui_internal.h) */
 bool daily_today(char day[12], int *level, int *wday)
 {
     (void)wday;
     return daily_today_v(day, level, NULL);
 }
 
-/* "Hard", "X-Sudoku Medium": a daily puzzle's level, with its variant unless Classic */
+/* (documented in ui_internal.h) */
 void daily_kind_text(int variant, int level, char *buf, size_t n)
 {
     const char *lv = level >= 0 && level < GEN_LEVELS ? gen_level_name(level) : "";
@@ -316,6 +344,11 @@ void daily_kind_text(int variant, int level, char *buf, size_t n)
     }
 }
 
+/**
+ * @brief The daily puzzle's seed: FNV-1a of its date.
+ * @param day  the date
+ * @return the seed
+ */
 static uint32_t daily_seed(const char *day)          /* FNV-1a of the date */
 {
     uint32_t h = 2166136261u;
@@ -325,7 +358,7 @@ static uint32_t daily_seed(const char *day)          /* FNV-1a of the date */
     return h ? h : 1;
 }
 
-/* the Daily puzzle line on the home screen */
+/* (documented in ui_internal.h) */
 void daily_sub_text(char *buf, size_t n)
 {
     char day[12], kind[32];
@@ -353,6 +386,7 @@ void daily_sub_text(char *buf, size_t n)
     }
 }
 
+/* (documented in ui_internal.h) */
 void daily_cb(lv_event_t *e)
 {
     char day[12];
@@ -380,11 +414,11 @@ void daily_cb(lv_event_t *e)
     gen_start_ex(variant, level, daily_seed(day), day);
 }
 
-static lv_obj_t *gen_pick;                          /* the level dialog */
-static lv_obj_t *gen_pick_desc;                     /* its line about the variant chosen */
-static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kept until power-off) */
+static lv_obj_t *gen_pick;                          /**< the level dialog */
+static lv_obj_t *gen_pick_desc;                     /**< its line about the variant chosen */
+static int gen_pick_var = VAR_CLASSIC;              /**< variant chosen there (kept until power-off) */
 
-/* the variants in the New puzzle dialog, in button order */
+/** @brief the variants in the New puzzle dialog, in button order */
 static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW,
                                                  VAR_KILLER, VAR_MINI, VAR_KIDS, VAR_THERMO,
                                                  VAR_KNIGHT, VAR_KING, VAR_EVENODD, VAR_SANDWICH,
@@ -393,6 +427,7 @@ static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, 
                                                  VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
                                                  VAR_SKY, VAR_LK
                                                 };
+/** each variant's rules in a sentence (New puzzle's dialog) */
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -420,9 +455,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_SKY] = "9x9: a clue by a row or column is how many buildings are seen from there (taller ones hide shorter).",
     [VAR_LK] = "9x9: a clue with an arrow outside the grid is the sum of the digits along that diagonal.",
 };
-static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /* the level buttons (Kids 4x4: Hard and Expert off) */
+static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /**< the level buttons (Kids 4x4: Hard and Expert off) */
 
-/* Hard and Expert need techniques a 4x4 board never calls for: off for Kids 4x4 */
+/** @brief Hard and Expert need techniques a 4x4 board never calls for: off for Kids 4x4 */
 static void gen_levels_update(void)
 {
     for (int lv = 0; lv < GEN_LEVELS; lv++) {
@@ -432,6 +467,9 @@ static void gen_levels_update(void)
     }
 }
 
+/**
+ * @brief Closes New puzzle's dialog.
+ */
 static void gen_pick_close(void)
 {
     if (gen_pick) {
@@ -440,6 +478,10 @@ static void gen_pick_close(void)
     gen_pick = NULL;
 }
 
+/**
+ * @brief A level picked: makes the puzzle.
+ * @param e  the event (user data: the level)
+ */
 static void gen_level_cb(lv_event_t *e)
 {
     int level = (int)(intptr_t)lv_event_get_user_data(e);
@@ -447,6 +489,10 @@ static void gen_level_cb(lv_event_t *e)
     gen_start(gen_pick_var, level);
 }
 
+/**
+ * @brief A variant picked: the levels it has.
+ * @param e  the event
+ */
 static void gen_var_cb(lv_event_t *e)
 {
     lv_obj_t *bm = lv_event_get_target_obj(e);
@@ -459,12 +505,19 @@ static void gen_var_cb(lv_event_t *e)
     gen_levels_update();
 }
 
+/**
+ * @brief Cancel.
+ * @param e  the event
+ */
 static void gen_cancel_cb(lv_event_t *e)
 {
     gen_pick_close();
 }
 
-/* a tap on the dimmed background (not on the dialog) closes it too */
+/**
+ * @brief A tap on the dimmed background (not on the dialog) closes it too.
+ * @param e  the event
+ */
 static void gen_backdrop_cb(lv_event_t *e)
 {
     if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) {
@@ -472,6 +525,10 @@ static void gen_backdrop_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief New puzzle: the dialog (a variant, then a level).
+ * @param e  the event
+ */
 static void new_puzzle_cb(lv_event_t *e)
 {
     lv_obj_t *m = make_msgbox("New puzzle", NULL);
@@ -565,8 +622,8 @@ static void new_puzzle_cb(lv_event_t *e)
 }
 
 /* ------------------------------------------------------------- learn (practice a technique) */
-/*
- * Learn (Puzzles screen): pick a technique; a worker task walks built-in
+/**
+ * @brief Learn (Puzzles screen): pick a technique; a worker task walks built-in
  * puzzles forward with the hint engine (sudoku_next_step) until the next
  * step needs that technique, and the game opens at that point as a practice
  * game, with the hint card on the technique. Practice games aren't saved,
@@ -589,7 +646,11 @@ static const char *const LEARN_DESC[LEARN_COUNT] = {
     "A bar: the two cells differ by 1. No bar: they don't. Both narrow down a cell's digits.",
 };
 
-/* the variant lessons: a new puzzle of that variant (made on the spot, kept in RAM only) */
+/**
+ * @brief The variant lessons: a new puzzle of that variant (made on the spot, kept in RAM only).
+ * @param target  LEARN_*
+ * @return its variant, or -1 (a technique lesson)
+ */
 static int learn_variant(int target)
 {
     switch (target) {
@@ -605,6 +666,11 @@ static int learn_variant(int target)
     return -1;
 }
 
+/**
+ * @brief The technique a variant lesson shows.
+ * @param target  LEARN_*
+ * @return TECH_*
+ */
 static int learn_variant_tech(int target)
 {
     switch (target) {
@@ -620,8 +686,12 @@ static int learn_variant_tech(int target)
     return TECH_NONE;
 }
 
-/* the techniques that sudoku_step_with() finds a lesson position for (the newer, rarer ones:
- * the hint engine seldom reaches them first, so any position where they open a single will do) */
+/**
+ * @brief the techniques that sudoku_step_with() finds a lesson position for (the newer, rarer ones:
+ * the hint engine seldom reaches them first, so any position where they open a single will do)
+ * @param target  LEARN_*
+ * @return TECH_*, or TECH_NONE
+ */
 static int learn_tech(int target)
 {
     switch (target) {
@@ -637,14 +707,20 @@ static int learn_tech(int target)
     return TECH_NONE;
 }
 
-static lv_obj_t *learn_box, *learn_wait;
-static volatile int learn_state;                    /* 0 searching, 1 found, 2 nothing found */
-static int learn_target;
-static uint16_t learn_id;
-static uint8_t learn_vals[81];
-static sudoku_step_t learn_step;
+static lv_obj_t *learn_box;                         /**< the Learn dialog */
+static lv_obj_t *learn_wait;                        /**< "Finding a puzzle..." */
+static volatile int learn_state;                    /**< 0 searching, 1 found, 2 nothing found */
+static int learn_target;                /**< the lesson asked for, LEARN_* */
+static uint16_t learn_id;               /**< the lesson's puzzle */
+static uint8_t learn_vals[81];          /**< its position */
+static sudoku_step_t learn_step;        /**< the step it shows */
 
-/* does this step need the technique (for a naked single: a cell with one candidate is enough) */
+/**
+ * @brief does this step need the technique (for a naked single: a cell with one candidate is enough)
+ * @param target  LEARN_*
+ * @param st  the step
+ * @return true if so
+ */
 static bool is_learn_match(int target, const sudoku_step_t *st)
 {
     switch (target) {
@@ -664,8 +740,14 @@ static bool is_learn_match(int target, const sudoku_step_t *st)
     return false;
 }
 
-/* a naked single on the board: a cell only one digit fits (singles are found
- * as hidden ones first, so the hint engine seldom names this one itself) */
+/**
+ * @brief a naked single on the board: a cell only one digit fits (singles are found
+ * as hidden ones first, so the hint engine seldom names this one itself)
+ * @param vals  the board
+ * @param sol  the solution
+ * @param st  gets the step
+ * @return true if there is one
+ */
 static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudoku_step_t *st)
 {
     const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
@@ -690,11 +772,17 @@ static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudo
 }
 
 /* a variant lesson's puzzle, for learn_poll_cb to put in the RAM cache */
-static uint8_t learn_givens[81];
-static sudoku_geom_t *learn_board;                  /* PSRAM */
-static char *learn_cages, *learn_thermos;           /* PSRAM */
-static char learn_marks[82];
+static uint8_t learn_givens[81];                    /**< a variant lesson's puzzle */
+static sudoku_geom_t *learn_board;                  /**< PSRAM */
+static char *learn_cages;                           /**< its cages (PSRAM) */
+static char *learn_thermos;                         /**< its lines (PSRAM) */
+static char learn_marks[82];            /**< its marks */
 
+/**
+ * @brief A variant lesson's position: new puzzles of the variant until a step needs the technique.
+ * @param target  LEARN_*
+ * @return 1 found, 2 nothing found
+ */
 static int learn_variant_find(int target)
 {
     static uint8_t vals[81], sol[81];
@@ -737,6 +825,10 @@ static int learn_variant_find(int target)
     return 2;
 }
 
+/**
+ * @brief The lesson search (core 0): a position where the technique opens up a single; learn_state then says found or not.
+ * @param arg  unused
+ */
 static void learn_task(void *arg)
 {
     static uint8_t vals[81], sol[81];
@@ -786,6 +878,10 @@ static void learn_task(void *arg)
     vTaskDelete(NULL);
 }
 
+/**
+ * @brief Waits for the lesson search: then opens the lesson, or says none was found.
+ * @param t  the timer
+ */
 static void learn_poll_cb(lv_timer_t *t)
 {
     if (learn_state == 0) {
@@ -829,6 +925,10 @@ static void learn_poll_cb(lv_timer_t *t)
     hint_render();
 }
 
+/**
+ * @brief A lesson picked: the search starts.
+ * @param e  the event (user data: LEARN_*)
+ */
 static void learn_pick_cb(lv_event_t *e)
 {
     int target = (int)(intptr_t)lv_event_get_user_data(e);
@@ -870,6 +970,10 @@ static void learn_pick_cb(lv_event_t *e)
     learn_timer = lv_timer_create(learn_poll_cb, 50, NULL);
 }
 
+/**
+ * @brief Closes the Learn dialog.
+ * @param e  the event
+ */
 static void learn_close_cb(lv_event_t *e)
 {
     if (learn_box) {
@@ -878,6 +982,10 @@ static void learn_close_cb(lv_event_t *e)
     learn_box = NULL;
 }
 
+/**
+ * @brief Learn: the dialog of techniques.
+ * @param e  the event
+ */
 static void learn_cb(lv_event_t *e)
 {
     lv_obj_t *m = make_msgbox("Learn a technique", NULL);
@@ -912,18 +1020,24 @@ static void learn_cb(lv_event_t *e)
 }
 
 /* ------------------------------------------------------------- enter a puzzle by hand */
-/*
- * Enter (Puzzles screen): a blank 9x9 board and a 1-9 pad to type in a
+/**
+ * @brief Enter (Puzzles screen): a blank 9x9 board and a 1-9 pad to type in a
  * Classic puzzle from a book or a newspaper. Check & play: it needs exactly
  * one solution (the solver counts them); then it's graded, saved as "My
  * puzzles #n" (sudoku.db, like an imported one; RAM only without a card)
  * and opened like any other.
  */
-static lv_obj_t *scr_edit, *ed_cells[81], *ed_lbl[81], *ed_status;
-static uint8_t ed_val[81];
-static int ed_sel = -1;
-static uint16_t s_own_ram_next = 1;                 /* RAM-only numbering without a card */
+static lv_obj_t *scr_edit;                          /**< the Enter a puzzle screen (NULL: not built) */
+static lv_obj_t *ed_cells[81];                      /**< its cells */
+static lv_obj_t *ed_lbl[81];                        /**< their digits */
+static lv_obj_t *ed_status;                         /**< "30 digits", a conflict, ... */
+static uint8_t ed_val[81];              /**< the digits typed, 0 = empty */
+static int ed_sel = -1;                 /**< the selected cell, -1: none */
+static uint16_t s_own_ram_next = 1;                 /**< RAM-only numbering without a card */
 
+/**
+ * @brief Redraws the board typed in: digits, the selection, conflicts, the count.
+ */
 static void ed_refresh(void)
 {
     const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
@@ -952,12 +1066,20 @@ static void ed_refresh(void)
     }
 }
 
+/**
+ * @brief A cell tapped: selected.
+ * @param e  the event (user data: the cell)
+ */
 static void ed_cell_cb(lv_event_t *e)
 {
     ed_sel = (int)(intptr_t)lv_event_get_user_data(e);
     ed_refresh();
 }
 
+/**
+ * @brief A digit tapped: into the selected cell (the same digit again clears it), then on to the next cell.
+ * @param e  the event (user data: the digit)
+ */
 static void ed_digit_cb(lv_event_t *e)
 {
     int d = (int)(intptr_t)lv_event_get_user_data(e);
@@ -971,6 +1093,9 @@ static void ed_digit_cb(lv_event_t *e)
     ed_refresh();
 }
 
+/**
+ * @brief Closes Enter a puzzle (back to Puzzles).
+ */
 static void ed_close(void)
 {
     lv_screen_load(screen_list());
@@ -980,11 +1105,19 @@ static void ed_close(void)
     scr_edit = NULL;
 }
 
+/**
+ * @brief Cancel.
+ * @param e  the event
+ */
 static void ed_cancel_cb(lv_event_t *e)
 {
     ed_close();
 }
 
+/**
+ * @brief Erase: the selected cell.
+ * @param e  the event
+ */
 static void ed_erase_cb(lv_event_t *e)
 {
     if (ed_sel >= 0) {
@@ -993,6 +1126,10 @@ static void ed_erase_cb(lv_event_t *e)
     ed_refresh();
 }
 
+/**
+ * @brief Clear: all of it.
+ * @param e  the event
+ */
 static void ed_clear_cb(lv_event_t *e)
 {
     memset(ed_val, 0, sizeof(ed_val));
@@ -1001,12 +1138,17 @@ static void ed_clear_cb(lv_event_t *e)
 }
 
 /* the check runs in its own task: the solver recurses a level per empty cell (the UI task's stack is small) */
-static volatile int ed_check_state;                 /* 0 idle, 1 checking, 2 done */
-static volatile int ed_check_n, ed_check_level;
-static uint8_t ed_check_cells[81];
-static lv_timer_t *ed_check_timer;
-static TaskHandle_t ed_check_handle;                /* its stack in PSRAM (internal RAM is short) */
+static volatile int ed_check_state;                 /**< 0 idle, 1 checking, 2 done */
+static volatile int ed_check_n;                     /**< the solutions found (at most 2) */
+static volatile int ed_check_level;                 /**< its level (gen_level_t), -1: not one solution */
+static uint8_t ed_check_cells[81];      /**< the puzzle being checked */
+static lv_timer_t *ed_check_timer;      /**< waits for the check */
+static TaskHandle_t ed_check_handle;                /**< its stack in PSRAM (internal RAM is short) */
 
+/**
+ * @brief The check (its own task): counts the solutions (up to 2), grades a unique puzzle, then waits to be deleted.
+ * @param arg  unused
+ */
 static void ed_check_task(void *arg)
 {
     const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
@@ -1017,6 +1159,10 @@ static void ed_check_task(void *arg)
     vTaskSuspend(NULL);                             /* deleted by ed_check_done (a PSRAM-stack task can't delete itself) */
 }
 
+/**
+ * @brief The check is done: the puzzle saved and opened, or why not.
+ * @param t  the timer
+ */
 static void ed_check_done(lv_timer_t *t)
 {
     if (ed_check_state != 2 || eTaskGetState(ed_check_handle) != eSuspended) {
@@ -1065,6 +1211,10 @@ static void ed_check_done(lv_timer_t *t)
     open_puzzle(id);
 }
 
+/**
+ * @brief Check & play: the puzzle typed in is checked in the background.
+ * @param e  the event
+ */
 static void ed_play_cb(lv_event_t *e)
 {
     if (ed_check_state) {
@@ -1091,6 +1241,10 @@ static void ed_play_cb(lv_event_t *e)
     ed_check_timer = lv_timer_create(ed_check_done, 50, NULL);
 }
 
+/**
+ * @brief Puzzles > Enter puzzle: the screen to type one in.
+ * @param e  the event
+ */
 static void enter_cb(lv_event_t *e)
 {
     memset(ed_val, 0, sizeof(ed_val));
@@ -1151,16 +1305,16 @@ static void enter_cb(lv_event_t *e)
     lv_screen_load(scr_edit);
 }
 
-/* ---- the title row's context menu (the vertical dots): New puzzle, Enter, Learn, Starred puzzles */
+/* (documented in ui_internal.h) */
 void new_menu_cb(lv_event_t *e)
 {
     const ctx_item_t ITEMS[] = {
-        {LV_SYMBOL_PLUS, "New puzzle", new_puzzle_cb},
-        {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
-        {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
+        {LV_SYMBOL_PLUS, "New puzzle", new_puzzle_cb, false, false},
+        {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb, false, false},      /* type one in from a book */
+        {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb, false, false},             /* practise a technique */
         {
             is_puzzles_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, is_puzzles_starred() ? "All puzzles" : "Starred puzzles",
-            list_star_cb
+            list_star_cb, false, false
         },                                      /* the starred ones in the right pane, or back */
     };
     ctx_menu_toggle(list_new_btn(), ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));

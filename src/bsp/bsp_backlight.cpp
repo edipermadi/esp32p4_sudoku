@@ -1,10 +1,15 @@
-// Backlight on GPIO26: LEDC PWM, active low (GPIO33 is NC on this board - leave it alone).
+/**
+ * @file bsp_backlight.cpp
+ * @ingroup bsp
+ * @brief The backlight: LEDC PWM on GPIO26, active low.
+ */
 #include <Arduino.h>
 #include "bsp_board.h"
 
-#define BL_FREQ_HZ 5000
-#define BL_RES_BITS 10
+#define BL_FREQ_HZ 5000                 /**< the PWM frequency, Hz */
+#define BL_RES_BITS 10                  /**< the PWM resolution, bits */
 
+/* (documented in bsp_board.h) */
 extern "C" void bsp_display_brightness_set(int percent)
 {
     static bool ready = false;

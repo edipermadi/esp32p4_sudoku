@@ -1,6 +1,10 @@
-/*
+/**
+ * @file wifi_mgr.cpp
+ * @brief The Wi-Fi station: scanning, connecting, saved networks, the clock from NTP.
+ *
  * Wi-Fi station manager (see wifi_mgr.h). From the esp32p4_86box project;
  * here "forget" also clears the C6's own stored config (radio_forget()).
+ *
  */
 #include "wifi_mgr.h"
 #include <Arduino.h>
@@ -9,35 +13,49 @@
 #include "nvs.h"
 #include "bsp/bsp_board.h"
 
-#define NS              "wifi"
-#define MAX_APS         32
-#define CONNECT_TIMEOUT 20000     /* ms */
-#define WORKER_STACK    6144
+#define NS              "wifi"          /**< the NVS namespace */
+#define MAX_APS         32              /**< scan results kept */
+#define CONNECT_TIMEOUT 20000     /**< ms */
+#define WORKER_STACK    6144            /**< the worker's stack, bytes */
 
-enum cmd_type { CMD_ENABLE, CMD_DISABLE, CMD_SCAN, CMD_CONNECT, CMD_FORGET };
+/** @brief What the worker is asked to do. */
+enum cmd_type {
+    CMD_ENABLE,                             /**< Wi-Fi on */
+    CMD_DISABLE,                            /**< Wi-Fi off */
+    CMD_SCAN,                               /**< scan for networks */
+    CMD_CONNECT,                            /**< join a network */
+    CMD_FORGET                              /**< disconnect and forget the saved network */
+};
+/** @brief A command for the worker. */
 struct cmd_t {
-    cmd_type type;
-    char ssid[33];
-    char pass[65];
+    cmd_type type;                          /**< what */
+    char ssid[33];                          /**< CMD_CONNECT: the network */
+    char pass[65];                          /**< CMD_CONNECT: its password */
 };
 
-static QueueHandle_t s_q;
-static SemaphoreHandle_t s_lock;            /* guards s_st and s_aps */
-static wifi_status_t s_st;
-static wifi_ap_t s_aps[MAX_APS];
-static int s_aps_n;
+static QueueHandle_t s_q;               /**< commands for the worker (cmd_t) */
+static SemaphoreHandle_t s_lock;            /**< guards s_st and s_aps */
+static wifi_status_t s_st;              /**< the status (under s_lock) */
+static wifi_ap_t s_aps[MAX_APS];        /**< the scan results, strongest first (under s_lock) */
+static int s_aps_n;                     /**< how many */
 
 /* worker-only state */
-static bool s_radio_up;
-static char s_saved_pass[65];
-static char s_try_ssid[33], s_try_pass[65];
-static bool s_trying;                       /* a connect command is in progress */
-static uint32_t s_try_start;
-static volatile uint8_t s_last_reason;      /* from the disconnect event */
-static bool s_sntp_started;
-static volatile bool s_radio_started;       /* ESP-Hosted transport has been started */
+static bool s_radio_up;                     /**< the radio is up (the worker's view) */
+static char s_saved_pass[65];           /**< the saved network's password */
+static char s_try_ssid[33];                 /**< the network being joined */
+static char s_try_pass[65];                 /**< its password */
+static bool s_trying;                       /**< a connect command is in progress */
+static uint32_t s_try_start;            /**< when the connect started, millis() */
+static volatile uint8_t s_last_reason;      /**< from the disconnect event */
+static bool s_sntp_started;             /**< the clock is set from NTP (SNTP started) */
+static volatile bool s_radio_started;       /**< ESP-Hosted transport has been started */
 
-/* ------------------------------------------------------------------ NVS */
+/**
+ * @brief Reads the saved state from NVS.
+ * @param on  gets Wi-Fi on
+ * @param ssid  gets the saved network
+ * @param pass  gets its password
+ */
 static void nvs_load(bool *on, char *ssid, char *pass)
 {
     *on = false;
@@ -61,6 +79,12 @@ static void nvs_load(bool *on, char *ssid, char *pass)
     nvs_close(h);
 }
 
+/**
+ * @brief Saves the state in NVS (NULL: that one unchanged).
+ * @param on  Wi-Fi on
+ * @param ssid  the saved network
+ * @param pass  its password
+ */
 static void nvs_store(const bool *on, const char *ssid, const char *pass)
 {
     nvs_handle_t h;
@@ -83,7 +107,11 @@ static void nvs_store(const bool *on, const char *ssid, const char *pass)
     nvs_close(h);
 }
 
-/* --------------------------------------------------------------- helpers */
+/**
+ * @brief Sets the state (under s_lock).
+ * @param st  the state
+ * @param reason  why it failed (WIFI_ST_FAILED)
+ */
 static void set_state(wifi_state_t st, const char *reason = nullptr)
 {
     xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -94,6 +122,11 @@ static void set_state(wifi_state_t st, const char *reason = nullptr)
     xSemaphoreGive(s_lock);
 }
 
+/**
+ * @brief A disconnect reason in words.
+ * @param r  the reason (wifi_err_reason_t)
+ * @return the text
+ */
 static const char *reason_text(uint8_t r)
 {
     switch (r) {
@@ -113,12 +146,17 @@ static const char *reason_text(uint8_t r)
     }
 }
 
+/**
+ * @brief The disconnect event: its reason kept for the worker.
+ * @param ev  the event
+ * @param info  its data
+ */
 static void on_disconnect(arduino_event_id_t ev, arduino_event_info_t info)
 {
     s_last_reason = info.wifi_sta_disconnected.reason;
 }
 
-/* The station's MAC, from the C6 (a round trip over SDIO), kept once known. Right after
+/** @brief The station's MAC, from the C6 (a round trip over SDIO), kept once known. Right after
  * the radio starts it can still read all zeros: tried again when a network connects. */
 static void read_mac(void)
 {
@@ -135,6 +173,10 @@ static void read_mac(void)
     xSemaphoreGive(s_lock);
 }
 
+/**
+ * @brief Brings up the C6 link and the station (once).
+ * @return false: no radio
+ */
 static bool radio_up(void)
 {
     if (s_radio_up) {
@@ -160,7 +202,7 @@ static bool radio_up(void)
     return true;
 }
 
-/* The ESP32-C6 runs its own Wi-Fi stack and keeps the last station config in
+/** @brief The ESP32-C6 runs its own Wi-Fi stack and keeps the last station config in
  * its own flash (the P4 side stores nothing: ESP-Hosted sets nvs_enable =
  * false). Erasing only our NVS keys left it there, and it reconnected to the
  * old network when Wi-Fi was switched on. Needs the radio up. */
@@ -170,6 +212,11 @@ static void radio_forget(void)
     WiFi.eraseAP();                          /* esp_wifi_restore: stored config back to defaults */
 }
 
+/**
+ * @brief Starts joining a network.
+ * @param ssid  the network
+ * @param pass  its password
+ */
 static void begin_connect(const char *ssid, const char *pass)
 {
     strlcpy(s_try_ssid, ssid, sizeof(s_try_ssid));
@@ -187,6 +234,10 @@ static void begin_connect(const char *ssid, const char *pass)
     WiFi.begin(ssid, pass[0] ? pass : nullptr);
 }
 
+/**
+ * @brief Takes a scan's results: strongest first, one per SSID.
+ * @param n  the networks found
+ */
 static void collect_scan(int n)
 {
     static wifi_ap_t tmp[MAX_APS];
@@ -235,7 +286,10 @@ static void collect_scan(int n)
     xSemaphoreGive(s_lock);
 }
 
-/* ---------------------------------------------------------------- worker */
+/**
+ * @brief Does a command.
+ * @param c  the command
+ */
 static void handle(const cmd_t &c)
 {
     switch (c.type) {
@@ -324,7 +378,7 @@ static void handle(const cmd_t &c)
     }
 }
 
-/* Polls the driver into the snapshot. */
+/** @brief Polls the driver into the snapshot. */
 static void poll(void)
 {
     if (!s_radio_up) {
@@ -384,6 +438,10 @@ static void poll(void)
     }
 }
 
+/**
+ * @brief The worker: commands, and the connect's progress (timeout, the clock from NTP once connected).
+ * @param arg  unused
+ */
 static void worker(void *arg)
 {
     if (s_st.enabled && radio_up()) {
@@ -403,6 +461,12 @@ static void worker(void *arg)
     }
 }
 
+/**
+ * @brief Queues a command for the worker.
+ * @param t  the command
+ * @param ssid  CMD_CONNECT's network
+ * @param pass  its password
+ */
 static void send(cmd_type t, const char *ssid = "", const char *pass = "")
 {
     if (!s_q) {
@@ -416,7 +480,7 @@ static void send(cmd_type t, const char *ssid = "", const char *pass = "")
     memset(c.pass, 0, sizeof(c.pass));
 }
 
-/* ------------------------------------------------------------------- API */
+/* (documented in wifi_mgr.h) */
 extern "C" void wifi_mgr_start(void)
 {
     if (s_q) {
@@ -436,11 +500,13 @@ extern "C" void wifi_mgr_scan(void)                            { send(CMD_SCAN);
 extern "C" void wifi_mgr_connect(const char *ssid, const char *pass) { send(CMD_CONNECT, ssid, pass); }
 extern "C" void wifi_mgr_forget(void)                          { send(CMD_FORGET); }
 
+/* (documented in wifi_mgr.h) */
 extern "C" bool is_wifi_mgr_radio_started(void)
 {
     return s_radio_started;
 }
 
+/* (documented in wifi_mgr.h) */
 extern "C" void wifi_mgr_get_status(wifi_status_t *out)
 {
     if (!s_lock) {
@@ -452,6 +518,7 @@ extern "C" void wifi_mgr_get_status(wifi_status_t *out)
     xSemaphoreGive(s_lock);
 }
 
+/* (documented in wifi_mgr.h) */
 extern "C" int wifi_mgr_get_aps(wifi_ap_t *out, int max)
 {
     if (!s_lock) {

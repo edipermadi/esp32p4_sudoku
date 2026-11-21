@@ -1,3 +1,7 @@
+/**
+ * @file sfx.c
+ * @brief Sound effects: a small synthesizer mixing notes into the speaker, and PCM clips.
+ */
 #include "sfx.h"
 #include <math.h>
 #include "bsp/bsp_board.h"
@@ -6,50 +10,53 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
-static const char *TAG = "sfx";
+static const char *TAG = "sfx";         /**< the log's tag */
 
-#define SFX_RATE      24000
-#define SFX_CHUNK     240           /* frames per write: 10 ms */
-#define SFX_VOICES    4
-#define SFX_VOLUME    70            /* codec volume, % */
+#define SFX_RATE      24000             /**< the speaker's sample rate, Hz */
+#define SFX_CHUNK     240           /**< frames per write: 10 ms */
+#define SFX_VOICES    4                 /**< notes played at once */
+#define SFX_VOLUME    70            /**< codec volume, % */
 
+/** A note's waveform. */
 typedef enum { W_SINE, W_TRI, W_SQUARE } wave_t;
 
+/** A note of a sound: its pitch, length, waveform and loudness. */
 typedef struct {
-    uint16_t freq;                  /* Hz, 0 = rest */
-    uint16_t ms;
-    uint8_t  wave;
-    uint8_t  amp;                   /* 0..100 */
+    uint16_t freq;                  /**< Hz, 0 = rest */
+    uint16_t ms;                        /**< how long, ms */
+    uint8_t  wave;                      /**< wave_t */
+    uint8_t  amp;                   /**< 0..100 */
 } note_t;
 
-#define END {0, 0, 0, 0}
+#define END {0, 0, 0, 0}                /**< a sound's last note */
 
-/* A bright tick: barely a note, mostly attack. */
+/** @brief A bright tick: barely a note, mostly attack. */
 static const note_t s_touch[] = {
     {2400, 14, W_SINE, 28}, END,
 };
-/* Rising fifth: G5 -> C6. */
+/** @brief Rising fifth: G5 -> C6. */
 static const note_t s_digit_done[] = {
     {784, 90, W_TRI, 55}, {1047, 170, W_TRI, 55}, END,
 };
-/* Quick bright sparkle, same key: E6 G6 C7. */
+/** @brief Quick bright sparkle, same key: E6 G6 C7. */
 static const note_t s_unit_done[] = {
     {1319, 60, W_SINE, 40}, {1568, 60, W_SINE, 40}, {2093, 150, W_SINE, 38}, END,
 };
-/* Longer for a cross of units: C6 E6 G6 C7, held. */
+/** @brief Longer for a cross of units: C6 E6 G6 C7, held. */
 static const note_t s_units_done[] = {
     {1047, 55, W_SINE, 40}, {1319, 55, W_SINE, 40}, {1568, 55, W_SINE, 40}, {2093, 240, W_SINE, 40}, END,
 };
-/* Low two-step buzz. */
+/** @brief Low two-step buzz. */
 static const note_t s_error[] = {
     {196, 90, W_SQUARE, 22}, {0, 35, 0, 0}, {147, 160, W_SQUARE, 22}, END,
 };
-/* C major arpeggio and a held top note. */
+/** @brief C major arpeggio and a held top note. */
 static const note_t s_solved[] = {
     {523, 110, W_TRI, 55}, {659, 110, W_TRI, 55}, {784, 110, W_TRI, 55},
     {1047, 160, W_TRI, 60}, {0, 40, 0, 0}, {784, 110, W_TRI, 50}, {1047, 420, W_TRI, 65}, END,
 };
 
+/** each sound's notes, by sfx_id_t */
 static const note_t *const s_sounds[SFX_COUNT] = {
     [SFX_TOUCH] = s_touch,
     [SFX_DIGIT_DONE] = s_digit_done,
@@ -59,24 +66,29 @@ static const note_t *const s_sounds[SFX_COUNT] = {
     [SFX_UNITS_DONE] = s_units_done,
 };
 
+/** A voice: one sound playing, note by note. */
 typedef struct {
-    const note_t *note;             /* NULL = idle */
-    uint32_t pos;                   /* frames into the current note */
-    uint32_t len;                   /* frames in the current note */
-    float    phase;                 /* 0..1 */
+    const note_t *note;             /**< NULL = idle */
+    uint32_t pos;                   /**< frames into the current note */
+    uint32_t len;                   /**< frames in the current note */
+    float    phase;                 /**< 0..1 */
 } voice_t;
 
-#define SFX_PCM_ID    0xFE          /* queued: the PCM in s_pcm starts */
+#define SFX_PCM_ID    0xFE          /**< queued: the PCM in s_pcm starts */
 
-static QueueHandle_t s_queue;
-/* one mono PCM clip at a time (sfx_play_pcm): the caller keeps it until done */
+static QueueHandle_t s_queue;           /**< the sounds to start (sfx_id_t, or SFX_PCM_ID) */
+/** @brief one mono PCM clip at a time (sfx_play_pcm): the caller keeps it until done */
 static const int16_t *volatile s_pcm;
-static volatile size_t s_pcm_len;
-static size_t s_pcm_pos;
-static volatile bool s_pcm_busy;
-static volatile bool s_enabled = true;
-static voice_t s_voices[SFX_VOICES];
+static volatile size_t s_pcm_len;       /**< its length, frames */
+static size_t s_pcm_pos;                /**< the next frame of it */
+static volatile bool s_pcm_busy;        /**< a clip is playing (sfx_play_pcm() until it ends) */
+static volatile bool s_enabled = true;  /**< sound is on */
+static voice_t s_voices[SFX_VOICES];    /**< the voices */
 
+/**
+ * @brief Starts a voice's note: its length in frames, the phase from 0.
+ * @param v  the voice
+ */
 static void voice_start_note(voice_t *v)
 {
     v->pos = 0;
@@ -84,6 +96,10 @@ static void voice_start_note(voice_t *v)
     v->phase = 0;
 }
 
+/**
+ * @brief Starts a sound on a free voice (or the first one, stolen).
+ * @param id  the sound
+ */
 static void voice_start(sfx_id_t id)
 {
     /* free voice, or steal the first one */
@@ -100,7 +116,13 @@ static void voice_start(sfx_id_t id)
     voice_start_note(v);
 }
 
-/* Envelope: 2 ms attack, then exponential decay with a short linear tail to 0. */
+/**
+ * @brief
+ * @param pos  frames into the note
+ * @param len  the note's frames
+ * @return the level, 0..1
+ */
+/** @brief Envelope: 2 ms attack, then exponential decay with a short linear tail to 0. */
 static float envelope(uint32_t pos, uint32_t len)
 {
     const uint32_t attack = SFX_RATE / 500;
@@ -112,6 +134,12 @@ static float envelope(uint32_t pos, uint32_t len)
     return e;
 }
 
+/**
+ * @brief One oscillator sample.
+ * @param wave  wave_t
+ * @param ph  the phase, 0..1
+ * @return -1..1
+ */
 static float osc(uint8_t wave, float ph)
 {
     switch (wave) {
@@ -124,6 +152,12 @@ static float osc(uint8_t wave, float ph)
     }
 }
 
+/**
+ * @brief Mixes the voices and the PCM clip into stereo frames.
+ * @param out  gets frames * 2 samples
+ * @param frames  how many
+ * @return false: all silent
+ */
 static bool render(int16_t *out, int frames)
 {
     bool any = false;
@@ -173,6 +207,10 @@ static bool render(int16_t *out, int frames)
     return any;
 }
 
+/**
+ * @brief The mixer task: starts what's queued, writes 10 ms chunks to the speaker, silence when idle.
+ * @param arg  unused
+ */
 static void sfx_task(void *arg)
 {
     static int16_t buf[SFX_CHUNK * 2];
@@ -194,6 +232,7 @@ static void sfx_task(void *arg)
     }
 }
 
+/* (documented in sfx.h) */
 esp_err_t sfx_init(void)
 {
     esp_err_t err = bsp_audio_init(SFX_RATE);
@@ -214,6 +253,7 @@ esp_err_t sfx_init(void)
     return ESP_OK;
 }
 
+/* (documented in sfx.h) */
 void sfx_play(sfx_id_t id)
 {
     if (!s_queue || !s_enabled) {
@@ -223,16 +263,19 @@ void sfx_play(sfx_id_t id)
     xQueueSend(s_queue, &b, 0);
 }
 
+/* (documented in sfx.h) */
 void sfx_set_enabled(bool on)
 {
     s_enabled = on;
 }
 
+/* (documented in sfx.h) */
 bool is_sfx_enabled(void)
 {
     return s_enabled;
 }
 
+/* (documented in sfx.h) */
 bool sfx_play_pcm(const int16_t *mono, size_t frames)
 {
     if (!s_queue || s_pcm_busy || !frames) {
@@ -250,11 +293,13 @@ bool sfx_play_pcm(const int16_t *mono, size_t frames)
     return true;
 }
 
+/* (documented in sfx.h) */
 bool is_sfx_pcm_busy(void)
 {
     return s_pcm_busy;
 }
 
+/* (documented in sfx.h) */
 uint32_t sfx_rate(void)
 {
     return SFX_RATE;

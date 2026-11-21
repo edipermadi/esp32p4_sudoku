@@ -1,3 +1,8 @@
+/**
+ * @file ui_sudoku.h
+ * @ingroup ui_sudoku
+ * @brief The UI's public functions: start-up, notices, and what serial control asks of it.
+ */
 #pragma once
 #include <stdbool.h>
 #include <stddef.h>
@@ -8,79 +13,151 @@
 extern "C" {
 #endif
 
-/* Builds the puzzle list and game screens and shows the list.
- * Call after bsp_lvgl_start() and store_init(). */
+/**
+ * @defgroup ui_sudoku UI
+ * @brief The touch UI (LVGL 9): start-up, notices, the screen saver, and the functions serial
+ *        control (devctl) uses; each screen is a file of its own (ui_*.c, sharing ui_internal.h).
+ *
+ * | File          | What's in it |
+ * |---------------|--------------|
+ * | ui_sudoku.c   | start-up: the card and sudoku.db read, the settings applied, the screens built, the timers |
+ * | ui_notice.c   | notices: a banner for a while, or one that stays while something runs |
+ * | ui_saver.c    | the screen saver: the dim clock, then dark, power saving; the waking tap |
+ * | ui_lock.c     | the lock screen and Settings' PIN setup (@ref topic_lock) |
+ * | ui_remote.c   | for devctl: digits into the game, the game as text, the screen's name, what uses the card, the Benchmarking panel |
+ * @{
+ */
+
+/**
+ * @brief Builds the screens and shows Home: the card and sudoku.db read first (the settings and
+ *        the game in progress live there), Wi-Fi started, the settings applied, the timers started.
+ *        Call after bsp_lvgl_start() and store_init().
+ * @return ESP_OK, or ESP_ERR_NO_MEM
+ */
 esp_err_t sudoku_ui_start(void);
 
-/* Shows a message banner at the bottom of the screen for `ms` milliseconds. */
+/**
+ * @brief Shows a message banner at the bottom of the screen for a while.
+ * @param text  the message
+ * @param ms    how long, ms
+ */
 void sudoku_ui_notice(const char *text, uint32_t ms);
-/* A banner that stays while something runs (drawn at once, so it shows even while the caller holds
- * the UI); called again, its text changes. sudoku_ui_progress_done() gives it its last text and
- * removes it after `ms` milliseconds (with no progress banner up: a plain notice). */
+/**
+ * @brief A banner that stays while something runs (drawn at once, so it shows even while the
+ *        caller holds the UI); called again, its text changes.
+ * @param text  the message
+ */
 void sudoku_ui_progress(const char *text);
+/**
+ * @brief Gives the banner of sudoku_ui_progress() its last text and removes it after a while (with
+ *        no progress banner up: a plain notice).
+ * @param text  the message
+ * @param ms    how long, ms
+ */
 void sudoku_ui_progress_done(const char *text, uint32_t ms);
 
-/* Writing the flash makes the panel flicker cyan (the display can't reach its frame buffer
- * meanwhile), so the screen is dark during it: sudoku_ui_flash_busy() covers the screen with a
- * card (title, text) that takes all taps; sudoku_ui_flash_dark() then turns the screen off (and
- * keeps the screen timeout from firing) until sudoku_ui_flash_done() brings it back and removes
- * the card. Call from the LVGL task. */
+/** @name Writing the flash
+ *  Writing the flash makes the panel flicker cyan (the display can't reach its frame buffer
+ *  meanwhile), so the screen is dark during it. Call from the LVGL task.
+ *  @{ */
+/**
+ * @brief Covers the screen with a card that takes every tap, before the flash is written.
+ * @param title  the card's title
+ * @param text   what is happening (and that the screen goes dark)
+ */
 void sudoku_ui_flash_busy(const char *title, const char *text);
+/** @brief Turns the screen off (and keeps the screen timeout from firing) while the flash is written. */
 void sudoku_ui_flash_dark(void);
+/** @brief The screen back on, and the card removed. */
 void sudoku_ui_flash_done(void);
+/** @} */
 
-/* Turns the screen off now, as its timeout does (and shows the lock screen
- * under it, if that's on); the next tap wakes it. For serial control. */
+/** @brief Turns the screen off now, as its timeout does (with the lock screen under it, if that's on); the next tap wakes it. For serial control. */
 void sudoku_ui_screen_off(void);
 
-/* Enters digits in the game on screen, as if typed on the pad (moves, undo, the
- * replay, sounds, mistakes, and the solve if it's finished): cells[k] gets
- * digits[k], cells 0..80 row by row. Checked first: nothing is entered if any
- * pair can't be (no game shown, solved or paused, a cell not on the board or a
- * given, a digit out of range); why says which. A cell that already holds its
- * digit is left as it is. Returns how many were entered, or -1. For serial
- * control (devctl "fill"). */
+/**
+ * @brief Enters digits in the game on screen, as if typed on the pad (moves, undo, the replay,
+ *        sounds, mistakes, and the solve if it's finished). For serial control (devctl "fill").
+ *
+ * Checked first: nothing is entered if any pair can't be (no game shown, solved or paused, a cell
+ * not on the board or a given, a digit out of range). A cell that already holds its digit is left
+ * as it is.
+ * @param cells   the cells, 0..80 row by row
+ * @param digits  each one's digit
+ * @param n       how many
+ * @param why     gets why not, on -1
+ * @param why_n   its size
+ * @return how many were entered, or -1
+ */
 int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why, size_t why_n);
 
-/* The game on screen, for serial control (devctl "state"). board: 81 characters
- * and a terminator, row by row (cell 0 top left): '1'-'9' a given, 'a'-'i' a
- * digit entered (a = 1), '.' empty, '#' not on the board (Mini). false: no game
- * on screen. */
+/** @brief The game on screen, for serial control (devctl "state"). */
 typedef struct {
-    char name[48];               /* "Easy #15", "Daily Hyper Hard, 19 Nov", ... */
-    const char *variant;         /* "Classic", "X-Sudoku", ... */
-    int size;                    /* 9, or 6 (Mini) */
-    int filled, cells;           /* digits on the board / cells on it */
-    bool solved, paused, practice, attack;
-    uint32_t seconds;            /* the game's clock */
-    unsigned mistakes, hints;
+    char name[48];               /**< "Easy #15", "Daily Hyper Hard, 19 Nov", ... */
+    const char *variant;         /**< "Classic", "X-Sudoku", ... */
+    int size;                    /**< 9, or 6 (Mini), or 4 (Kids) */
+    int filled;                  /**< digits on the board */
+    int cells;                   /**< cells on it */
+    bool solved;                 /**< solved */
+    bool paused;                 /**< paused */
+    bool practice;               /**< a Learn practice */
+    bool attack;                 /**< a time attack */
+    uint32_t seconds;            /**< the game's clock */
+    unsigned mistakes;           /**< mistakes made */
+    unsigned hints;              /**< hints used */
 } sudoku_ui_state_t;
+/**
+ * @brief The game on screen.
+ * @param st     gets its state
+ * @param board  gets 81 characters and a terminator, row by row (cell 0 top left): '1'-'9' a given,
+ *               'a'-'i' a digit entered (a = 1), '.' empty, '#' not on the board (Mini)
+ * @return false: no game on screen
+ */
 bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82]);
 
-/* Where the board is, for scripts (devctl "screen"): "home1" / "home2" (the menu's page),
- * "list", "game", "stats", "settings", "sysmon", "players", "trophies", ... ("other" for
- * the rest), with "+dialog" when a dialog or overlay covers it. */
+/**
+ * @brief Where the board is, for scripts (devctl "screen").
+ * @param buf  gets "home1" / "home2" (the menu's page), "list", "game", "stats", "settings",
+ *             "sysmon", "players", "trophies", ... ("other" for the rest), with "+dialog" when a
+ *             dialog or overlay covers it
+ * @param n    its size
+ */
 void sudoku_ui_screen_name(char *buf, size_t n);
 
-/* A part of a puzzle sent by sound (devctl / Gibberlink "pz <id> <i>/<n> <part>",
- * another board's Share > Send by sound; the format is in ui_sudoku.c). When the
- * last part is in, the puzzle is checked (one solution), kept in Puzzles > Saved >
- * "Received" and offered to play. out: "OK pz 1/3", "OK pz done" or "ERR pz: ...". */
+/**
+ * @brief A part of a puzzle sent by sound (devctl / Gibberlink "pz \<id\> \<i\>/\<n\> \<part\>",
+ *        another board's Share > Send by sound). When the last part is in, the puzzle is checked
+ *        (one solution), kept in Puzzles > Saved > "Received" and offered to play.
+ * @param args  what follows "pz"
+ * @param out   gets "OK pz 1/3", "OK pz done" or "ERR pz: ..."
+ * @param n     its size
+ * @return true if it went in
+ */
 bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n);
 
-/* What's using the microSD card right now (an MP4 export, a screenshot, Files, a firmware update,
- * formatting, the USB drive, sudoku.db's worker), as a few words; NULL when nothing is.
- * (devctl genbench waits for none.) */
+/**
+ * @brief What's using the microSD card right now (an MP4 export, a screenshot, Files, a firmware
+ *        update, formatting, the USB drive, sudoku.db's worker). devctl genbench waits for none.
+ * @return a few words, or NULL when nothing is
+ */
 const char *sudoku_ui_io_busy(void);
 
-/* A full-screen panel that blocks the screen (title "Benchmarking", text under it), or
- * updates its text; NULL takes it away. (devctl genbench) */
+/**
+ * @brief A full-screen panel that blocks the screen (title "Benchmarking", the text under it), or
+ *        updates its text (devctl genbench).
+ * @param text  the text; NULL takes the panel away
+ */
 void sudoku_ui_busy(const char *text);
 
-/* devctl genbench: the puzzle generator to itself while it runs (false: New puzzle or Learn
- * is using it; then nothing to end) */
+/**
+ * @brief devctl genbench: the puzzle generator to itself while it runs.
+ * @return false: New puzzle or Learn is using it (then nothing to end)
+ */
 bool gen_bench_begin(void);
+/** @brief devctl genbench is done with the generator. */
 void gen_bench_end(void);
+
+/** @} */
 
 #ifdef __cplusplus
 }

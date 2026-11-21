@@ -1,4 +1,8 @@
-/* See video_enc.h. */
+/**
+ * @file video_enc.c
+ * @ingroup media
+ * @brief H.264 video encoding (the hardware encoder) into an MP4 file.
+ */
 #include "video_enc.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +13,11 @@
 #include "driver/ppa.h"
 #include "mp4_writer.h"
 
-#define OUT_MAX (512 * 1024)              /* one encoded frame */
+#define OUT_MAX (512 * 1024)              /**< one encoded frame */
+/**
+ * @brief Prints the internal RAM free and its largest block (the encoder needs ~52 KB in one piece).
+ * @param when  before or after what
+ */
 static void log_internal(const char *when)
 {
     printf("video_enc: internal RAM %s: %u free, largest block %u\n", when,
@@ -18,20 +26,23 @@ static void log_internal(const char *when)
 }
 
 
+/** @brief An encoder writing one MP4 file. */
 struct video_enc {
-    int w, h, fps;
-    esp_h264_enc_handle_t enc;
-    uint8_t *yuv;                         /* O_UYY_E_VYY, w*h*3/2 */
-    uint32_t yuv_size;
-    uint8_t *out;
-    uint32_t out_size;
-    uint32_t pts;
-    mp4w_t *mp4;
-    ppa_client_handle_t ppa;              /* RGB565 -> YUV 4:2:0 by the PPA (NULL: the CPU loop) */
+    int w;                                /**< px */
+    int h;                                /**< px */
+    int fps;                              /**< frames a second */
+    esp_h264_enc_handle_t enc;            /**< the hardware encoder */
+    uint8_t *yuv;                         /**< O_UYY_E_VYY, w*h*3/2 */
+    uint32_t yuv_size;                    /**< its bytes */
+    uint8_t *out;                         /**< the encoded frame */
+    uint32_t out_size;                    /**< its room */
+    uint32_t pts;                         /**< frames encoded (the next one's number) */
+    mp4w_t *mp4;                          /**< the file */
+    ppa_client_handle_t ppa;              /**< RGB565 -> YUV 4:2:0 by the PPA (NULL: the CPU loop) */
 };
 
-/*
- * The colour conversion runs on the PPA (its scale-rotate-mirror unit, by DMA): 20 ms
+/**
+ * @brief * @brief The colour conversion runs on the PPA (its scale-rotate-mirror unit, by DMA): 20 ms
  * a 720x720 frame where the CPU loop below takes 87 ms. Its packed YUV 4:2:0 is the
  * layout the encoder takes. The frames come in as RGB888, not RGB565: the PPA widens
  * 5- and 6-bit RGB565 by shifting alone, so white came out (248, 252, 248) and every
@@ -41,6 +52,10 @@ struct video_enc {
  * (pre-v3 ESP32-P4 takes only this): even lines "u y y u y y ...", odd lines
  * "v y y v y y ...". One U and one V per 2x2 block, from the block's average
  * colour. BT.601 limited range, as H.264 players expect by default.
+ * @param src  the picture
+ * @param dst  gets the YUV
+ * @param w  px
+ * @param h  px
  */
 static void rgb888_to_ouyy_evyy(const uint8_t *src, uint8_t *dst, int w, int h)
 {
@@ -73,6 +88,7 @@ static void rgb888_to_ouyy_evyy(const uint8_t *src, uint8_t *dst, int w, int h)
     }
 }
 
+/* (documented in video_enc.h) */
 video_enc_t *video_enc_open(const char *path, int width, int height, int fps, int max_frames)
 {
     if (width % 16 || height % 16) {
@@ -115,8 +131,13 @@ video_enc_t *video_enc_open(const char *path, int width, int height, int fps, in
     return v;
 }
 
-/* RGB888 (64-byte aligned, a whole number of cache lines: the caller's frame buffer)
- * -> v->yuv, by the PPA; false if it couldn't */
+/**
+ * @brief RGB888 (64-byte aligned, a whole number of cache lines: the caller's frame buffer)
+ * -> v->yuv, by the PPA; false if it couldn't
+ * @param v  the encoder
+ * @param rgb888  the picture
+ * @return false: it couldn't
+ */
 static bool ppa_convert(video_enc_t *v, const uint8_t *rgb888)
 {
     if (!v->ppa) {
@@ -144,6 +165,7 @@ static bool ppa_convert(video_enc_t *v, const uint8_t *rgb888)
     return err == ESP_OK;
 }
 
+/* (documented in video_enc.h) */
 bool video_enc_frame(video_enc_t *v, const uint8_t *rgb888, bool changed)
 {
     if ((changed || v->pts == 0) && !ppa_convert(v, rgb888)) {
@@ -164,6 +186,10 @@ bool video_enc_frame(video_enc_t *v, const uint8_t *rgb888, bool changed)
     return mp4w_add_frame(v->mp4, v->out, out.length, key);
 }
 
+/**
+ * @brief Frees the encoder's buffers, the PPA and the encoder (not the file).
+ * @param v  it
+ */
 static void release(video_enc_t *v)
 {
     if (v->ppa) {
@@ -204,6 +230,7 @@ void video_enc_abort(video_enc_t *v)
     release(v);
 }
 
+/* (documented in video_enc.h) */
 uint32_t video_enc_bytes(const video_enc_t *v)
 {
     return v ? mp4w_size(v->mp4) : 0;

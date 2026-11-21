@@ -8,7 +8,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-/* a hidden single (boxes first: the easiest to spot), or -1 */
+/**
+ * @brief a hidden single (boxes first: the easiest to spot), or -1
+ * @param L  the techniques' state
+ * @param digit  gets its digit
+ * @param unit  gets its unit
+ * @return the cell, or -1
+ */
 static int find_hidden_single(const logic_t *L, int *digit, int *unit)
 {
     const sudoku_geom_t *G = L->G;
@@ -42,6 +48,12 @@ static int find_hidden_single(const logic_t *L, int *digit, int *unit)
     return -1;
 }
 
+/**
+ * @brief A naked single: a cell with one candidate left.
+ * @param L  the techniques' state
+ * @param digit  gets its digit
+ * @return the cell, or -1
+ */
 static int find_naked_single(const logic_t *L, int *digit)
 {
     const sudoku_geom_t *G = L->G;
@@ -55,6 +67,7 @@ static int find_naked_single(const logic_t *L, int *digit)
     return -1;
 }
 
+/* (documented in generator.h) */
 bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out)
 {
     memset(out, 0, sizeof(*out));
@@ -122,6 +135,7 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
     return best >= 0;
 }
 
+/* (documented in generator.h) */
 bool sudoku_step_with(const sudoku_geom_t *G, const uint8_t vals[81], const uint8_t solution[81], int tech,
                       sudoku_step_t *out)
 {
@@ -184,6 +198,7 @@ bool sudoku_step_with(const sudoku_geom_t *G, const uint8_t vals[81], const uint
     return d == solution[c];
 }
 
+/* (documented in generator.h) */
 int sudoku_unit_cell(const sudoku_geom_t *G, int unit, int k)
 {
     if (unit < 0 || unit >= UNITS_MAX || !G->active[unit] || k < 0 || k >= G->n) {

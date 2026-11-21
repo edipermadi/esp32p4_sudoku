@@ -1,15 +1,18 @@
-/* ui_sudoku.c split: palette, layout, widgets and helpers, the generated-puzzle cache, context menus. See ui_sudoku.c for the whole. */
+/**
+ * @file ui_common.c
+ * @brief What every screen shares: the palette, layout, widgets and helpers, the generated-puzzle cache, context menus.
+ */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
 static bool gen_own_name(uint16_t id, char *buf, size_t n);
 static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char *cages, char *marks, char *thermos, int *variant, int *level, char day[12]);
-static int puzzle_variant(uint16_t id);
 static void ctx_backdrop_cb(lv_event_t *e);
 static void ctx_item_cb(lv_event_t *e);
 
 /* ------------------------------------------------------------- palette */
 /* palette_t and the C_* colour macros are in ui_palette.h (shared with ui_wifi.c) */
+/** @brief The dark scheme. */
 static const palette_t PAL_DARK = {
     .bg = 0x101218, .card = 0x1B1E27, .card2 = 0x2A2F3D, .text = 0xEDEFF4, .muted = 0x8B92A5,
     .accent = 0x4F8CFF, .green = 0x3DD68C, .orange = 0xFFA94D, .red = 0xFF6B6B,
@@ -19,6 +22,7 @@ static const palette_t PAL_DARK = {
     .list_solved = 0x1E7A4F, .list_active = 0xA0621C, .notice = 0x5A2A1A, .scrim_opa = LV_OPA_60,
 };
 
+/** @brief The light scheme. */
 static const palette_t PAL_LIGHT = {
     .bg = 0xF2F3F7, .card = 0xFFFFFF, .card2 = 0xE2E5EC, .text = 0x1B1E27, .muted = 0x6B7285,
     .accent = 0x2F6FE0, .green = 0x1E9E62, .orange = 0xD9822B, .red = 0xD93A3A,
@@ -28,15 +32,15 @@ static const palette_t PAL_LIGHT = {
     .list_solved = 0x2FA36B, .list_active = 0xD98A2B, .notice = 0xFFE8D6, .scrim_opa = LV_OPA_40,
 };
 
-static const palette_t *ui_pal = &PAL_DARK;
-static palette_t s_pal;                   /* the active scheme with the chosen accent (palette_build) */
+static const palette_t *ui_pal = &PAL_DARK;   /**< the scheme in use (PAL_DARK or PAL_LIGHT) */
+static palette_t s_pal;                   /**< the active scheme with the chosen accent (palette_build) */
 
-/* accent colours (Settings): dark-mode and light-mode shades; 0 = the schemes' own blue */
+/** @brief accent colours (Settings): dark-mode and light-mode shades; 0 = the schemes' own blue */
 static const uint32_t ACCENTS[ACCENT_COUNT][2] = {
     {0x4F8CFF, 0x2F6FE0}, {0x2DD4BF, 0x0D9488}, {0x4ADE80, 0x16A34A}, {0xA78BFA, 0x7C3AED}, {0xF472B6, 0xDB2777},
 };
 
-/* the backlight for "on": the day's setting, or less at night */
+/* (documented in ui_internal.h) */
 int effective_brightness(void)
 {
     int b = store_brightness();
@@ -46,6 +50,7 @@ int effective_brightness(void)
     return b;
 }
 
+/* (documented in ui_internal.h) */
 uint32_t mix_hex(uint32_t a, uint32_t b, int pct)   /* pct % of a over b */
 {
     uint32_t out = 0;
@@ -56,7 +61,7 @@ uint32_t mix_hex(uint32_t a, uint32_t b, int pct)   /* pct % of a over b */
     return out;
 }
 
-/* the dark or light scheme, with the accent and the cell highlights made from it */
+/* (documented in ui_internal.h) */
 void palette_build(bool dark, int accent)
 {
     s_pal = dark ? PAL_DARK : PAL_LIGHT;
@@ -94,7 +99,7 @@ void palette_build(bool dark, int accent)
     ui_pal = &s_pal;
 }
 
-/* the players' colours (by their names on leaderboards) */
+/* (documented in ui_internal.h) */
 lv_color_t player_color(int k)
 {
     static const uint32_t C[STATS_PLAYER_COLORS] = {0x3E7BFA, 0xE5484D, 0x30A46C, 0xF5A524,
@@ -103,7 +108,7 @@ lv_color_t player_color(int k)
     return lv_color_hex(C[(k % STATS_PLAYER_COLORS + STATS_PLAYER_COLORS) % STATS_PLAYER_COLORS]);
 }
 
-/* a small round dot in a player's colour */
+/* (documented in ui_internal.h) */
 lv_obj_t *player_dot(lv_obj_t *parent, int color, int size)
 {
     lv_obj_t *d = lv_obj_create(parent);
@@ -118,8 +123,7 @@ lv_obj_t *player_dot(lv_obj_t *parent, int color, int size)
 
 /* ------------------------------------------------------------- widgets */
 
-/* a player in that list, by id (non-zero) or else by name (names are unique, ignoring case);
- * NULL: not there (yet) */
+/* (documented in ui_internal.h) */
 const stats_player_t *player_find(int32_t id, const char *name)
 {
     for (int i = 0; i < players_count(); i++) {
@@ -130,8 +134,7 @@ const stats_player_t *player_find(int32_t id, const char *name)
     return NULL;
 }
 
-/* A player's avatar shrunk to size px or, without one, a dot (dot px) of their colour, centred
- * in a size x size box that takes no taps. color < 0: the colour from the player list. */
+/* (documented in ui_internal.h) */
 lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, int size, int dot)
 {
     lv_obj_t *box = lv_obj_create(parent);
@@ -154,14 +157,15 @@ lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, in
     }
     return box;
 }
-/* collections imported from puzzles/ on the card (stats_db_import_puzzles) */
+/** @brief collections imported from puzzles/ on the card (stats_db_import_puzzles) */
 static stats_import_t s_imports[STATS_MAX_IMPORTS];
-static int s_nimports;
-/* collections made on the board (the game screen's Save), after the imported ones */
-static stats_saved_t *s_saved;            /* STATS_MAX_SAVED of them, PSRAM */
+static int s_nimports;                    /**< how many */
+/** @brief collections made on the board (the game screen's Save), after the imported ones */
+static stats_saved_t *s_saved;            /**< STATS_MAX_SAVED of them, PSRAM */
 
 /* ============================================================= helpers */
 
+/* (documented in ui_internal.h) */
 void fmt_time(char *buf, size_t n, uint32_t s)
 {
     if (s >= 3600) {
@@ -171,7 +175,7 @@ void fmt_time(char *buf, size_t n, uint32_t s)
     }
 }
 
-/* "st", "nd", "rd" or "th" after n */
+/* (documented in ui_internal.h) */
 const char *ordinal(int n)
 {
     int t = n % 100;
@@ -180,11 +184,11 @@ const char *ordinal(int n)
     }
     return n % 10 == 1 ? "st" : n % 10 == 2 ? "nd" : n % 10 == 3 ? "rd" : "th";
 }
-static gen_cache_t *s_gen_cache;          /* GEN_CACHE entries, PSRAM */
-static int s_gen_cache_next;
-static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;
+static gen_cache_t *s_gen_cache;          /**< GEN_CACHE entries, PSRAM */
+static int s_gen_cache_next;              /**< the cache slot used next (round) */
+static uint16_t s_gen_ram_next = PUZZLE_GEN_RAM_BASE;   /**< the next RAM-only puzzle id */
 
-/* the next RAM-only puzzle id (no card: they last until power-off) */
+/* (documented in ui_internal.h) */
 uint16_t gen_ram_take(void)
 {
     uint16_t id = s_gen_ram_next++;
@@ -194,6 +198,7 @@ uint16_t gen_ram_take(void)
     return id;
 }
 
+/* (documented in ui_internal.h) */
 void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions,
                    const char *cages, const char *marks, const char *thermos, const char *day)
 {
@@ -220,6 +225,7 @@ void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81]
     s_gen_cache_next = (s_gen_cache_next + 1) % GEN_CACHE;
 }
 
+/* (documented in ui_internal.h) */
 void gen_cache_source(uint16_t id, const char *source, int number)
 {
     for (int i = 0; i < GEN_CACHE; i++) {
@@ -231,7 +237,13 @@ void gen_cache_source(uint16_t id, const char *source, int number)
     }
 }
 
-/* a typed-in puzzle's collection and number from the cache (not imported ones: import_of) */
+/**
+ * @brief a typed-in puzzle's collection and number from the cache (not imported ones: import_of)
+ * @param id  the puzzle
+ * @param buf  gets "My puzzles #3"
+ * @param n  its size
+ * @return false: not a typed-in one
+ */
 static bool gen_own_name(uint16_t id, char *buf, size_t n)
 {
     for (int i = 0; i < GEN_CACHE; i++) {
@@ -243,7 +255,19 @@ static bool gen_own_name(uint16_t id, char *buf, size_t n)
     return false;
 }
 
-/* givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown */
+/**
+ * @brief givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown
+ * @param id  the puzzle
+ * @param givens  gets them
+ * @param regions  gets Jigsaw's regions
+ * @param cages  gets Killer's cages
+ * @param marks  gets the marks
+ * @param thermos  gets the lines
+ * @param variant  gets it
+ * @param level  gets it
+ * @param day  gets the daily date ("" if none)
+ * @return false if unknown
+ */
 static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char *cages, char *marks, char *thermos,
                             int *variant, int *level, char day[12])
 {
@@ -330,28 +354,19 @@ static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char
     return true;
 }
 
+/* (documented in ui_internal.h) */
 bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12])
 {
     return gen_lookup_full(id, givens, NULL, NULL, NULL, NULL, variant, level, day);
 }
 
+/* (documented in collections.h) */
 bool gen_lookup(uint16_t id, uint8_t *givens, int *variant, int *level)
 {
     return gen_lookup_full(id, givens, NULL, NULL, NULL, NULL, variant, level, NULL);
 }
 
-/* variant of any puzzle: the built-in ones are classic */
-static int puzzle_variant(uint16_t id)
-{
-    int v = VAR_CLASSIC;
-    if (puzzle_is_generated(id)) {
-        gen_lookup(id, NULL, &v, NULL);
-    }
-    return v;
-}
-
-/* The board of any puzzle: a fixed variant's geometry, or for a Jigsaw
- * puzzle its regions built into buf. *variant (may be NULL) is set too. */
+/* (documented in ui_internal.h) */
 const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
 {
     int v = VAR_CLASSIC;
@@ -399,7 +414,7 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     return sudoku_geom(v);                          /* (a broken map or cages: a classic board) */
 }
 
-/* the givens of any puzzle, built-in or generated */
+/* (documented in ui_internal.h) */
 bool puzzle_get(uint16_t id, uint8_t cells[81])
 {
     if (!puzzle_is_generated(id)) {
@@ -412,7 +427,7 @@ bool puzzle_get(uint16_t id, uint8_t cells[81])
     return gen_lookup(id, cells, NULL, NULL);
 }
 
-/* the imported collection a puzzle is in (-1: none) and its number there */
+/* (documented in collections.h) */
 int import_of(uint16_t id, int *number)
 {
     int gid = (int)id - PUZZLE_GEN_BASE;
@@ -427,10 +442,11 @@ int import_of(uint16_t id, int *number)
     return -1;
 }
 
-/* the list's collections: the built-in ones, then the imported ones, then the saved ones */
+/** @brief the list's collections: the built-in ones, then the imported ones, then the saved ones */
 int coll_total(void) { return PUZZLE_COLLECTION_COUNT + s_nimports + ui_nsaved(); }
-int coll_saved_index(int c) { return c - PUZZLE_COLLECTION_COUNT - s_nimports; }   /* >= 0: a saved one */
+int coll_saved_index(int c) { return c - PUZZLE_COLLECTION_COUNT - s_nimports; }   /**< >= 0: a saved one */
 int coll_tab(int c) { return c < PUZZLE_COLLECTION_COUNT ? 0 : 1; }
+/* (documented in collections.h) */
 const char *coll_name(int c)
 {
     if (c < PUZZLE_COLLECTION_COUNT) {
@@ -441,7 +457,7 @@ const char *coll_name(int c)
     }
     return s_saved[coll_saved_index(c)].name;
 }
-/* built-in and imported collections are runs of ids */
+/* (documented in collections.h) */
 uint16_t coll_first(int c)
 {
     if (c < PUZZLE_COLLECTION_COUNT) {
@@ -452,6 +468,7 @@ uint16_t coll_first(int c)
     }
     return s_saved[coll_saved_index(c)].count ? s_saved[coll_saved_index(c)].puzzles[0] : 0;
 }
+/* (documented in collections.h) */
 int coll_size(int c)
 {
     if (c < PUZZLE_COLLECTION_COUNT) {
@@ -462,13 +479,13 @@ int coll_size(int c)
     }
     return s_saved[coll_saved_index(c)].count;
 }
-/* puzzle i (from 0) of collection c */
+/* (documented in collections.h) */
 uint16_t coll_puzzle(int c, int i)
 {
     int k = c >= PUZZLE_COLLECTION_COUNT ? coll_saved_index(c) : -1;
     return k >= 0 ? s_saved[k].puzzles[i] : (uint16_t)(coll_first(c) + i);
 }
-/* where puzzle id is in collection c, -1: not there */
+/* (documented in collections.h) */
 int coll_find(int c, uint16_t id)
 {
     if (c < 0 || c >= coll_total()) {
@@ -481,7 +498,7 @@ int coll_find(int c, uint16_t id)
     }
     return -1;
 }
-/* the collection of a puzzle (built-in or imported); -1 for others */
+/* (documented in collections.h) */
 int coll_of(uint16_t id)
 {
     if (!puzzle_is_generated(id)) {
@@ -491,6 +508,7 @@ int coll_of(uint16_t id)
     return k < 0 ? -1 : PUZZLE_COLLECTION_COUNT + k;
 }
 
+/* (documented in collections.h) */
 void imports_reload(void)
 {
     int n = is_stats_db_ready() ? stats_db_list_imports(s_imports) : -1;
@@ -502,6 +520,7 @@ void imports_reload(void)
     ui_set_nsaved(m < 0 ? 0 : m);
 }
 
+/* (documented in collections.h) */
 void puzzle_name(uint16_t id, char *buf, size_t n)
 {
     int num, k = import_of(id, &num);
@@ -542,6 +561,7 @@ void puzzle_name(uint16_t id, char *buf, size_t n)
     snprintf(buf, n, "%s #%u", puzzle_collection(c)->name, (unsigned)(id - puzzle_collection(c)->first + 1));
 }
 
+/* (documented in ui_internal.h) */
 lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *text,
                    const lv_font_t *font, lv_event_cb_t cb, void *user)
 {
@@ -567,6 +587,7 @@ lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *tex
     return b;
 }
 
+/* (documented in ui_internal.h) */
 lv_obj_t *make_screen(void)
 {
     lv_obj_t *s = lv_obj_create(NULL);
@@ -576,6 +597,7 @@ lv_obj_t *make_screen(void)
     return s;
 }
 
+/* (documented in ui_internal.h) */
 lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color)
 {
     lv_obj_t *l = lv_label_create(parent);
@@ -586,14 +608,16 @@ lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color)
 }
 
 /* ------------------------------------------------------------- icon buttons, context menus */
-/* an icon button of a title row (a toggle, or a menu's): accent with a white icon while on */
+/* (documented in ui_internal.h) */
 void icon_btn_set(lv_obj_t *b, bool on, lv_color_t off_c)
 {
     lv_obj_set_state(b, LV_STATE_CHECKED, on);
     lv_obj_set_style_text_color(lv_obj_get_child(b, 0), on ? lv_color_white() : off_c, 0);
 }
-static lv_obj_t *ctx_menu, *ctx_btn;    /* the open menu's backdrop, and its button */
+static lv_obj_t *ctx_menu;              /**< the open menu's backdrop (NULL: none) */
+static lv_obj_t *ctx_btn;               /**< its button */
 
+/* (documented in ui_internal.h) */
 void ctx_menu_close(void)
 {
     if (!ctx_menu) {
@@ -607,6 +631,10 @@ void ctx_menu_close(void)
     ctx_btn = NULL;
 }
 
+/**
+ * @brief A tap beside the menu closes it.
+ * @param e  the event
+ */
 static void ctx_backdrop_cb(lv_event_t *e)
 {
     if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) {
@@ -614,6 +642,10 @@ static void ctx_backdrop_cb(lv_event_t *e)
     }
 }
 
+/**
+ * @brief A menu item tapped: the menu closes and the item's action runs.
+ * @param e  the event (user data: the item's action)
+ */
 static void ctx_item_cb(lv_event_t *e)
 {
     void (*cb)(lv_event_t *) = (void (*)(lv_event_t *))lv_event_get_user_data(e);
@@ -621,7 +653,7 @@ static void ctx_item_cb(lv_event_t *e)
     cb(NULL);
 }
 
-/* the menu's card, w wide, under btn (any open menu closes first); its content is the caller's */
+/* (documented in ui_internal.h) */
 lv_obj_t *ctx_card_open(lv_obj_t *btn, int w)
 {
     ctx_menu_close();
@@ -652,7 +684,7 @@ lv_obj_t *ctx_card_open(lv_obj_t *btn, int w)
     return card;
 }
 
-/* opens btn's menu (or closes it, when it is open) */
+/* (documented in ui_internal.h) */
 void ctx_menu_toggle(lv_obj_t *btn, const ctx_item_t *items, int n)
 {
     bool was = ctx_menu && ctx_btn == btn;
@@ -684,8 +716,7 @@ void ctx_menu_toggle(lv_obj_t *btn, const ctx_item_t *items, int n)
 }
 
 /* ------------------------------------------------------------- dialog text */
-/* Text that wraps to its parent's width, left-aligned (dialogs). Font: NULL
- * = the parent's (inherited, like a label's). */
+/* (documented in ui_internal.h) */
 lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, const char *text)
 {
     lv_obj_t *l = lv_label_create(parent);

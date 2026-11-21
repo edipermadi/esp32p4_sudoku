@@ -1,4 +1,8 @@
-/*
+/**
+ * @file ui_media_view.c
+ * @ingroup media
+ * @brief The picture and video viewer.
+ *
  * Picture and video viewer (see ui_media_view.h).
  *
  * A worker task (core 0) decodes into one of two 720x720 RGB565 buffers in
@@ -16,6 +20,7 @@
  * frames are decoded but not shown, so the video keeps its speed.
  * Seeking decodes from the key frame before the target and shows only the
  * target. tinyh264 takes about 55 KB of internal RAM while a video is open.
+ *
  */
 #include "ui_media_view.h"
 #include "mp4_reader.h"
@@ -33,41 +38,65 @@
 #include "driver/jpeg_decode.h"
 #include "esp_h264_dec_sw.h"
 
-#define SCR        720
-#define BUF_BYTES  (SCR * SCR * 2)
-#define NAME_B     256
-#define PATH_B     512
-#define POLL_MS    10
-#define JPEG_MAX_FILE  (16u * 1024 * 1024)
-#define JPEG_MAX_OUT   (24u * 1024 * 1024)       /* decoded RGB565 at full size */
-#define VIDEO_MAX_PX   (1920 * 1088)
+#define SCR        720                  /**< the screen's size, px */
+#define BUF_BYTES  (SCR * SCR * 2)      /**< a picture buffer's bytes (RGB565) */
+#define NAME_B     256                  /**< a file name's room */
+#define PATH_B     512                  /**< a path's room */
+#define POLL_MS    10                   /**< the page's poll, ms */
+#define JPEG_MAX_FILE  (16u * 1024 * 1024)  /**< the largest JPEG file read */
+#define JPEG_MAX_OUT   (24u * 1024 * 1024)       /**< decoded RGB565 at full size */
+#define VIDEO_MAX_PX   (1920 * 1088)    /**< the largest video picture, px */
 
 /* ------------------------------------------------------------- state */
 /* UI side */
-static lv_obj_t *s_root, *s_img, *s_status, *s_top, *s_name, *s_counter, *s_prev, *s_next;
-static lv_obj_t *s_vbar, *s_play_lbl, *s_slider, *s_time;
-static lv_timer_t *s_timer;
-static lv_image_dsc_t s_dsc[2];
-static char s_dir[PATH_B];
-static char (*s_names)[NAME_B];
-static int s_n, s_idx, s_want = -1, s_kind;
-static bool s_bars = true, s_gest, s_range_set;
-static uint32_t s_msg_seen;
+static lv_obj_t *s_root;                      /**< the viewer (NULL: closed) */
+static lv_obj_t *s_img;                       /**< the picture */
+static lv_obj_t *s_status;                    /**< a message over it ("Loading...", why not) */
+static lv_obj_t *s_top;                       /**< the top bar */
+static lv_obj_t *s_name;                      /**< the file's name */
+static lv_obj_t *s_counter;                   /**< "3 / 12" */
+static lv_obj_t *s_prev;                      /**< Previous */
+static lv_obj_t *s_next;                      /**< Next */
+static lv_obj_t *s_vbar;                      /**< the video bar */
+static lv_obj_t *s_play_lbl;                  /**< Play / Pause's icon */
+static lv_obj_t *s_slider;                    /**< where in the video */
+static lv_obj_t *s_time;                      /**< "0:12 / 1:30" */
+static lv_timer_t *s_timer;                   /**< the page's poll (POLL_MS) */
+static lv_image_dsc_t s_dsc[2];               /**< the two buffers as images */
+static char s_dir[PATH_B];                    /**< the folder */
+static char (*s_names)[NAME_B];               /**< its viewable files (a copy) */
+static int s_n;                               /**< how many */
+static int s_idx;                             /**< the one shown */
+static int s_want = -1;                       /**< the one to show once the worker is free (-1: none) */
+static int s_kind;                            /**< the shown one's MEDIA_* */
+static bool s_bars = true;                    /**< the bars are shown (a tap toggles them) */
+static bool s_gest;                           /**< this press is a swipe or a drag, not a tap */
+static bool s_range_set;                      /**< the slider's range is set for this video */
+static uint32_t s_msg_seen;                   /**< the worker's message shown (s_msg_seq) */
 
 /* shared with the worker */
-static uint16_t *s_buf[2];                    /* 64-byte aligned, PSRAM, kept once made */
-static volatile bool s_running, s_stop;
-static volatile int s_pending = -1, s_front = 1;   /* the buffer handed over / the one shown */
-static volatile int s_pub_w[2], s_pub_h[2];
-static char s_msg[160];
-static volatile uint32_t s_msg_seq;
-static char s_job_path[PATH_B + NAME_B];
-static int s_job_kind;
+static uint16_t *s_buf[2];                    /**< 64-byte aligned, PSRAM, kept once made */
+static volatile bool s_running;               /**< the worker runs a job */
+static volatile bool s_stop;                  /**< asks the worker to stop */
+static volatile int s_pending = -1;           /**< the buffer handed over (-1: none) */
+static volatile int s_front = 1;              /**< the buffer shown */
+static volatile int s_pub_w[2];               /**< each buffer's picture: width, px */
+static volatile int s_pub_h[2];               /**< and height */
+static char s_msg[160];                       /**< the worker's message for the page */
+static volatile uint32_t s_msg_seq;           /**< changes with each message */
+static char s_job_path[PATH_B + NAME_B];      /**< the worker's file */
+static int s_job_kind;                        /**< its MEDIA_* */
 /* video */
-static volatile bool s_v_info, s_play, s_ended;
-static volatile uint32_t s_v_n, s_v_pos, s_v_pos_ms, s_v_dur_ms;
-static volatile int32_t s_seek = -1;
+static volatile bool s_v_info;                /**< the video's frames and length are known */
+static volatile bool s_play;                  /**< playing */
+static volatile bool s_ended;                 /**< it played to the end */
+static volatile uint32_t s_v_n;               /**< its frames */
+static volatile uint32_t s_v_pos;             /**< the frame shown */
+static volatile uint32_t s_v_pos_ms;          /**< its time, ms */
+static volatile uint32_t s_v_dur_ms;          /**< the video's length, ms */
+static volatile int32_t s_seek = -1;          /**< the frame to seek to (-1: none) */
 
+/* (documented in ui_media_view.h) */
 int media_view_kind(const char *name)
 {
     const char *dot = strrchr(name, '.');
@@ -83,12 +112,17 @@ int media_view_kind(const char *name)
     return MEDIA_NONE;
 }
 
+/* (documented in ui_media_view.h) */
 bool media_view_is_open(void)
 {
     return s_root != NULL;
 }
 
-/* ------------------------------------------------------------- worker helpers */
+/**
+ * @brief The worker's message for the page (and the log).
+ * @param fmt  printf format
+ * @param ...  its arguments
+ */
 static void set_msg(const char *fmt, ...)
 {
     va_list ap;
@@ -99,7 +133,10 @@ static void set_msg(const char *fmt, ...)
     s_msg_seq++;
 }
 
-/* waits until the page has taken the last picture handed over; false: stop */
+/**
+ * @brief waits until the page has taken the last picture handed over; false: stop
+ * @return false: stop
+ */
 static bool wait_free(void)
 {
     while (s_pending >= 0 && !s_stop) {
@@ -108,11 +145,20 @@ static bool wait_free(void)
     return !s_stop;
 }
 
+/**
+ * @brief The buffer the worker fills (not the one shown).
+ * @return it
+ */
 static uint16_t *back_buf(void)
 {
     return s_buf[1 - s_front];
 }
 
+/**
+ * @brief Hands the back buffer over to the page (flushed from the cache for the PPA's DMA).
+ * @param w  the picture's width, px
+ * @param h  its height
+ */
 static void publish(int w, int h)
 {
     int k = 1 - s_front;
@@ -122,6 +168,13 @@ static void publish(int w, int h)
     s_pending = k;
 }
 
+/**
+ * @brief The size to show a picture at: as it is, or scaled down to fit the screen.
+ * @param w  its width, px
+ * @param h  its height
+ * @param dw  gets the width shown
+ * @param dh  gets the height shown
+ */
 static void fit(int w, int h, int *dw, int *dh)
 {
     if (w <= SCR && h <= SCR) {
@@ -142,21 +195,36 @@ static void fit(int w, int h, int *dw, int *dh)
     }
 }
 
-static uint16_t s_xmap[SCR];
+static uint16_t s_xmap[SCR];            /**< each output column's source column (make_xmap()) */
 
-static void make_xmap(int sw, int dw)            /* each output column's source column (centres) */
+/**
+ * @brief Each output column's source column (centres), for scaling a row.
+ * @param sw  the source's width
+ * @param dw  the output's width
+ */
+static void make_xmap(int sw, int dw)
 {
     for (int x = 0; x < dw; x++) {
         s_xmap[x] = (uint16_t)(((int64_t)x * 2 + 1) * sw / (2 * dw));
     }
 }
 
+/**
+ * @brief An output row's source row (centres).
+ * @param y  the output row
+ * @param sh  the source's height
+ * @param dh  the output's height
+ * @return the source row
+ */
 static inline int src_row(int y, int sh, int dh)
 {
     return (int)(((int64_t)y * 2 + 1) * sh / (2 * dh));
 }
 
-/* ------------------------------------------------------------- JPEG */
+/**
+ * @brief Shows a JPEG: read whole, decoded by the JPEG engine at full size, scaled down to fit.
+ * @param path  the file
+ */
 static void do_jpeg(const char *path)
 {
     uint8_t *in = NULL;
@@ -265,18 +333,30 @@ done:
 }
 
 /* ------------------------------------------------------------- H.264 */
-static int32_t t_y[256], t_rv[256], t_gu[256], t_gv[256], t_bu[256];
+static int32_t t_y[256];                      /**< YUV -> RGB: Y's part (BT.601 limited range, x 256) */
+static int32_t t_rv[256];                     /**< V's part of red */
+static int32_t t_gu[256];                     /**< U's part of green */
+static int32_t t_gv[256];                     /**< V's part of green */
+static int32_t t_bu[256];                     /**< U's part of blue */
 
+/**
+ * @brief Clamps to 0..255.
+ * @param v  a level
+ * @return it, clamped
+ */
 static inline int clamp8(int v)
 {
     return v < 0 ? 0 : (v > 255 ? 255 : v);
 }
 
-/* (x >> 8) of the sums below -> that channel's bits of an RGB565 pixel, clamped:
- * the sums stay within -384..639 */
-#define CLIP_OFF 384
-static uint16_t c_r[1024], c_g[1024], c_b[1024];
+#define CLIP_OFF 384                          /**< the tables' offset: the sums (>> 8) stay within -384..639 */
+static uint16_t c_r[1024];                    /**< (sum >> 8) + CLIP_OFF -> red's bits of an RGB565 pixel, clamped */
+static uint16_t c_g[1024];                    /**< the same for green */
+static uint16_t c_b[1024];                    /**< the same for blue */
 
+/**
+ * @brief Fills the YUV -> RGB565 tables (once).
+ */
 static void yuv_tables(void)
 {
     if (t_y[255]) {
@@ -297,11 +377,23 @@ static void yuv_tables(void)
     }
 }
 
-/* I420 (W x H planes; the picture is the top-left vw x vh) -> dw x dh RGB565 */
+/** @brief I420 (W x H planes; the picture is the top-left vw x vh) -> dw x dh RGB565 */
 #define PX(c) (uint32_t)(c_r[((c) + rv) >> 8] | c_g[((c) + guv) >> 8] | c_b[((c) + bu) >> 8])
 
-/* chg (1:1 only, else NULL): per pair of rows, the frame number it last changed in;
- * only pairs changed after frame `since` are converted (dst holds frame `since`) */
+/**
+ * @brief chg (1:1 only, else NULL): per pair of rows, the frame number it last changed in;
+ * only pairs changed after frame `since` are converted (dst holds frame `since`)
+ * @param yp  the Y plane (U and V follow)
+ * @param W  the planes' width
+ * @param H  their height
+ * @param vw  the picture's width
+ * @param vh  its height
+ * @param dst  gets RGB565
+ * @param dw  dst's width
+ * @param dh  dst's height
+ * @param chg  each pair of rows' last change, or NULL
+ * @param since  the frame dst holds
+ */
 static void i420_to_565(const uint8_t *yp, int W, int H, int vw, int vh, uint16_t *dst, int dw, int dh,
                         const uint32_t *chg, int32_t since)
 {
@@ -343,7 +435,14 @@ static void i420_to_565(const uint8_t *yp, int W, int H, int vw, int vh, uint16_
     }
 }
 
-/* one access unit (Annex-B) through the decoder; *frame: a picture that came out */
+/**
+ * @brief one access unit (Annex-B) through the decoder; *frame: a picture that came out
+ * @param dec  the decoder
+ * @param buf  the access unit
+ * @param len  its bytes
+ * @param frame  gets a picture, or NULL
+ * @return false: the decoder failed
+ */
 static bool feed(esp_h264_dec_handle_t dec, uint8_t *buf, size_t len, uint8_t **frame)
 {
     esp_h264_dec_in_frame_t in = {.raw_data = {.buffer = buf, .len = (uint32_t)len}};
@@ -366,8 +465,8 @@ static bool feed(esp_h264_dec_handle_t dec, uint8_t *buf, size_t len, uint8_t **
     return true;
 }
 
-/*
- * Two cores: this task (core 0) only decodes; the converter task (core 1, where
+/**
+ * @brief Two cores: this task (core 0) only decodes; the converter task (core 1, where
  * LVGL mostly just copies the picture while a video plays) takes each frame to
  * show straight from the decoder's output, finds the rows that changed (against
  * `prev`, its copy of the last frame it took), converts those to RGB565, waits
@@ -385,18 +484,30 @@ static bool feed(esp_h264_dec_handle_t dec, uint8_t *buf, size_t len, uint8_t **
  * same buffer as the one before, every decode waits for the converter.
  */
 typedef struct {
-    const uint8_t *src;                 /* I420, W x H planes (the decoder's output) */
-    uint8_t *prev;                      /* 1:1 only (else NULL): copy of the last frame taken */
-    uint32_t *chg;
-    int W, H, vw, vh, dw, dh;
-    uint32_t pos, pos_ms;
-    int64_t due;                        /* when to show it (esp_timer us); 0: at once */
+    const uint8_t *src;                 /**< I420, W x H planes (the decoder's output) */
+    uint8_t *prev;                      /**< 1:1 only (else NULL): copy of the last frame taken */
+    uint32_t *chg;                      /**< 1:1 only: each pair of rows' last change (frame number) */
+    int W;                              /**< the planes' width, px */
+    int H;                              /**< their height, px */
+    int vw;                             /**< the picture's width (cropped), px */
+    int vh;                             /**< its height, px */
+    int dw;                             /**< shown at this width, px */
+    int dh;                             /**< and height */
+    uint32_t pos;                       /**< the frame's number */
+    uint32_t pos_ms;                    /**< its time, ms */
+    int64_t due;                        /**< when to show it (esp_timer us); 0: at once */
 } cv_job_t;
 
-static cv_job_t s_cv;
-static SemaphoreHandle_t s_cv_go, s_cv_done;   /* a job is in s_cv / the converter is done reading src */
-static volatile bool s_cv_quit, s_cv_alive;
+static cv_job_t s_cv;                   /**< the job for the converter */
+static SemaphoreHandle_t s_cv_go;             /**< a job is in s_cv */
+static SemaphoreHandle_t s_cv_done;           /**< the converter is done reading src */
+static volatile bool s_cv_quit;               /**< asks the converter to end */
+static volatile bool s_cv_alive;              /**< the converter task runs */
 
+/**
+ * @brief The converter task (core 1): I420 -> RGB565 into the back buffer (only the rows that changed, 1:1), then hands it over when it's due.
+ * @param arg  unused
+ */
 static void converter(void *arg)
 {
     int32_t buf_seq[2] = {-1, -1};      /* the frame each display buffer holds (-1: none of ours) */
@@ -456,7 +567,10 @@ static void converter(void *arg)
     vTaskDelete(NULL);
 }
 
-/* waits until the converter is done with its frame; false: stop */
+/**
+ * @brief waits until the converter is done with its frame; false: stop
+ * @return false: stop
+ */
 static bool cv_wait_done(void)
 {
     while (xSemaphoreTake(s_cv_done, pdMS_TO_TICKS(20)) != pdTRUE) {
@@ -467,6 +581,10 @@ static bool cv_wait_done(void)
     return true;
 }
 
+/**
+ * @brief Plays a video: decodes on this core, converts on the other, paced by the frames' times; seeks from the key frame before.
+ * @param path  the file
+ */
 static void do_video(const char *path)
 {
     mp4r_t m;
@@ -695,6 +813,10 @@ done:
     fclose(f);
 }
 
+/**
+ * @brief The worker task (core 0): the picture or the video, then it ends.
+ * @param arg  unused
+ */
 static void worker(void *arg)
 {
     if (s_job_kind == MEDIA_IMAGE) {
@@ -706,19 +828,31 @@ static void worker(void *arg)
     vTaskDelete(NULL);
 }
 
-/* ------------------------------------------------------------- UI */
+/**
+ * @brief A time as "m:ss".
+ * @param buf  gets it
+ * @param n  its size
+ * @param ms  the time
+ */
 static void fmt_ms(char *buf, size_t n, uint32_t ms)
 {
     uint32_t s = ms / 1000;
     snprintf(buf, n, "%u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
 }
 
+/**
+ * @brief Shows a message over the picture ("" hides it).
+ * @param txt  the message
+ */
 static void show_status(const char *txt)
 {
     lv_label_set_text(s_status, txt);
     lv_obj_set_hidden(s_status, txt[0] == 0);
 }
 
+/**
+ * @brief Shows or hides the bars (Previous / Next with more than one file, the video bar for a video).
+ */
 static void apply_bars(void)
 {
     lv_obj_set_hidden(s_top, !s_bars);
@@ -727,6 +861,10 @@ static void apply_bars(void)
     lv_obj_set_hidden(s_vbar, !s_bars || s_kind != MEDIA_VIDEO);
 }
 
+/**
+ * @brief Starts the worker on a file.
+ * @param idx  the file
+ */
 static void start_job(int idx)
 {
     s_idx = idx;
@@ -755,6 +893,10 @@ static void start_job(int idx)
     }
 }
 
+/**
+ * @brief Shows a file: at once, or once the running worker has stopped.
+ * @param idx  the file
+ */
 static void request(int idx)
 {
     if (idx < 0 || idx >= s_n) {
@@ -773,6 +915,10 @@ static void request(int idx)
     }
 }
 
+/**
+ * @brief The next or previous file, round.
+ * @param step  +1 or -1
+ */
 static void go(int step)
 {
     if (s_n < 2) {
@@ -781,6 +927,10 @@ static void go(int step)
     request((s_idx + step + s_n) % s_n);
 }
 
+/**
+ * @brief The page's poll: the next file once the worker stopped, a picture handed over, the worker's message, the video's slider and time.
+ * @param t  the timer
+ */
 static void poll(lv_timer_t *t)
 {
     if (s_want >= 0 && !s_running) {
@@ -827,10 +977,26 @@ static void poll(lv_timer_t *t)
     }
 }
 
+/**
+ * @brief Close.
+ * @param e  the event
+ */
 static void on_close(lv_event_t *e) { media_view_close(); }
+/**
+ * @brief Previous.
+ * @param e  the event
+ */
 static void on_prev(lv_event_t *e) { go(-1); }
+/**
+ * @brief Next.
+ * @param e  the event
+ */
 static void on_next(lv_event_t *e) { go(1); }
 
+/**
+ * @brief Play / Pause (at the end: from the start).
+ * @param e  the event
+ */
 static void on_play(lv_event_t *e)
 {
     if (s_ended) {
@@ -842,6 +1008,10 @@ static void on_play(lv_event_t *e)
     }
 }
 
+/**
+ * @brief The slider let go: seeks there.
+ * @param e  the event
+ */
 static void on_slider(lv_event_t *e)
 {
     if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
@@ -849,10 +1019,14 @@ static void on_slider(lv_event_t *e)
     }
 }
 
-/* Swipes by hand (from where the finger went down and came up): LVGL's own
+/** @brief Swipes by hand (from where the finger went down and came up): LVGL's own
  * gesture events didn't arrive here (the drag went to the screen as a scroll). */
 static lv_point_t s_down;
 
+/**
+ * @brief The viewer pressed: a swipe goes to the next or previous file, a tap shows or hides the bars.
+ * @param e  the event
+ */
 static void on_root(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -878,6 +1052,13 @@ static void on_root(lv_event_t *e)
     }
 }
 
+/**
+ * @brief A label.
+ * @param parent  where
+ * @param font  its font
+ * @param txt  its text
+ * @return it
+ */
 static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, const char *txt)
 {
     lv_obj_t *l = lv_label_create(parent);
@@ -887,6 +1068,13 @@ static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, const char *txt)
     return l;
 }
 
+/**
+ * @brief A bar across the screen (a row; a tap on it doesn't hide the bars).
+ * @param parent  where
+ * @param h  its height, px
+ * @param align  where on the screen
+ * @return it
+ */
 static lv_obj_t *bar(lv_obj_t *parent, int h, lv_align_t align)
 {
     lv_obj_t *b = lv_obj_create(parent);
@@ -905,6 +1093,15 @@ static lv_obj_t *bar(lv_obj_t *parent, int h, lv_align_t align)
     return b;
 }
 
+/**
+ * @brief An icon button.
+ * @param parent  where
+ * @param w  px
+ * @param h  px
+ * @param sym  its icon
+ * @param cb  a tap
+ * @return it
+ */
 static lv_obj_t *btn(lv_obj_t *parent, int w, int h, const char *sym, lv_event_cb_t cb)
 {
     lv_obj_t *b = lv_button_create(parent);
@@ -919,6 +1116,7 @@ static lv_obj_t *btn(lv_obj_t *parent, int w, int h, const char *sym, lv_event_c
     return b;
 }
 
+/* (documented in ui_media_view.h) */
 void media_view_open(lv_obj_t *parent, const char *dir, const char *const *names, int count, int index)
 {
     if (count <= 0 || index < 0 || index >= count) {
@@ -1006,6 +1204,7 @@ void media_view_open(lv_obj_t *parent, const char *dir, const char *const *names
     request(index);
 }
 
+/* (documented in ui_media_view.h) */
 void media_view_close(void)
 {
     if (!s_root) {

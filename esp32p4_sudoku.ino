@@ -1,4 +1,7 @@
-/*
+/**
+ * @file esp32p4_sudoku.ino
+ * @brief The sketch: setup() brings up the board, the card, sudoku.db and the UI; loop() runs LVGL and devctl.
+ *
  * Sudoku for the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B
  * (720x720 MIPI-DSI + GT911 touch, ES8311 speaker), built with LVGL 9.
  *
@@ -18,6 +21,7 @@
  *
  * Libraries: lvgl 9.6.0 in ~/Arduino/libraries/lvgl,
  *            lv_conf.h in ~/Arduino/libraries/lv_conf.h.
+ *
  */
 #ifndef BOARD_HAS_PSRAM
 #error "Enable PSRAM in the Tools menu"
@@ -36,17 +40,24 @@
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 
-/* A firmware installed from update.bin (Settings > Data) starts on probation:
- * the Arduino core would keep it at once; instead it is kept once the board
- * has run for a while (loop() below). If it crashes before, the next restart
- * goes back to the previous firmware (the bootloader's rollback). */
+/**
+ * @brief A firmware installed from update.bin (Settings > Data) starts on probation: the Arduino core
+ * would keep it at once; instead it is kept once the board has run for a while (loop()). If it
+ * crashes before, the next restart goes back to the previous firmware (the bootloader's rollback).
+ * @return true: the core leaves the rollback to us
+ */
 extern "C" bool verifyRollbackLater()
 {
     return true;
 }
-#define KEEP_FIRMWARE_AFTER_MS 15000
+#define KEEP_FIRMWARE_AFTER_MS 15000    /**< the board must run this long before an updated firmware is kept, ms */
 
-/* Why the chip last restarted, if it was not a normal power-on/reset. */
+/**
+ * @brief
+ * @param r  the reset reason
+ * @return a sentence, or NULL for a normal power-on or reset
+ */
+/** @brief Why the chip last restarted, if it was not a normal power-on/reset. */
 static const char *abnormal_reset_text(esp_reset_reason_t r)
 {
     switch (r) {
@@ -65,11 +76,17 @@ static const char *abnormal_reset_text(esp_reset_reason_t r)
     }
 }
 
+/// @cond
 /* loop() runs LVGL and everything the screens do, the sudoku solver's recursion
  * among it (up to ~90 bytes a level, a level per empty cell): 8 KB (the default)
  * overflowed when Continue re-solved a hard Hyper puzzle under a devctl tap. */
 SET_LOOP_TASK_STACK_SIZE(16 * 1024);
+/// @endcond
 
+/**
+ * @brief Brings the board up: PSRAM for malloc(), the card, sudoku.db, the display and touch, sound, the
+ * UI, Wi-Fi, devctl; tells what restarted the chip if it wasn't a normal reset.
+ */
 void setup()
 {
     /* malloc() of 4 bytes or more goes to PSRAM (the core default is 4096):
@@ -118,7 +135,7 @@ void setup()
     }
 }
 
-/* The avatars, if they aren't in flash: installed from avatars.bin on the card, once the card is
+/** @brief The avatars, if they aren't in flash: installed from avatars.bin on the card, once the card is
  * mounted (sudoku.db open), with the screen dark meanwhile (writing the flash makes the panel
  * flicker); it comes back with them. */
 static void avatars_poll(void)
@@ -157,6 +174,9 @@ static void avatars_poll(void)
     }
 }
 
+/**
+ * @brief Runs LVGL, devctl and the screens' polling; keeps an updated firmware once it has run a while.
+ */
 void loop()
 {
     static bool kept;

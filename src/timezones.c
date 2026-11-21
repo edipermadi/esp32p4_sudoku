@@ -1,8 +1,13 @@
+/**
+ * @file timezones.c
+ * @brief The time zones offered in Settings, and setting one.
+ */
 #include "timezones.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+/** the zones offered, west to east */
 static const tz_entry_t ZONES[] = {
     { "Pacific/Honolulu",      "HST10",                               "UTC-10  Honolulu" },
     { "America/Anchorage",     "AKST9AKDT,M3.2.0,M11.1.0",            "UTC-9  Anchorage" },
@@ -85,15 +90,17 @@ static const tz_entry_t ZONES[] = {
     { "Pacific/Fiji",          "<+12>-12",                            "UTC+12  Fiji" },
     { "Pacific/Tongatapu",     "<+13>-13",                            "UTC+13  Tonga" },
 };
-#define N_ZONES ((int)(sizeof(ZONES) / sizeof(ZONES[0])))
+#define N_ZONES ((int)(sizeof(ZONES) / sizeof(ZONES[0])))  /**< how many */
 
 int tz_count(void) { return N_ZONES; }
 
+/* (documented in timezones.h) */
 const tz_entry_t *tz_get(int i)
 {
     return (i >= 0 && i < N_ZONES) ? &ZONES[i] : NULL;
 }
 
+/* (documented in timezones.h) */
 int tz_find(const char *name)
 {
     int utc = 0;
@@ -108,6 +115,7 @@ int tz_find(const char *name)
     return utc;
 }
 
+/* (documented in timezones.h) */
 const char *tz_options(void)
 {
     static char *opts;
@@ -131,6 +139,7 @@ const char *tz_options(void)
     return opts;
 }
 
+/* (documented in timezones.h) */
 void tz_apply(const char *name)
 {
     setenv("TZ", ZONES[tz_find(name)].posix, 1);
