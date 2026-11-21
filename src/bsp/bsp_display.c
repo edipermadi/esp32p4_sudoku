@@ -115,6 +115,7 @@ static const lcd_init_cmd_t jd9365_init_cmds[] = {
 
 static bsp_panel_kind_t s_panel_kind = BSP_PANEL_UNKNOWN;
 static esp_lcd_panel_handle_t s_panel = NULL;
+static esp_lcd_panel_io_handle_t s_io = NULL;     /* DBI commands (sleep in/out) */
 
 bsp_panel_kind_t bsp_display_panel_kind(void) { return s_panel_kind; }
 
@@ -270,7 +271,27 @@ esp_err_t bsp_display_new(esp_lcd_panel_handle_t *ret_panel)
     }
     ESP_RETURN_ON_ERROR(esp_lcd_panel_init(panel), TAG, "DPI start failed");
 
+    s_io = io;
     s_panel = panel;
     *ret_panel = panel;
     return ESP_OK;
+}
+
+/* Both controllers take the standard DCS commands for this (page 0 on the
+ * JD9365, where the init leaves it). The DPI video stream keeps running: the
+ * panel ignores it while asleep and shows it again on sleep-out. Waits as the
+ * init tables do (sleep-out: 120 ms on the JD9365, 250 ms on the ST7703). */
+void bsp_display_sleep(bool sleep)
+{
+    if (!s_io) return;
+    if (sleep) {
+        esp_lcd_panel_io_tx_param(s_io, LCD_CMD_DISPOFF, NULL, 0);
+        esp_lcd_panel_io_tx_param(s_io, LCD_CMD_SLPIN, NULL, 0);
+        vTaskDelay(pdMS_TO_TICKS(5));
+    } else {
+        esp_lcd_panel_io_tx_param(s_io, LCD_CMD_SLPOUT, NULL, 0);
+        vTaskDelay(pdMS_TO_TICKS(s_panel_kind == BSP_PANEL_JD9365 ? 120 : 250));
+        esp_lcd_panel_io_tx_param(s_io, LCD_CMD_DISPON, NULL, 0);
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
 }

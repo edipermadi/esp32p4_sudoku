@@ -62,6 +62,10 @@ bsp_panel_kind_t bsp_display_panel_kind(void);
 
 /* Backlight brightness 0..100 % (implemented with the Arduino LEDC API). */
 void bsp_display_brightness_set(int percent);
+/* Panel controller asleep (DCS display off + sleep in) or awake again
+ * (sleep out + display on, blocks ~140..270 ms). Turn the backlight off
+ * before sleeping it and on only after waking it. */
+void bsp_display_sleep(bool sleep);
 
 /* ---------------------------------------------------------------- microSD */
 /* SDMMC slot 0 (IO_MUX): CLK 43, CMD 44, D0..D3 = 39..42, no card-detect.
@@ -141,6 +145,13 @@ esp_err_t bsp_mic_read(int16_t *stereo_frames, size_t frames, size_t *got_frames
  * deep sleep with no wake-up source: only the RESET button (or a power cycle)
  * starts the board again. Close files / unmount the card first. Never returns. */
 void bsp_power_off(void) __attribute__((noreturn));
+
+/* Power saving while the screen is dark: backlight off, panel asleep, CPU
+ * clocked down (BSP_SAVE_CPU_MHZ). false: CPU back to full speed, panel awake;
+ * the caller then sets the backlight. Call from the LVGL task. */
+#define BSP_SAVE_CPU_MHZ 180     /* 90 MHz: the DPI DMA underruns (memory clock follows the CPU) */
+void bsp_power_save(bool on);
+bool bsp_power_saving(void);
 
 #ifdef __cplusplus
 }

@@ -7,6 +7,8 @@
 #include "driver/gpio.h"
 #include "esp_sleep.h"
 #include "esp_rom_sys.h"
+#include "esp32-hal-cpu.h"
+#include <stdio.h>
 
 /* Drives a pin to a level and keeps it there through deep sleep. The pad hold
  * latches whatever the pad outputs; gpio_config() also takes the pin back from
@@ -45,3 +47,24 @@ void bsp_power_off(void)
     gpio_force_hold_all();
     esp_deep_sleep_start();                       /* does not return */
 }
+
+/* ------------------------------------------------------- screen-off saving */
+static bool s_saving;
+static uint32_t s_full_mhz;
+
+void bsp_power_save(bool on)
+{
+    if (on == s_saving) return;
+    s_saving = on;
+    if (on) {
+        bsp_display_brightness_set(0);
+        bsp_display_sleep(true);
+        s_full_mhz = getCpuFrequencyMhz();
+        if (!setCpuFrequencyMhz(BSP_SAVE_CPU_MHZ)) printf("power save: CPU stays at %u MHz\n", (unsigned)s_full_mhz);
+    } else {
+        if (s_full_mhz && getCpuFrequencyMhz() != s_full_mhz) setCpuFrequencyMhz(s_full_mhz);
+        bsp_display_sleep(false);
+    }
+}
+
+bool bsp_power_saving(void) { return s_saving; }

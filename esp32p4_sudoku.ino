@@ -113,5 +113,7 @@ void loop()
   devctl_poll();                     /* commands from tools/devctl.py, if any */
   gibberlink_poll();                 /* commands heard as sound (Settings > Sound > Gibberlink) */
   uint32_t wait_ms = lv_timer_handler();
-  delay(wait_ms < 5 ? 1 : (wait_ms > 20 ? 20 : wait_ms));
+  /* screen dark (bsp_power_save): poll every 50 ms, still quick enough for the waking tap */
+  uint32_t max_ms = bsp_power_saving() ? 50 : 20;
+  delay(wait_ms < 5 ? 1 : (wait_ms > max_ms ? max_ms : wait_ms));
 }

@@ -48,7 +48,8 @@
  * a chime when all nine of a digit are placed, a fanfare when solved.
  *
  * Screen saver: after the time chosen in Settings without a touch, the game pauses, the screen goes
- * black and the backlight turns off. The next tap only wakes it.
+ * black and the backlight turns off. The next tap only wakes it. While dark the board saves power
+ * (bsp_power_save): the panel controller sleeps, the CPU runs slower and loop() polls less often.
  */
 #include "ui_internal.h"
 
@@ -403,7 +404,7 @@ static void saver_clock_tick(lv_timer_t *t)
         lv_timer_delete(sv_timer);
         sv_timer = NULL;
         lv_refr_now(NULL);
-        bsp_display_brightness_set(0);
+        bsp_power_save(true);                       /* light off, panel asleep, CPU slower */
         return;
     }
     time_t now = time(NULL);
@@ -437,6 +438,7 @@ static void saver_wake_cb(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSED) {
         saver_clock_stop();
+        bsp_power_save(false);                      /* CPU and panel back (if it was dark) */
         bsp_display_brightness_set(effective_brightness());
     } else if (s_saver) {
         /* removed only once the finger is up, so the waking tap reaches nothing below */
@@ -477,7 +479,7 @@ static void saver_sleep(bool lock_now)
         return;
     }
     lv_refr_now(NULL);                  /* panel shows black before the light goes off */
-    bsp_display_brightness_set(0);
+    bsp_power_save(true);               /* light off, panel asleep, CPU slower */
 }
 
 int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why, size_t why_n)
