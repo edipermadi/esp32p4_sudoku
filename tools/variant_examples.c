@@ -1,0 +1,360 @@
+/*
+ * The example puzzles of the variant pages (docs/variants/): one puzzle per variant, from
+ * the generator, whose opening position has a single that the classic rules alone don't
+ * give, only the variant's own rule (for Classic, Mini 6x6 and Kids 4x4: a hidden single in
+ * a box). Everything in a worked example follows from the digits on the board and the
+ * rules (sudoku_fits), no candidate chains, so it can be written out step by step.
+ *
+ * Writes the puzzles as an .sdx collection (import it on the board to follow along, and for
+ * the screenshots) and prints, per variant, the puzzle, its solution and three steps with
+ * the reason every other digit or cell is ruled out.
+ *
+ *   make -C tests examples            all of them: docs/variant-examples.sdx
+ *   tests/variant_examples - kropki   just one variant, printed (nothing written)
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include "generator.h"
+#include "sdx.h"
+
+#define STEPS 3
+
+static bool same_box(int a, int b, int bh, int bw)
+{
+    return a / 9 / bh == b / 9 / bh && a % 9 / bw == b % 9 / bw;
+}
+
+/* candidates by the classic rules only (row, column, box), against the filled digits */
+static bool classic_fits(const uint8_t v[81], int c, int d, int n, int bh, int bw)
+{
+    for (int o = 0; o < 81; o++) {
+        if (o == c || v[o] != d) continue;
+        if (o / 9 == c / 9 || o % 9 == c % 9 || same_box(o, c, bh, bw)) return false;
+    }
+    return d >= 1 && d <= n && !v[c];
+}
+
+/* the units a hidden single can be in: rows, columns, boxes / regions, and the variant's */
+static int units_of(const sudoku_geom_t *G, int *u)
+{
+    int n = 0;
+    for (int i = 0; i < G->nunits; i++) u[n++] = G->unit_ids[i];
+    return n;
+}
+
+static const char *unit_name(const sudoku_geom_t *G, int u, char *b)
+{
+    if (u < 9) sprintf(b, "row %d", u + 1);
+    else if (u < 18) sprintf(b, "column %d", u - 8);
+    else if (u < 27) sprintf(b, "%s %d", G->variant == VAR_JIGSAW ? "region" : "box", u - 17);
+    else if (u == UNIT_DIAG_MAIN) sprintf(b, "the main diagonal");
+    else if (u == UNIT_DIAG_ANTI) sprintf(b, "the anti-diagonal");
+    else if (u < UNIT_GROUP) sprintf(b, "window %d", u - UNIT_WINDOW + 1);
+    else if (u < UNIT_ASTERISK) sprintf(b, "disjoint group %d", u - UNIT_GROUP + 1);
+    else sprintf(b, "the asterisk");
+    return b;
+}
+
+static bool in_unit(const sudoku_geom_t *G, int u, int c)
+{
+    for (int k = 0; k < G->n; k++) if (G->unit[u][k] == c) return true;
+    return false;
+}
+
+/* why d can't go in c: a filled peer (and through which unit / move), or the variant's rule */
+static void why(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char *b)
+{
+    int u[64], nu = units_of(G, u);
+    char ub[40];
+    for (int i = 0; i < nu; i++) {                 /* the same row, column, box or extra unit */
+        if (!in_unit(G, u[i], c)) continue;
+        for (int k = 0; k < G->n; k++) {
+            int o = G->unit[u[i]][k];
+            if (o != c && v[o] == d) {
+                sprintf(b, "r%dc%d is %d (%s)", o / 9 + 1, o % 9 + 1, d, unit_name(G, u[i], ub));
+                return;
+            }
+        }
+    }
+    for (int k = 0; k < G->nxpeers[c]; k++) {      /* Anti-Knight, Anti-King */
+        int o = G->xpeers[c][k];
+        if (v[o] == d) {
+            sprintf(b, "r%dc%d is %d (%s)", o / 9 + 1, o % 9 + 1, d,
+                    G->variant == VAR_KNIGHT ? "a knight's move away" : "touching, corner to corner");
+            return;
+        }
+    }
+    if (G->parity[c] && !(G->allow[c] >> d & 1)) {
+        sprintf(b, "the cell is %s", G->parity[c] == PARITY_EVEN ? "even" : "odd");
+        return;
+    }
+    sprintf(b, "RULE");
+}
+
+/* the variant's features around a cell, to explain a RULE */
+static void context(const sudoku_geom_t *G, const uint8_t v[81], int c)
+{
+    int r = c / 9, q = c % 9;
+    const int nb[4] = {q > 0 ? c - 1 : -1, q < 8 ? c + 1 : -1, r > 0 ? c - 9 : -1, r < 8 ? c + 9 : -1};
+    static const char *const SIDE[4] = {"left", "right", "above", "below"};
+    if (G->edge_kind || G->consec_on) {
+        for (int k = 0; k < 4; k++) {
+            if (nb[k] < 0) continue;
+            int m;
+            if (G->edge_kind) m = k == 0 ? EDGE_RIGHT(G->edge[c - 1]) : k == 1 ? EDGE_RIGHT(G->edge[c])
+                                : k == 2 ? EDGE_DOWN(G->edge[c - 9]) : EDGE_DOWN(G->edge[c]);
+            else m = k == 0 ? (G->consec[c - 1] & CONSEC_RIGHT) != 0 : k == 1 ? (G->consec[c] & CONSEC_RIGHT) != 0
+                   : k == 2 ? (G->consec[c - 9] & CONSEC_DOWN) != 0 : (G->consec[c] & CONSEC_DOWN) != 0;
+            printf("         %s r%dc%d (%c): mark %d\n", SIDE[k], nb[k] / 9 + 1, nb[k] % 9 + 1,
+                   v[nb[k]] ? '0' + v[nb[k]] : '.', m);
+        }
+    }
+    if (G->cage_of[c] != CAGE_NONE) {
+        int k = G->cage_of[c];
+        printf("         cage sum %d:", G->cage_sum[k]);
+        for (int i = 0; i < G->cage_n[k]; i++) {
+            int o = G->cage_cell[k][i];
+            printf(" r%dc%d(%c)", o / 9 + 1, o % 9 + 1, v[o] ? '0' + v[o] : '.');
+        }
+        printf("\n");
+    }
+    if (G->thermo_of[c] != THERMO_NONE) {
+        int t = G->thermo_of[c];
+        printf("         thermometer (bulb first):");
+        for (int i = 0; i < G->thermo_n[t]; i++) {
+            int o = G->thermo_cell[t][i];
+            printf(" r%dc%d(%c)", o / 9 + 1, o % 9 + 1, v[o] ? '0' + v[o] : '.');
+        }
+        printf("  (this cell is #%d)\n", G->thermo_pos[c] + 1);
+    }
+    for (int s = 0; s < 4 && G->nquads && G->quad_of[c][s] != QUAD_NONE; s++) {
+        int qd = G->quad_of[c][s], at = G->quad_at[qd];
+        printf("         circle at r%dc%d-r%dc%d:", at / 9 + 1, at % 9 + 1, at / 9 + 2, at % 9 + 2);
+        for (int i = 0; i < G->quad_n[qd]; i++) printf("%d", G->quad_dig[qd][i]);
+        printf("  cells: %c%c%c%c\n", v[at] ? '0' + v[at] : '.', v[at + 1] ? '0' + v[at + 1] : '.',
+               v[at + 9] ? '0' + v[at + 9] : '.', v[at + 10] ? '0' + v[at + 10] : '.');
+    }
+    if (G->sandwich) {
+        printf("         sandwich: row %d sum %d, column %d sum %d\n", r + 1, G->sandwich_sum[r], q + 1,
+               G->sandwich_sum[9 + q]);
+    }
+}
+
+typedef struct { int cell, digit, unit; bool naked, rule; } single_t;
+
+/* the singles of position v by the rules against the filled digits (sudoku_fits); classic:
+ * by the classic rules only */
+static int singles(const sudoku_geom_t *G, const uint8_t v[81], bool classic, single_t *out)
+{
+    int n = 0;
+    for (int k = 0; k < G->ncells; k++) {
+        int c = G->cells[k], only = 0, cnt = 0;
+        if (v[c]) continue;
+        for (int d = 1; d <= G->n; d++) {
+            bool ok = classic ? classic_fits(v, c, d, G->n, G->box_h, G->box_w) : sudoku_fits(G, v, c, d);
+            if (ok) { only = d; cnt++; }
+        }
+        if (cnt == 1) out[n++] = (single_t){c, only, -1, true, false};
+    }
+    int u[64], nu = classic ? 27 : units_of(G, u);
+    if (classic) for (int i = 0; i < 27; i++) u[i] = i;
+    for (int i = 0; i < nu; i++) {
+        if (classic && u[i] >= 18 + (G->n / G->box_w) * (G->n / G->box_h)) continue;
+        if (classic && ((u[i] < 9 && u[i] >= G->n) || (u[i] >= 9 && u[i] < 18 && u[i] - 9 >= G->n))) continue;
+        for (int d = 1; d <= G->n; d++) {
+            int where = -1, cnt = 0;
+            bool placed = false;
+            for (int k = 0; k < G->n; k++) {
+                int c;
+                if (classic) {
+                    if (u[i] < 9) c = u[i] * 9 + k;
+                    else if (u[i] < 18) c = k * 9 + (u[i] - 9);
+                    else {
+                        int b = u[i] - 18, across = G->n / G->box_w;
+                        c = ((b / across) * G->box_h + k / G->box_w) * 9 + (b % across) * G->box_w + k % G->box_w;
+                    }
+                } else {
+                    c = G->unit[u[i]][k];
+                }
+                if (v[c] == d) { placed = true; break; }
+                bool ok = !v[c] && (classic ? classic_fits(v, c, d, G->n, G->box_h, G->box_w) : sudoku_fits(G, v, c, d));
+                if (ok) { where = c; cnt++; }
+            }
+            if (!placed && cnt == 1) out[n++] = (single_t){where, d, u[i], false, false};
+        }
+    }
+    return n;
+}
+
+/* the single s is also a classic one (the same cell and digit, any kind) */
+static bool classic_has(const single_t *cl, int ncl, const single_t *s)
+{
+    for (int i = 0; i < ncl; i++) if (cl[i].cell == s->cell && cl[i].digit == s->digit) return true;
+    return false;
+}
+
+/* how many reasons of the single are the variant's own rule (RULE), and how many are its
+ * extra units / moves / parity (anything but a classic row, column or box) */
+static int rule_count(const sudoku_geom_t *G, const uint8_t v[81], const single_t *s, int *special)
+{
+    char b[96];
+    int rules = 0;
+    *special = 0;
+    if (s->naked) {
+        for (int d = 1; d <= G->n; d++) {
+            if (d == s->digit) continue;
+            why(G, v, s->cell, d, b);
+            if (!strcmp(b, "RULE")) rules++;
+            else if (!strstr(b, "(row") && !strstr(b, "(column") && !strstr(b, "(box")) (*special)++;
+        }
+    } else {
+        for (int k = 0; k < G->n; k++) {
+            int o = G->unit[s->unit][k];
+            if (o == s->cell || v[o]) continue;
+            why(G, v, o, s->digit, b);
+            if (!strcmp(b, "RULE")) rules++;
+            else if (!strstr(b, "(row") && !strstr(b, "(column") && !strstr(b, "(box")) (*special)++;
+        }
+    }
+    return rules;
+}
+
+static void print_step(const sudoku_geom_t *G, const uint8_t v[81], const single_t *s, int i)
+{
+    char ub[40], b[96];
+    printf("   step %d: %s r%dc%d = %d", i, s->naked ? "naked single" : "hidden single", s->cell / 9 + 1,
+           s->cell % 9 + 1, s->digit);
+    if (!s->naked) printf(" (the only place for %d in %s)", s->digit, unit_name(G, s->unit, ub));
+    printf("\n");
+    if (s->naked) {
+        for (int d = 1; d <= G->n; d++) {
+            if (d == s->digit) continue;
+            why(G, v, s->cell, d, b);
+            printf("      %d: %s\n", d, b);
+        }
+        context(G, v, s->cell);
+    } else {
+        for (int k = 0; k < G->n; k++) {
+            int o = G->unit[s->unit][k];
+            if (o == s->cell) continue;
+            if (v[o]) { printf("      r%dc%d: has %d\n", o / 9 + 1, o % 9 + 1, v[o]); continue; }
+            why(G, v, o, s->digit, b);
+            printf("      r%dc%d: %s\n", o / 9 + 1, o % 9 + 1, b);
+            if (!strcmp(b, "RULE")) context(G, v, o);
+        }
+    }
+}
+
+static bool plain(int v) { return v == VAR_CLASSIC || v == VAR_MINI || v == VAR_KIDS; }
+
+/* the best opening single of position v for variant var: not a classic one (plain variants:
+ * a hidden single in a box), with the fewest reasons that need the variant's rule spelled out
+ * (at least one, or an extra unit / move); -1 if none. *score: lower is better */
+static int pick(int var, const sudoku_geom_t *G, const uint8_t v[81], single_t *best, int *score)
+{
+    static single_t s[2048], cl[2048];
+    int n = singles(G, v, false, s), ncl = singles(G, v, true, cl), got = -1;
+    *score = 1 << 30;
+    for (int i = 0; i < n; i++) {
+        int special, rules = rule_count(G, v, &s[i], &special), sc;
+        if (plain(var)) {
+            if (s[i].naked || s[i].unit < 18) continue;
+            sc = 0;
+        } else {
+            if (classic_has(cl, ncl, &s[i]) || rules + special == 0) continue;
+            sc = (rules > 3 ? 10 * rules : rules) + (s[i].naked ? 0 : 1);
+        }
+        if (sc < *score) { *score = sc; *best = s[i]; got = i; }
+    }
+    return got;
+}
+
+static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, char *marks, char *thermos, int len)
+{
+    regions[0] = cages[0] = marks[0] = thermos[0] = 0;
+    switch (g->variant) {
+    case VAR_JIGSAW:
+        for (int i = 0; i < 81; i++) regions[i] = (char)('0' + g->region[i]);
+        regions[81] = 0;
+        break;
+    case VAR_KILLER: sudoku_cages_text(g, cages, len); break;
+    case VAR_QUAD: sudoku_quads_text(g, cages, len); break;
+    case VAR_EVENODD: case VAR_CONSEC: case VAR_KROPKI: case VAR_XV: case VAR_GT:
+        sudoku_marks_text(g, marks, len); break;
+    case VAR_SANDWICH: sudoku_sandwich_text(g, marks, len); break;
+    case VAR_THERMO: sudoku_thermos_text(g, thermos, len); break;
+    default: break;
+    }
+}
+
+int main(int argc, char **argv)
+{
+    const char *out = argc > 1 ? argv[1] : "-";
+    const char *only = argc > 2 ? argv[2] : NULL;
+    FILE *f = strcmp(out, "-") ? fopen(out, "w") : NULL;
+    if (strcmp(out, "-") && !f) { perror(out); return 1; }
+    if (f) fprintf(f, "# One example puzzle per variant for the variant pages (docs/variants/), made by\n"
+                      "# tools/variant_examples.c. Import it (Files > puzzles > this file > Import) to follow along.\n");
+    sudoku_geom_init();
+    static sudoku_geom_t board, best_board;
+    for (int var = 0; var < VAR_COUNT; var++) {
+        if (only && strncasecmp(only, variant_name(var), strlen(only))) continue;
+        uint8_t giv[81], best_giv[81] = {0};
+        int best_score = 1 << 30, best_level = GEN_EASY;
+        uint32_t best_seed = 0;
+        single_t first;
+        for (int lv = GEN_EASY; lv <= GEN_MEDIUM && best_score > 2; lv++) {
+            for (uint32_t s = 1; s <= 60; s++) {
+                gen_level_t got;
+                uint32_t seed = 7000 + s * 13;
+                if (!sudoku_generate(var, (gen_level_t)lv, seed, giv, &board, &got) || (int)got != lv) continue;
+                single_t one;
+                int sc;
+                if (pick(var, &board, giv, &one, &sc) < 0 || sc >= best_score) continue;
+                best_score = sc;
+                best_seed = seed;
+                best_level = lv;
+                first = one;
+                memcpy(best_giv, giv, 81);
+                best_board = board;
+                if (sc <= 1) break;
+            }
+        }
+        if (!best_seed) { printf("== %s: no example found\n", variant_name(var)); continue; }
+        const sudoku_geom_t *G = &best_board;
+        uint8_t sol[81], v[81];
+        sudoku_solve(G, best_giv, sol);
+        static char cages[1024], marks[1024], thermos[1024];
+        char regions[82], line[2400];
+        layout_texts(G, regions, cages, marks, thermos, sizeof(cages));
+        sdx_format(var, best_level, best_giv, regions, cages, marks, thermos, false, line, sizeof(line));
+        if (f) fprintf(f, "%s\n", line);
+        printf("== %s (%s, seed %u)\n   sdx: %s\n", variant_name(var), gen_level_name(best_level), (unsigned)best_seed,
+               line);
+        for (int r = 0; r < G->n; r++) {
+            printf("   ");
+            for (int c = 0; c < G->n; c++) printf("%c", best_giv[r * 9 + c] ? '0' + best_giv[r * 9 + c] : '.');
+            printf("   ");
+            for (int c = 0; c < G->n; c++) printf("%d", sol[r * 9 + c]);
+            printf("\n");
+        }
+        memcpy(v, best_giv, 81);
+        single_t s = first;
+        for (int i = 1; i <= STEPS; i++) {
+            print_step(G, v, &s, i);
+            v[s.cell] = (uint8_t)s.digit;
+            int sc;
+            if (pick(var, G, v, &s, &sc) < 0) {        /* then any single, the variant's or not */
+                static single_t all[2048];
+                int n = singles(G, v, false, all);
+                if (!n) break;
+                s = all[0];
+                for (int k = 0; k < n; k++) if (!all[k].naked && all[k].unit >= 18) { s = all[k]; break; }
+            }
+        }
+    }
+    if (f) fclose(f);
+    return 0;
+}

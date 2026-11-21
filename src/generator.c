@@ -906,6 +906,13 @@ bool sudoku_solve(const sudoku_geom_t *G, const uint8_t cells[81], uint8_t out[8
     return true;
 }
 
+bool sudoku_fits(const sudoku_geom_t *G, const uint8_t vals[81], int cell, int d)
+{
+    static grid_t g;
+    if (cell < 0 || cell > 80 || vals[cell] || d < 1 || d > G->n || !grid_load(&g, G, vals)) return false;
+    return (grid_free(&g, cell) >> d & 1) != 0;
+}
+
 /* false if node_limit (0 = none) was reached first */
 static bool random_full_grid(const sudoku_geom_t *G, uint8_t out[81], uint32_t *rng, uint32_t node_limit)
 {

@@ -36,6 +36,7 @@ Also online, as web pages: **https://edipermadi.github.io/esp32p4_sudoku/docs/**
 |------|--------------|
 | [Features](docs/features.md) | Everything the game does, by topic: puzzles, playing, players & progress, settings & system |
 | [How to play](docs/how-to-play.md) | Which button does what, as a table |
+| [Variants](docs/variants/README.md) | Each of the 20 variants on its own page: rules, tips and a worked example with a screenshot |
 | [Data & storage](docs/data.md) | `sudoku.db` and its tables, backups, firmware update, USB drive, format, factory reset, saving |
 | [Building and releases](docs/building.md) | Arduino settings, `arduino-cli`, GitHub Actions releases, the web flasher |
 | [Development](docs/development.md) | Regenerating puzzles and fonts, colours, sounds, tests, puzzle generation speed on the board, source layout |

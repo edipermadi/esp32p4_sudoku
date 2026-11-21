@@ -56,3 +56,4 @@ dkms.conf
 
 # PC-side test binary (make -C tests)
 tests/sudoku_tests
+tests/variant_examples

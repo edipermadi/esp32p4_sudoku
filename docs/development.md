@@ -45,6 +45,8 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 | .sdx edge cases | `.sdm` lines, names and numbers, bad lines rejected, packed runs of empty cells, a Classic puzzle in one Send-by-sound part |
 | hints | the hint engine walks puzzles of several variants to their solution, a right digit at every step |
 
+`make -C tests examples` remakes [`docs/variant-examples.sdx`](variant-examples.sdx), the example puzzles of the [variant pages](variants/README.md) (`tools/variant_examples.c`: one puzzle per variant whose first steps need its own rule, and those steps printed with their reasons; `tests/variant_examples - kropki` prints one variant). Each page's screenshot is that puzzle opened from Puzzles → Saved → variant-examples after importing the file: `python3 tools/variant_shots.py --port /dev/ttyACM1` takes all 20 (or `... kropki 18` some), closing a rules card if one pops up; Saved must open on that collection (the first one there, or the one shown last).
+
 `make -C tests golden` prints the golden hashes: after a deliberate change to the generator, pin the new ones in `test_determinism` (and know that every board's daily puzzles change with the firmware). `./tests/sudoku_tests hints` runs only the tests whose name contains "hints". Code that touches LVGL or ESP-IDF (the screens, `sudoku.db`) isn't covered: that is still checked on the board, with devctl.
 
 ## Puzzle generation speed

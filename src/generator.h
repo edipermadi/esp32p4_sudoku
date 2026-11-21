@@ -280,6 +280,11 @@ bool sudoku_classic_unique(const uint8_t cells[81]);
  * puzzle that takes too long. */
 bool sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
 
+/* Digit d may go in the empty cell by every rule of the board, as far as the digits in vals
+ * (filled, 0 = empty) tell: no solving ahead, just the rules against what's there (the
+ * variant pages' worked examples, tools/variant_examples.c). */
+bool sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
+
 /* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
  * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.) */
 bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[81]);

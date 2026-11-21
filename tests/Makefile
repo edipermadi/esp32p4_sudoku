@@ -1,6 +1,7 @@
 # PC-side tests of the firmware's plain-C parts (see test_main.c):
 #   make -C tests            build and run them (with AddressSanitizer and UBSan)
 #   make -C tests golden     print the golden hashes (to pin a deliberate generator change)
+#   make -C tests examples   the variant pages' example puzzles (docs/variant-examples.sdx)
 #   make -C tests clean
 CC      ?= cc
 SRC      = ../src
@@ -15,10 +16,15 @@ run: sudoku_tests
 sudoku_tests: $(OBJS) $(SRC)/generator.h $(SRC)/puzzles.h $(SRC)/sdx.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(OBJS)
 
+# the variant pages' example puzzles: docs/variant-examples.sdx, and their opening steps printed
+examples: ../tools/variant_examples.c $(SRC)/generator.c $(SRC)/sdx.c $(SRC)/generator.h $(SRC)/sdx.h
+	$(CC) $(CPPFLAGS) -O2 -o variant_examples ../tools/variant_examples.c $(SRC)/generator.c $(SRC)/sdx.c
+	cd .. && tests/variant_examples docs/variant-examples.sdx
+
 golden: sudoku_tests
 	PRINT_GOLDEN=1 ./sudoku_tests determinism
 
 clean:
-	rm -f sudoku_tests
+	rm -f sudoku_tests variant_examples
 
-.PHONY: run golden clean
+.PHONY: run golden clean examples
