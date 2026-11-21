@@ -26,21 +26,7 @@ It's [Consecutive](consecutive.md) with no bars at all.
 
 ## Worked example
 
-**variant-examples #14**, Non-Consecutive Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-. . 4 | . 3 . | . . .
-. . . | . . . | 7 4 1
-. . 2 | 4 . 8 | . 6 9
-------+-------+------
-. 5 . | . . . | . . .
-. . 3 | 5 . 9 | 4 . .
-. . . | . . . | . 9 .
-------+-------+------
-7 4 . | 8 . 3 | 9 . .
-3 6 8 | . . . | . . .
-. . . | . 4 . | 8 . .
-```
+**variant-examples #14**, Non-Consecutive Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 **Step 1: r7c3.** Row 7 has 7, 4, 8, 3 and 9; column 3 has 4, 2, 3 and 8; box 7 has 7, 4, 3, 6 and 8. By the Classic rules r7c3 could be 1 or 5. Its left neighbour, r7c2, is a 4, and 5 is 1 away from 4. **r7c3 = 1**.
 

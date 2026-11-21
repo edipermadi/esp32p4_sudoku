@@ -23,24 +23,10 @@
 
 ## Worked example
 
-**variant-examples #10**, Thermo Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The thermometers are in the screenshot; two matter here, both through a 7:
+**variant-examples #10**, Thermo Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The thermometers are in the screenshot; two matter here, both through a 7:
 
 - bulb **r4c6**, then r3c6 (a 7), then r2c6, going up;
 - bulb **r7c6**, then r6c7 (a 7), then r5c7, going diagonally up and right.
-
-```
-. . 3 | . 4 5 | 8 2 .
-. . 5 | . . . | . . 4
-2 . . | . . 7 | . . .
-------+-------+------
-. . 7 | 3 9 . | . . .
-1 . . | 6 . 4 | . . 5
-. . . | . 5 1 | 7 . .
-------+-------+------
-. . . | 4 . . | . . 9
-4 . . | . . . | 3 . .
-. 3 2 | 5 8 . | 1 . .
-```
 
 **Step 1: r4c6, a bulb below a 7.** Row 4 has 7, 3 and 9; column 6 has 5, 7, 4 and 1; box 5 has 3, 9, 6, 4, 5 and 1. By the Classic rules r4c6 could be 2 or 8. It's the bulb of the thermometer through the 7 at r3c6, so it's smaller than 7. **r4c6 = 2**.
 

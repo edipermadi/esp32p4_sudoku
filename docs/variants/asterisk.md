@@ -24,21 +24,7 @@
 
 ## Worked example
 
-**variant-examples #16**, Asterisk Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-. 4 2 | 5 7 9 | 3 . 8
-. . . | . . . | . 4 7
-. 6 . | . . 2 | 5 . 9
-------+-------+------
-6 . . | 8 3 . | . . 5
-. . . | 6 . 5 | . . .
-5 . . | . 2 7 | . . 3
-------+-------+------
-8 . 4 | 9 . . | . 3 .
-2 5 . | . . . | . . .
-9 . 3 | 2 8 4 | 1 5 .
-```
+**variant-examples #16**, Asterisk Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 **Step 1: the 4 in column 5.** Column 5 needs a 4; its empty cells are r2c5, r3c5, r5c5, r7c5 and r8c5.
 

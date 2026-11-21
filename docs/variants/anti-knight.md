@@ -23,21 +23,7 @@
 
 ## Worked example
 
-**variant-examples #7**, Anti-Knight Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-. . 2 | . . 9 | 3 . .
-. . . | 2 6 . | 4 1 9
-. . 3 | 4 . . | 7 . .
-------+-------+------
-2 . . | 3 4 . | . . .
-. . 5 | 9 . 6 | 1 . .
-. . . | . 8 7 | . . 2
-------+-------+------
-. . 1 | . . 4 | 5 . .
-8 5 4 | . 9 2 | . . .
-. . 7 | 8 . . | 2 . .
-```
+**variant-examples #7**, Anti-Knight Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 **Step 1: r7c4.** Row 7 has 1, 4 and 5; column 4 has 2, 4, 3, 9 and 8; box 8 has 4, 9, 2 and 8. By the Classic rules r7c4 could be 6 or 7. A knight's move from r7c4 (one row up, two columns right) is **r6c6**, which is a 7. **r7c4 = 6**.
 

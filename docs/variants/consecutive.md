@@ -24,21 +24,7 @@
 
 ## Worked example
 
-**variant-examples #9**, Consecutive Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The bars are in the screenshot.
-
-```
-. . . | . . . | . . .
-. . . | . . . | . . 2
-. . . | . . . | . . 5
-------+-------+------
-. 6 . | 4 9 . | . . .
-. . . | 3 . 7 | . . .
-. . . | . 8 5 | . 6 .
-------+-------+------
-5 . . | . . . | . . .
-7 . . | . . . | . . .
-. . . | . . . | . . .
-```
+**variant-examples #9**, Consecutive Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The bars are in the screenshot.
 
 **Step 1: r6c4, with no bar above it.** Row 6 has 8, 5 and 6; column 4 has 4 and 3; box 5 has 4, 9, 3, 7, 8 and 5. By the Classic rules r6c4 could be 1 or 2. But r5c4, right above it, is a 3, and there's **no bar** between them: so r6c4 isn't 2 (or 4). **r6c4 = 1**.
 

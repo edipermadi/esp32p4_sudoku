@@ -24,21 +24,7 @@
 
 ## Worked example
 
-**variant-examples #19**, Greater-Than Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The signs are in the screenshot.
-
-```
-. 4 . | . . . | 3 . 8
-. . . | . . . | 7 . .
-. . . | 1 . . | . 2 9
-------+-------+------
-. . 4 | . . . | . . .
-. . 3 | . . . | 4 . .
-. . . | . . . | 6 . .
-------+-------+------
-9 2 . | . . 5 | . . .
-. . 6 | . . . | . . .
-4 . 1 | . . . | . 3 .
-```
+**variant-examples #19**, Greater-Than Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The signs are in the screenshot.
 
 **Step 1: r7c7, the top-left cell of box 9.** Row 7 has 9, 2 and 5; column 7 has 3, 7, 4 and 6; box 9 has a 3. By the Classic rules r7c7 could be 1 or 8. The signs say it's **smaller than r7c8** (to its right) and **smaller than r8c7** (below): two different cells of box 9 are bigger than it, and they can't both be 9. So r7c7 is at most 7. **r7c7 = 1**.
 

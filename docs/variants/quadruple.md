@@ -24,24 +24,10 @@
 
 ## Worked example
 
-**variant-examples #20**, Quadruple Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The circles are in the screenshot; two matter here:
+**variant-examples #20**, Quadruple Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The circles are in the screenshot; two matter here:
 
 - **1 2 8 9** where r8c5, r8c6, r9c5 and r9c6 meet (r9c6 is a given 2);
 - **3 6 7 9** where r1c6, r1c7, r2c6 and r2c7 meet (r1c6 is 9, r2c6 is 6, r2c7 is 7).
-
-```
-1 4 . | 5 . 9 | . . .
-. . . | . . 6 | 7 4 .
-. . . | . 3 . | . 2 .
-------+-------+------
-. 7 . | 9 . 3 | . 1 .
-6 . . | 2 . 7 | . . 5
-. 1 . | 4 . 8 | . 7 .
-------+-------+------
-. 2 . | . 4 . | . . .
-. 3 6 | 7 . . | . . .
-. . . | 6 . 2 | . 3 7
-```
 
 **Step 1: r8c6, in the 1-2-8-9 circle.** Row 8 has 3, 6 and 7; column 6 has 9, 6, 3, 7, 8 and 2; box 8 has 4, 7, 6 and 2. By the Classic rules r8c6 could be 1 or 5. Now the circle: its 2 is placed (r9c6), so 1, 8 and 9 are still missing, and it has exactly three empty cells (r8c5, r8c6, r9c5). Each of them must take one of 1, 8 and 9: r8c6 can't be 5. **r8c6 = 1**.
 

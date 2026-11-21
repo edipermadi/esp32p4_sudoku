@@ -22,21 +22,7 @@
 
 ## Worked example
 
-**variant-examples #8**, Even-Odd Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The marks are in the screenshot.
-
-```
-1 . . | 5 . 9 | . . .
-. 9 . | . 2 . | . 4 1
-7 . . | . . . | . . .
-------+-------+------
-. 7 . | 9 . . | 8 1 2
-6 . 3 | . . . | 4 . 5
-2 1 9 | . . 8 | . 7 .
-------+-------+------
-. . . | . . . | . . 6
-8 3 . | . 9 . | . 5 .
-. . . | 6 . 2 | . . 7
-```
+**variant-examples #8**, Even-Odd Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The marks are in the screenshot.
 
 **Step 1: r1c9, a shaded (even) cell.** Row 1 has 1, 5 and 9; column 9 has 1, 2, 5, 6 and 7; box 3 has 4 and 1. That leaves 3 and 8, and the cell is even. **r1c9 = 8**.
 

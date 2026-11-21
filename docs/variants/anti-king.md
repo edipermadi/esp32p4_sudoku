@@ -23,21 +23,7 @@
 
 ## Worked example
 
-**variant-examples #13**, Anti-King Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-. . 1 | 7 8 . | . 2 4
-. . 8 | 4 . 1 | . . .
-. 4 . | . . 5 | . . 1
-------+-------+------
-. 9 . | . . . | 4 . .
-3 8 5 | . . . | 2 9 7
-. . 4 | . . . | . 1 .
-------+-------+------
-5 . . | 3 . . | . 4 .
-. . . | 8 . 9 | 1 . .
-8 1 . | . 7 4 | 6 . .
-```
+**variant-examples #13**, Anti-King Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 **Step 1: the 5 in column 4.** Column 4 needs a 5; its empty cells are r3c4, r4c4, r5c4, r6c4 and r9c4.
 

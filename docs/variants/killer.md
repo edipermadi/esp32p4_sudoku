@@ -24,23 +24,11 @@
 
 ## Worked example
 
-**variant-examples #6**, Killer Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The cages are in the screenshot; these three matter:
+**variant-examples #6**, Killer Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The cages are in the screenshot; these three matter:
 
 - the bottom-left cage: **15** over r9c1, r9c2 and r9c3 (r9c3 is a given 2);
 - a two-cell cage of **13**: r4c7 (a given 8) and r5c7;
 - a two-cell cage of **16**: r4c8 and r4c9 (a given 9).
-
-```
-. . . . . . 1 . .
-3 . . . . . . . .
-. . . . . . . . .
-. . . . . 1 8 . 9
-. . . . . . . . .
-1 . 3 5 . . . . .
-. . . . . . . . .
-. . . . . . . . 3
-. . 2 . . . . . .
-```
 
 **Step 1: the 3 in column 2.** Column 2 needs a 3. Go down it:
 

@@ -29,21 +29,7 @@
 
 ## Worked example
 
-**variant-examples #17**, Kropki Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The dots are in the screenshot.
-
-```
-. . . | 9 . . | 8 . 7
-. 7 5 | . . . | 6 . .
-. . . | . . . | . . .
-------+-------+------
-. . . | . . . | . . .
-1 . . | . . . | . . 5
-. . . | . . . | . . .
-------+-------+------
-. . . | . . . | . . .
-. . 1 | . . . | 3 5 .
-7 . 2 | . . 9 | . . .
-```
+**variant-examples #17**, Kropki Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The dots are in the screenshot.
 
 **Step 1: r9c7, with no dot to the 3 above it.** Row 9 has 7, 2 and 9; column 7 has 8, 6 and 3; box 9 has 3 and 5. By the Classic rules r9c7 could be 1 or 4. The cell above, r8c7, is a 3, and there's **no dot** between them: so r9c7 isn't 4 (1 apart from 3), nor 2 or 6. **r9c7 = 1**.
 

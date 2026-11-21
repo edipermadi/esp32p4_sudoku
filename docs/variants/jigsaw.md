@@ -22,19 +22,7 @@
 
 ## Worked example
 
-**variant-examples #5**, Jigsaw Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-3 2 . . . . . . 9
-. . 6 . . 1 2 3 .
-. 1 7 . . . . . .
-4 3 9 8 6 2 1 . 5
-2 . 1 . . . 8 . 3
-1 . 5 9 3 8 6 2 4
-. . . . . . 7 4 .
-. 4 3 1 . . 9 . .
-6 . . . . . . 9 1
-```
+**variant-examples #5**, Jigsaw Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 The regions are in the screenshot. Two of them matter here:
 

@@ -22,21 +22,7 @@
 
 ## Worked example
 
-**variant-examples #4**, Hyper Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-. 4 . | 5 . 9 | . . 8
-3 9 . | . . . | . . .
-7 . 8 | 2 . . | 9 4 .
-------+-------+------
-4 . 7 | . 8 2 | 6 5 .
-. . 3 | 6 . 7 | 2 . .
-. 2 9 | 1 5 . | 8 . 7
-------+-------+------
-. 5 6 | . . 1 | 7 . 3
-. . . | . . . | . 9 1
-2 . . | 9 . 5 | . 8 .
-```
+**variant-examples #4**, Hyper Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 The top-left window is rows 2–4, columns 2–4; the top-right one is rows 2–4, columns 6–8.
 

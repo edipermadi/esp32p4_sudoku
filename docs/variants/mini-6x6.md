@@ -22,18 +22,7 @@ A 6×6 grid with the digits 1 to 6: every **row**, every **column** and every **
 
 ## Worked example
 
-**variant-examples #3**, Mini 6×6 Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-1 3 5 | 6 . .
-. . . | . . 3
-------+------
-. 2 1 | . . 5
-3 . . | 4 2 .
-------+------
-6 . . | . . .
-. . 2 | 1 3 6
-```
+**variant-examples #3**, Mini 6×6 Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 **Step 1: the 2 in box 1 (rows 1–2, columns 1–3).** Row 1 of the box is full (1, 3, 5), so the 2 goes in row 2: r2c1, r2c2 or r2c3. Column 2 has a 2 (r3c2), and so does column 3 (r6c3). **r2c1 = 2**.
 

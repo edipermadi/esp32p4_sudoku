@@ -22,15 +22,7 @@ A small grid for younger players: 4 rows, 4 columns and four **2×2 boxes**. Eve
 
 ## Worked example
 
-**variant-examples #12**, Kids 4×4 Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). Box 1 is the top-left 2×2, box 2 the top-right.
-
-```
-1 2 | 3 .
-4 . | . 2
-----+----
-3 . | . 1
-. 1 | 4 3
-```
+**variant-examples #12**, Kids 4×4 Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). Box 1 is the top-left 2×2, box 2 the top-right.
 
 **Step 1: the 3 in box 1.** Box 1 has 1, 2 and 4, so it needs a 3, and it has one empty cell, r2c2. **r2c2 = 3**.
 

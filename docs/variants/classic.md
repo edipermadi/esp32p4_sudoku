@@ -28,20 +28,6 @@ Every other variant on these pages keeps these rules and adds one of its own.
 
 The puzzle in the screenshot is **variant-examples #1**, a Classic Easy puzzle. To play along, import [`variant-examples.sdx`](../variant-examples.sdx) (copy it to `puzzles/` on the card, then **Files → puzzles → variant-examples.sdx → Import**): it lands in **Puzzles → Saved → variant-examples**. Cells are written **r**ow**c**olumn, counted from the top left: r1c3 is row 1, column 3.
 
-```
-. 4 . | . . . | 3 6 8
-. . . | . 2 . | 7 . .
-. . . | 1 . . | 5 2 9
-------+-------+------
-. 7 4 | 9 6 3 | . 1 2
-. . 3 | 2 . 7 | 4 . .
-2 1 . | 4 5 8 | 6 7 .
-------+-------+------
-9 2 7 | . . 5 | . . .
-. . 6 | . 9 . | . . .
-4 5 1 | . . . | . 3 .
-```
-
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py classic: edit the script, not this part. -->
 

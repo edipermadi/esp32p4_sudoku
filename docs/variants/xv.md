@@ -29,21 +29,7 @@
 
 ## Worked example
 
-**variant-examples #18**, XV Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The marks are in the screenshot.
-
-```
-. 4 . | . . . | 3 6 8
-. . . | . . . | 7 . .
-. . . | 1 . . | . 2 9
-------+-------+------
-. . 4 | . 6 . | . 1 .
-. . 3 | . . . | 4 . .
-. 1 . | . 5 . | 6 . .
-------+-------+------
-9 2 . | . . 5 | . . .
-. . 6 | . . . | . . .
-4 5 1 | . . . | . 3 .
-```
+**variant-examples #18**, XV Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The marks are in the screenshot.
 
 **Step 1: r2c8, under an X.** There's an **X** between r1c8 (a 6) and r2c8: together they make 10, so **r2c8 = 4**. (The Classic rules alone would leave it 4 or 5.)
 

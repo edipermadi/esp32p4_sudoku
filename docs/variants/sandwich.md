@@ -24,21 +24,7 @@
 
 ## Worked example
 
-**variant-examples #11**, Sandwich Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*). The sums are in the screenshot: rows 13, 18, 0, 2, 24, 5, 19, 0, 18 from the top; columns 8, 10, 8, 12, 8, 3, 14, 12, 0 from the left.
-
-```
-5 . 7 | . . 4 | 6 . .
-. . . | . 2 . | 4 . 9
-. . . | 3 . . | 8 . .
-------+-------+------
-. 4 . | . . 2 | . . .
-2 6 9 | . . . | 5 1 3
-. . . | 9 . . | . 8 .
-------+-------+------
-. . 2 | . . 1 | . . .
-8 . 6 | . 4 . | . . .
-. . 4 | 2 . . | 3 . 8
-```
+**variant-examples #11**, Sandwich Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*). The sums are in the screenshot: rows 13, 18, 0, 2, 24, 5, 19, 0, 18 from the top; columns 8, 10, 8, 12, 8, 3, 14, 12, 0 from the left.
 
 **Step 1: r7c7, next to row 7's 1.** Row 7 has 2 and 1; column 7 has 6, 4, 8, 5 and 3; box 9 has 3 and 8. By the Classic rules r7c7 could be 7 or 9. But row 7's 1 is in r7c6, right next to it: a 9 there would make row 7's sandwich 0, and its sum is **19**. **r7c7 = 7**.
 

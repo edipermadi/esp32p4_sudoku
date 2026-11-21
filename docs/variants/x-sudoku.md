@@ -23,21 +23,7 @@
 
 ## Worked example
 
-**variant-examples #2**, X-Sudoku Easy (see [Classic](classic.md#worked-example) for how to import the examples; cells are written r*row*c*column*).
-
-```
-. 4 3 | . 6 . | 7 . .
-8 7 . | 3 . . | . . 9
-. . 1 | 9 . . | . 3 .
-------+-------+------
-3 8 . | . . . | . 1 7
-7 1 . | 5 4 3 | . 2 8
-4 2 . | . . . | . 9 3
-------+-------+------
-. 9 . | . . 2 | 3 . .
-2 . . | . . 6 | . 5 1
-. . 4 | . 3 . | 9 7 .
-```
+**variant-examples #2**, X-Sudoku Easy (see [Classic](classic.md#worked-example-the-whole-puzzle) for how to import the examples; cells are written r*row*c*column*).
 
 **Step 1: r2c8, using the anti-diagonal.** r2c8 is on the anti-diagonal (it runs r1c9, r2c8, r3c7, r4c6, r5c5, r6c4, r7c3, r8c2, r9c1). Which digits can it take?
 
