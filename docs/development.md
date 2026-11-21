@@ -154,7 +154,13 @@ src/ui_sysmon_memory.c   System monitor > Memory: internal RAM, PSRAM, DMA; the 
 src/ui_sysmon_storage.c  System monitor > Storage: firmware, flash, NVS, microSD
 src/ui_sysmon_graphics.c System monitor > Graphics: LVGL frame rate, draw times, objects, timers
 src/ui_sysmon_tasks.c    System monitor > Tasks: the FreeRTOS task table, sortable
-src/sysmon_core.c       the system monitor's numbers, without LVGL: CPU load, temperature, memory, storage, the task list, the last hour
+src/sysmon_core.h       the system monitor's numbers, without LVGL (a header for the six parts below)
+src/sysmon_chip.c       reset reason, uptime, chip, Ethernet MAC, task count
+src/sysmon_cpu.c        CPU load per core, the temperature sensor
+src/sysmon_memory.c     the heaps
+src/sysmon_storage.c    flash, NVS, the microSD card's free space
+src/sysmon_tasks.c      the FreeRTOS task list: the core-0 reader, CPU shares, sorting
+src/sysmon_history.c    the last hour, a sample every 10 s
 src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
