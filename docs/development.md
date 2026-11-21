@@ -133,7 +133,11 @@ src/sd_card.c           the microSD card: probe and format
 src/device_ops.c        factory reset, power off
 src/usb_drive.c         the card lent to a computer over USB
 src/ui_history.c        History and Gameplays
-src/ui_trophies.c       Trophies: achievements, leaderboards, records
+src/ui_trophies.c       Trophies: the screen around the tabs, the tab bar, the unlock toast (ui_trophies_tab.h)
+src/ui_trophies_achievements.c   its Achievements tab
+src/ui_trophies_daily.c          its Daily tab: a daily puzzle's leaderboard
+src/ui_trophies_weekly.c         its Weekly tab
+src/ui_trophies_records.c        its Records tab
 src/trophies_core.h     the Trophies screen's data, without LVGL (a header for the four parts below)
 src/trophies_dates.c    date arithmetic: a day moved, this week's Monday
 src/trophies_view.c     the day and week shown: moving them, asking sudoku.db
