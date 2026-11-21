@@ -9,7 +9,8 @@
  * A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4-inch 720×720 MIPI-DSI
  * display, GT911 touch, ES8311 speaker), built with LVGL 9.6 as an Arduino sketch. These pages
  * document the code; how to play, the features and how to build are in the project's `docs/`
- * folder (and online at https://edipermadi.github.io/esp32p4_sudoku/docs/).
+ * folder (and online at https://edipermadi.github.io/esp32p4_sudoku/docs/). These pages are online
+ * too, with each release: https://edipermadi.github.io/esp32p4_sudoku/code/
  *
  * @section mp_what What the firmware does
  *
@@ -66,6 +67,8 @@
  *   `sdx.c`, Wi-Fi in `wifi_mgr.cpp` (its page: `ui_wifi.c`), sound effects in `sfx.c`, remote
  *   control by sound in `gibberlink.cpp`, the USB drive in `usb_msc.cpp`, SQLite's VFS in
  *   `sqlite/sqlite3_esp.c`.
+ *
+ * @ref screens draws every screen and how a tap leads from one to another (Graphviz).
  *
  * @section mp_running How it runs
  *

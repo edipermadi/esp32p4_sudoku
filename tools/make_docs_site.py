@@ -13,6 +13,8 @@ Turns README.md and the Markdown under docs/ into HTML pages for GitHub Pages:
     OUT_DIR/screenshots/...             docs/screenshots/
     OUT_DIR/variant-examples.sdx        the variant pages' example puzzles, to download
 
+The top bar links the code docs (OUT_DIR/../code/, Doxygen) when they are there.
+
 The pages are flat (one folder), so every relative path is the same from each. A
 section's pages are under one entry of the menu, with a breadcrumb and previous / next
 links. Every link between pages, to an anchor or to an image is checked: a broken
@@ -215,7 +217,7 @@ TEMPLATE = """<!doctype html>
 <div class="top"><div class="in">
   <a class="brand" href="index.html">Sudoku for ESP32-P4<span>{version}</span></a>
   <a href="{repo}">GitHub</a>
-  <a class="install" href="../index.html">Install from the browser</a>
+{code}  <a class="install" href="../index.html">Install from the browser</a>
 </div></div>
 <nav>{nav}</nav>
 <main>
@@ -238,6 +240,9 @@ def main():
     titles, bodies = {}, {}
     for src, page, _, _ in PAGES:
         titles[page], bodies[page] = render(src)
+    # the code docs (Doxygen) next to the pages, one level up, when the site has them
+    code = ('  <a href="../code/index.html">Code</a>\n'
+            if os.path.exists(os.path.join(out, "..", "code", "index.html")) else "")
     for src, page, under, sub in PAGES:
         nav = "".join('<a href="%s"%s>%s</a>' % (p, ' class="on"' if p == under else "", html.escape(t))
                       for _, p, t in MENU)
@@ -252,7 +257,7 @@ def main():
                    if k + 1 < len(pages) else "<span></span>")
             pager = '\n<p class="pager">%s%s</p>' % (prev, nxt)
         doc = TEMPLATE.format(title=html.escape(titles[page]), version=html.escape(version), repo=REPO,
-                              nav=nav, crumb=crumb, body=bodies[page], pager=pager, src=src,
+                              code=code, nav=nav, crumb=crumb, body=bodies[page], pager=pager, src=src,
                               script=MERMAID if 'class="mermaid"' in bodies[page] else "")
         with open(os.path.join(out, page), "w", encoding="utf-8") as f:
             f.write(doc)

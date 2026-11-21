@@ -5,7 +5,7 @@
 #   make upload         builds, then flashes it over the UART port (PORT=/dev/ttyACM0)
 #   make avatars        flashes extras/avatars.bin into its partition (once per board)
 #   make release        the release files into dist/ (tools/package_release.sh; VERSION=...)
-#   make site           the web flasher and docs site into site/ (tools/make_flasher_site.sh)
+#   make site           the web flasher, docs and code docs site into site/ (tools/make_flasher_site.sh)
 #   make doxygen        the code's documentation (Doxyfile) into build/doxygen/html/index.html;
 #                       its warnings in build/doxygen/warnings.log
 #   make clean          removes build/, dist/ and site/

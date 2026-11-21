@@ -6,6 +6,8 @@
 #   OUT_DIR/firmware/*.bin      bootloader, partition table, boot_app0, app, avatars
 #   OUT_DIR/home.png            a screenshot for the page
 #   OUT_DIR/docs/               README.md and the docs (variants, internals too) as HTML (tools/make_docs_site.py)
+#   OUT_DIR/code/               the code's documentation (Doxygen: Doxyfile, as make doxygen); left out
+#                               when doxygen isn't installed, unless REQUIRE_CODE_DOCS=1 (CI)
 #
 # The parts go separately (not the merged image from 0x0), so flashing leaves
 # NVS, and with it the board's Wi-Fi setting, alone unless the user asks the
@@ -25,7 +27,21 @@ mkdir -p "$out/firmware"
 cp "$here/web/index.html" "$out/index.html"
 cp "$here/docs/screenshots/home.png" "$out/home.png"
 touch "$out/.nojekyll"
-python3 "$here/tools/make_docs_site.py" "$out/docs" "$ver"
+if command -v doxygen >/dev/null; then
+    mkdir -p "$here/build/doxygen"
+    (cd "$here" && VERSION="$ver" doxygen Doxyfile)
+    cp -r "$here/build/doxygen/html" "$out/code"
+    n=$(grep -c "warning" "$here/build/doxygen/warnings.log" 2>/dev/null || true)
+    echo "code docs: $out/code (${n:-0} Doxygen warnings: build/doxygen/warnings.log)"
+elif [ "${REQUIRE_CODE_DOCS:-0}" = 1 ]; then
+    echo "no doxygen for the code docs (apt install doxygen graphviz)" >&2
+    exit 1
+else
+    echo "no doxygen: the code docs are left out (apt install doxygen graphviz)" >&2
+    sed -i '/<a href="code\/">/d' "$out/index.html"     # (no link to them)
+fi
+
+python3 "$here/tools/make_docs_site.py" "$out/docs" "$ver"                  # (after code/: its pages link to it)
 
 python3 - "$build" "$out" "$ver" <<'PY'
 import json, os, shutil, sys

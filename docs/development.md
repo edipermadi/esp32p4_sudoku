@@ -37,7 +37,7 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 
 ## Code documentation
 
-`make doxygen` builds HTML documentation of the firmware's code into `build/doxygen/html/index.html` (Doxygen with Graphviz: `apt install doxygen graphviz`; settings in `Doxyfile`). Every source file, function and structure is there with its code, documented or not. The main page (`src/mainpage.dox`) says what the firmware does, where to start, how it runs, the conventions and the build commands. Under **Topics** (`src/topics.dox`) each screen's UI and core files are bundled: Game, Puzzles, Statistics, History, Gameplays and Replay, Trophies, Players, Files, Settings, System monitor, Lock screen; next to them the UI's start-up, Media and Board support. All of the firmware's own code is documented in Doxygen's `/** ... */` style: every file, function (`@brief`, `@param`, `@return`), structure, member, variable and macro. A new screen's UI and core go under a topic of their own: a `@defgroup` in `topics.dox` and an `@ingroup` line in each. Vendored and generated code is left out, as in `make format`. Warnings (a documented function missing a parameter, a malformed tag) go to `build/doxygen/warnings.log`, and `make doxygen` prints how many.
+`make doxygen` builds HTML documentation of the firmware's code into `build/doxygen/html/index.html` (each release also puts it online, at https://edipermadi.github.io/esp32p4_sudoku/code/) (Doxygen with Graphviz: `apt install doxygen graphviz`; settings in `Doxyfile`). Every source file, function and structure is there with its code, documented or not. The main page (`src/mainpage.dox`) says what the firmware does, where to start, how it runs, the conventions and the build commands. The **Screens** page (`src/screens.dox`) is a state diagram of every screen and how a tap leads from one to another, drawn by Graphviz from the `@dot` block there: a new screen, or a new way between two, needs a line in it. Under **Topics** (`src/topics.dox`) each screen's UI and core files are bundled: Game, Puzzles, Statistics, History, Gameplays and Replay, Trophies, Players, Files, Settings, System monitor, Lock screen; next to them the UI's start-up, Media and Board support. All of the firmware's own code is documented in Doxygen's `/** ... */` style: every file, function (`@brief`, `@param`, `@return`), structure, member, variable and macro. A new screen's UI and core go under a topic of their own: a `@defgroup` in `topics.dox` and an `@ingroup` line in each. Vendored and generated code is left out, as in `make format`. Warnings (a documented function missing a parameter, a malformed tag) go to `build/doxygen/warnings.log`, and `make doxygen` prints how many.
 
 ## Tests
 
@@ -233,7 +233,7 @@ tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/gen_avatars.py    regenerates extras/avatars.bin and src/avatars.c / .h from Noto Color Emoji (Pillow with raqm)
 tools/avatars_order.txt the avatars' order (sudoku.db keeps their numbers: only add at the end)
 tools/devctl.py         screenshots (PNG) and touches over the serial port
-tools/make_flasher_site.sh  the GitHub Pages site: web flasher + docs
+tools/make_flasher_site.sh  the GitHub Pages site: web flasher + docs + code docs (Doxygen)
 tools/make_docs_site.py README.md and docs/*.md as HTML pages (for the site)
 docs/screenshots.txt    the script that makes docs/screenshots/*.png
 tests/                  PC-side tests: make -C tests (see Tests)

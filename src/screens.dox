@@ -1,0 +1,92 @@
+/**
+ * @file screens.dox
+ * @brief The screens and how one leads to another (Doxygen only, not built).
+ */
+
+/**
+ * @page screens Screens
+ *
+ * Every screen of the UI and what takes the board from one to another: a state machine whose
+ * states are LVGL screens (`lv_screen_load()`) and whose transitions are taps. Drawn by Graphviz
+ * from the diagram in `src/screens.dox`; a screen links to its code.
+ *
+ * - **Boxes** are screens. **Rounded dashed boxes** are overlays: they cover the screen shown
+ *   without leaving it (the screen saver and lock screen on the system layer, the media viewer
+ *   over Files).
+ * - **Solid arrows** are taps; **dashed arrows** happen by themselves (a timeout, a puzzle made,
+ *   a check done). A two-headed arrow is a way there and its way back ("Puzzles / Home": Home's
+ *   Puzzles button, then the Puzzles screen's Home button).
+ * - Dialogs that stay on their screen (New puzzle's variant and level, Learn, Time attack's rules,
+ *   Share, the Solved dialog, the context menus) aren't states; where one leads to another screen,
+ *   the arrow is labelled with it.
+ *
+ * @dot
+ * digraph screens {
+ *   graph [rankdir=LR, fontname="Helvetica", fontsize=11, nodesep=0.35, ranksep=0.7, bgcolor="transparent"];
+ *   node  [shape=box, style="rounded,filled", fillcolor="#eef2fb", color="#4f6ea8", fontname="Helvetica", fontsize=11];
+ *   edge  [fontname="Helvetica", fontsize=9, color="#5a6375", fontcolor="#3a4150", arrowsize=0.7];
+ *
+ *   boot     [label="Start-up\n(splash)", shape=ellipse, fillcolor="#ffffff", URL="\ref ui_sudoku"];
+ *   home     [label="Home", fillcolor="#d7e3fa", penwidth=2, URL="\ref ui_home_menu"];
+ *   list     [label="Puzzles", URL="\ref ui_list"];
+ *   edit     [label="Enter a puzzle", URL="\ref ui_game"];
+ *   game     [label="Game", fillcolor="#d7e3fa", penwidth=2, URL="\ref ui_game"];
+ *   stats    [label="Statistics", URL="\ref ui_stats"];
+ *   history  [label="History", URL="\ref ui_history"];
+ *   plays    [label="Gameplays", URL="\ref ui_replay"];
+ *   replay   [label="Replay", URL="\ref ui_replay"];
+ *   trophies [label="Trophies", URL="\ref ui_trophies"];
+ *   players  [label="Players", URL="\ref ui_players"];
+ *   settings [label="Settings", URL="\ref settings"];
+ *   wifi     [label="Wi-Fi", URL="\ref ui_wifi.c"];
+ *   files    [label="Files", URL="\ref ui_file"];
+ *   sysmon   [label="System monitor", URL="\ref ui_sysmon"];
+ *
+ *   media    [label="Media viewer", style="rounded,dashed,filled", fillcolor="#ffffff", URL="\ref media"];
+ *   saver    [label="Screen off\n(dim clock, dark)", style="rounded,dashed,filled", fillcolor="#ffffff", URL="\ref ui_saver.c"];
+ *   lock     [label="Lock screen\n(Swipe or PIN)", style="rounded,dashed,filled", fillcolor="#ffffff", URL="\ref ui_lock"];
+ *   any      [label="any screen", shape=plaintext, style="", fontcolor="#5a6375"];
+ *
+ *   boot -> home [style=dashed, label="card and sudoku.db read"];
+ *
+ *   { rank=same; list; stats; history; plays; trophies; players; settings; files; sysmon; }
+ *
+ *   home -> list     [dir=both, label="Puzzles / Home"];
+ *   home -> stats    [dir=both, label="Statistics / Home"];
+ *   home -> history  [dir=both, label="History / Back"];
+ *   home -> plays    [dir=both, label="Gameplays / Home"];
+ *   home -> trophies [dir=both, label="Trophies / Home"];
+ *   home -> players  [dir=both, label="Players / Home"];
+ *   home -> settings [dir=both, label="Settings / Home"];
+ *   home -> files    [dir=both, label="Files / Home"];
+ *   home -> sysmon   [dir=both, label="System / Home"];
+ *   home -> game     [label="Continue, Daily puzzle,\nTime attack: Start"];
+ *
+ *   list -> game  [label="a puzzle, Starred;\nNew puzzle, Learn"];
+ *   list -> edit  [dir=both, label="Enter puzzle / Cancel"];
+ *   edit -> game  [style=dashed, label="Check & play:\none solution"];
+ *   game -> game  [label="Solved: Next;\nTime attack:\nnext puzzle"];
+ *   game -> list  [label="List, Solved: List"];
+ *   game -> home  [label="Time attack: Stop, its end"];
+ *   game -> replay    [label="Solved: Replay"];
+ *   history -> replay [label="a game of the day"];
+ *   plays -> replay   [label="a solve"];
+ *   replay -> game    [label="Back", style=dotted];
+ *   replay -> history [label="Back", style=dotted];
+ *   replay -> plays   [label="Back", style=dotted];
+ *   settings -> wifi  [dir=both, label="Network: Wi-Fi / Back"];
+ *   files -> media    [dir=both, label="a picture or video / Close"];
+ *
+ *   any -> saver  [style=dashed, label="screen timeout,\nHome's lock button"];
+ *   saver -> lock [label="tap (lock on)"];
+ *   saver -> any  [label="tap (lock off)"];
+ *   lock -> any   [label="swipe up, PIN"];
+ *   any -> game   [label="a puzzle received\nby sound: Play"];
+ * }
+ * @enddot
+ *
+ * Replay's Back returns to the screen it was opened from (the dotted arrows). Its Export
+ * draws the replay on a second, invisible display, so the screen doesn't change. A theme
+ * change (Settings, night mode) builds every screen again and loads the new copy of the one
+ * shown.
+ */

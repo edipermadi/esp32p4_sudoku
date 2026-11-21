@@ -2,8 +2,8 @@
 # run's artifact for 30 days). A pushed tag v* also makes a GitHub release with
 # them: git tag v1.0.0 && git push origin v1.0.0
 # A release tag (no '-', so not v1.1.0-rc1) also publishes the web flasher
-# (web/index.html + the firmware) and the documentation (README.md and docs/, variants and internals too,
-# as HTML, under /docs/) on GitHub Pages. To publish it for an existing
+# (web/index.html + the firmware), the documentation (README.md and docs/, variants and internals too,
+# as HTML, under /docs/) and the code's documentation (Doxygen, under /code/) on GitHub Pages. To publish it for an existing
 # tag: Actions > Firmware > Run workflow, and pick the tag.
 # Needs, once: Settings > Pages > Build and deployment > Source: GitHub Actions.
 name: Firmware
@@ -76,9 +76,14 @@ jobs:
           python-version: '3.12'
 
       - name: Web flasher site
+        env:
+          REQUIRE_CODE_DOCS: 1                  # the code docs (/code/) must be there
         run: |
           pip install markdown-it-py==3.0.0     # docs: Markdown to HTML (tools/make_docs_site.py)
-          tools/make_flasher_site.sh build site "${{ steps.version.outputs.version }}"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq doxygen graphviz   # the code docs (Doxyfile)
+          tools/make_flasher_site.sh build site "${{ steps.version.outputs.version }}" | tee site.log
+          grep "^code docs:" site.log >> "$GITHUB_STEP_SUMMARY" || true
 
       - uses: actions/upload-artifact@v4
         with:
