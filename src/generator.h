@@ -1,6 +1,6 @@
 #pragma once
 /*
- * Puzzle generator, solver and hints for five variants:
+ * Puzzle generator, solver and hints for the variants:
  *
  *   VAR_CLASSIC  9x9, rows, columns and 3x3 boxes hold 1-9 once each
  *   VAR_X        X-Sudoku: also both main diagonals hold 1-9 once each
@@ -23,6 +23,14 @@
  *                digits rise from its bulb; every puzzle has its own
  *   VAR_SANDWICH Sandwich: Classic rules, and a clue by each row and column
  *                gives the sum of the digits between its 1 and its 9
+ *   VAR_KING     Anti-King: Classic rules, and two cells that touch, also
+ *                diagonally (a chess king's move), never hold the same digit
+ *   VAR_NONCONSEC Non-Consecutive: Classic rules, and side-by-side cells
+ *                never hold digits 1 apart (Consecutive with no bars at all)
+ *   VAR_DISJOINT Disjoint Groups: Classic rules, and the nine cells in the
+ *                same place in each box also hold 1-9 once each
+ *   VAR_ASTERISK Asterisk: Classic rules, and nine cells in an asterisk
+ *                shape around the centre also hold 1-9 once each
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -37,7 +45,9 @@
  * Units have fixed numbers whatever the variant: 0..8 rows, 9..17 columns,
  * 18..26 boxes (left to right, top to bottom; on Jigsaw the regions), 27 the
  * main diagonal (top left to bottom right), 28 the other diagonal, 29..32
- * the Hyper windows (top left, top right, bottom left, bottom right). A 6x6
+ * the Hyper windows (top left, top right, bottom left, bottom right), 33..41
+ * the Disjoint groups (by the place in the box, row by row), 42 the
+ * Asterisk. A 6x6
  * board has rows 0..5, columns 9..14 and boxes 18..23; each unit has n cells.
  *
  * Generating: a random complete grid, then clues taken away in symmetric
@@ -66,15 +76,18 @@ const char *gen_level_name(int level);   /* 0..GEN_LEVELS-1: "Easy", "Medium", "
 
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
-               VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_COUNT } sudoku_variant_t;
+               VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_KING, VAR_NONCONSEC, VAR_DISJOINT,
+               VAR_ASTERISK, VAR_COUNT } sudoku_variant_t;
 
 /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
- * "Thermo", "Sandwich", "Kids 4x4" */
+ * "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups", "Asterisk" */
 const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku", ... */
 #define UNIT_DIAG_MAIN 27
 #define UNIT_DIAG_ANTI 28
 #define UNIT_WINDOW    29               /* 29..32 */
-#define UNITS_MAX      33
+#define UNIT_GROUP     33               /* 33..41: Disjoint groups */
+#define UNIT_ASTERISK  42
+#define UNITS_MAX      43
 #define CAGES_MAX      81               /* Killer: cages per board (1 cell each at most) */
 #define CAGE_NONE      0xFF
 #define THERMOS_MAX    16
@@ -96,7 +109,7 @@ typedef struct {
     bool active[UNITS_MAX];
     uint8_t unit[UNITS_MAX][9];         /* cells of each unit in use (n of them) */
     uint8_t ncu[81];
-    uint8_t cu[81][5];                  /* units of each cell: row, column, box (+ diagonals) */
+    uint8_t cu[81][5];                  /* units of each cell: row, column, box (+ diagonals, window, group...) */
     uint8_t npeers[81];
     uint8_t peers[81][32];              /* cells sharing a unit */
     uint32_t peer_bits[81][3];          /* the same as bits (cell / 32, cell % 32) */
@@ -112,7 +125,7 @@ typedef struct {
     /* Consecutive: bars, bit CONSEC_RIGHT = to the cell on the right, CONSEC_DOWN = below */
     bool consec_on;
     uint8_t consec[81];
-    /* peers that share no unit (Anti-Knight: the knight's moves) */
+    /* peers that share no unit (Anti-Knight: the knight's moves; Anti-King: the touching cells) */
     uint8_t nxpeers[81];
     uint8_t xpeers[81][8];
     /* Thermo: thermometers, each a path of cells from its bulb (digits rise along it) */
@@ -178,10 +191,20 @@ static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
     return (r > 4) * 2 + (c > 4);
 }
 
-/* the cells drawn tinted: X diagonals, Hyper windows */
+/* on the Asterisk (9x9: rows and columns 1, 2, 4, 6, 7 around the centre) */
+static inline bool sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
+{
+    if (g->variant != VAR_ASTERISK) return false;
+    switch (cell) {                     /* (a switch: this header is C++ too, no designated array init) */
+    case 13: case 20: case 24: case 37: case 40: case 43: case 56: case 60: case 67: return true;
+    default: return false;
+    }
+}
+
+/* the cells drawn tinted: X diagonals, Hyper windows, the Asterisk */
 static inline bool sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 {
-    return sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0;
+    return sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || sudoku_geom_on_asterisk(g, cell);
 }
 
 /* ---------------------------------------------------------------- generating */

@@ -36,9 +36,15 @@ static void unit_name(int u, char *buf, size_t n)
     else if (u < 18) snprintf(buf, n, "column %d", u - 9 + 1);
     else if (u < 27) snprintf(buf, n, "%s %d", game_geo()->variant == VAR_JIGSAW ? "region" : "box", u - 18 + 1);
     else if (u < UNIT_WINDOW) snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");
-    else {                                          /* Hyper windows */
+    else if (u < UNIT_GROUP) {                      /* Hyper windows */
         static const char *const W[4] = {"top-left", "top-right", "bottom-left", "bottom-right"};
         snprintf(buf, n, "the %s window", W[(u - UNIT_WINDOW) & 3]);
+    } else if (u < UNIT_ASTERISK) {                 /* Disjoint groups: by the place in the box */
+        static const char *const SPOT[9] = {"top-left", "top", "top-right", "left", "centre", "right",
+                                         "bottom-left", "bottom", "bottom-right"};
+        snprintf(buf, n, "the %s cells of the boxes", SPOT[(u - UNIT_GROUP) % 9]);
+    } else {
+        snprintf(buf, n, "the asterisk");
     }
 }
 
@@ -50,6 +56,9 @@ static const char *units_word(void)
     if (game_geo()->variant == VAR_JIGSAW) return "row, column or region";
     if (game_geo()->ncages) return "row, column, box or cage";
     if (game_geo()->variant == VAR_KNIGHT) return "row, column, box or a knight's move away";
+    if (game_geo()->variant == VAR_KING) return "row, column, box or a touching cell";
+    if (game_geo()->variant == VAR_DISJOINT) return "row, column, box or group";
+    if (game_geo()->variant == VAR_ASTERISK) return "row, column, box or the asterisk";
     if (game_geo()->nthermos) return "row, column or box (or the thermometer)";
     return "row, column or box";
 }
@@ -133,8 +142,12 @@ void hint_render(void)
         for (int d = 1; d <= 9; d++) {
             if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
         }
-        snprintf(tech, sizeof(tech), "The bars around row %d, column %d (and where there are none) leave it only %s. ",
-                 c / 9 + 1, c % 9 + 1, digs);
+        if (game_geo()->variant == VAR_NONCONSEC)
+            snprintf(tech, sizeof(tech), "Its neighbours can't be 1 apart from row %d, column %d, which leaves it "
+                     "only %s. ", c / 9 + 1, c % 9 + 1, digs);
+        else
+            snprintf(tech, sizeof(tech), "The bars around row %d, column %d (and where there are none) leave it "
+                     "only %s. ", c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_CAGE) {              /* Killer: the cage's cells */
         int k = t->unit;
         for (int i = 0; k >= 0 && k < game_geo()->ncages && i < game_geo()->cage_n[k]; i++) h_mark[game_geo()->cage_cell[k][i]] = 1;

@@ -140,6 +140,9 @@ void atk_finish(void)
     update_header();
 }
 
+/* cell size: a whole 9x9 board (Asterisk) smaller, so the dialog fits */
+#define RULES_PIC_CS(p) ((p)->h > 6 ? 28 : 40)
+
 static const uint8_t PIC_BARS[] = {0, 1, 0xFF};    /* 4|5: a bar; 5 3 and 3 7: none */
 static const uint8_t PIC_THERMO[] = {0, 1, 2, 3, 0xFF};
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /* 9 + 2 = 11, and an empty 8 */
@@ -162,6 +165,14 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_THERMO] = {4, 1, 0, 0, "2458", NULL, NULL, NULL, NULL, NULL, PIC_THERMO, NULL, -1},
     [VAR_SANDWICH] = {6, 1, 0, 0, "614329", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9},
     [VAR_KIDS] = {4, 4, 2, 2, "1234" "3412" "2143" "4321", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
+    [VAR_KING] = {3, 3, 0, 0, "..." ".5." "...", NULL, NULL, NULL, "xxx" "x.x" "xxx", NULL, NULL, NULL, -1},
+    [VAR_NONCONSEC] = {4, 1, 0, 0, "4627", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
+    [VAR_DISJOINT] = {6, 3, 3, 3, "......" ".7..2." "......", "000000" "010010" "000000", NULL, NULL, NULL, NULL,
+                      NULL, NULL, -1},
+    [VAR_ASTERISK] = {9, 9, 3, 3, "........." "....1...." "..2...3.." "........." ".4..5..6." "........."
+                      "..7...8.." "....9...." ".........",
+                      "000000000" "000010000" "001000100" "000000000" "010010010" "000000000" "001000100"
+                      "000010000" "000000000", NULL, NULL, NULL, NULL, NULL, NULL, -1},
 };
 
 static const char *const RULES_TEXT[VAR_COUNT] = {
@@ -187,6 +198,14 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
                      "between that line's 1 and 9, wherever they are: here 4 + 3 + 2 = 9.",
     [VAR_KIDS] = "A small 4x4 grid to start with: every row, every column and every 2x2 box holds 1, 2, 3 and 4, "
                  "each once.",
+    [VAR_KING] = "Classic rules, and two cells that touch, side by side or corner to corner (a chess king's move), "
+                 "never hold the same digit: the 5 here means none of the eight cells around it can be 5.",
+    [VAR_NONCONSEC] = "Classic rules, and two side-by-side cells never hold digits 1 apart: a 4 can't sit next to "
+                      "a 3 or a 5. Corner to corner doesn't count.",
+    [VAR_DISJOINT] = "Classic rules, and the cells in the same place in each 3x3 box (all the centres, all the "
+                     "top-left corners, ...) also hold 1 to 9, each once: the tinted 7 and 2 here.",
+    [VAR_ASTERISK] = "Classic rules, and the nine tinted cells that make an asterisk around the centre also hold "
+                     "1 to 9, each once.",
 };
 
 static void rules_pic_draw_cb(lv_event_t *e)
@@ -197,7 +216,7 @@ static void rules_pic_draw_cb(lv_event_t *e)
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t co;
     lv_obj_get_coords(obj, &co);
-    const int cs = 40, w = p->w * cs, h = p->h * cs;
+    const int cs = RULES_PIC_CS(p), w = p->w * cs, h = p->h * cs;
     const int x0 = (co.x1 + co.x2) / 2 - w / 2, y0 = (co.y1 + co.y2) / 2 - h / 2;
     lv_draw_rect_dsc_t r;
     lv_draw_line_dsc_t l;
@@ -352,7 +371,7 @@ static void rules_show(int variant)
     lv_obj_t *pic = lv_obj_create(lv_msgbox_get_content(m));
     lv_obj_remove_style_all(pic);
     const rules_pic_t *p = &RULES_PIC[variant];
-    lv_obj_set_size(pic, LV_PCT(100), p->h * 40 + 16);
+    lv_obj_set_size(pic, LV_PCT(100), p->h * RULES_PIC_CS(p) + 16);
     lv_obj_set_user_data(pic, (void *)p);
     lv_obj_add_event_cb(pic, rules_pic_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_t *t = make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT, RULES_TEXT[variant]);

@@ -247,9 +247,10 @@ static lv_obj_t *gen_pick_desc;                     /* its line about the varian
 static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kept until power-off) */
 
 /* the variants in the New puzzle dialog, in button order */
-static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_MINI,
-                                                 VAR_KNIGHT, VAR_EVENODD, VAR_CONSEC, VAR_THERMO, VAR_SANDWICH,
-                                                 VAR_KIDS};
+static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW,
+                                                 VAR_KILLER, VAR_MINI, VAR_KIDS, VAR_THERMO,
+                                                 VAR_KNIGHT, VAR_KING, VAR_EVENODD, VAR_SANDWICH,
+                                                 VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -263,6 +264,10 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_THERMO] = "9x9 with thermometers: along each one, the digits rise from the round bulb.",
     [VAR_SANDWICH] = "9x9: the number by each row and column is the sum of the digits between its 1 and its 9.",
     [VAR_KIDS] = "4x4 for kids, with big digits: rows, columns and 2x2 boxes hold 1-4 once each. Easy or Medium.",
+    [VAR_KING] = "9x9, and two cells that touch, also corner to corner, never hold the same digit.",
+    [VAR_NONCONSEC] = "9x9: two side-by-side cells never hold digits 1 apart (no 4 next to a 5).",
+    [VAR_DISJOINT] = "9x9, and the cells in the same place in each 3x3 box also hold 1-9 once each.",
+    [VAR_ASTERISK] = "9x9, and the nine tinted cells of the asterisk also hold 1-9 once each.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /* the level buttons (Kids 4x4: Hard and Expert off) */
 
@@ -317,9 +322,11 @@ static void new_puzzle_cb(lv_event_t *e)
                    "A new puzzle made on the board, with exactly one solution. Easy and Medium need only "
                    "singles; Hard needs pairs or locked candidates; Expert needs more than that.");
 
-    /* the variant: Classic, X-Sudoku or Mini 6x6 (one of them checked) */
-    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "\n", "Jigsaw", "Killer", "Mini 6x6", "\n",
-                                          "Anti-Knight", "Even-Odd", "Consecutive", "\n", "Thermo", "Sandwich", "Kids 4x4", ""};
+    /* the variant (one of them checked): rows of four, in GEN_VAR_ORDER */
+    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "Jigsaw", "\n",
+                                          "Killer", "Mini 6x6", "Kids 4x4", "Thermo", "\n",
+                                          "Anti-Knight", "Anti-King", "Even-Odd", "Sandwich", "\n",
+                                          "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
@@ -327,14 +334,14 @@ static void new_puzzle_cb(lv_event_t *e)
     for (uint32_t i = 0; i < VAR_COUNT; i++) {
         if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
     }
-    lv_obj_set_size(vm, LV_PCT(100), 226);          /* rows of three */
+    lv_obj_set_size(vm, LV_PCT(100), 226);          /* four rows */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);
     lv_obj_set_style_margin_top(vm, 14, 0);
     lv_obj_set_style_border_width(vm, 0, 0);
     lv_obj_set_style_bg_opa(vm, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_text_font(vm, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_font(vm, &lv_font_montserrat_16, 0);   /* (four across: "Consecutive" fits) */
     lv_obj_set_style_bg_color(vm, C_CARD2, LV_PART_ITEMS);
     lv_obj_set_style_text_color(vm, C_TEXT, LV_PART_ITEMS);
     lv_obj_set_style_bg_color(vm, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);

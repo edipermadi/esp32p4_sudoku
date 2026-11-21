@@ -64,6 +64,16 @@ static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const ui
         if (givens[c] && givens[c] != sol[c]) return false;
         if (!g->used[c] && sol[c]) return false;
     }
+    for (int k = 0; k < g->ncells; k++) {           /* peers differ (Anti-Knight, Anti-King too) */
+        int c = g->cells[k];
+        for (int p = 0; p < g->npeers[c]; p++) {
+            if (sol[g->peers[c][p]] == sol[c]) return false;
+        }
+    }
+    for (int c = 0; g->consec_on && c < 81; c++) {  /* Consecutive, Non-Consecutive: bar = 1 apart */
+        if (c % 9 < 8 && (abs(sol[c] - sol[c + 1]) == 1) != ((g->consec[c] & CONSEC_RIGHT) != 0)) return false;
+        if (c < 72 && (abs(sol[c] - sol[c + 9]) == 1) != ((g->consec[c] & CONSEC_DOWN) != 0)) return false;
+    }
     for (int k = 0; k < g->ncages; k++) {           /* Killer: the cage sums */
         int sum = 0;
         for (int j = 0; j < g->cage_n[k]; j++) sum += sol[g->cage_cell[k][j]];
@@ -118,6 +128,8 @@ static void test_geometry(void)
     static const struct { int variant, n, ncells, nunits, peers0; } G[] = {
         {VAR_CLASSIC, 9, 81, 27, 20}, {VAR_X, 9, 81, 29, 26}, {VAR_HYPER, 9, 81, 31, 20},
         {VAR_MINI, 6, 36, 18, 12},     {VAR_KIDS, 4, 16, 12, 7},
+        {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
+        {VAR_ASTERISK, 9, 81, 28, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -135,6 +147,16 @@ static void test_geometry(void)
     CHECKF(sudoku_geom(VAR_HYPER)->npeers[10] == 23, "Hyper peers of cell 10: %d", sudoku_geom(VAR_HYPER)->npeers[10]);
     CHECK(sudoku_geom_on_diag(sudoku_geom(VAR_X), 80) && !sudoku_geom_on_diag(sudoku_geom(VAR_X), 1));
     CHECK(strcmp(variant_name(VAR_KIDS), "Kids 4x4") == 0);
+    /* Anti-King: cell 2 (row 0, column 2) touches (1, 3) diagonally, outside its box */
+    CHECKF(sudoku_geom(VAR_KING)->npeers[2] == 21, "Anti-King peers of cell 2: %d", sudoku_geom(VAR_KING)->npeers[2]);
+    CHECK(sudoku_geom_peer(sudoku_geom(VAR_KING), 2, 12) && !sudoku_geom_peer(sudoku_geom(VAR_CLASSIC), 2, 12));
+    /* Disjoint: cell 0's group is the top-left cell of every box */
+    CHECK(sudoku_geom_peer(sudoku_geom(VAR_DISJOINT), 0, 30) && sudoku_geom_peer(sudoku_geom(VAR_DISJOINT), 0, 60));
+    /* Asterisk: its cell 13 sees the six others it shares no row, column or box with */
+    CHECKF(sudoku_geom(VAR_ASTERISK)->npeers[13] == 26, "Asterisk peers of cell 13: %d",
+           sudoku_geom(VAR_ASTERISK)->npeers[13]);
+    CHECK(sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 40) && !sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 41));
+    CHECK(sudoku_geom(VAR_NONCONSEC)->consec_on && strcmp(variant_name(VAR_NONCONSEC), "Non-Consecutive") == 0);
     CHECK(sudoku_geom(VAR_KIDS)->box_w == 2 && sudoku_geom(VAR_KIDS)->box_h == 2);
 }
 
@@ -265,8 +287,12 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "12|0|%s", E1);      /* no variant 12 */
+    snprintf(buf, sizeof(buf), "16|0|%s", E1);      /* no variant 16 */
     CHECK(!sdx_parse(buf, &p));
+    snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
+    CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);
+    snprintf(buf, sizeof(buf), "non-consecutive|-|%s", E1);
+    CHECK(sdx_parse(buf, &p) && p.variant == VAR_NONCONSEC);
     snprintf(buf, sizeof(buf), "Classic|Impossible|%s", E1);
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "0|0|%sx", E1);      /* a stray character */

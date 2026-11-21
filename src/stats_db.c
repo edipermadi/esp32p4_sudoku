@@ -353,10 +353,11 @@ static const char SQL_SOLVE_INSERT[] =
 
 static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily puzzle", "X-Sudoku", "Hyper", "Jigsaw",
                                                   "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo",
-                                                  "Sandwich", "Mini 6x6", "Kids 4x4"};
+                                                  "Sandwich", "Mini 6x6", "Kids 4x4", "Anti-King",
+                                                  "Non-Consecutive", "Disjoint Groups", "Asterisk"};
 static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
                                                    "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini",
-                                                   "Kids"};
+                                                   "Kids", "Anti-King", "Non-Consecutive", "Disjoint", "Asterisk"};
 const char *stats_kind_name(int kind) { return STATS_KIND_NAMES[kind]; }
 const char *stats_kind_prefix(int kind) { return STATS_KIND_PREFIX[kind]; }
 
@@ -375,6 +376,10 @@ int stats_kind_of(int variant, bool daily)
     case VAR_SANDWICH: return KIND_SANDWICH;
     case VAR_MINI: return KIND_MINI;
     case VAR_KIDS: return KIND_KIDS;
+    case VAR_KING: return KIND_KING;
+    case VAR_NONCONSEC: return KIND_NONCONSEC;
+    case VAR_DISJOINT: return KIND_DISJOINT;
+    case VAR_ASTERISK: return KIND_ASTERISK;
     default: return KIND_NEW;
     }
 }
@@ -2710,6 +2715,10 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Sandwich", OF_VARIANT(10)},
     {"Fastest Mini 6x6", OF_VARIANT(2)},
     {"Fastest Kids 4x4", OF_VARIANT(11)},
+    {"Fastest Anti-King", OF_VARIANT(12)},
+    {"Fastest Non-Consecutive", OF_VARIANT(13)},
+    {"Fastest Disjoint Groups", OF_VARIANT(14)},
+    {"Fastest Asterisk", OF_VARIANT(15)},
 };
 
 /* a player's records into R */

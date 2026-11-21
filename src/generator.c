@@ -7,7 +7,8 @@
 static const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard", "Expert"};
 static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
                                               "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich",
-                                              "Kids 4x4"};
+                                              "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups",
+                                              "Asterisk"};
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
 const char *variant_name(int variant) { return VARIANT_NAMES[variant]; }
@@ -55,6 +56,8 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
         if (diag && r + c == n - 1) ids[nid++] = UNIT_DIAG_ANTI;   /* centre cell: both (5 units) */
         int w = sudoku_geom_window(g, cell);
         if (w >= 0) ids[nid++] = UNIT_WINDOW + w;
+        if (variant == VAR_DISJOINT) ids[nid++] = UNIT_GROUP + (r % 3) * 3 + c % 3;
+        if (sudoku_geom_on_asterisk(g, cell)) ids[nid++] = UNIT_ASTERISK;
         for (int i = 0; i < nid; i++) {
             int u = ids[i];
             g->unit[u][fill[u]++] = (uint8_t)cell;
@@ -98,19 +101,31 @@ void sudoku_geom_init(void)
     geom_build(&g[VAR_KIDS], VAR_KIDS, 4, 2, 2, false, false, NULL);   /* 4x4 for kids: 2x2 boxes, digits 1-4 */
     geom_build(&g[VAR_HYPER], VAR_HYPER, 9, 3, 3, false, true, NULL);
     geom_build(&g[VAR_KNIGHT], VAR_KNIGHT, 9, 3, 3, false, false, NULL);
-    for (int c = 0; c < 81; c++) {                  /* Anti-Knight: a knight's move away is a peer too */
-        static const int8_t KM[8][2] = {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}};
-        sudoku_geom_t *k = &g[VAR_KNIGHT];
-        for (int m = 0; m < 8; m++) {
-            int r = c / 9 + KM[m][0], q = c % 9 + KM[m][1];
-            if (r < 0 || r > 8 || q < 0 || q > 8) continue;
-            int o = r * 9 + q;
-            k->xpeers[c][k->nxpeers[c]++] = (uint8_t)o;
-            if (sudoku_geom_peer(k, c, o)) continue;
-            k->peer_bits[c][o >> 5] |= 1u << (o & 31);
-            k->peers[c][k->npeers[c]++] = (uint8_t)o;
+    geom_build(&g[VAR_KING], VAR_KING, 9, 3, 3, false, false, NULL);
+    geom_build(&g[VAR_DISJOINT], VAR_DISJOINT, 9, 3, 3, false, false, NULL);
+    geom_build(&g[VAR_ASTERISK], VAR_ASTERISK, 9, 3, 3, false, false, NULL);
+    /* Anti-Knight: a knight's move away is a peer too; Anti-King: a touching cell (the diagonal
+     * ones are new; side by side they share a row or column already) */
+    static const int8_t KM[8][2] = {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}};
+    static const int8_t KG[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
+    for (int v = 0; v < 2; v++) {
+        sudoku_geom_t *k = &g[v ? VAR_KING : VAR_KNIGHT];
+        const int8_t (*M)[2] = v ? KG : KM;
+        for (int c = 0; c < 81; c++) {
+            for (int m = 0; m < 8; m++) {
+                int r = c / 9 + M[m][0], q = c % 9 + M[m][1];
+                if (r < 0 || r > 8 || q < 0 || q > 8) continue;
+                int o = r * 9 + q;
+                if (sudoku_geom_peer(k, c, o)) continue;   /* (Anti-King: only the diagonal ones are new) */
+                k->xpeers[c][k->nxpeers[c]++] = (uint8_t)o;
+                k->peer_bits[c][o >> 5] |= 1u << (o & 31);
+                k->peers[c][k->npeers[c]++] = (uint8_t)o;
+            }
         }
     }
+    g[VAR_NONCONSEC] = g[VAR_CLASSIC];              /* Consecutive with no bars: no neighbours 1 apart */
+    g[VAR_NONCONSEC].variant = VAR_NONCONSEC;
+    g[VAR_NONCONSEC].consec_on = true;
     g[VAR_EVENODD] = g[VAR_CLASSIC];
     g[VAR_EVENODD].variant = VAR_EVENODD;
     g[VAR_CONSEC] = g[VAR_CLASSIC];
@@ -1205,9 +1220,11 @@ static int technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
 static int easy_min_clues(const sudoku_geom_t *G)
 {
     if (G->ncages) return 8;
+    if (G->variant == VAR_NONCONSEC) return 24;
     if (G->consec_on) return 12;                    /* the bars say a lot */
     if (G->variant == VAR_EVENODD) return 30;
-    if (G->variant == VAR_KNIGHT) return 32;
+    if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT) return 32;
+    if (G->variant == VAR_ASTERISK) return 34;
     if (G->nthermos) return 28;
     if (G->sandwich) return 24;
     return G->n == 9 ? 36 : G->n == 6 ? 16 : 8;   /* (4x4: half its 16 cells; Medium digs to the minimum, ~5) */
@@ -1521,7 +1538,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 sums[lu] = (uint8_t)sum;
             }
             geom_sandwich(sums, jig);
-        } else if (variant == VAR_KNIGHT) {         /* not every fill works out: try again */
+        } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC) {
+            /* not every fill works out quickly: try again */
             if (!random_full_grid(G, full, &rng, 20000)) continue;
         } else {
             random_full_grid(G, full, &rng, 0);
