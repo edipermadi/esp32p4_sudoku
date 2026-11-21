@@ -35,6 +35,10 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 
 `make format` formats the project's own C and C++ sources, headers and the sketch (`esp32p4_sudoku.ino`) with astyle (`.astylerc`: K&R braces, 4-space indents, every `if` / `for` / `while` / `else` body in braces on its own lines; blocks already on one line, like one-line accessors, stay). `make format-check` lists the files that need it and fails if any do, changing nothing. Vendored code (SQLite, the QR Code generator, ggwave in `src/ggwave/`, `extras/lv_conf.h`) and generated files (puzzles, avatars, fonts) are left out. astyle 3.1 doesn't brace a loop whose body is itself an `if` / `for`; `tools/brace_nested.py` does, between two astyle passes. It also has a bug: a `<<` inside a designated initializer (`.pin_bit_mask = 1ULL << gpio,`) misaligns the following lines, so keep such shifts in parentheses.
 
+## Code documentation
+
+`make doxygen` builds HTML documentation of the firmware's code into `build/doxygen/html/index.html` (Doxygen with Graphviz: `apt install doxygen graphviz`; settings in `Doxyfile`). Every source file, function and structure is there with its code, documented or not; the Settings screen's files (`ui_settings*.c`, `ui_settings.h`, the **Settings screen** topic) are fully documented in Doxygen's `/** ... */` style, with `@brief`, `@param` and `@return`. Vendored and generated code is left out, as in `make format`. Warnings (a documented function missing a parameter, a malformed tag) go to `build/doxygen/warnings.log`, and `make doxygen` prints how many.
+
 ## Tests
 
 The parts of the firmware that are plain C run on a PC too: `make -C tests` builds them with the host's compiler (AddressSanitizer and UBSan on) and runs `tests/test_main.c` in a few seconds, no board needed:
@@ -116,7 +120,13 @@ src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Learn, Ent
 src/ui_list.c           the Puzzles screen
 src/ui_home.c           Home: the week, Continue and unfinished games, the menu
 src/ui_stats.c          Statistics and the progress chart
-src/ui_settings.c       the Settings screen, and the dialogs of its card actions (and the dark screen while the flash is written)
+src/ui_settings.c       the Settings screen around its tabs, the rows' look, the theme, settings reloaded, power off,
+                        the dark screen while the flash is written (ui_settings.h lists the tab files)
+src/ui_settings_network.c  Settings > Network: Wi-Fi, time zone
+src/ui_settings_display.c  Settings > Display: theme, accent, brightness, screen off, lock screen, night mode
+src/ui_settings_sound.c    Settings > Sound: sound effects, volume, Gibberlink
+src/ui_settings_game.c     Settings > Game: timer, mistake check, no-notes, left-handed, hints, tour
+src/ui_settings_data.c     Settings > Data: microSD card, USB drive, firmware update, import, export, backup, factory reset
 src/settings_core.c     what those do, without LVGL: firmware update from the card, microSD probe and format, factory reset, power off, USB drive
 src/ui_history.c        History and Gameplays
 src/ui_trophies.c       Trophies: achievements, leaderboards, records

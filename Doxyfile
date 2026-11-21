@@ -1,0 +1,48 @@
+# Doxygen for the firmware's own code: make doxygen (HTML in build/doxygen/html/index.html).
+# Only the settings that differ from Doxygen's defaults (doxygen -x lists them; doxygen -g writes
+# the full template). Vendored and generated code is left out, as in make format.
+
+PROJECT_NAME           = "Sudoku for ESP32-P4"
+PROJECT_NUMBER         = $(VERSION)
+PROJECT_BRIEF          = "Touch-screen Sudoku for the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B"
+OUTPUT_DIRECTORY       = build/doxygen
+
+INPUT                  = src esp32p4_sudoku.ino
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.h *.cpp *.ino
+EXTENSION_MAPPING      = ino=C++
+EXCLUDE                = src/sqlite/sqlite3.h \
+                         src/sqlite/sqlite3_amalgamation.h \
+                         src/ggwave \
+                         src/qrcode \
+                         src/fonts \
+                         src/avatars.c \
+                         src/puzzles_data.c \
+                         src/puzzles_count.h
+
+OPTIMIZE_OUTPUT_FOR_C  = YES
+# every file and function browsable, documented or not
+EXTRACT_ALL            = YES
+# (most of the UI's functions are static)
+EXTRACT_STATIC         = YES
+# the code, linked from the docs
+SOURCE_BROWSER         = YES
+STRIP_FROM_PATH        = .
+FULL_PATH_NAMES        = YES
+# members in the order of the file
+SORT_MEMBER_DOCS       = NO
+
+# warnings: what's documented must be complete (parameters, return values) and well-formed.
+# (Undocumented code isn't reported: EXTRACT_ALL. To check one part, run doxygen on it with
+# EXTRACT_ALL = NO and WARN_IF_UNDOCUMENTED = YES, as was done for the Settings files.)
+QUIET                  = YES
+WARN_NO_PARAMDOC       = YES
+WARN_IF_INCOMPLETE_DOC = YES
+WARN_LOGFILE           = build/doxygen/warnings.log
+
+GENERATE_LATEX         = NO
+HTML_DYNAMIC_SECTIONS  = YES
+# include graphs (needs Graphviz; set NO without it)
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES

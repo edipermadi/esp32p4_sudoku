@@ -6,6 +6,8 @@
 #   make avatars        flashes extras/avatars.bin into its partition (once per board)
 #   make release        the release files into dist/ (tools/package_release.sh; VERSION=...)
 #   make site           the web flasher and docs site into site/ (tools/make_flasher_site.sh)
+#   make doxygen        the code's documentation (Doxyfile) into build/doxygen/html/index.html;
+#                       its warnings in build/doxygen/warnings.log
 #   make clean          removes build/, dist/ and site/
 #
 #   make format         formats the C / C++ sources, headers and the sketch in place with astyle (.astylerc)
@@ -44,7 +46,7 @@ SOURCES := $(filter-out \
 
 ASTYLE_RUN = $(ASTYLE) --options=.astylerc --quiet
 
-.PHONY: all build upload avatars release site clean format format-check test
+.PHONY: all build upload avatars release site doxygen clean format format-check test
 
 all: build
 
@@ -65,6 +67,13 @@ release: build
 
 site: build
 	tools/make_flasher_site.sh $(BUILD) site $(VERSION)
+
+doxygen:
+	@command -v doxygen >/dev/null || { echo "no doxygen (apt install doxygen graphviz)"; exit 1; }
+	@mkdir -p build/doxygen
+	VERSION="$(VERSION)" doxygen Doxyfile
+	@n=$$(grep -c "warning" build/doxygen/warnings.log 2>/dev/null || true); \
+	echo "build/doxygen/html/index.html ($${n:-0} warnings: build/doxygen/warnings.log)"
 
 clean:
 	rm -rf $(BUILD) dist site
