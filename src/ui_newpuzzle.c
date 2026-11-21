@@ -69,8 +69,10 @@ static void gen_task(void *arg)
                     gen_board, &got);
     gen_cages[0] = 0;
     if (gen_var_req == VAR_KILLER) sudoku_cages_text(gen_board, gen_cages, STATS_CAGES_LEN);
+    if (gen_var_req == VAR_QUAD) sudoku_quads_text(gen_board, gen_cages, STATS_CAGES_LEN);   /* (where cages go) */
     gen_marks[0] = 0;
-    if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC) sudoku_marks_text(gen_board, gen_marks, 82);
+    if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC || gen_board->edge_kind)
+        sudoku_marks_text(gen_board, gen_marks, 82);
     if (gen_var_req == VAR_SANDWICH) sudoku_sandwich_text(gen_board, gen_marks, 82);
     gen_thermos[0] = 0;
     if (gen_var_req == VAR_THERMO) sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);
@@ -93,7 +95,7 @@ static void gen_poll_cb(lv_timer_t *t)
     gen_box = NULL;
     uint16_t id;
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
-    const char *cages = gen_var_req == VAR_KILLER ? gen_cages : NULL;
+    const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_QUAD ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,
@@ -250,7 +252,8 @@ static int gen_pick_var = VAR_CLASSIC;              /* variant chosen there (kep
 static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW,
                                                  VAR_KILLER, VAR_MINI, VAR_KIDS, VAR_THERMO,
                                                  VAR_KNIGHT, VAR_KING, VAR_EVENODD, VAR_SANDWICH,
-                                                 VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK};
+                                                 VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK,
+                                                 VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -268,6 +271,10 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_NONCONSEC] = "9x9: two side-by-side cells never hold digits 1 apart (no 4 next to a 5).",
     [VAR_DISJOINT] = "9x9, and the cells in the same place in each 3x3 box also hold 1-9 once each.",
     [VAR_ASTERISK] = "9x9, and the nine tinted cells of the asterisk also hold 1-9 once each.",
+    [VAR_KROPKI] = "9x9: a white dot joins digits 1 apart, a black dot a digit and its double; no dot, neither.",
+    [VAR_XV] = "9x9: X joins two cells that add up to 10, V two that add up to 5; no mark, neither.",
+    [VAR_GT] = "9x9: in each box, the signs between side-by-side cells say which digit is bigger.",
+    [VAR_QUAD] = "9x9: a circle where four cells meet lists digits that are among those four cells.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /* the level buttons (Kids 4x4: Hard and Expert off) */
 
@@ -318,7 +325,7 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_t *m = make_msgbox("New puzzle", NULL);
     gen_pick = m;
     lv_obj_set_width(m, 600);
-    make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT,
+    make_wrap_text(lv_msgbox_get_content(m), &lv_font_montserrat_16, C_TEXT,   /* (small: room for 20 variants) */
                    "A new puzzle made on the board, with exactly one solution. Easy and Medium need only "
                    "singles; Hard needs pairs or locked candidates; Expert needs more than that.");
 
@@ -326,7 +333,8 @@ static void new_puzzle_cb(lv_event_t *e)
     static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "Jigsaw", "\n",
                                           "Killer", "Mini 6x6", "Kids 4x4", "Thermo", "\n",
                                           "Anti-Knight", "Anti-King", "Even-Odd", "Sandwich", "\n",
-                                          "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", ""};
+                                          "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", "\n",
+                                          "Kropki", "XV", "Greater-Than", "Quadruple", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
@@ -334,7 +342,7 @@ static void new_puzzle_cb(lv_event_t *e)
     for (uint32_t i = 0; i < VAR_COUNT; i++) {
         if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
     }
-    lv_obj_set_size(vm, LV_PCT(100), 226);          /* four rows */
+    lv_obj_set_size(vm, LV_PCT(100), 264);          /* five rows */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);
@@ -351,30 +359,48 @@ static void new_puzzle_cb(lv_event_t *e)
                                    GEN_VAR_DESC[gen_pick_var]);
     lv_obj_set_style_margin_top(gen_pick_desc, 8, 0);
 
-    /* the four levels: big buttons in two rows */
+    /* the four levels: one row of buttons, a figure growing up from Easy to Expert (the
+     * players' avatar emoji, avatars.h) over the level's name */
+    static const uint16_t LEVEL_AVATAR[GEN_LEVELS] = {
+        225,                                        /* baby: Easy (avatars_order.txt line 226) */
+        226,                                        /* child: Medium */
+        231,                                        /* man: Hard */
+        345,                                        /* prince (the king): Expert */
+    };
     lv_obj_t *grid = lv_obj_create(lv_msgbox_get_content(m));
     lv_obj_remove_style_all(grid);
     lv_obj_set_size(grid, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
-    lv_obj_set_style_pad_column(grid, 12, 0);
-    lv_obj_set_style_pad_row(grid, 12, 0);
-    lv_obj_set_style_pad_top(grid, 16, 0);
+    lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(grid, 10, 0);
+    lv_obj_set_style_pad_top(grid, 12, 0);
     for (int lv = 0; lv < GEN_LEVELS; lv++) {
-        /* a star per step: Easy one, Expert four */
-        char label[48] = "";
-        for (int k = 0; k <= lv; k++) strcat(label, SYMBOL_STAR);
-        strcat(label, "  ");
-        strcat(label, gen_level_name(lv));
-        lv_obj_t *b = make_btn(grid, 0, 0, 0, 60, label, &font_icons_24, gen_level_cb, (void *)(intptr_t)lv);
-        lv_obj_set_width(b, LV_PCT(48));
-        lv_obj_set_style_bg_color(b, C_ACCENT, 0);
-        lv_obj_set_style_text_color(lv_obj_get_child(b, 0), lv_color_white(), 0);
-        lv_obj_set_style_bg_opa(b, LV_OPA_30, LV_STATE_DISABLED);
+        lv_obj_t *b = make_btn(grid, 0, 0, 0, 72, NULL, NULL, gen_level_cb, (void *)(intptr_t)lv);
+        lv_obj_set_flex_grow(b, 1);
+        lv_obj_set_style_bg_color(b, C_CARD2, 0);
+        lv_obj_t *img = lv_image_create(b);
+        lv_image_set_src(img, avatar_image(LEVEL_AVATAR[lv]));
+        lv_obj_align(img, LV_ALIGN_TOP_MID, 0, 7);
+        lv_obj_t *name = lv_label_create(b);
+        lv_label_set_text(name, gen_level_name(lv));
+        lv_obj_set_style_text_font(name, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_color(name, C_TEXT, 0);
+        lv_obj_align(name, LV_ALIGN_BOTTOM_MID, 0, -6);
+        lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);   /* (Kids 4x4: no Hard, Expert) */
         gen_lvl_btn[lv] = b;
     }
     gen_levels_update();
 
-    msgbox_button(m, "Cancel", gen_cancel_cb, false);
+    /* closing: an X in the title bar (or a tap beside the dialog), no Cancel row */
+    lv_obj_t *x = lv_msgbox_add_header_button(m, LV_SYMBOL_CLOSE);
+    lv_obj_set_size(x, 52, 40);
+    lv_obj_set_style_bg_color(x, C_CARD2, 0);
+    lv_obj_set_style_text_color(x, C_TEXT, 0);
+    lv_obj_set_style_radius(x, 8, 0);
+    lv_obj_set_style_shadow_width(x, 0, 0);
+    lv_obj_add_event_cb(x, gen_cancel_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *head = lv_msgbox_get_header(m);
+    lv_obj_set_height(head, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_ver(head, 6, 0);
     lv_obj_t *backdrop = lv_obj_get_parent(m);         /* the modal's dimmed layer */
     if (backdrop && backdrop != lv_layer_top()) lv_obj_add_event_cb(backdrop, gen_backdrop_cb, LV_EVENT_CLICKED, NULL);
 }
@@ -878,13 +904,15 @@ static void enter_cb(lv_event_t *e)
     lv_screen_load(scr_edit);
 }
 
-/* ---- the title row's context menu (the vertical dots): New puzzle, Enter, Learn */
+/* ---- the title row's context menu (the vertical dots): New puzzle, Enter, Learn, Starred puzzles */
 void new_menu_cb(lv_event_t *e)
 {
-    static const ctx_item_t ITEMS[] = {
+    const ctx_item_t ITEMS[] = {
         {LV_SYMBOL_PLUS, "New puzzle", new_puzzle_cb},
         {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
         {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
+        {list_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, list_starred() ? "All puzzles" : "Starred puzzles",
+         list_star_cb},                                      /* the starred ones in the right pane, or back */
     };
     ctx_menu_toggle(list_new_btn(), ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));
 }

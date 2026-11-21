@@ -48,6 +48,7 @@ static void win_list_cb(lv_event_t *e);
 static void win_hide_cb(lv_event_t *e);
 static void win_share_cb(lv_event_t *e);
 static void star_cb(lv_event_t *e);
+static void game_menu_cb(lv_event_t *e);
 
 static const char *const DIGITS[10] = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
@@ -66,15 +67,16 @@ static uint32_t g_elapsed_ms;
 static uint16_t g_mistakes;      /* digits placed that broke a rule (undo doesn't remove them) */
 static uint16_t g_hints;         /* cells filled with Fill (undo doesn't remove them either) */
 static uint32_t g_flags;         /* GAME_FLAG_* (store.h): the no-notes challenge, techniques the hints showed */
-static lv_obj_t *g_auto_btn, *g_win_badge, *g_win_share;
+static lv_obj_t *g_win_badge, *g_win_share;
 static uint8_t  g_sol[81];       /* the solution, for Fill */
 static game_move_t *g_moves;     /* move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
 static int      h_step;          /* 0 = no hint open, 1 = nudge shown, 2 = reason shown */
 static sudoku_step_t h_info;
 static int      g_practice = -1;  /* Learn: the technique being practised (LEARN_*), -1 = a real game */
 static bool     g_attack;         /* this game is part of a run */
-static bool     g_starred;        /* the puzzle is bookmarked (the star in the top bar) */
-static lv_obj_t *g_star_btn;
+static bool     g_starred;        /* the puzzle is bookmarked (Star in the ⋮ menu) */
+static bool     g_can_star;       /* ... and can be (not Learn's, nor one kept only in RAM) */
+static lv_obj_t *g_title_star;    /* a small star after the title while it is starred */
 static lv_obj_t *g_save_btn;      /* put it in a saved collection (generated and typed-in puzzles) */
 static lv_obj_t *h_card, *h_text, *h_act;
 static int      g_nmoves;
@@ -102,7 +104,8 @@ static lv_obj_t *g_hint_cnt;     /* hints used, on the Fill button */
 static lv_obj_t *g_win_h2h;      /* Solved dialog: how others did on this puzzle */
 static lv_obj_t *g_win_h2h_row;  /* ... in a row with the leader's avatar */
 static lv_obj_t *g_undo_btn, *g_redo_btn;
-static lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the tour points at them) */
+static lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the tour points at them;
+                                                                         g_bulb_btn: the ⋮ menu) */
 
 /* ============================================================= sudoku rules */
 
@@ -157,6 +160,20 @@ int compute_conflicts(void)
         for (int i = 1; i < g_geo->thermo_n[t]; i++) {
             int a = g_geo->thermo_cell[t][i - 1], b = g_geo->thermo_cell[t][i];
             if (g_b.val[a] && g_b.val[b] && g_b.val[b] <= g_b.val[a]) g_conflict[a] = g_conflict[b] = true;
+        }
+    }
+    for (int i = 0; g_geo->edge_kind && i < 81; i++) {   /* Kropki, XV, Greater-Than: two digits the mark (or none) rules out */
+        for (int k = 0; k < 2; k++) {
+            int o = k ? i + 9 : i + 1, m = k ? EDGE_DOWN(g_geo->edge[i]) : EDGE_RIGHT(g_geo->edge[i]);
+            if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) continue;
+            if (!sudoku_edge_ok(g_geo->edge_kind, m, g_b.val[i], g_b.val[o])) g_conflict[i] = g_conflict[o] = true;
+        }
+    }
+    for (int q = 0; q < g_geo->nquads; q++) {       /* Quadruple: no room left for the circle's digits */
+        int empty, at = g_geo->quad_at[q];
+        if (sudoku_quad_missing(g_geo, q, g_b.val, &empty) > empty) {
+            const int cells[4] = {at, at + 1, at + 9, at + 10};
+            for (int k = 0; k < 4; k++) if (g_b.val[cells[k]]) g_conflict[cells[k]] = true;
         }
     }
     for (int k = 0; k < g_geo->ncages; k++) {       /* Killer: a cage over its sum, or full and short of it */
@@ -311,8 +328,10 @@ void update_header(void)
     lv_label_set_text(g_title, name);
     /* the star: puzzles that stay (not Learn's, nor ones kept only in RAM) */
     bool can_star = g_practice < 0 && stats_db_ready() && g_id < PUZZLE_GEN_RAM_BASE;
-    lv_obj_set_hidden(g_star_btn, !can_star);
-    lv_obj_set_style_text_color(lv_obj_get_child(g_star_btn, 0), g_starred ? C_ORANGE : C_MUTED, 0);
+    g_can_star = can_star;
+    lv_obj_set_hidden(g_title_star, !(can_star && g_starred));   /* right after the title's text */
+    lv_obj_update_layout(g_title);
+    lv_obj_align_to(g_title_star, g_title, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
     /* Save: a puzzle made on the board (not an imported one: it has its collection) */
     bool can_save = can_star && !g_attack && puzzle_is_generated(g_id) && import_of(g_id, NULL) < 0;
     bool saved = false;
@@ -1060,8 +1079,7 @@ void challenge_ui(void)
         g_notes_mode = false;
         lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
     }
-    lv_obj_set_state(g_notes_btn, LV_STATE_DISABLED, on);
-    if (g_auto_btn) lv_obj_set_state(g_auto_btn, LV_STATE_DISABLED, on);
+    lv_obj_set_state(g_notes_btn, LV_STATE_DISABLED, on);   /* (Auto notes: dimmed in the ⋮ menu) */
 }
 
 void set_paused(bool p)
@@ -1087,30 +1105,53 @@ void build_game(void)
     make_btn(screen_game(), 8, 6, 104, 48, LV_SYMBOL_LEFT "  List", &lv_font_montserrat_18, back_cb, NULL);
     g_title = make_label(screen_game(), &lv_font_montserrat_22, C_TEXT);
     lv_obj_set_pos(g_title, 126, 6);
-    /* the whole line to the right edge, one line ("Daily X-Sudoku Medium, 18 Nov" fits; longer ends in ...) */
-    lv_obj_set_size(g_title, SCR_W - 8 - 126, lv_font_get_line_height(&lv_font_montserrat_22));
+    /* as wide as its text, up to the right edge less room for the star after it; one line
+     * ("Daily X-Sudoku Medium, 18 Nov" fits; longer ends in ...) */
+    lv_obj_set_size(g_title, LV_SIZE_CONTENT, lv_font_get_line_height(&lv_font_montserrat_22));
+    lv_obj_set_style_max_width(g_title, SCR_W - 8 - 126 - 30, 0);
     lv_label_set_long_mode(g_title, LV_LABEL_LONG_MODE_DOTS);
-    /* second row: ? and Hint on the left, the pause button and timer on the right */
-    lv_obj_t *qb = make_btn(screen_game(), 8, TOOL_Y, 52, 48, SYMBOL_BULB, &font_icons_24, rules_cb,
-                            NULL);                   /* the variant's rules */
-    lv_obj_set_style_text_color(lv_obj_get_child(qb, 0), C_ACCENT, 0);
+    g_title_star = make_label(screen_game(), &font_icons_20, C_ORANGE);
+    lv_label_set_text(g_title_star, SYMBOL_STAR);
+    lv_obj_set_hidden(g_title_star, true);
+    /* second row: icons for the ⋮ menu (rules, Share, Star, Auto notes, Restart), Hint, Undo, Redo,
+     * Erase and Notes, then Fill and Save; the pause button and timer on the right. (No bottom bar:
+     * the board goes down to the bottom edge.) */
+    const int ib = 52, ig = 8;                      /* icon buttons, and the gap between them */
+    int tx = 8;
+    lv_obj_t *qb = make_btn(screen_game(), tx, TOOL_Y, ib, 48, SYMBOL_MORE, &font_icons_24, game_menu_cb, NULL);
     g_bulb_btn = qb;
     g_best = make_label(screen_game(), &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_pos(g_best, 126, 36);
-
-    lv_obj_t *hb = make_btn(screen_game(), 8 + 52 + 8, TOOL_Y, 120, 48, LV_SYMBOL_EYE_OPEN "  Hint", &lv_font_montserrat_18,
-                            hint_cb, NULL);
+    tx += ib + ig;
+    lv_obj_t *hb = make_btn(screen_game(), tx, TOOL_Y, ib, 48, LV_SYMBOL_EYE_OPEN, &font_icons_24, hint_cb, NULL);
     lv_obj_set_style_text_color(lv_obj_get_child(hb, 0), C_ACCENT, 0);
     g_hint_btn = hb;
-
-    lv_obj_t *shb = make_btn(screen_game(), 8 + 52 + 8 + 120 + 8, TOOL_Y, 130, 48, SYMBOL_QR "  Share", &font_icons_20,
-                             share_cb, NULL);       /* the puzzle as a QR code */
-    lv_obj_set_style_text_color(lv_obj_get_child(shb, 0), C_ACCENT, 0);
-    g_star_btn = make_btn(screen_game(), 8 + 52 + 8 + 120 + 8 + 130 + 8, TOOL_Y, 52, 48, SYMBOL_STAR, &font_icons_24,
-                          star_cb, NULL);           /* bookmark it (Puzzles > Starred) */
-    g_save_btn = make_btn(screen_game(), 8 + 52 + 8 + 120 + 8 + 130 + 8 + 52 + 8, TOOL_Y, 52, 48, LV_SYMBOL_SAVE,
+    tx += ib + ig;
+    g_undo_btn = make_btn(screen_game(), tx, TOOL_Y, ib, 48, SYMBOL_UNDO, &font_icons_24, undo_cb, NULL);
+    tx += ib + ig;
+    g_redo_btn = make_btn(screen_game(), tx, TOOL_Y, ib, 48, SYMBOL_REDO, &font_icons_24, redo_cb, NULL);
+    tx += ib + ig;
+    make_btn(screen_game(), tx, TOOL_Y, ib, 48, LV_SYMBOL_BACKSPACE, &font_icons_24, erase_cb, NULL);
+    tx += ib + ig;
+    g_notes_btn = make_btn(screen_game(), tx, TOOL_Y, ib, 48, LV_SYMBOL_EDIT, &font_icons_24, NULL, NULL);
+    lv_obj_set_checkable(g_notes_btn, true);
+    lv_obj_add_event_cb(g_notes_btn, notes_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_style_opa(g_notes_btn, LV_OPA_40, LV_STATE_DISABLED);   /* (the no-notes challenge) */
+    /* the pencil white on the accent while on (the label takes the button's colour) */
+    lv_obj_remove_local_style_prop(lv_obj_get_child(g_notes_btn, 0), LV_STYLE_TEXT_COLOR, 0);
+    lv_obj_set_style_text_color(g_notes_btn, C_TEXT, 0);
+    lv_obj_set_style_text_color(g_notes_btn, lv_color_white(), LV_STATE_CHECKED);
+    tx += ib + ig;
+    lv_obj_t *fb = make_btn(screen_game(), tx, TOOL_Y, 96, 48, LV_SYMBOL_OK "  Fill", &lv_font_montserrat_16,
+                            fill_cb, NULL);
+    g_fill_btn = fb;
+    g_hint_cnt = make_label(fb, &lv_font_montserrat_12, C_ORANGE);     /* hints used */
+    lv_obj_align(g_hint_cnt, LV_ALIGN_TOP_RIGHT, -5, 2);
+    lv_obj_set_hidden(g_hint_cnt, true);
+    tx += 96 + ig;
+    g_save_btn = make_btn(screen_game(), tx, TOOL_Y, ib, 48, LV_SYMBOL_SAVE,
                           &lv_font_montserrat_22, save_cb, NULL);   /* into a collection (Puzzles > Saved) */
-    lv_obj_t *tb = make_btn(screen_game(), SCR_W - 8 - 200, TOOL_Y, 200, 48, NULL, NULL, pause_cb, NULL);
+    lv_obj_t *tb = make_btn(screen_game(), SCR_W - 8 - 176, TOOL_Y, 176, 48, NULL, NULL, pause_cb, NULL);
     lv_obj_set_style_bg_opa(tb, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(tb, LV_OPA_COVER, LV_STATE_PRESSED);
     g_timer_btn = tb;
@@ -1161,7 +1202,7 @@ void build_game(void)
     g_pause_ovl = lv_obj_create(screen_game());
     lv_obj_remove_style_all(g_pause_ovl);
     lv_obj_set_pos(g_pause_ovl, GRID_X, GRID_Y);
-    lv_obj_set_size(g_pause_ovl, GRID_SIZE, GRID_SIZE);
+    lv_obj_set_size(g_pause_ovl, GAME_GRID_SIZE, GAME_GRID_SIZE);
     lv_obj_set_style_bg_color(g_pause_ovl, C_CARD, 0);
     lv_obj_set_style_bg_opa(g_pause_ovl, LV_OPA_COVER, 0);
     lv_obj_set_clickable(g_pause_ovl, true);
@@ -1176,7 +1217,7 @@ void build_game(void)
 
     /* number pad */
     for (int d = 1; d <= 9; d++) {
-        lv_obj_t *b = make_btn(screen_game(), PAD_X, GRID_Y + 1 + (d - 1) * (PAD_H + PAD_GAP), PAD_W, PAD_H,
+        lv_obj_t *b = make_btn(screen_game(), GAME_PAD_X, GRID_Y + 1 + (d - 1) * (PAD_H + PAD_GAP), GAME_PAD_W, PAD_H,
                                DIGITS[d], &lv_font_montserrat_28, NULL, NULL);
         lv_obj_add_event_cb(b, pad_click_cb, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)d);
         lv_obj_add_event_cb(b, pad_long_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)d);   /* lock it */
@@ -1185,34 +1226,6 @@ void build_game(void)
         lv_obj_align(g_pad_cnt[d - 1], LV_ALIGN_TOP_RIGHT, -6, 4);
     }
 
-    /* bottom bar: seven buttons across (the status line is in the top bar) */
-    const int gap = 6, bw = (SCR_W - 16 - 6 * gap) / 7;
-    int bx = 8;
-    g_undo_btn = make_btn(screen_game(), bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LEFT "  Undo", &lv_font_montserrat_16, undo_cb,
-                          NULL);
-    bx += bw + gap;
-    g_redo_btn = make_btn(screen_game(), bx, BOT_Y, bw, BOT_H, "Redo  " LV_SYMBOL_RIGHT, &lv_font_montserrat_16, redo_cb,
-                          NULL);
-    bx += bw + gap;
-    make_btn(screen_game(), bx, BOT_Y, bw, BOT_H, LV_SYMBOL_BACKSPACE "  Erase", &lv_font_montserrat_16, erase_cb, NULL);
-    bx += bw + gap;
-    g_notes_btn = make_btn(screen_game(), bx, BOT_Y, bw, BOT_H, LV_SYMBOL_EDIT "  Notes", &lv_font_montserrat_16, NULL, NULL);
-    lv_obj_set_checkable(g_notes_btn, true);
-    lv_obj_add_event_cb(g_notes_btn, notes_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bx += bw + gap;
-    g_auto_btn = make_btn(screen_game(), bx, BOT_Y, bw, BOT_H, LV_SYMBOL_LIST "  Auto", &lv_font_montserrat_16,
-                          auto_notes_cb, NULL);
-    lv_obj_set_style_opa(g_auto_btn, LV_OPA_40, LV_STATE_DISABLED);   /* (the no-notes challenge) */
-    lv_obj_set_style_opa(g_notes_btn, LV_OPA_40, LV_STATE_DISABLED);
-    bx += bw + gap;
-    make_btn(screen_game(), bx, BOT_Y, bw, BOT_H, LV_SYMBOL_REFRESH "  Restart", &lv_font_montserrat_16, restart_cb, NULL);
-    bx += bw + gap;
-    lv_obj_t *fb = make_btn(screen_game(), bx, BOT_Y, bw, BOT_H, LV_SYMBOL_OK "  Fill", &lv_font_montserrat_16,
-                            fill_cb, NULL);
-    g_fill_btn = fb;
-    g_hint_cnt = make_label(fb, &lv_font_montserrat_12, C_ORANGE);     /* hints used */
-    lv_obj_align(g_hint_cnt, LV_ALIGN_TOP_RIGHT, -5, 2);
-    lv_obj_set_hidden(g_hint_cnt, true);
     /* status: top bar, right-aligned on the line under the title, up to the Hint button */
     g_status = make_label(screen_game(), &lv_font_montserrat_14, C_MUTED);
     lv_obj_set_width(g_status, SCR_W - 8 - 126);
@@ -1518,6 +1531,21 @@ static void win_share_cb(lv_event_t *e)
     }
 }
 
+/* the ⋮ menu of the second row: the variant's rules, Share (a QR code), Star (Puzzles > Starred), Auto notes,
+ * Restart */
+static void game_menu_cb(lv_event_t *e)
+{
+    const ctx_item_t items[] = {
+        {SYMBOL_BULB, "Rules", rules_cb, false},
+        {SYMBOL_QR, "Share", share_cb, g_id == STORE_NO_GAME},
+        {SYMBOL_STAR, g_starred ? "Unstar" : "Star", star_cb, !g_can_star},
+        {LV_SYMBOL_LIST, "Auto notes", auto_notes_cb,        /* all the marks at once (Undo takes them back) */
+         g_solved || (g_flags & GAME_FLAG_NO_NOTES) != 0},
+        {LV_SYMBOL_REFRESH, "Restart", restart_cb, false},   /* (asks first once there's progress) */
+    };
+    ctx_menu_toggle(g_bulb_btn, items, (int)(sizeof(items) / sizeof(items[0])));
+}
+
 static void star_cb(lv_event_t *e)
 {
     if (g_practice >= 0 || g_id >= PUZZLE_GEN_RAM_BASE) return;
@@ -1571,7 +1599,6 @@ bool game_attack(void) { return g_attack; }
 void game_set_attack(bool v) { g_attack = v; }
 bool game_starred(void) { return g_starred; }
 void game_set_starred(bool v) { g_starred = v; }
-lv_obj_t *game_star_btn(void) { return g_star_btn; }
 lv_obj_t *hint_card(void) { return h_card; }
 lv_obj_t *hint_text(void) { return h_text; }
 lv_obj_t *hint_act(void) { return h_act; }

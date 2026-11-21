@@ -74,6 +74,14 @@ static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const ui
         if (c % 9 < 8 && (abs(sol[c] - sol[c + 1]) == 1) != ((g->consec[c] & CONSEC_RIGHT) != 0)) return false;
         if (c < 72 && (abs(sol[c] - sol[c + 9]) == 1) != ((g->consec[c] & CONSEC_DOWN) != 0)) return false;
     }
+    for (int c = 0; g->edge_kind && c < 81; c++) {  /* Kropki, XV, Greater-Than: the marks (and none) */
+        if (c % 9 < 8 && !sudoku_edge_ok(g->edge_kind, EDGE_RIGHT(g->edge[c]), sol[c], sol[c + 1])) return false;
+        if (c < 72 && !sudoku_edge_ok(g->edge_kind, EDGE_DOWN(g->edge[c]), sol[c], sol[c + 9])) return false;
+    }
+    for (int q = 0; q < g->nquads; q++) {           /* Quadruple: every circle's digits are there */
+        int empty;
+        if (sudoku_quad_missing(g, q, sol, &empty) != 0) return false;
+    }
     for (int k = 0; k < g->ncages; k++) {           /* Killer: the cage sums */
         int sum = 0;
         for (int j = 0; j < g->cage_n[k]; j++) sum += sol[g->cage_cell[k][j]];
@@ -100,7 +108,10 @@ static bool same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->cage_sum, b->cage_sum, sizeof(a->cage_sum)) && !memcmp(a->parity, b->parity, 81) &&
            !memcmp(a->consec, b->consec, 81) && a->nthermos == b->nthermos &&
            !memcmp(a->thermo_of, b->thermo_of, 81) && !memcmp(a->thermo_pos, b->thermo_pos, 81) &&
-           a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18);
+           a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
+           a->edge_kind == b->edge_kind && !memcmp(a->edge, b->edge, 81) && a->nquads == b->nquads &&
+           !memcmp(a->quad_at, b->quad_at, a->nquads) && !memcmp(a->quad_n, b->quad_n, a->nquads) &&
+           !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads);
 }
 
 /* the layout texts of a board, as the game keeps them (sudoku_db's generated table) */
@@ -113,8 +124,12 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         regions[81] = 0;
         break;
     case VAR_KILLER:   sudoku_cages_text(g, cages, len); break;
+    case VAR_QUAD:     sudoku_quads_text(g, cages, len); break;
     case VAR_EVENODD:
-    case VAR_CONSEC:   sudoku_marks_text(g, marks, len); break;
+    case VAR_CONSEC:
+    case VAR_KROPKI:
+    case VAR_XV:
+    case VAR_GT:       sudoku_marks_text(g, marks, len); break;
     case VAR_SANDWICH: sudoku_sandwich_text(g, marks, len); break;
     case VAR_THERMO:   sudoku_thermos_text(g, thermos, len); break;
     default: break;
@@ -287,7 +302,7 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "16|0|%s", E1);      /* no variant 16 */
+    snprintf(buf, sizeof(buf), "20|0|%s", E1);      /* no variant 20 */
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);

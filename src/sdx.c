@@ -89,8 +89,12 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_jigsaw(reg, out);
     }
     case VAR_KILLER:   return sudoku_geom_killer_text(p->cages, out);
+    case VAR_QUAD:     return sudoku_geom_quad_text(p->cages, out);   /* (its circles go where cages do) */
     case VAR_EVENODD:
-    case VAR_CONSEC:   return strlen(p->marks) == 81 && sudoku_geom_marks(p->variant, p->marks, out);
+    case VAR_CONSEC:
+    case VAR_KROPKI:
+    case VAR_XV:
+    case VAR_GT:       return strlen(p->marks) == 81 && sudoku_geom_marks(p->variant, p->marks, out);
     case VAR_THERMO:   return sudoku_geom_thermo_text(p->thermos, out);
     case VAR_SANDWICH: return sudoku_geom_sandwich_text(p->marks, out);
     default: {

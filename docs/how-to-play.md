@@ -11,11 +11,11 @@
 | Select a cell                   | Tap it                                           |
 | Enter a digit                   | Tap 1–9 on the right. Tap the same digit again to clear it |
 | Pencil marks                    | Switch **Notes** on, then tap digits to toggle marks |
-| All candidates as notes         | **Auto**                                         |
+| All candidates as notes         | **⋮ → Auto notes**                               |
 | Place one digit in many cells   | Hold the digit on the pad (it locks), then tap cells; tap the digit to unlock |
 | Clear a cell                    | **Erase**                                        |
 | Take back a move                | **Undo**; **Redo** puts it back                  |
-| Start the puzzle over           | **Restart** (asks first if there is progress)    |
+| Start the puzzle over           | **⋮ → Restart** (asks first if there is progress) |
 | Pause                           | Tap the timer; tap the board to resume           |
 | Back to the list                | **List** (top left); the game is saved           |
 | Back to the home screen         | **Home** (top left of the list, statistics, players or settings) |
@@ -29,14 +29,14 @@
 | Type in a puzzle from a book    | **Puzzles → ⋮ → Enter puzzle**, then **Check & play** |
 | A dim clock when the screen is off | **Settings → Display → Screen-saver clock**   |
 | Update the firmware             | `update.bin` on the card, **Settings → Data → Firmware update** |
-| A variant's rules               | The light bulb button in the game (next to Hint) |
+| A variant's rules               | **⋮ → Rules** in the game (left of Hint)          |
 | Accent colour                   | **Settings → Accent colour**                     |
 | A player's colour               | Tap the dot by their name on **Players**         |
 | Practise a technique            | **Puzzles → ⋮ → Learn**                          |
 | Bigger digits on the board      | **Settings → Display → Digit size** → Large      |
 | This week against last week     | Tap the "puzzles solved" line on the home screen  |
 | Ten minutes of Easy puzzles     | **Time attack** on the home screen, then **Start** |
-| Bookmark a puzzle               | The star next to **Share** in the game; the star in **Puzzles**' title row lists them |
+| Bookmark a puzzle               | **⋮ → Star** in the game; **⋮ → Starred puzzles** on the Puzzles screen lists them |
 | Hints that only point the way   | **Settings → Game → Hints** → Nudge only          |
 | See the game screen tour again  | **Settings → Game → Game screen tour → Show again** |
 | Number pad on the left          | **Settings → Game → Left-handed**                |

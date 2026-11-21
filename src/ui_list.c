@@ -10,7 +10,6 @@ static void star_row_cb(lv_event_t *e);
 static void star_row_off_cb(lv_event_t *e);
 static void list_fill_starred(void);
 static void list_set_starred(bool on);
-static void list_star_cb(lv_event_t *e);
 static void list_del_confirm_cb(lv_event_t *e);
 static void list_del_cb(lv_event_t *e);
 static void coll_click_cb(lv_event_t *e);
@@ -169,7 +168,7 @@ void list_fill_rows(int lc)
 /* ---- Starred (the star in the title row, a toggle): the player's bookmarks in the
  * right pane, newest first, instead of the collection's puzzles */
 static bool      l_starred;
-static lv_obj_t *l_star_btn, *l_new_btn;
+static lv_obj_t *l_new_btn;
 static uint16_t  l_star_ids[STATS_MAX_BOOKMARKS];
 static int       l_nstar;
 
@@ -213,7 +212,7 @@ static void list_fill_starred(void)
         lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_pad_top(t, 40, 0);
         lv_label_set_text(t, n < 0 ? "Stars need sudoku.db on a microSD card."
-                                   : "No starred puzzles yet: tap the star next to Share on the game screen to keep "
+                                   : "No starred puzzles yet: use the menu's Star on the game screen to keep "
                                      "one here.");
     }
     for (int i = 0; i < l_nstar; i++) {
@@ -234,10 +233,10 @@ static void list_fill_starred(void)
 static void list_set_starred(bool on)
 {
     l_starred = on;
-    icon_btn_set(l_star_btn, on, C_ORANGE);
 }
 
-static void list_star_cb(lv_event_t *e)
+/* the ⋮ menu's Starred puzzles / All puzzles: the right pane shows the starred ones, or the collection again */
+void list_star_cb(lv_event_t *e)
 {
     list_set_starred(!l_starred);
     refresh_list();
@@ -566,14 +565,11 @@ void build_list(void)
     lv_label_set_text(t, "Puzzles");
     lv_obj_set_pos(t, 150, 20);
     l_total = make_label(screen_list(), &lv_font_montserrat_16, C_MUTED);
-    /* right of the title: the solved count, Starred (a toggle: the starred puzzles in the
-     * right pane) and the context menu (New puzzle, Enter: type one in from a book, Learn) */
+    /* right of the title: the solved count and the context menu (New puzzle, Enter: type one in
+     * from a book, Learn, and Starred puzzles: a toggle, the starred puzzles in the right pane) */
     l_new_btn = make_btn(screen_list(), SCR_W - 12 - L_ICON_W, 10, L_ICON_W, 52, SYMBOL_MORE, &font_icons_24,
                          new_menu_cb, NULL);
-    l_star_btn = make_btn(screen_list(), SCR_W - 12 - 2 * L_ICON_W - 8, 10, L_ICON_W, 52, SYMBOL_STAR, &font_icons_24,
-                          list_star_cb, NULL);
-    icon_btn_set(l_star_btn, l_starred, C_ORANGE);
-    lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -(12 + 2 * L_ICON_W + 8 + 14), 28);
+    lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -(12 + L_ICON_W + 14), 28);
 
     /* left pane: the tabs (the built-in collections, or the player's: imported and saved),
      * and under them that tab's collections in a column that scrolls */
@@ -670,3 +666,4 @@ void list_set_tab(int v) { l_tab = v; }
 int list_coll(void) { return l_coll; }
 void list_set_coll(int v) { l_coll = v; }
 lv_obj_t *list_new_btn(void) { return l_new_btn; }
+bool list_starred(void) { return l_starred; }

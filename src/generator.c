@@ -8,13 +8,89 @@ static const char *const GEN_LEVEL_NAMES[GEN_LEVELS] = {"Easy", "Medium", "Hard"
 static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer",
                                               "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich",
                                               "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups",
-                                              "Asterisk"};
+                                              "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple"};
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
 const char *variant_name(int variant) { return VARIANT_NAMES[variant]; }
 
 /* sum of the digits in a candidate mask (bit d = digit d), for the cage logic */
 static uint8_t s_mask_sum[1024];
+
+/* Kropki, XV, Greater-Than: [kind][mark][a] = the digits b may be when the left / top
+ * cell is a (s_edge_fwd), and the digits a may be when the right / bottom one is b
+ * (s_edge_bwd) */
+static uint16_t s_edge_fwd[4][3][10], s_edge_bwd[4][3][10];
+
+bool sudoku_edge_ok(int kind, int mark, int a, int b)
+{
+    switch (kind) {
+    case EDGE_KROPKI: {
+        bool white = a - b == 1 || b - a == 1, black = a == 2 * b || b == 2 * a;
+        return mark == MARK_WHITE ? white : mark == MARK_BLACK ? black : !white && !black;
+    }
+    case EDGE_XV:
+        return mark == MARK_V ? a + b == 5 : mark == MARK_X ? a + b == 10 : a + b != 5 && a + b != 10;
+    case EDGE_GT:
+        return mark == MARK_LESS ? a < b : mark == MARK_MORE ? a > b : true;
+    default:
+        return true;
+    }
+}
+
+static void edge_tables(void)
+{
+    for (int k = 0; k < 4; k++) {
+        for (int m = 0; m < 3; m++) {
+            for (int a = 1; a <= 9; a++) {
+                uint16_t f = 0, b = 0;
+                for (int o = 1; o <= 9; o++) {
+                    if (sudoku_edge_ok(k, m, a, o)) f |= (uint16_t)(1u << o);
+                    if (sudoku_edge_ok(k, m, o, a)) b |= (uint16_t)(1u << o);
+                }
+                s_edge_fwd[k][m][a] = f;
+                s_edge_bwd[k][m][a] = b;
+            }
+        }
+    }
+}
+
+/* the digits cell i may hold beside its neighbours' digits (or, with cand, any of
+ * their candidates: v[o] == 0 then uses cand[o]) */
+static uint16_t edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const uint16_t *cand)
+{
+    int k = G->edge_kind;
+    uint16_t free = 0x3FE;
+    const int nb[4] = {i % 9 > 0 ? i - 1 : -1, i % 9 < 8 ? i + 1 : -1, i > 8 ? i - 9 : -1, i < 72 ? i + 9 : -1};
+    const int mk[4] = {nb[0] >= 0 ? EDGE_RIGHT(G->edge[i - 1]) : 0, EDGE_RIGHT(G->edge[i]),
+                       nb[2] >= 0 ? EDGE_DOWN(G->edge[i - 9]) : 0, EDGE_DOWN(G->edge[i])};
+    for (int j = 0; j < 4; j++) {
+        if (nb[j] < 0 || (k == EDGE_GT && !mk[j])) continue;
+        bool before = j == 0 || j == 2;             /* the neighbour is left of / above i */
+        uint16_t others = v[nb[j]] ? (uint16_t)(1u << v[nb[j]]) : cand ? cand[nb[j]] : 0;
+        if (!others) continue;                      /* (empty, and no candidates to go by) */
+        uint16_t ok = 0;
+        for (int w = 1; w <= 9; w++) {
+            if (others >> w & 1) ok |= before ? s_edge_fwd[k][mk[j]][w] : s_edge_bwd[k][mk[j]][w];
+        }
+        free &= ok;
+    }
+    return free;
+}
+
+int sudoku_quad_missing(const sudoku_geom_t *g, int q, const uint8_t vals[81], int *empty)
+{
+    int need[10] = {0}, miss = 0, at = g->quad_at[q];
+    for (int k = 0; k < g->quad_n[q]; k++) need[g->quad_dig[q][k]]++;
+    const int cells[4] = {at, at + 1, at + 9, at + 10};
+    *empty = 0;
+    for (int k = 0; k < 4; k++) {
+        int v = vals[cells[k]];
+        if (!v) (*empty)++;
+        else if (need[v]) need[v]--;
+    }
+    for (int d = 1; d <= 9; d++) miss += need[d];
+    return miss;
+}
 
 /* ---------------------------------------------------------------- geometry */
 
@@ -93,6 +169,7 @@ void sudoku_geom_init(void)
 {
     bread_tables();                                 /* (Sandwich sums; before any task uses them) */
     if (s_geom) return;
+    edge_tables();
     sudoku_geom_t *g = calloc(VAR_COUNT, sizeof(sudoku_geom_t));
     if (!g) abort();                                /* at start-up, with megabytes free */
     geom_build(&g[VAR_CLASSIC], VAR_CLASSIC, 9, 3, 3, false, false, NULL);
@@ -138,6 +215,11 @@ void sudoku_geom_init(void)
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
     g[VAR_KILLER] = g[VAR_CLASSIC];
     g[VAR_KILLER].variant = VAR_KILLER;
+    static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD};   /* placeholders too */
+    for (size_t i = 0; i < sizeof(OWN); i++) {
+        g[OWN[i]] = g[VAR_CLASSIC];
+        g[OWN[i]].variant = OWN[i];
+    }
     for (int m = 0; m < 1024; m++) {
         int sum = 0;
         for (int d = 1; d <= 9; d++) sum += (m >> d & 1) * d;
@@ -150,7 +232,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
 {
     sudoku_geom_init();
     if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER ||
-        variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH) {
+        variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH ||
+        variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -158,13 +241,21 @@ const sudoku_geom_t *sudoku_geom(int variant)
 
 bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
 {
-    if (!text || strlen(text) != 81 || (variant != VAR_EVENODD && variant != VAR_CONSEC)) return false;
+    const int ek = variant == VAR_KROPKI ? EDGE_KROPKI : variant == VAR_XV ? EDGE_XV : variant == VAR_GT ? EDGE_GT : 0;
+    if (!text || strlen(text) != 81 || (variant != VAR_EVENODD && variant != VAR_CONSEC && !ek)) return false;
     sudoku_geom_init();
     *out = s_geom[VAR_CLASSIC];
     out->variant = (uint8_t)variant;
+    out->edge_kind = (uint8_t)ek;
     for (int c = 0; c < 81; c++) {
         char ch = text[c];
-        if (variant == VAR_EVENODD) {
+        if (ek) {                                   /* the mark to the right + 3 x the one below */
+            if (ch < '0' || ch > '8') return false;
+            int right = (ch - '0') % 3, down = (ch - '0') / 3;
+            if (c % 9 == 8) right = 0;
+            if (c / 9 == 8) down = 0;
+            out->edge[c] = (uint8_t)(right | down << 2);
+        } else if (variant == VAR_EVENODD) {
             if (ch == 'e') {
                 out->parity[c] = PARITY_EVEN;
                 out->allow[c] = 0x154;                 /* 2 4 6 8 */
@@ -312,7 +403,8 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len)
 {
     if (len < 82) return false;
     for (int c = 0; c < 81; c++) {
-        if (g->variant == VAR_CONSEC) buf[c] = (char)('0' + (g->consec[c] & 3));
+        if (g->edge_kind) buf[c] = (char)('0' + EDGE_RIGHT(g->edge[c]) + 3 * EDGE_DOWN(g->edge[c]));
+        else if (g->variant == VAR_CONSEC) buf[c] = (char)('0' + (g->consec[c] & 3));
         else buf[c] = g->parity[c] == PARITY_EVEN ? 'e' : g->parity[c] == PARITY_ODD ? 'o' : '.';
     }
     buf[81] = 0;
@@ -322,6 +414,80 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len)
 /* Killer: a classic board plus cages (cage_of: cage per cell, CAGE_NONE =
  * none; sums per cage). Cage-mates become peers. False if a cage is empty,
  * has more than 9 cells, or its sum can't be made of distinct digits. */
+/* Quadruple: a classic board with these circles (false: a corner twice, or too many) */
+static bool geom_quad(const uint8_t *at, const uint8_t *n, const uint8_t (*dig)[4], int nq, sudoku_geom_t *out)
+{
+    if (nq > QUADS_MAX) return false;
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_QUAD;
+    memset(out->quad_of, QUAD_NONE, sizeof(out->quad_of));
+    for (int q = 0; q < nq; q++) {
+        if (at[q] > 79 || at[q] % 9 == 8 || n[q] < 1 || n[q] > 4) return false;
+        for (int p = 0; p < q; p++) if (at[p] == at[q]) return false;
+        out->quad_at[q] = at[q];
+        out->quad_n[q] = n[q];
+        uint8_t d[4] = {0, 0, 0, 0};
+        memcpy(d, dig[q], n[q]);                    /* (the unused places stay 0) */
+        for (int i = 0; i < n[q]; i++) {            /* sorted */
+            if (d[i] < 1 || d[i] > 9) return false;
+            for (int j = i + 1; j < n[q]; j++) if (d[j] < d[i]) { uint8_t t = d[i]; d[i] = d[j]; d[j] = t; }
+        }
+        int cnt[10] = {0};
+        for (int i = 0; i < n[q]; i++) if (++cnt[d[i]] > 2) return false;   /* (a digit fits twice at most) */
+        memcpy(out->quad_dig[q], d, 4);
+        const int cells[4] = {at[q], at[q] + 1, at[q] + 9, at[q] + 10};
+        for (int k = 0; k < 4; k++) {
+            int s = 0;
+            while (s < 4 && out->quad_of[cells[k]][s] != QUAD_NONE) s++;
+            out->quad_of[cells[k]][s] = (uint8_t)q;
+        }
+    }
+    out->nquads = (uint8_t)nq;
+    return true;
+}
+
+bool sudoku_geom_quad_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t at[QUADS_MAX], n[QUADS_MAX], dig[QUADS_MAX][4];
+    int nq = 0;
+    const char *p = text;
+    while (p && *p) {
+        if (nq >= QUADS_MAX) return false;
+        char *end;
+        long c = strtol(p, &end, 10);
+        if (end == p || *end != ':' || c < 0 || c > 79) return false;
+        p = end + 1;
+        at[nq] = (uint8_t)c;
+        n[nq] = 0;
+        memset(dig[nq], 0, 4);
+        while (*p >= '1' && *p <= '9') {
+            if (n[nq] >= 4) return false;
+            dig[nq][n[nq]++] = (uint8_t)(*p++ - '0');
+        }
+        if (!n[nq]) return false;
+        nq++;
+        if (*p == ';') p++;
+        else if (*p) return false;
+    }
+    return nq > 0 && geom_quad(at, n, (const uint8_t (*)[4])dig, nq, out);
+}
+
+bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    if (len < 1) return false;
+    buf[0] = 0;
+    for (int q = 0; q < g->nquads; q++) {
+        char d[5] = "";
+        for (int k = 0; k < g->quad_n[q]; k++) d[k] = (char)('0' + g->quad_dig[q][k]);
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d:%s", q ? ";" : "", g->quad_at[q], d);
+        if (w < 0 || w >= len - pos) return false;
+        pos += w;
+    }
+    return true;
+}
+
 static bool geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncages, sudoku_geom_t *out)
 {
     if (ncages < 1 || ncages > CAGES_MAX) return false;
@@ -507,6 +673,20 @@ static uint16_t grid_free(const grid_t *g, int i)
             int w = g->v[nb[k]];
             uint16_t near = (uint16_t)(((1u << (w + 1)) | (1u << (w - 1))) & 0x3FE);
             free &= bar[k] ? near : (uint16_t)~near;
+        }
+    }
+    if (G->edge_kind && free) free &= edge_allow(G, i, g->v, NULL);   /* Kropki, XV, Greater-Than */
+    for (int s = 0; s < 4 && free && G->nquads && G->quad_of[i][s] != QUAD_NONE; s++) {
+        int empty, miss = sudoku_quad_missing(G, G->quad_of[i][s], g->v, &empty);   /* (i is one of the empty) */
+        if (miss > empty) free = 0;                 /* Quadruple: not enough room left for its digits */
+        else if (miss == empty) {                   /* every empty cell must take one of them */
+            int need[10] = {0}, q = G->quad_of[i][s], at = G->quad_at[q];
+            for (int k = 0; k < G->quad_n[q]; k++) need[G->quad_dig[q][k]]++;
+            const int cells[4] = {at, at + 1, at + 9, at + 10};
+            for (int k = 0; k < 4; k++) if (g->v[cells[k]] && need[g->v[cells[k]]]) need[g->v[cells[k]]]--;
+            uint16_t m = 0;
+            for (int d = 1; d <= 9; d++) if (need[d]) m |= (uint16_t)(1u << d);
+            free &= m;
         }
     }
     if (G->sandwich && free) {                      /* Sandwich: a digit that can't keep a line's sum goes */
@@ -872,6 +1052,72 @@ static bool consec_logic(logic_t *L)
 
 /* Thermo: along a thermometer each cell's digit is above the lowest the cell
  * before it can be, and below the highest the cell after it can be. */
+/* Kropki, XV, Greater-Than: a cell keeps the digits its neighbours' candidates
+ * allow across the marks between them (and, for Kropki and XV, where there are none) */
+static bool edge_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int c = 0; c < 81; c++) {
+        if (L->v[c]) continue;
+        uint16_t keep = (uint16_t)(L->cand[c] & edge_allow(G, c, L->v, L->cand));
+        if (keep != L->cand[c]) {
+            eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+            trace(TECH_EDGE, c, -1, keep, 0, c, -1);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Quadruple: when a circle's missing digits fill its empty cells, they take
+ * nothing else; a missing digit with as many places as it needs takes them */
+static bool quad_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int q = 0; q < G->nquads; q++) {
+        int at = G->quad_at[q], need[10] = {0}, empty = 0, miss = 0;
+        const int cells[4] = {at, at + 1, at + 9, at + 10};
+        for (int k = 0; k < G->quad_n[q]; k++) need[G->quad_dig[q][k]]++;
+        for (int k = 0; k < 4; k++) {
+            int v = L->v[cells[k]];
+            if (!v) empty++;
+            else if (need[v]) need[v]--;
+        }
+        uint16_t mm = 0;
+        for (int d = 1; d <= 9; d++) {
+            miss += need[d];
+            if (need[d]) mm |= (uint16_t)(1u << d);
+        }
+        if (!miss) continue;
+        if (miss > empty) { L->broken = true; return false; }
+        for (int k = 0; miss == empty && k < 4; k++) {          /* only its digits fit */
+            int c = cells[k];
+            if (L->v[c] || !(L->cand[c] & ~mm)) continue;
+            uint16_t keep = (uint16_t)(L->cand[c] & mm);
+            eliminate(L, c, (uint16_t)(L->cand[c] & ~mm));
+            trace(TECH_QUAD, c, q, keep, 0, c, -1);
+            return true;
+        }
+        for (int d = 1; d <= 9; d++) {              /* d has just the places it needs */
+            if (!need[d]) continue;
+            int where[4], nw = 0;
+            for (int k = 0; k < 4; k++) {
+                if (!L->v[cells[k]] && (L->cand[cells[k]] >> d & 1)) where[nw++] = cells[k];
+            }
+            if (nw < need[d]) { L->broken = true; return false; }
+            if (nw != need[d]) continue;
+            for (int k = 0; k < nw; k++) {
+                int c = where[k];
+                if (L->cand[c] == (uint16_t)(1u << d)) continue;
+                eliminate(L, c, (uint16_t)(L->cand[c] & ~(1u << d)));
+                trace(TECH_QUAD, c, q, 1 << d, 0, c, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static bool thermo_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
@@ -1206,6 +1452,8 @@ static int technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->consec_on && consec_logic(&L)) continue;   /* Consecutive: so do the bars */
         if (G->nthermos && thermo_logic(&L)) continue;     /* Thermo: and the thermometers */
         if (G->sandwich && sandwich_logic(&L)) continue;   /* Sandwich: and where the 1 and 9 can be */
+        if (G->edge_kind && edge_logic(&L)) continue;     /* Kropki, XV, Greater-Than: the marks */
+        if (G->nquads && quad_logic(&L)) continue;         /* Quadruple: the circles */
         if (locked_candidates(&L) || pairs(&L)) {
             tier = 2;
             continue;
@@ -1221,6 +1469,10 @@ static int easy_min_clues(const sudoku_geom_t *G)
 {
     if (G->ncages) return 8;
     if (G->variant == VAR_NONCONSEC) return 24;
+    if (G->edge_kind == EDGE_KROPKI) return 14;     /* every dot is there, and every missing one says something */
+    if (G->edge_kind == EDGE_XV) return 22;
+    if (G->edge_kind == EDGE_GT) return 16;
+    if (G->nquads) return 28;
     if (G->consec_on) return 12;                    /* the bars say a lot */
     if (G->variant == VAR_EVENODD) return 30;
     if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT) return 32;
@@ -1232,10 +1484,13 @@ static int easy_min_clues(const sudoku_geom_t *G)
 
 int sudoku_grade(const sudoku_geom_t *G, const uint8_t givens[81])
 {
-    if (sudoku_count_solutions(G, givens, 2) != 1) return -1;   /* exact, also for Jigsaw */
+    /* solved by the logic alone (tier 1 or 2): one solution, proven; otherwise an exact count
+     * (also for Jigsaw). The same answer as counting first, without the slow count. */
+    int tier = technique_tier(G, givens);
+    if (tier >= 3 && sudoku_count_solutions(G, givens, 2) != 1) return -1;
     int clues = 0;
     for (int k = 0; k < G->ncells; k++) clues += givens[G->cells[k]] != 0;
-    switch (technique_tier(G, givens)) {
+    switch (tier) {
     case 1: return clues >= easy_min_clues(G) ? GEN_EASY : GEN_MEDIUM;
     case 2: return GEN_HARD;
     default: return GEN_EXPERT;
@@ -1279,7 +1534,13 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
         int a = order[k], b = (n - 1 - a / 9) * 9 + (n - 1 - a % 9);
         uint8_t va = out[a], vb = out[b];
         out[a] = out[b] = 0;
-        if (count_bounded(G, out, 2, node_limit) == 1 && (max_tier == 3 || technique_tier(G, out) <= max_tier)) {
+        /* (marks and circles: when the logic alone solves it within max_tier, it has one
+         * solution, no count needed: Greater-Than's counting is slow. Only for these, so
+         * the other variants' puzzles for a seed, the daily ones among them, stay the same.) */
+        bool ok;
+        if ((G->edge_kind || G->nquads) && max_tier < 3) ok = technique_tier(G, out) <= max_tier;
+        else ok = count_bounded(G, out, 2, node_limit) == 1 && (max_tier == 3 || technique_tier(G, out) <= max_tier);
+        if (ok) {
             clues -= a == b ? 1 : 2;
         } else {
             out[a] = va;
@@ -1481,7 +1742,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
     const bool thermo = variant == VAR_THERMO, sandwich = variant == VAR_SANDWICH;
-    const bool own = jigsaw || killer || marks || thermo || sandwich;
+    const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
+    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad;
     if (sandwich) bread_tables();
     if (own && !jig && !(jig = malloc(sizeof(*jig)))) return false;
     const sudoku_geom_t *G = own ? jig : sudoku_geom(variant);
@@ -1520,6 +1782,54 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             }
             text[81] = 0;
             sudoku_geom_marks(variant, text, jig);
+        } else if (edges) {                         /* a grid, then its marks */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            const int ek = variant == VAR_KROPKI ? EDGE_KROPKI : variant == VAR_XV ? EDGE_XV : EDGE_GT;
+            char text[82];
+            for (int c = 0; c < 81; c++) {
+                int m[2] = {0, 0};
+                for (int k = 0; k < 2; k++) {
+                    int o = k ? c + 9 : c + 1;
+                    if ((k == 0 && c % 9 == 8) || o > 80) continue;
+                    int a = full[c], b = full[o];
+                    if (ek == EDGE_GT) {            /* inside a box, every pair */
+                        if (k ? (c / 9) % 3 == 2 : (c % 9) % 3 == 2) continue;
+                        m[k] = a < b ? MARK_LESS : MARK_MORE;
+                    } else if (ek == EDGE_KROPKI) {
+                        bool white = abs(a - b) == 1, black = a == 2 * b || b == 2 * a;
+                        m[k] = white && black ? (rnd(&rng) & 1 ? MARK_WHITE : MARK_BLACK)   /* 1 and 2: either */
+                             : white ? MARK_WHITE : black ? MARK_BLACK : MARK_NONE;
+                    } else {
+                        m[k] = a + b == 5 ? MARK_V : a + b == 10 ? MARK_X : MARK_NONE;
+                    }
+                }
+                text[c] = (char)('0' + m[0] + 3 * m[1]);
+            }
+            text[81] = 0;
+            sudoku_geom_marks(variant, text, jig);
+        } else if (quad) {                          /* a grid, then circles at random corners */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t at[QUADS_MAX], n[QUADS_MAX], dig[QUADS_MAX][4];
+            int nq = level >= GEN_HARD ? 18 : 14;
+            for (int q = 0; q < nq; q++) {
+                int a;
+                bool dup;
+                do {                                /* a corner not used yet */
+                    int r = (int)(rnd(&rng) % 8), c = (int)(rnd(&rng) % 8);
+                    a = r * 9 + c;
+                    dup = false;
+                    for (int p = 0; p < q; p++) dup |= at[p] == a;
+                } while (dup);
+                at[q] = (uint8_t)a;
+                uint8_t four[4] = {full[a], full[a + 1], full[a + 9], full[a + 10]};
+                for (int i = 3; i > 0; i--) {       /* shuffled, then the first 2-4 of them */
+                    int j = (int)(rnd(&rng) % (uint32_t)(i + 1));
+                    uint8_t t = four[i]; four[i] = four[j]; four[j] = t;
+                }
+                n[q] = (uint8_t)(2 + rnd(&rng) % 3);
+                memcpy(dig[q], four, 4);
+            }
+            if (!geom_quad(at, n, (const uint8_t (*)[4])dig, nq, jig)) continue;
         } else if (thermo) {                        /* a grid, then thermometers along rising digits */
             random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!thermo_paths(full, &rng, level >= GEN_HARD ? 10 : 7, jig)) continue;
@@ -1638,7 +1948,8 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
             return true;
         }
         if (!(G->ncages && cage_logic(&L)) && !(G->consec_on && consec_logic(&L)) &&
-            !(G->nthermos && thermo_logic(&L)) && !(G->sandwich && sandwich_logic(&L)) && !locked_candidates(&L) &&
+            !(G->nthermos && thermo_logic(&L)) && !(G->sandwich && sandwich_logic(&L)) &&
+            !(G->edge_kind && edge_logic(&L)) && !(G->nquads && quad_logic(&L)) && !locked_candidates(&L) &&
             !pairs(&L) && !naked_triple(&L) && !fish(&L, 2) && !fish(&L, 3) && !xy_wing(&L)) {
             break;                                                  /* the first one is in out->tech */
         }

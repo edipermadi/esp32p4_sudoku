@@ -31,6 +31,15 @@
  *                same place in each box also hold 1-9 once each
  *   VAR_ASTERISK Asterisk: Classic rules, and nine cells in an asterisk
  *                shape around the centre also hold 1-9 once each
+ *   VAR_KROPKI   Kropki: Classic rules, and a white dot between two side-by-side
+ *                cells means their digits are 1 apart, a black dot that one is
+ *                double the other; no dot: neither (1 and 2 get either one)
+ *   VAR_XV       XV: Classic rules, and an X between two side-by-side cells
+ *                means they add up to 10, a V to 5; no mark: neither
+ *   VAR_GT       Greater-Than: Classic rules, and between every two side-by-side
+ *                cells in a box a sign says which one is bigger
+ *   VAR_QUAD     Quadruple: Classic rules, and a circle where four cells meet
+ *                lists digits that must be among those four cells
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -77,10 +86,11 @@ const char *gen_level_name(int level);   /* 0..GEN_LEVELS-1: "Easy", "Medium", "
 /* the numbers are stored in sudoku.db (generated.variant): don't reorder */
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
                VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_KING, VAR_NONCONSEC, VAR_DISJOINT,
-               VAR_ASTERISK, VAR_COUNT } sudoku_variant_t;
+               VAR_ASTERISK, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_COUNT } sudoku_variant_t;
 
 /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
- * "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups", "Asterisk" */
+ * "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki",
+ * "XV", "Greater-Than", "Quadruple" */
 const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku", ... */
 #define UNIT_DIAG_MAIN 27
 #define UNIT_DIAG_ANTI 28
@@ -92,6 +102,16 @@ const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku
 #define CAGE_NONE      0xFF
 #define THERMOS_MAX    16
 #define THERMO_NONE    0xFF
+#define QUADS_MAX      32
+#define QUAD_NONE      0xFF
+
+/* Kropki, XV, Greater-Than: the kind of edge marks, and the marks (sudoku_geom_t.edge) */
+enum { EDGE_NONE = 0, EDGE_KROPKI, EDGE_XV, EDGE_GT };
+enum { MARK_NONE = 0, MARK_WHITE = 1, MARK_BLACK = 2 };     /* Kropki: 1 apart, double */
+enum { MARK_V = 1, MARK_X = 2 };                            /* XV: sum 5, sum 10 */
+enum { MARK_LESS = 1, MARK_MORE = 2 };                      /* Greater-Than: the left / top cell is smaller, bigger */
+#define EDGE_RIGHT(e) ((e) & 3)                 /* the mark on the line to the right of a cell */
+#define EDGE_DOWN(e)  (((e) >> 2) & 3)          /* ... below it */
 
 typedef struct {
     uint8_t variant;                    /* sudoku_variant_t */
@@ -137,6 +157,16 @@ typedef struct {
     /* Sandwich: per row (0..8) and column (9..17), the sum between its 1 and 9 */
     bool sandwich;
     uint8_t sandwich_sum[18];
+    /* Kropki, XV, Greater-Than: EDGE_*, and per cell its marks (EDGE_RIGHT, EDGE_DOWN) */
+    uint8_t edge_kind;
+    uint8_t edge[81];
+    /* Quadruple: circles, each at the corner where the 2x2 cells from quad_at meet, with
+     * 1-4 digits (sorted) that must be among them */
+    uint8_t nquads;
+    uint8_t quad_at[QUADS_MAX];
+    uint8_t quad_n[QUADS_MAX];
+    uint8_t quad_dig[QUADS_MAX][4];
+    uint8_t quad_of[81][4];             /* the circles at a cell's corners, QUAD_NONE padded */
 } sudoku_geom_t;
 
 enum { PARITY_NONE = 0, PARITY_EVEN, PARITY_ODD };
@@ -155,10 +185,11 @@ bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
  * the text isn't one. sudoku_cages_text() writes it (false: buf too small). */
 bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out);
 bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
-/* Even-Odd / Consecutive boards from their marks as text, 81 characters row
- * by row: Even-Odd '.', 'e' (even) or 'o' (odd); Consecutive '0'-'3' (bit 1
- * = a bar to the right, bit 2 = a bar below). sudoku_marks_text() writes it
- * (buf: at least 82). */
+/* Even-Odd / Consecutive / Kropki / XV / Greater-Than boards from their marks
+ * as text, 81 characters row by row: Even-Odd '.', 'e' (even) or 'o' (odd);
+ * Consecutive '0'-'3' (bit 1 = a bar to the right, bit 2 = a bar below);
+ * Kropki, XV, Greater-Than '0'-'8': the mark to the right + 3 x the mark below
+ * (MARK_*). sudoku_marks_text() writes it (buf: at least 82). */
 bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out);
 bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
 /* A Thermo board from its thermometers as text: "cell,cell,...;cell,..."
@@ -171,6 +202,18 @@ bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
  * sudoku_sandwich_text() writes it. */
 bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out);
 bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len);
+/* A Quadruple board from its circles as text: "cell:digits;cell:digits;..." (cell
+ * 0..79 the top-left of the four, not in the last column; 1-4 digits 1-9 each);
+ * sudoku_quads_text() writes it. Kept where Killer keeps its cages. */
+bool sudoku_geom_quad_text(const char *text, sudoku_geom_t *out);
+bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len);
+
+/* Kropki, XV, Greater-Than: may a (the left / top cell) and b (its neighbour) stand
+ * with that mark between them? */
+bool sudoku_edge_ok(int kind, int mark, int a, int b);
+/* Quadruple: how many of circle q's digits the filled cells of vals still miss
+ * (*empty: its empty cells) */
+int sudoku_quad_missing(const sudoku_geom_t *g, int q, const uint8_t vals[81], int *empty);
 
 static inline bool sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 {
@@ -244,12 +287,15 @@ int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cel
  * still means "pairs or locked candidates" and Expert "more than that". */
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
                TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH,
-               TECH_NAKED_TRIPLE, TECH_X_WING, TECH_SWORDFISH, TECH_XY_WING } tech_kind_t;
+               TECH_NAKED_TRIPLE, TECH_X_WING, TECH_SWORDFISH, TECH_XY_WING,
+               TECH_EDGE, TECH_QUAD } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
     int unit, unit2, unit3;  /* pointing: box, line; claiming: line, box; pairs, triple: the unit; cage: the
                                 cage; consecutive: the cell whose candidates its neighbours narrowed;
-                                thermo: the thermometer; sandwich: the row or column; X-Wing, Swordfish:
+                                thermo: the thermometer; sandwich: the row or column; edge (Kropki, XV,
+                                Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
+                                the circle; X-Wing, Swordfish:
                                 the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
     int digit, digit2;       /* pointing/claiming, X-Wing, Swordfish: digit; pairs: the two digits; triple:
                                 bit mask of its three digits; cage: bit mask of the digits its sum still

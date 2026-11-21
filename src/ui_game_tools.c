@@ -143,6 +143,9 @@ void atk_finish(void)
 /* cell size: a whole 9x9 board (Asterisk) smaller, so the dialog fits */
 #define RULES_PIC_CS(p) ((p)->h > 6 ? 28 : 40)
 
+static const uint8_t PIC_KROPKI[] = {0, MARK_WHITE, 1, MARK_BLACK, 0xFF};   /* 3 4 8 2 */
+static const uint8_t PIC_XV[] = {0, MARK_V, 1, MARK_X, 0xFF};               /* 2 3 7 9 */
+static const uint8_t PIC_GT[] = {0, MARK_LESS, 1, MARK_MORE, 2, MARK_LESS, 0xFF};   /* 2 < 5 > 4 < 9 */
 static const uint8_t PIC_BARS[] = {0, 1, 0xFF};    /* 4|5: a bar; 5 3 and 3 7: none */
 static const uint8_t PIC_THERMO[] = {0, 1, 2, 3, 0xFF};
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /* 9 + 2 = 11, and an empty 8 */
@@ -173,6 +176,10 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
                       "..7...8.." "....9...." ".........",
                       "000000000" "000010000" "001000100" "000000000" "010010010" "000000000" "001000100"
                       "000010000" "000000000", NULL, NULL, NULL, NULL, NULL, NULL, -1},
+    [VAR_KROPKI] = {4, 1, 0, 0, "3482", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, EDGE_KROPKI, PIC_KROPKI},
+    [VAR_XV] = {4, 1, 0, 0, "2379", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, EDGE_XV, PIC_XV},
+    [VAR_GT] = {4, 1, 0, 0, "2549", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, EDGE_GT, PIC_GT},
+    [VAR_QUAD] = {2, 2, 0, 0, "16" "93", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, 0, NULL, "139"},
 };
 
 static const char *const RULES_TEXT[VAR_COUNT] = {
@@ -206,6 +213,15 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
                      "top-left corners, ...) also hold 1 to 9, each once: the tinted 7 and 2 here.",
     [VAR_ASTERISK] = "Classic rules, and the nine tinted cells that make an asterisk around the centre also hold "
                      "1 to 9, each once.",
+    [VAR_KROPKI] = "Classic rules, and dots between side-by-side cells: a white dot means the digits are 1 apart "
+                   "(3 and 4), a black dot that one is double the other (4 and 8). No dot: neither (8 and 2). "
+                   "1 and 2 can have either dot.",
+    [VAR_XV] = "Classic rules, and marks between side-by-side cells: V means they add up to 5 (2 and 3), X to 10 "
+               "(3 and 7). No mark: they add up to neither (7 and 9).",
+    [VAR_GT] = "Classic rules, and inside each 3x3 box a sign between every two side-by-side cells points to "
+               "the smaller digit: 2 < 5 > 4 < 9.",
+    [VAR_QUAD] = "Classic rules, and a circle where four cells meet lists digits that must be among those four "
+                 "cells, in any order: here 1, 3 and 9. The fourth cell can be anything else.",
 };
 
 static void rules_pic_draw_cb(lv_event_t *e)
@@ -278,6 +294,17 @@ static void rules_pic_draw_cb(lv_event_t *e)
         int x = x0 + (i % p->w) * cs, y = y0 + (i / p->w) * cs;
         lv_area_t a = {.x1 = x + 4, .y1 = y + 4, .x2 = x + cs - 4, .y2 = y + cs - 4};
         lv_draw_rect(layer, &r, &a);
+    }
+    for (int k = 0; p->edges && p->edges[k] != 0xFF; k += 2) {   /* Kropki, XV, Greater-Than marks */
+        int a = p->edges[k];
+        draw_edge_mark(layer, p->edge_kind, p->edges[k + 1], false, x0 + (a % p->w + 1) * cs,
+                       y0 + (a / p->w) * cs + cs / 2);
+    }
+    if (p->quad) {                                  /* Quadruple: the circle in the middle */
+        uint8_t dig[4];
+        int n = 0;
+        for (const char *q = p->quad; *q && n < 4; q++) dig[n++] = (uint8_t)(*q - '0');
+        draw_quad_circle(layer, x0 + w / 2, y0 + h / 2, dig, n);
     }
     for (int k = 0; p->bars && p->bars[k] != 0xFF; k += 2) {   /* consecutive bars */
         int a = p->bars[k], b = p->bars[k + 1];
@@ -424,8 +451,12 @@ static bool share_text(char *buf, size_t n)
         key = "regions";
         break;
     case VAR_KILLER: key = sudoku_cages_text(G, extra, sizeof(extra)) ? "cages" : NULL; break;
+    case VAR_QUAD: key = sudoku_quads_text(G, extra, sizeof(extra)) ? "circles" : NULL; break;
     case VAR_EVENODD:
-    case VAR_CONSEC: key = sudoku_marks_text(G, extra, sizeof(extra)) ? "marks" : NULL; break;
+    case VAR_CONSEC:
+    case VAR_KROPKI:
+    case VAR_XV:
+    case VAR_GT: key = sudoku_marks_text(G, extra, sizeof(extra)) ? "marks" : NULL; break;
     case VAR_THERMO: key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "thermos" : NULL; break;
     case VAR_SANDWICH: key = sudoku_sandwich_text(G, extra, sizeof(extra)) ? "sums" : NULL; break;
     default: break;
@@ -516,8 +547,12 @@ static int pz_line(char *buf, size_t n)
         regions[81] = 0;
         break;
     case VAR_KILLER:   if (sudoku_cages_text(G, extra, sizeof(extra))) cages = extra; break;
+    case VAR_QUAD:     if (sudoku_quads_text(G, extra, sizeof(extra))) cages = extra; break;
     case VAR_EVENODD:
-    case VAR_CONSEC:   if (sudoku_marks_text(G, extra, sizeof(extra))) marks = extra; break;
+    case VAR_CONSEC:
+    case VAR_KROPKI:
+    case VAR_XV:
+    case VAR_GT:       if (sudoku_marks_text(G, extra, sizeof(extra))) marks = extra; break;
     case VAR_SANDWICH: if (sudoku_sandwich_text(G, extra, sizeof(extra))) marks = extra; break;
     case VAR_THERMO:   if (sudoku_thermos_text(G, extra, sizeof(extra))) thermos = extra; break;
     default: break;

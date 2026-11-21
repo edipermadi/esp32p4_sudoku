@@ -27,7 +27,7 @@ expect list
 shot docs/screenshots/puzzles-saved.png
 tap 73 96                   # back to Built-in (Easy)
 wait 600
-tap 682 36                  # the menu (vertical dots): New puzzle, Enter puzzle, Learn
+tap 682 36                  # the menu (vertical dots): New puzzle, Enter puzzle, Learn, Starred puzzles
 wait 500
 expect list+dialog
 shot docs/screenshots/puzzles-menu.png
@@ -35,7 +35,7 @@ tap 600 103                 # New puzzle: the variant and level dialog
 wait 800
 expect list+dialog
 shot docs/screenshots/new-puzzle.png
-tap 360 656                 # Cancel
+tap 620 111                 # the X in its title bar
 wait 400
 expect list
 tap 682 36                  # the menu
@@ -47,11 +47,15 @@ shot docs/screenshots/learn.png
 tap 360 628                 # Close (the list scrolls above it)
 wait 400
 expect list
-tap 622 36                  # Starred (the star toggle): the bookmarked puzzles in the right pane
+tap 682 36                  # the menu
+wait 500
+tap 560 283                 # Starred puzzles: the bookmarked puzzles in the right pane
 wait 900
 expect list
 shot docs/screenshots/starred.png
-tap 622 36                  # Starred off: Easy again
+tap 682 36                  # the menu
+wait 500
+tap 560 283                 # All puzzles: Easy again
 wait 400
 expect list
 tap 682 36                  # the menu
@@ -69,14 +73,20 @@ tap 294 159                 # puzzle 1 (Easy is still selected)
 wait 900
 expect game
 shot docs/screenshots/game.png
-tap 261 86                  # Share: the puzzle as a QR code
+tap 34 86                   # the ⋮ menu: Rules, Share, Star, Restart
+wait 400
+expect game+dialog
+shot docs/screenshots/game-menu.png
+tap 120 211                 # Share: the puzzle as a QR code
 wait 800
 expect game+dialog
 shot docs/screenshots/share.png
 tap 224 614                 # Close (left of Send by sound)
 wait 300
 expect game
-tap 34 86                   # the light bulb: the variant's rules
+tap 34 86                   # the ⋮ menu
+wait 400
+tap 120 151                 # Rules: the variant's rules
 wait 600
 expect game+dialog
 shot docs/screenshots/rules.png

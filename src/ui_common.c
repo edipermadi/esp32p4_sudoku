@@ -294,7 +294,9 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (variant) *variant = v;
     if (v == VAR_JIGSAW && buf && sudoku_geom_jigsaw(reg, buf)) return buf;
     if (v == VAR_KILLER && buf && sudoku_geom_killer_text(cages, buf)) return buf;
-    if ((v == VAR_EVENODD || v == VAR_CONSEC) && buf && sudoku_geom_marks(v, marks, buf)) return buf;
+    if (v == VAR_QUAD && buf && sudoku_geom_quad_text(cages, buf)) return buf;   /* (its circles are in cages) */
+    if ((v == VAR_EVENODD || v == VAR_CONSEC || v == VAR_KROPKI || v == VAR_XV || v == VAR_GT) && buf &&
+        sudoku_geom_marks(v, marks, buf)) return buf;
     if (v == VAR_THERMO && buf && sudoku_geom_thermo_text(thermos, buf)) return buf;
     if (v == VAR_SANDWICH && buf && sudoku_geom_sandwich_text(marks, buf)) return buf;   /* (its sums are in marks) */
     return sudoku_geom(v);                          /* (a broken map or cages: a classic board) */
@@ -503,7 +505,7 @@ lv_obj_t *ctx_card_open(lv_obj_t *btn, int w)
     lv_area_t a;
     lv_obj_get_coords(btn, &a);
     lv_obj_t *card = lv_obj_create(ctx_menu);
-    lv_obj_set_pos(card, a.x2 + 1 - w, a.y2 + 7);
+    lv_obj_set_pos(card, LV_MAX(8, a.x2 + 1 - w), a.y2 + 7);   /* (a button on the left: from the edge) */
     lv_obj_set_size(card, w, LV_SIZE_CONTENT);
     lv_obj_set_style_bg_color(card, C_CARD, 0);
     lv_obj_set_style_border_color(card, C_CARD2, 0);
@@ -534,7 +536,8 @@ void ctx_menu_toggle(lv_obj_t *btn, const ctx_item_t *items, int n)
         lv_obj_set_style_bg_color(b, C_CARD2, LV_STATE_PRESSED);
         lv_obj_set_clickable(b, !items[i].disabled);
         if (items[i].disabled) lv_obj_set_style_opa(b, LV_OPA_40, 0);
-        lv_obj_t *ic = make_label(b, &lv_font_montserrat_20, items[i].danger ? C_RED : C_ACCENT);   /* own column */
+        lv_obj_t *ic = make_label(b, &font_icons_20, items[i].danger ? C_RED : C_ACCENT);   /* own column; LVGL's
+                                                                     symbols and a few FontAwesome ones (Montserrat 20 fallback) */
         lv_label_set_text(ic, items[i].icon);
         lv_obj_set_width(ic, 32);
         lv_obj_set_style_text_align(ic, LV_TEXT_ALIGN_CENTER, 0);

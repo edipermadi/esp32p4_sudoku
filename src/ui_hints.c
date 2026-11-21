@@ -148,6 +148,32 @@ void hint_render(void)
         else
             snprintf(tech, sizeof(tech), "The bars around row %d, column %d (and where there are none) leave it "
                      "only %s. ", c / 9 + 1, c % 9 + 1, digs);
+    } else if (t->kind == TECH_EDGE || t->kind == TECH_QUAD) {   /* the marks around a cell, or a circle */
+        int c = t->unit;
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+        }
+        snprintf(u1, sizeof(u1), "row %d, column %d", c / 9 + 1, c % 9 + 1);
+        if (t->kind == TECH_QUAD && t->unit2 >= 0 && t->unit2 < game_geo()->nquads) {
+            int at = game_geo()->quad_at[t->unit2];
+            h_mark[at] = h_mark[at + 1] = h_mark[at + 9] = h_mark[at + 10] = 1;
+            char need[8] = "";
+            for (int k = 0; k < game_geo()->quad_n[t->unit2]; k++) need[k] = (char)('0' + game_geo()->quad_dig[t->unit2][k]);
+            snprintf(tech, sizeof(tech), "The circle with %s needs those digits among its four cells, which leaves "
+                     "row %d, column %d only %s. ", need, c / 9 + 1, c % 9 + 1, digs);
+        } else if (c >= 0 && c < 81) {
+            h_mark[c] = 1;
+            if (c % 9 > 0) h_mark[c - 1] = 1;
+            if (c % 9 < 8) h_mark[c + 1] = 1;
+            if (c > 8) h_mark[c - 9] = 1;
+            if (c < 72) h_mark[c + 9] = 1;
+            int ek = game_geo()->edge_kind;
+            snprintf(tech, sizeof(tech), "%s around row %d, column %d%s leave it only %s. ",
+                     ek == EDGE_KROPKI ? "The dots" : ek == EDGE_XV ? "The X and V marks" : "The signs",
+                     c / 9 + 1, c % 9 + 1, ek == EDGE_GT ? "" : " (and where there are none)", digs);
+        }
     } else if (t->kind == TECH_CAGE) {              /* Killer: the cage's cells */
         int k = t->unit;
         for (int i = 0; k >= 0 && k < game_geo()->ncages && i < game_geo()->cage_n[k]; i++) h_mark[game_geo()->cage_cell[k][i]] = 1;
@@ -491,6 +517,116 @@ static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
     }
 }
 
+/* Kropki: a white or black dot; XV: an X or a V; Greater-Than: a chevron whose point
+ * faces the smaller digit; centred on (cx, cy), on a line between two cells (down: the
+ * line below a cell, else the one to its right). Also the rules card's picture. */
+void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy)
+{
+    if (kind == EDGE_KROPKI) {
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.radius = LV_RADIUS_CIRCLE;
+        d.bg_opa = LV_OPA_COVER;
+        d.bg_color = m == MARK_WHITE ? lv_color_white() : lv_color_hex(0x2B2F36);
+        d.border_color = m == MARK_WHITE ? lv_color_hex(0x2B2F36) : lv_color_white();
+        d.border_width = m == MARK_WHITE ? 2 : 1;
+        lv_area_t r = {.x1 = cx - 7, .y1 = cy - 7, .x2 = cx + 7, .y2 = cy + 7};
+        lv_draw_rect(layer, &d, &r);
+    } else if (kind == EDGE_XV) {
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.radius = 4;
+        d.bg_color = C_CARD;
+        d.bg_opa = LV_OPA_COVER;
+        lv_area_t r = {.x1 = cx - 9, .y1 = cy - 10, .x2 = cx + 9, .y2 = cy + 10};
+        lv_draw_rect(layer, &d, &r);
+        lv_draw_label_dsc_t l;
+        lv_draw_label_dsc_init(&l);
+        l.text = m == MARK_X ? "X" : "V";
+        l.font = &lv_font_montserrat_16;
+        l.color = C_ORANGE;
+        l.align = LV_TEXT_ALIGN_CENTER;
+        lv_area_t t = {.x1 = cx - 9, .y1 = cy - 9, .x2 = cx + 9, .y2 = cy + 10};
+        lv_draw_label(layer, &l, &t);
+    } else if (kind == EDGE_GT) {
+        lv_draw_line_dsc_t l;
+        lv_draw_line_dsc_init(&l);
+        l.color = C_ORANGE;
+        l.width = 3;
+        l.round_start = l.round_end = 1;
+        int s = m == MARK_LESS ? -1 : 1;            /* the point toward the smaller: left / up for LESS */
+        if (!down) {
+            l.p1.x = cx - 4 * s; l.p1.y = cy - 7; l.p2.x = cx + 4 * s; l.p2.y = cy;
+            lv_draw_line(layer, &l);
+            l.p1.x = cx - 4 * s; l.p1.y = cy + 7;
+            lv_draw_line(layer, &l);
+        } else {
+            l.p1.x = cx - 7; l.p1.y = cy - 4 * s; l.p2.x = cx; l.p2.y = cy + 4 * s;
+            lv_draw_line(layer, &l);
+            l.p1.x = cx + 7;
+            lv_draw_line(layer, &l);
+        }
+    }
+}
+
+/* Quadruple: a circle centred on (cx, cy) with its 1-4 digits, two to a line */
+void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n)
+{
+    const int rad = 16;
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.radius = LV_RADIUS_CIRCLE;
+    d.bg_color = C_CARD;
+    d.bg_opa = LV_OPA_COVER;
+    d.border_color = C_ORANGE;
+    d.border_width = 2;
+    lv_area_t r = {.x1 = cx - rad, .y1 = cy - rad, .x2 = cx + rad, .y2 = cy + rad};
+    lv_draw_rect(layer, &d, &r);
+    char txt[8];
+    int p = 0;
+    for (int k = 0; k < n && k < 4; k++) {
+        if (k == 2) txt[p++] = '\n';
+        txt[p++] = (char)('0' + dig[k]);
+    }
+    txt[p] = 0;
+    lv_draw_label_dsc_t l;
+    lv_draw_label_dsc_init(&l);
+    l.text = txt;
+    l.text_local = 1;
+    l.font = &lv_font_montserrat_12;
+    l.color = C_TEXT;
+    l.align = LV_TEXT_ALIGN_CENTER;
+    l.line_space = -2;
+    int h = n > 2 ? 26 : 14;
+    lv_area_t t = {.x1 = cx - rad, .y1 = cy - h / 2, .x2 = cx + rad, .y2 = cy + h / 2 + 1};
+    lv_draw_label(layer, &l, &t);
+}
+
+static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    for (int i = 0; i < 81; i++) {
+        for (int k = 0; k < 2; k++) {               /* the line to the right, the one below */
+            int m = k ? EDGE_DOWN(geo->edge[i]) : EDGE_RIGHT(geo->edge[i]), o = k ? i + 9 : i + 1;
+            if (!m || o > 80 || (!k && i % 9 == 8)) continue;
+            lv_area_t a, b;
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + o), &b);
+            int cx = k ? (a.x1 + a.x2) / 2 : (a.x2 + b.x1) / 2, cy = k ? (a.y2 + b.y1) / 2 : (a.y1 + a.y2) / 2;
+            draw_edge_mark(layer, geo->edge_kind, m, k, cx, cy);
+        }
+    }
+}
+
+static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    for (int q = 0; q < geo->nquads; q++) {
+        lv_area_t a, d;
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->quad_at[q]), &a);
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->quad_at[q] + 10), &d);
+        draw_quad_circle(layer, (a.x2 + d.x1) / 2, (a.y2 + d.y1) / 2, geo->quad_dig[q], geo->quad_n[q]);
+    }
+}
+
 /* Thermo: each thermometer as a wide, soft grey line through its cells from
  * a round bulb (translucent: the digits show through) */
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
@@ -535,6 +671,8 @@ void board_regions_draw_cb(lv_event_t *e)
     if (geo && geo->nthermos) board_thermos_draw(grid, geo, lv_event_get_layer(e));
     if (geo && geo->ncages) board_cages_draw(grid, geo, lv_event_get_layer(e));
     if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) board_marks_draw(grid, geo, lv_event_get_layer(e));
+    if (geo && geo->edge_kind) board_edges_draw(grid, geo, lv_event_get_layer(e));
+    if (geo && geo->nquads) board_quads_draw(grid, geo, lv_event_get_layer(e));
     if (!geo || geo->variant != VAR_JIGSAW) return;
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_draw_rect_dsc_t d;
@@ -559,17 +697,17 @@ void board_regions_draw_cb(lv_event_t *e)
 
 /* clues: 18 labels on the board's screen for a Sandwich's sums (rows, then
  * columns), hidden for the other variants; may be NULL */
-void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
-                         lv_obj_t *const *clues, int x0)
+void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
+                     lv_obj_t *const *clues, int x0, int y0, int size_all)
 {
     lv_obj_set_user_data(grid, (void *)geo);
     for (int i = 0; clues && i < 18; i++) lv_obj_set_hidden(clues[i], !geo->sandwich);
     if (geo->variant == VAR_JIGSAW) {
         /* evenly spaced cells on the thin-line colour in a thick frame; the
          * region borders are drawn over them (board_regions_draw_cb) */
-        const int cs = (GRID_SIZE - 2 * LINE_THICK - 8 * LINE_THIN) / 9;
+        const int cs = (size_all - 2 * LINE_THICK - 8 * LINE_THIN) / 9;
         const int w = 2 * LINE_THICK + 9 * cs + 8 * LINE_THIN;
-        lv_obj_set_pos(grid, x0 + (GRID_SIZE - w) / 2, GRID_Y + (GRID_SIZE - w) / 2);
+        lv_obj_set_pos(grid, x0 + (size_all - w) / 2, y0 + (size_all - w) / 2);
         lv_obj_set_size(grid, w, w);
         lv_obj_set_style_bg_color(grid, C_GRID_THIN, 0);
         lv_obj_set_style_border_color(grid, C_GRID_THICK, 0);
@@ -588,13 +726,13 @@ void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *box
     const int n = geo->n, bw = geo->box_w, bh = geo->box_h;
     const int across = n / bw, down = n / bh;                  /* boxes */
     const int band = geo->sandwich ? 36 : 0;                   /* Sandwich: room for the sums, top and left */
-    const int size = GRID_SIZE - band;
+    const int size = size_all - band;
     int cw = (size - (across + 1) * LINE_THICK - across * (bw - 1) * LINE_THIN) / n;
     int ch = (size - (down + 1) * LINE_THICK - down * (bh - 1) * LINE_THIN) / n;
     int cs = cw < ch ? cw : ch;
     int box_w = bw * cs + (bw - 1) * LINE_THIN, box_h = bh * cs + (bh - 1) * LINE_THIN;
     int w = (across + 1) * LINE_THICK + across * box_w, h = (down + 1) * LINE_THICK + down * box_h;
-    const int gx = x0 + band + (size - w) / 2, gy = GRID_Y + band + (size - h) / 2;
+    const int gx = x0 + band + (size - w) / 2, gy = y0 + band + (size - h) / 2;
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
     for (int i = 0; geo->sandwich && clues && i < 18; i++) {   /* the sums: left of the rows, above the columns */
@@ -623,33 +761,40 @@ void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *box
     }
 }
 
+void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
+                  lv_obj_t *const *clues, int x0)
+{
+    board_layout_at(geo, grid, boxes, cells, clues, x0, GRID_Y, GRID_SIZE);
+}
+
 /* the game screen's board and number pad (1..n, as tall as the board) for g_var */
 void game_layout(void)
 {
     if (!game_geo()) game_set_geo(sudoku_geom(game_var()));
     const bool left = store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
     if (game_layout_var() == game_var() && g_layout_left == left && game_var() != VAR_JIGSAW && game_var() != VAR_KILLER &&
-        game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH) {
+        game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH &&
+        game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD) {
         lv_obj_invalidate(game_grid());
         return;
     }
     lv_obj_invalidate(game_grid());                      /* every Jigsaw / Killer has its own regions / cages */
     game_set_layout_var(game_var());
     g_layout_left = left;
-    const int board_x = left ? SCR_W - 8 - GRID_SIZE : GRID_X, pad_x = left ? 8 : PAD_X;
-    board_layout(game_geo(), game_grid(), game_boxes(), game_cells(), game_clues(), board_x);
+    const int board_x = left ? SCR_W - 8 - GAME_GRID_SIZE : GRID_X, pad_x = left ? 8 : GAME_PAD_X;
+    board_layout_at(game_geo(), game_grid(), game_boxes(), game_cells(), game_clues(), board_x, GRID_Y, GAME_GRID_SIZE);
     for (int i = 0; i < 81; i++) {                  /* (4x4: big digits) */
         if (game_cell_lbl()[i]) lv_obj_set_style_text_font(game_cell_lbl()[i], DIGIT_FONT_N(game_geo()->n), 0);
     }
     lv_obj_set_x(game_pause_ovl(), board_x);
-    const int n = game_geo()->n, span = GRID_SIZE - 6;              /* 598: the 9 x 62 px pad, as before */
+    const int n = game_geo()->n, span = GAME_GRID_SIZE - 6;         /* the pad as tall as the board */
     const int h = (span - (n - 1) * PAD_GAP) / n;
     for (int d = 1; d <= 9; d++) {
         lv_obj_t *b = game_pad()[d - 1];
         lv_obj_set_hidden(b, d > n);
         if (d > n) continue;
         lv_obj_set_pos(b, pad_x, GRID_Y + 1 + (d - 1) * (h + PAD_GAP) + (span - n * h - (n - 1) * PAD_GAP) / 2);
-        lv_obj_set_size(b, PAD_W, h);
+        lv_obj_set_size(b, GAME_PAD_W, h);
     }
 }
 static int tour_step;
@@ -662,7 +807,7 @@ static void tour_area(int step, lv_area_t *a)
     case 1: o[0] = game_pad()[0]; o[1] = game_pad()[8]; break;
     case 2: o[0] = game_undo_btn(); o[1] = game_fill_btn(); break;
     case 3: o[0] = game_hint_btn(); break;
-    case 4: o[0] = game_bulb_btn(); o[1] = lv_obj_is_hidden(game_star_btn()) ? game_hint_btn() : game_star_btn(); break;
+    case 4: o[0] = game_bulb_btn(); break;                       /* the ⋮ menu */
     default: o[0] = game_timer_btn(); break;
     }
     lv_obj_get_coords(o[0], a);
@@ -718,11 +863,12 @@ static void tour_show(int step)
         "cage can hold).",
         "Puts the digit in the selected cell; the small number is how many are still to place. Hold a digit to "
         "light it up everywhere, then tap cells to place it.",
-        "Undo and Redo; Erase a cell; Notes puts digits in as pencil marks; Auto adds all the marks at once; "
-        "Restart; Fill puts the right digit in the selected cell (it counts as a hint).",
+        "Undo and Redo; Erase a cell; Notes puts digits in as pencil marks; Fill puts the right digit in the "
+        "selected cell (it counts as a hint).",
         "Shows where to look next. More then shows the cell and why, and Place it puts the digit in.",
-        "The light bulb: this puzzle's rules. Share: the puzzle as a QR code. The star keeps it under Puzzles > "
-        "Starred. List goes back to the puzzles: the game is saved after every move.",
+        "The menu: this puzzle's Rules, Share (the puzzle as a QR code), Star (keeps it under Puzzles > "
+        "Starred), Auto notes (all the pencil marks at once) and Restart. List goes back to the puzzles: the "
+        "game is saved after every move.",
         "Tap the timer to pause: the board is hidden until you go on. That's all - enjoy the puzzle!",
     };
     tour_step = step;

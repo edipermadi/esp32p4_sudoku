@@ -71,6 +71,8 @@ LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
 #define SYMBOL_QR       "\xEF\x80\xA9"   /* FontAwesome U+F029 (qrcode) */
 #define SYMBOL_CAMERA   "\xEF\x80\xB0"   /* FontAwesome U+F030 (camera): screenshots */
 #define SYMBOL_MORE     "\xEF\x85\x82"   /* FontAwesome U+F142 (ellipsis-v): a context menu (font_icons_24 only) */
+#define SYMBOL_UNDO     "\xEF\x83\xA2"   /* FontAwesome U+F0E2 (undo; font_icons_24 only) */
+#define SYMBOL_REDO     "\xEF\x80\x9E"   /* FontAwesome U+F01E (redo; font_icons_24 only) */
 #define P ui_palette()
 
 /* ------------------------------------------------------------- geometry */
@@ -89,6 +91,11 @@ LV_FONT_DECLARE(font_icons_20)    /* the same at 20 px + Montserrat 20 */
 #define PAD_GAP     5
 #define BOT_Y       (GRID_Y + GRID_SIZE + 6)
 #define BOT_H       (SCR_W - BOT_Y - 6)
+/* the game screen: no bottom bar (its tools are icons in the second row), so a bigger board
+ * down to the bottom edge, and a narrower pad */
+#define GAME_GRID_SIZE (SCR_W - GRID_Y - 8)         /* 596: 9x9 62 px cells */
+#define GAME_PAD_X  (GRID_X + GAME_GRID_SIZE + 8)
+#define GAME_PAD_W  (SCR_W - GAME_PAD_X - 8)
 
 #define SAVE_DELAY_MS    80      /* solve bookkeeping once the Solved! dialog is up */
 #define UNDO_MAX         128
@@ -212,6 +219,9 @@ typedef struct {
     const uint8_t *thermo;              /* cells from the bulb, ends with 0xFF, may be NULL */
     const uint8_t *cages;               /* per cage: sum, cells..., 0xFE; ends with 0xFF; may be NULL */
     int8_t left_clue;                   /* Sandwich: a sum left of the first row, -1 = none */
+    uint8_t edge_kind;                  /* Kropki, XV, Greater-Than: EDGE_*, with edges */
+    const uint8_t *edges;               /* per mark: a cell and its MARK_* on the line to its right; ends 0xFF */
+    const char *quad;                   /* Quadruple: a circle's digits at the picture's centre, may be NULL */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound */
@@ -457,7 +467,6 @@ int game_sel(void);
 void game_set_sel(int v);
 bool game_solved(void);
 void game_set_solved(bool v);
-lv_obj_t *game_star_btn(void);
 bool game_starred(void);
 void game_set_starred(bool v);
 int64_t game_start_stamp(void);
@@ -511,10 +520,15 @@ void home_set_nitems(int v);
 int list_coll(void);
 void list_set_coll(int v);
 lv_obj_t *list_new_btn(void);
+bool list_starred(void);                /* the right pane shows the starred puzzles */
+void list_star_cb(lv_event_t *e);       /* ... toggles that */
 int list_tab(void);
 void list_set_tab(int v);
 /* sudoku_ui.c */
 lv_obj_t *ui_saver(void);
+/* Kropki / XV / Greater-Than marks and Quadruple circles (board and rules card) */
+void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy);
+void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n);
 /* ui_newpuzzle.c */
 const char *const *learn_names(void);
 lv_obj_t *screen_edit(void);
@@ -626,6 +640,9 @@ void back_cb(lv_event_t *e);
 void tick_cb(lv_timer_t *t);
 void board_regions_draw_cb(lv_event_t *e);
 void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells, lv_obj_t *const *clues, int x0);
+/* the same in a square of size at (x0, y0) (board_layout: GRID_Y, GRID_SIZE) */
+void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
+                     lv_obj_t *const *clues, int x0, int y0, int size);
 void game_layout(void);
 void start_game(uint16_t id, bool resume);
 void tour_maybe(void);

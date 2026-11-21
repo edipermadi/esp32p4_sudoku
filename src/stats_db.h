@@ -87,7 +87,7 @@ typedef struct {
  * kind. Their solves are logged with level "<prefix> <Easy|Medium|Hard|Expert>". */
 typedef enum { KIND_NEW = 0, KIND_DAILY, KIND_X, KIND_HYPER, KIND_JIGSAW, KIND_KILLER, KIND_KNIGHT, KIND_EVENODD,
                KIND_CONSEC, KIND_THERMO, KIND_SANDWICH, KIND_MINI, KIND_KIDS, KIND_KING, KIND_NONCONSEC,
-               KIND_DISJOINT, KIND_ASTERISK, KIND_COUNT } stats_kind_t;
+               KIND_DISJOINT, KIND_ASTERISK, KIND_KROPKI, KIND_XV, KIND_GT, KIND_QUAD, KIND_COUNT } stats_kind_t;
 const char *stats_kind_name(int kind);     /* "New puzzles", "Daily puzzle", "X-Sudoku", ... */
 const char *stats_kind_prefix(int kind);   /* "Generated", "Daily", "X-Sudoku", ... */
 /* the kind of a generated puzzle of a variant (daily ones: KIND_DAILY) */
@@ -496,7 +496,7 @@ bool stats_db_take_unlocked(char *buf, int len, int *count);
 /* ---------------------------------------------------------------- personal records */
 /* The current player's bests (Trophies > Records). */
 typedef enum { REC_TIME = 0, REC_COUNT, REC_DAYS, REC_MINUTES } rec_unit_t;
-#define STATS_MAX_RECORDS 28
+#define STATS_MAX_RECORDS 32
 typedef struct {
     const char *title;                   /* static string */
     uint8_t unit;                        /* rec_unit_t */
