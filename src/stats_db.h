@@ -527,6 +527,22 @@ void stats_db_export_csv(void);
  * while in use); the result comes back as a message. */
 void stats_db_backup(void);
 
+/* ---------------------------------------------------------------- SQL (devctl) */
+/* Runs sql (one or more statements, any kind) on sudoku.db, on the database's own task, and
+ * waits for it (a statement runs 20 s at most). out (cap bytes) gets, per statement with
+ * columns, a line "C\t<name>\t<name>..." and a line "R\t<value>..." per row; values are
+ * escaped (\\ \t \n \r), NULL is \N and a blob x'<hex>'. A transaction left open is rolled
+ * back (an error). Changes bypass the RAM copies the screens use: they show after a restart.
+ * For devctl's sql command; not for the UI. */
+typedef struct {
+    bool ok;
+    int rows;                           /* rows returned, all statements */
+    int changes;                        /* rows inserted, updated or deleted */
+    bool truncated;                     /* out was too small for all of it */
+    char err[160];                      /* !ok: SQLite's message, or what else went wrong */
+} stats_sql_result_t;
+bool stats_db_sql(const char *sql, char *out, size_t cap, stats_sql_result_t *r);
+
 void stats_db_query_plays(int offset);
 bool stats_db_take_plays(stats_plays_t *out);
 

@@ -17,6 +17,7 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "sqlite/sqlite3.h"
 #include "bsp/bsp_board.h"
 #include "store.h"
@@ -47,8 +48,9 @@ typedef enum {
     CMD_PRANK, CMD_EXPORT, CMD_WEEK, CMD_PLAYER_COLOR, CMD_PLAYER_AVATAR, CMD_IMPORT, CMD_IMPORT_FILE, CMD_LIST_IMPORTS, CMD_SOLVED_IN, CMD_GEN_SOURCE,
     CMD_LEARNED, CMD_INSIGHTS, CMD_WEEKSUM, CMD_BM_GET, CMD_BM_SET, CMD_BM_LIST, CMD_SEEN_GET, CMD_SEEN_SET,
     CMD_ATTACK, CMD_ATTACK_BOARD, CMD_SAVED_LIST, CMD_SAVED_ADD, CMD_SAVED_REMOVE, CMD_SOLVED_LIST, CMD_SAVED_EXPORT,
-    CMD_COLL_DELETE, CMD_BACKUP,
+    CMD_COLL_DELETE, CMD_BACKUP, CMD_SQL,
 } cmd_type_t;
+static void do_sql(void);                 /* (devctl sql, below) */
 
 /* CMD_GAME_SPILL: a game whose last save was still waiting when another game
  * was saved (the slot holds one game): written on its own (freed by the worker) */
@@ -3893,6 +3895,9 @@ static void worker(void *arg)
         case CMD_BACKUP:
             do_backup();
             break;
+        case CMD_SQL:
+            do_sql();
+            break;
         case CMD_WEEK:
             do_week(c.text);
             break;
@@ -4714,6 +4719,165 @@ void stats_db_export_csv(void)
     if (!send(&c)) {
         post_message("Export: no database.");
     }
+}
+
+/* ---------------------------------------------------------------- devctl sql */
+
+typedef struct {
+    const char *sql;
+    char *out;
+    size_t cap, len;
+    stats_sql_result_t *r;
+} sql_job_t;
+static sql_job_t s_sqlj;
+static SemaphoreHandle_t s_sql_done;
+
+static void sql_put(const char *s, size_t n)
+{
+    if (s_sqlj.len + n + 1 > s_sqlj.cap) {
+        s_sqlj.r->truncated = true;
+        return;
+    }
+    memcpy(s_sqlj.out + s_sqlj.len, s, n);
+    s_sqlj.len += n;
+    s_sqlj.out[s_sqlj.len] = 0;
+}
+
+/* a value, escaped: \\ \t \n \r, NULL as \N, a blob as x'hex' */
+static void sql_value(sqlite3_stmt *st, int i)
+{
+    char buf[48];
+    switch (sqlite3_column_type(st, i)) {
+    case SQLITE_NULL:
+        sql_put("\\N", 2);
+        break;
+    case SQLITE_INTEGER:
+        sql_put(buf, (size_t)snprintf(buf, sizeof(buf), "%lld", (long long)sqlite3_column_int64(st, i)));
+        break;
+    case SQLITE_FLOAT:
+        sql_put(buf, (size_t)snprintf(buf, sizeof(buf), "%.17g", sqlite3_column_double(st, i)));
+        break;
+    case SQLITE_BLOB: {
+        const uint8_t *b = sqlite3_column_blob(st, i);
+        int n = sqlite3_column_bytes(st, i);
+        sql_put("x'", 2);
+        for (int k = 0; k < n && !s_sqlj.r->truncated; k++) {
+            sql_put(buf, (size_t)snprintf(buf, sizeof(buf), "%02x", b[k]));
+        }
+        sql_put("'", 1);
+        break;
+    }
+    default: {
+        const char *t = (const char *)sqlite3_column_text(st, i);
+        for (; t && *t; t++) {
+            const char *e = *t == '\\' ? "\\\\" : *t == '\t' ? "\\t" : *t == '\n' ? "\\n" : *t == '\r' ? "\\r" : NULL;
+            if (e) {
+                sql_put(e, 2);
+            } else {
+                sql_put(t, 1);
+            }
+        }
+        break;
+    }
+    }
+}
+
+static int sql_progress(void *deadline)
+{
+    return esp_timer_get_time() > *(int64_t *)deadline;   /* past it: interrupted */
+}
+
+/* (on the worker) every statement of s_sqlj.sql: "C\tname..." before a statement's rows,
+ * "R\tvalue..." for each */
+static void do_sql(void)
+{
+    stats_sql_result_t *r = s_sqlj.r;
+    s_sqlj.len = 0;
+    s_sqlj.out[0] = 0;
+    if (!s_db) {
+        snprintf(r->err, sizeof(r->err), "no sudoku.db");
+        xSemaphoreGive(s_sql_done);
+        return;
+    }
+    int64_t deadline = esp_timer_get_time() + 20000000;   /* 20 s, then interrupted */
+    sqlite3_progress_handler(s_db, 1000, sql_progress, &deadline);
+    int changes0 = sqlite3_total_changes(s_db);
+    const char *p = s_sqlj.sql;
+    r->ok = true;
+    while (p && *p) {
+        sqlite3_stmt *st = NULL;
+        const char *tail = NULL;
+        if (sqlite3_prepare_v2(s_db, p, -1, &st, &tail) != SQLITE_OK) {
+            snprintf(r->err, sizeof(r->err), "%s", sqlite3_errmsg(s_db));
+            r->ok = false;
+            break;
+        }
+        p = tail;
+        if (!st) {
+            continue;    /* (only white space or a comment) */
+        }
+        int nc = sqlite3_column_count(st);
+        if (nc) {
+            sql_put("C", 1);
+            for (int i = 0; i < nc; i++) {
+                const char *name = sqlite3_column_name(st, i);
+                sql_put("\t", 1);
+                sql_put(name, strlen(name));
+            }
+            sql_put("\n", 1);
+        }
+        int rc;
+        while ((rc = sqlite3_step(st)) == SQLITE_ROW) {
+            r->rows++;
+            sql_put("R", 1);
+            for (int i = 0; i < nc; i++) {
+                sql_put("\t", 1);
+                sql_value(st, i);
+            }
+            sql_put("\n", 1);
+        }
+        if (rc != SQLITE_DONE) {
+            snprintf(r->err, sizeof(r->err), "%s", rc == SQLITE_INTERRUPT ? "interrupted after 20 s" : sqlite3_errmsg(s_db));
+            r->ok = false;
+        }
+        sqlite3_finalize(st);
+        if (!r->ok) {
+            break;
+        }
+    }
+    sqlite3_progress_handler(s_db, 0, NULL, NULL);
+    r->changes = sqlite3_total_changes(s_db) - changes0;
+    if (!sqlite3_get_autocommit(s_db)) {          /* a BEGIN without its COMMIT would hold up the game's writes */
+        exec("ROLLBACK");
+        r->ok = false;
+        snprintf(r->err, sizeof(r->err), "a transaction was left open: rolled back");
+    }
+    xSemaphoreGive(s_sql_done);
+}
+
+bool stats_db_sql(const char *sql, char *out, size_t cap, stats_sql_result_t *r)
+{
+    memset(r, 0, sizeof(*r));
+    if (!stats_db_ready()) {
+        snprintf(r->err, sizeof(r->err), "no sudoku.db (no card, or it's lent over USB)");
+        return false;
+    }
+    if (!s_sql_done && !(s_sql_done = xSemaphoreCreateBinary())) {
+        snprintf(r->err, sizeof(r->err), "no memory");
+        return false;
+    }
+    xSemaphoreTake(s_sql_done, 0);                  /* clear a stale give */
+    s_sqlj = (sql_job_t) {.sql = sql, .out = out, .cap = cap, .r = r};
+    cmd_t c = {.type = CMD_SQL};
+    if (!send(&c)) {
+        snprintf(r->err, sizeof(r->err), "the database is busy");
+        return false;
+    }
+    if (xSemaphoreTake(s_sql_done, pdMS_TO_TICKS(60000)) != pdTRUE) {   /* (20 s for the SQL, the queue before it) */
+        snprintf(r->err, sizeof(r->err), "no answer from the database task");
+        return false;
+    }
+    return r->ok;
 }
 
 void stats_db_backup(void)

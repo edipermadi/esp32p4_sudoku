@@ -43,5 +43,19 @@ python3 tools/devctl.py --port /dev/ttyACM1 "mv 'old name.txt' new.txt; rm new.t
   ```
 
   `BOARD` is 81 characters, row by row, numbered as for `fill`: `1`–`9` a given, `a`–`i` a digit entered (`a` = 1 ... `i` = 9), `.` empty, `#` a cell not on the board (Mini 6×6 uses 36 of the 81, Kids 4×4 16). `STATE` adds `practice=1` (Learn) or `attack=1` (Time attack) for those games. With no game on screen: `ERR state: no game on screen`.
+
+## SQL on sudoku.db
+
+```
+python3 tools/devctl.py --port /dev/ttyACM1 --sql "SELECT id, name FROM players"
+python3 tools/devctl.py --port /dev/ttyACM1 --mode csv --sql "SELECT * FROM solves" > solves.csv
+python3 tools/devctl.py --port /dev/ttyACM1 --sqlite
+```
+
+- `--sql "..."` runs one or more statements (`;` between them) on the board's `sudoku.db` and prints each result (repeat `--sql` for more; the exit code is 1 if one failed). `--sqlite` opens a console like `sqlite3`'s: a statement ends with `;` and may span lines, the arrow keys bring back earlier ones (kept in `~/.devctl_sqlite_history`), and `.tables`, `.schema [NAME]`, `.indexes [TABLE]`, `.mode box|list|csv|tabs`, `.help` and `.quit` (or Ctrl-D) work. `--mode` picks the output: `box` (default; cells cut at 60 characters), `list` (`|` between values), `csv`, `tabs`. NULL shows as `NULL` in a box and empty in the others; a blob as `x'<hex>'`.
+- The board runs it on the database's own task (the one that does all of `sudoku.db`'s work), so it never collides with a save. A statement gets 20 seconds, then it's interrupted; a result returns up to 256 KB (`LIMIT` the rest); the SQL itself can be about 3000 bytes. The screen doesn't respond while a statement runs.
+- Writes work (`UPDATE`, `DELETE`, `CREATE TEMP TABLE` ...), but the screens keep their own copies of the statistics and settings, so a change shows after a restart (or, for statistics, a player switch). A transaction left open (`BEGIN` without `COMMIT`) is rolled back at the end, so the game's own saves can't get stuck behind it. Back up first (**Settings → Data → Back up database**, or `get sudoku.db`).
+- SQL is serial only: it doesn't work over sound.
+
 - The touch commands, `wait`, `fill`, `state`, `pz`, `ping`, `heap` and `screenoff` also work as sound, with no cable: see Gibberlink in [Home, settings & system](features-settings.md) (**Settings → Sound → Gibberlink**).
 - On the board, the commands are lines on the serial port (`src/devctl.h` has the protocol): a download comes as base64 lines like a screenshot; an upload sends base64 lines with an `ACK` from the board after every 12, so its 2 KB receive buffer never overflows.

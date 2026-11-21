@@ -44,6 +44,15 @@ Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
 sudoku.db is open while the board runs: get works, put/mv/rm on it don't
 (use Settings > Data > USB drive). Paths with spaces: quote them.
 
+SQL on sudoku.db, on the board (its database task runs it; 20 s at most a statement):
+    python3 tools/devctl.py --sql "SELECT * FROM players"      one or more statements, then exit
+    python3 tools/devctl.py --sqlite                           a console: statements end with ';'
+                                                               (several lines are fine), and
+    .tables  .schema [NAME]  .indexes  .mode box|list|csv|tabs  .help  .quit
+--mode picks how results print (box by default). Writes work too, but the screens keep their
+own copies of statistics and settings: changes show after a restart (or a player switch). A
+BEGIN without its COMMIT is rolled back at the end of the statement batch.
+
     python3 tools/devctl.py --port /dev/ttyACM1 "put build/esp32p4_sudoku.ino.bin update.bin"
     python3 tools/devctl.py --port /dev/ttyACM1 "get sudoku.db backup.db; ls puzzles"
 
@@ -56,8 +65,12 @@ Coordinates are screen pixels, 0..719, from the top left.
 """
 import argparse
 import base64
+import csv
+import io
 import os
 import shlex
+import sqlite3
+import unicodedata
 import struct
 import sys
 import time
@@ -235,6 +248,188 @@ class Board:
                     return
             print("screenshot garbled, retrying (%d)" % (attempt + 1))
         sys.exit("couldn't get a clean screenshot")
+
+
+# ---- SQL on the board's sudoku.db
+
+def sql_unescape(field):
+    if field == "\\N":
+        return None
+    out, i = [], 0
+    while i < len(field):
+        c = field[i]
+        if c == "\\" and i + 1 < len(field):
+            out.append({"t": "\t", "n": "\n", "r": "\r"}.get(field[i + 1], field[i + 1]))
+            i += 2
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def board_sql(board, text, timeout=90):
+    """Runs text on the board: [(columns, rows), ...] per statement with columns, the totals
+    (rows, changes, truncated), or an error message (then the results so far, too)."""
+    if board.verbose:
+        print("  > sql", text)
+    coded = base64.b64encode(text.encode()).decode()
+    if len(coded) > 4090:                           # (the board's line holds 4096: longer is cut off)
+        return [], None, "the SQL is too long for the board (%d bytes; about 3000 at most)" % len(text.encode())
+    board.ser.write(("sql %s\n" % coded).encode())
+    sets, end = [], time.time() + timeout
+    while time.time() < end:
+        line = board.readline(end - time.time())
+        if line is None:
+            break
+        if line.startswith("SQL C\t") or line == "SQL C":
+            sets.append(([sql_unescape(f) for f in line[6:].split("\t")], []))
+        elif line.startswith("SQL R"):
+            row = [sql_unescape(f) for f in line[6:].split("\t")] if len(line) > 5 else []
+            if not sets:
+                sets.append(([""] * len(row), []))
+            sets[-1][1].append(row)
+        elif line.startswith("OK sql"):
+            w = line.split()
+            return sets, (int(w[2]), int(w[3]), "truncated" in w), None
+        elif line.startswith("ERR sql"):
+            return sets, None, line[len("ERR sql: "):]
+        elif board.verbose:
+            print("  <", line)
+    return sets, None, "no answer from the board (timed out)"
+
+
+def cols_of(s):
+    """Terminal columns of s: wide (CJK, emoji) characters take two."""
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 0 if unicodedata.combining(c) else 1 for c in s)
+
+
+def pad(s, w, right=False):
+    gap = " " * max(0, w - cols_of(s))
+    return gap + s if right else s + gap
+
+
+def show_value(v, width=None):
+    s = "NULL" if v is None else v
+    s = s.replace("\n", "\\n").replace("\t", "\\t") if width else s
+    return s[:width - 1] + "…" if width and len(s) > width else s
+
+
+def print_result(cols, rows, mode, out=sys.stdout):
+    if mode == "csv":
+        w = csv.writer(out, lineterminator="\n")
+        w.writerow(cols)
+        w.writerows([["" if v is None else v for v in r] for r in rows])
+    elif mode == "tabs":
+        print("\t".join(cols), file=out)
+        for r in rows:
+            print("\t".join("" if v is None else v for v in r), file=out)
+    elif mode == "list":
+        print("|".join(cols), file=out)
+        for r in rows:
+            print("|".join("" if v is None else v for v in r), file=out)
+    else:                                           # box, as sqlite3 -box (cells cut at 60)
+        cells = [[show_value(v, 60) for v in r] for r in rows]
+        wid = [max([cols_of(c)] + [cols_of(r[i]) for r in cells]) for i, c in enumerate(cols)]
+        line = lambda l, m, r: l + m.join("─" * (w + 2) for w in wid) + r
+        print(line("┌", "┬", "┐"), file=out)
+        print("│" + "│".join(" %s " % pad(c, w) for w, c in zip(wid, cols)) + "│", file=out)
+        print(line("├", "┼", "┤"), file=out)
+        for r in cells:
+            print("│" + "│".join(" %s " % pad(v, w, v.lstrip("-").replace(".", "", 1).isdigit())
+                                 for w, v in zip(wid, r)) + "│", file=out)
+        print(line("└", "┴", "┘"), file=out)
+
+
+def run_sql(board, text, mode):
+    """Runs text and prints what came back; False on an error."""
+    sets, totals, err = board_sql(board, text)
+    for cols, rows in sets:
+        print_result(cols, rows, mode)
+    if err:
+        print("Error: %s" % err, file=sys.stderr)
+        return False
+    rows, changes, truncated = totals
+    if truncated:
+        print("(the result was cut off: the board returns up to 256 KB; add a LIMIT)", file=sys.stderr)
+    if changes:
+        print("(%d row%s changed; changes to sudoku.db show on the screens after a restart)"
+              % (changes, "" if changes == 1 else "s"), file=sys.stderr)
+    return True
+
+
+SQLITE_HELP = """Statements end with ';' and may span lines. Dot commands:
+  .tables              the tables and views
+  .schema [NAME]       CREATE statements (all, or those whose name matches NAME, % and _ as in LIKE)
+  .indexes [TABLE]     the indexes
+  .mode box|list|csv|tabs
+  .help                this
+  .quit / .exit        leave (Ctrl-D too)"""
+
+
+def sqlite_console(board, mode):
+    try:
+        import readline
+        hist = os.path.expanduser("~/.devctl_sqlite_history")
+        try:
+            readline.read_history_file(hist)
+        except OSError:
+            pass
+    except ImportError:
+        readline = None
+    print("sudoku.db on the board (%s). .help for help, .quit to leave." % board.ser.port)
+    buf = ""
+    try:
+        while True:
+            try:
+                line = input("sudoku.db> " if not buf else "      ...> ")
+            except EOFError:
+                print()
+                break
+            except KeyboardInterrupt:
+                print()
+                buf = ""
+                continue
+            if not buf and line.strip().startswith("."):
+                words = line.split()
+                cmd, arg = words[0], words[1] if len(words) > 1 else None
+                q = arg.replace("'", "''") if arg else None
+                if cmd in (".quit", ".exit"):
+                    break
+                elif cmd == ".help":
+                    print(SQLITE_HELP)
+                elif cmd == ".mode":
+                    if arg in ("box", "list", "csv", "tabs"):
+                        mode = arg
+                    else:
+                        print("modes: box list csv tabs (now %s)" % mode)
+                elif cmd == ".tables":
+                    sets, _, err = board_sql(board, "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') "
+                                                    "AND name NOT LIKE 'sqlite_%' ORDER BY name")
+                    print(err or "  ".join(r[0] for _, rows in sets for r in rows))
+                elif cmd == ".schema":
+                    where = " AND name LIKE '%s'" % q if q else ""
+                    sets, _, err = board_sql(board, "SELECT sql || ';' FROM sqlite_schema WHERE sql IS NOT NULL"
+                                                    "%s ORDER BY type DESC, name" % where)
+                    print(err or "\n".join(r[0] for _, rows in sets for r in rows))
+                elif cmd == ".indexes":
+                    where = " AND tbl_name LIKE '%s'" % q if q else ""
+                    sets, _, err = board_sql(board, "SELECT name FROM sqlite_schema WHERE type = 'index'%s "
+                                                    "ORDER BY name" % where)
+                    print(err or "\n".join(r[0] for _, rows in sets for r in rows))
+                else:
+                    print("unknown: %s (.help)" % cmd)
+                continue
+            buf += line + "\n"
+            if sqlite3.complete_statement(buf):
+                if buf.strip():
+                    run_sql(board, buf, mode)
+                buf = ""
+    finally:
+        if readline:
+            try:
+                readline.write_history_file(hist)
+            except OSError:
+                pass
 
 
 def enc(path):
@@ -418,6 +613,9 @@ def main():
     ap.add_argument("--baud", type=int, default=921600, help="speed for the transfers (default 921600)")
     ap.add_argument("--script", help="a file of commands, one per line")
     ap.add_argument("--no-wait", action="store_true", help="don't wait for the board to boot")
+    ap.add_argument("--sql", action="append", help="SQL to run on sudoku.db (several: repeat --sql)")
+    ap.add_argument("--sqlite", action="store_true", help="a SQL console on sudoku.db")
+    ap.add_argument("--mode", default="box", choices=("box", "list", "csv", "tabs"), help="how SQL results print")
     ap.add_argument("-v", "--verbose", action="store_true")
     ap.add_argument("commands", nargs="*", help="commands; several are separated by ';'")
     args = ap.parse_args()
@@ -432,6 +630,13 @@ def main():
     for line in lines:
         if line:
             run(board, shlex.split(line))
+    ok = True
+    for text in args.sql or []:
+        ok = run_sql(board, text, args.mode) and ok
+    if args.sqlite:
+        sqlite_console(board, args.mode)
+    if not ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

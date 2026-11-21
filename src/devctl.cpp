@@ -16,11 +16,13 @@
 #include <esp_timer.h>
 
 #define LINE_MAX     512                /* command line (fill: up to 81 pairs), or an upload's data line */
+#define CMD_MAX      4096               /* a line from the serial port: sql's base64 is the long one */
+#define SQL_OUT      (256 * 1024)       /* sql: the most it returns (the rest: "truncated") */
 #define CHUNK        96                 /* coded bytes per S line (128 base64 characters) */
 #define TAP_MS       120
 #define SETTLE_MS    150                /* after a release: let the UI react */
 
-static char s_line[LINE_MAX];
+static char *s_line;                    /* CMD_MAX bytes (PSRAM: internal RAM is tight) */
 static int s_len;
 
 /* the answer to a command: to Serial, or (devctl_run_line) into s_cap */
@@ -341,7 +343,7 @@ static void card_put(const char *path, long size, uint32_t crc)
     uint32_t c = 0;
     const char *err = NULL;
     while (got < size && !err) {
-        if (!read_line(s_line, LINE_MAX, UP_TIMEOUT)) {
+        if (!read_line(s_line, CMD_MAX, UP_TIMEOUT)) {
             err = "timed out waiting for data";
             break;
         }
@@ -642,6 +644,40 @@ out:
     gen_bench_end();
 }
 
+/* sql <base64 of the SQL, UTF-8>: runs it on sudoku.db (stats_db_sql), then "SQL C\t<column>..."
+ * and "SQL R\t<value>..." lines, then "OK sql <rows> <changes>[ truncated]" or "ERR sql: <why>".
+ * The SQL comes coded: it may hold ';', newlines and any text. */
+static void cmd_sql(const char *line)
+{
+    const char *b64 = line + 3;
+    while (*b64 == ' ') b64++;
+    size_t n = strlen(b64);
+    char *sql = (char *)heap_caps_malloc(n * 3 / 4 + 4, MALLOC_CAP_SPIRAM);
+    char *out = (char *)heap_caps_malloc(SQL_OUT, MALLOC_CAP_SPIRAM);
+    int len = sql ? b64_decode(b64, (uint8_t *)sql, (int)(n * 3 / 4 + 3)) : -1;
+    if (!sql || !out) {
+        reply("ERR sql: no memory\n");
+    } else if (len <= 0) {
+        reply("ERR sql: sql <base64 of the SQL> (tools/devctl.py --sql codes it)\n");
+    } else {
+        sql[len] = 0;
+        stats_sql_result_t r;
+        bool ok = stats_db_sql(sql, out, SQL_OUT, &r);
+        for (char *p = out; *p;) {                  /* the result, a line at a time */
+            char *e = strchr(p, '\n');
+            if (e) *e = 0;
+            Serial.print("SQL ");
+            Serial.println(p);
+            if (!e) break;
+            p = e + 1;
+        }
+        if (ok) Serial.printf("OK sql %d %d%s\n", r.rows, r.changes, r.truncated ? " truncated" : "");
+        else Serial.printf("ERR sql: %s\n", r.err);
+    }
+    heap_caps_free(sql);
+    heap_caps_free(out);
+}
+
 static void run(char *line)
 {
     if (!s_cap && run_file(line)) return;           /* (files: serial only) */
@@ -684,6 +720,10 @@ static void run(char *line)
         char o[96];
         sudoku_ui_puzzle_part(line + 2, o, sizeof(o));
         reply("%s\n", o);
+        return;
+    }
+    if (!strcmp(cmd, "sql")) {                     /* sql <base64>: SQL on sudoku.db (serial only: not in ok[] above) */
+        cmd_sql(line);
         return;
     }
     if (!strcmp(cmd, "genbench")) {                /* genbench <variant|all> [level|all] [n] */
@@ -775,6 +815,7 @@ bool devctl_run_line(const char *line, char *out, size_t n)
 
 void devctl_poll(void)
 {
+    if (!s_line && !(s_line = (char *)heap_caps_malloc(CMD_MAX, MALLOC_CAP_SPIRAM))) return;
     while (Serial.available()) {
         int c = Serial.read();
         if (c == '\r') continue;
@@ -782,7 +823,7 @@ void devctl_poll(void)
             s_line[s_len] = 0;
             if (s_len) run(s_line);
             s_len = 0;
-        } else if (c >= ' ' && c < 127 && s_len < LINE_MAX - 1) {   /* (line noise from a reset: dropped) */
+        } else if (c >= ' ' && c < 127 && s_len < CMD_MAX - 1) {    /* (line noise from a reset: dropped) */
             s_line[s_len++] = (char)c;
         }
     }
