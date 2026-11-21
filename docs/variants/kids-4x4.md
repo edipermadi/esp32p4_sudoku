@@ -39,3 +39,52 @@ A small grid for younger players: 4 rows, 4 columns and four **2×2 boxes**. Eve
 **Step 3: the 4 in box 2.** Box 2 now has 3, 1 and 2; the last cell, r1c4, takes the 4. **r1c4 = 4**.
 
 The bottom half goes the same way: row 3 needs 2 and 4, row 4 needs 2.
+
+## The whole puzzle, step by step
+
+<!-- walkthrough -->
+<!-- Written by tools/walkthrough.py kids-4x4: edit the script, not this part. -->
+
+The whole puzzle, from the start to the last cell: 6 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+
+![The start](../screenshots/variants/kids-4x4-walkthrough/step-00.png)
+
+#### Step 1: the 3 in box 1
+
+Box 1 needs a 3, and r2c2 is its last empty cell: **r2c2 = 3**.
+
+![Step 1](../screenshots/variants/kids-4x4-walkthrough/step-01.png)
+
+#### Step 2: the 1 in box 2
+
+Box 2 needs a 1. r1c4: row 1 has one (r1c1). Only **r2c3** is left: **r2c3 = 1**.
+
+![Step 2](../screenshots/variants/kids-4x4-walkthrough/step-02.png)
+
+#### Step 3: the 4 in box 2
+
+Box 2 needs a 4, and r1c4 is its last empty cell: **r1c4 = 4**.
+
+![Step 3](../screenshots/variants/kids-4x4-walkthrough/step-03.png)
+
+#### Step 4: the 2 in box 3
+
+Box 3 needs a 2. r3c2: column 2 has one (r1c2). Only **r4c1** is left: **r4c1 = 2**.
+
+![Step 4](../screenshots/variants/kids-4x4-walkthrough/step-04.png)
+
+#### Step 5: the 4 in box 3
+
+Box 3 needs a 4, and r3c2 is its last empty cell: **r3c2 = 4**.
+
+![Step 5](../screenshots/variants/kids-4x4-walkthrough/step-05.png)
+
+#### Step 6: the 2 in box 4
+
+Box 4 needs a 2, and r3c3 is its last empty cell: **r3c3 = 2**.
+
+![Step 6](../screenshots/variants/kids-4x4-walkthrough/step-06.png)
+
+Solved.
+
+<!-- /walkthrough -->

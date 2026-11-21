@@ -284,6 +284,10 @@ bool sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
  * (filled, 0 = empty) tell: no solving ahead, just the rules against what's there (the
  * variant pages' worked examples, tools/variant_examples.c). */
 bool sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
+/* The same, and which rule says no: FIT_OK (it fits), or the first rule that rules d out */
+enum { FIT_OK = 0, FIT_FILLED, FIT_BROKEN, FIT_UNIT, FIT_XPEER, FIT_ALLOW, FIT_CONSEC, FIT_EDGE, FIT_QUAD,
+       FIT_SANDWICH_ROW, FIT_SANDWICH_COL, FIT_THERMO, FIT_CAGE };
+int sudoku_fits_why(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
 
 /* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
  * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.) */

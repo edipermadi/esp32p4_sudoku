@@ -689,16 +689,24 @@ static void mask_k_range(uint16_t mask, int k, int *lo, int *hi)
     for (int d = 9, n = 0; d >= 1 && n < k; d--) if (mask >> d & 1) { *hi += d; n++; }
 }
 
+/* sudoku_fits_why(): which rule took the digit asked about out of grid_free()'s result (NULL:
+ * nobody asks, the usual case: one predictable branch per rule) */
+typedef struct { int d, code; } why_t;   /* (one type for both ends: no aliasing surprise) */
+static why_t *s_why;
+#define WHY(c) do { if (s_why && !s_why->code && !(free >> s_why->d & 1)) s_why->code = (c); } while (0)
+
 static uint16_t grid_free(const grid_t *g, int i)
 {
     uint16_t used = 0;
     for (int k = 0; k < 5 && g->units[i][k] >= 0; k++) used |= g->um[g->units[i][k]];
     const sudoku_geom_t *G = g->G;
     uint16_t free = (uint16_t)(G->allow[i] & ~used);
+    if (s_why && !s_why->code && !(free >> s_why->d & 1)) s_why->code = (used >> s_why->d & 1) ? FIT_UNIT : FIT_ALLOW;
     for (int k = 0; k < G->nxpeers[i]; k++) {       /* Anti-Knight */
         int v = g->v[G->xpeers[i][k]];
         if (v) free &= (uint16_t)~(1u << v);
     }
+    WHY(FIT_XPEER);
     if (G->consec_on && free) {                     /* Consecutive: a bar = differ by 1, none = don't */
         const int nb[4] = {i % 9 > 0 ? i - 1 : -1, i % 9 < 8 ? i + 1 : -1, i > 8 ? i - 9 : -1, i < 72 ? i + 9 : -1};
         const bool bar[4] = {nb[0] >= 0 && (G->consec[i - 1] & CONSEC_RIGHT), (G->consec[i] & CONSEC_RIGHT) != 0,
@@ -710,7 +718,9 @@ static uint16_t grid_free(const grid_t *g, int i)
             free &= bar[k] ? near : (uint16_t)~near;
         }
     }
+    WHY(FIT_CONSEC);
     if (G->edge_kind && free) free &= edge_allow(G, i, g->v, NULL);   /* Kropki, XV, Greater-Than */
+    WHY(FIT_EDGE);
     for (int s = 0; s < 4 && free && G->nquads && G->quad_of[i][s] != QUAD_NONE; s++) {
         int empty, miss = sudoku_quad_missing(G, G->quad_of[i][s], g->v, &empty);   /* (i is one of the empty) */
         if (miss > empty) free = 0;                 /* Quadruple: not enough room left for its digits */
@@ -724,6 +734,7 @@ static uint16_t grid_free(const grid_t *g, int i)
             free &= m;
         }
     }
+    WHY(FIT_QUAD);
     if (G->sandwich && free) {                      /* Sandwich: a digit that can't keep a line's sum goes */
         for (int line = 0; line < 2 && free; line++) {
             int lu = line ? 9 + i % 9 : i / 9, ki = line ? i / 9 : i % 9, vals[9], p1 = -1, p9 = -1;
@@ -766,6 +777,7 @@ static uint16_t grid_free(const grid_t *g, int i)
                 int left = G->sandwich_sum[lu] - sum;
                 if (left < 0 || !(s_bread[empty] >> left & 1)) free &= (uint16_t)~(1u << d);
             }
+            WHY(line ? FIT_SANDWICH_COL : FIT_SANDWICH_ROW);
         }
     }
     int t = G->thermo_of[i];
@@ -780,6 +792,7 @@ static uint16_t grid_free(const grid_t *g, int i)
             if (v) free &= (uint16_t)((1u << v) - 1);
         }
     }
+    WHY(FIT_THERMO);
     int c = G->cage_of[i];
     if (c != CAGE_NONE && free) {                    /* Killer: what the cage's sum still allows */
         free &= (uint16_t)~g->cage_used[c];
@@ -797,6 +810,7 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
         free = ok;
     }
+    WHY(FIT_CAGE);
     return free;
 }
 
@@ -904,6 +918,19 @@ bool sudoku_solve(const sudoku_geom_t *G, const uint8_t cells[81], uint8_t out[8
     if (search(&g, 1, NULL) < 1) return false;
     memcpy(out, g.v, 81);
     return true;
+}
+
+int sudoku_fits_why(const sudoku_geom_t *G, const uint8_t vals[81], int cell, int d)
+{
+    static grid_t g;
+    if (cell < 0 || cell > 80 || d < 1 || d > G->n) return FIT_UNIT;
+    if (vals[cell]) return FIT_FILLED;
+    if (!grid_load(&g, G, vals)) return FIT_BROKEN;
+    why_t w = {d, FIT_OK};
+    s_why = &w;
+    grid_free(&g, cell);
+    s_why = NULL;
+    return w.code;
 }
 
 bool sudoku_fits(const sudoku_geom_t *G, const uint8_t vals[81], int cell, int d)

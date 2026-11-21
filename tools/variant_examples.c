@@ -11,6 +11,11 @@
  *
  *   make -C tests examples            all of them: docs/variant-examples.sdx
  *   tests/variant_examples - kropki   just one variant, printed (nothing written)
+ *   tests/variant_examples --json classic
+ *                                     one variant's example solved to the end, a single at a
+ *                                     time (a box's hidden single first, then a row's or
+ *                                     column's, then a naked single), every step with its
+ *                                     reasons, as JSON (tools/walkthrough.py draws and writes it)
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,6 +96,27 @@ static void why(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char 
         return;
     }
     sprintf(b, "RULE");
+}
+
+/* why() as data: the filled cell that rules d out of c (-1: none) and through what, in words
+ * ("row 2", "box 1", "the anti-diagonal", "a knight's move", "even", "RULE") */
+static int blocker(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char *via)
+{
+    int u[64], nu = units_of(G, u);
+    for (int i = 0; i < nu; i++) {
+        if (!in_unit(G, u[i], c)) continue;
+        for (int k = 0; k < G->n; k++) {
+            int o = G->unit[u[i]][k];
+            if (o != c && v[o] == d) { unit_name(G, u[i], via); return o; }
+        }
+    }
+    for (int k = 0; k < G->nxpeers[c]; k++) {
+        int o = G->xpeers[c][k];
+        if (v[o] == d) { strcpy(via, G->variant == VAR_KNIGHT ? "a knight's move" : "a touching cell"); return o; }
+    }
+    if (G->parity[c] && !(G->allow[c] >> d & 1)) { strcpy(via, G->parity[c] == PARITY_EVEN ? "even" : "odd"); return -1; }
+    strcpy(via, "RULE");
+    return -1;
 }
 
 /* the variant's features around a cell, to explain a RULE */
@@ -289,8 +315,178 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     }
 }
 
+/* a rule's reason for d not going in c, as JSON fields (after "via": "RULE") */
+static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
+{
+    int why = sudoku_fits_why(G, v, c, d), r = c / 9, q = c % 9;
+    const int nb[4] = {q > 0 ? c - 1 : -1, q < 8 ? c + 1 : -1, r > 0 ? c - 9 : -1, r < 8 ? c + 9 : -1};
+    switch (why) {
+    case FIT_CONSEC: case FIT_EDGE:                 /* the neighbour whose mark (or none) rules it out */
+        for (int k = 0; k < 4; k++) {
+            int o = nb[k];
+            if (o < 0 || !v[o]) continue;
+            bool first = k == 0 || k == 2;          /* o is left of / above c */
+            int a = first ? v[o] : d, b = first ? d : v[o], m;
+            int top = first ? o : c;
+            if (why == FIT_CONSEC) {
+                m = (k < 2 ? G->consec[top] & CONSEC_RIGHT : G->consec[top] & CONSEC_DOWN) != 0;
+                if ((abs(a - b) == 1) == (m != 0)) continue;
+            } else {
+                m = k < 2 ? EDGE_RIGHT(G->edge[top]) : EDGE_DOWN(G->edge[top]);
+                if (sudoku_edge_ok(G->edge_kind, m, a, b)) continue;
+            }
+            printf(", \"rule\": \"%s\", \"with\": %d, \"mark\": %d, \"cell_first\": %s",
+                   why == FIT_CONSEC ? "consec" : G->edge_kind == EDGE_KROPKI ? "kropki" : G->edge_kind == EDGE_XV ? "xv" : "gt",
+                   o, m, first ? "false" : "true");
+            return;
+        }
+        printf(", \"rule\": \"marks\"");
+        return;
+    case FIT_ALLOW: {                               /* Greater-Than: the range from the chains of signs */
+        int lo = 0, hi = 0;
+        for (int x = 1; x <= 9; x++) if (G->allow[c] >> x & 1) { if (!lo) lo = x; hi = x; }
+        printf(", \"rule\": \"range\", \"lo\": %d, \"hi\": %d", lo, hi);
+        return;
+    }
+    case FIT_THERMO: {
+        int t = G->thermo_of[c], p = G->thermo_pos[c];
+        int before = p > 0 ? G->thermo_cell[t][p - 1] : -1, after = p + 1 < G->thermo_n[t] ? G->thermo_cell[t][p + 1] : -1;
+        int o = before >= 0 && v[before] && d <= v[before] ? before : after;
+        printf(", \"rule\": \"thermo\", \"with\": %d, \"after\": %s", o, o == before ? "true" : "false");
+        return;
+    }
+    case FIT_CAGE:
+        printf(", \"rule\": \"cage\", \"cage\": %d", G->cage_of[c]);
+        return;
+    case FIT_QUAD:
+        for (int s = 0; s < 4 && G->quad_of[c][s] != QUAD_NONE; s++) {
+            int qd = G->quad_of[c][s], empty, miss = sudoku_quad_missing(G, qd, v, &empty);
+            if (miss >= empty) { printf(", \"rule\": \"quad\", \"quad\": %d", qd); return; }
+        }
+        printf(", \"rule\": \"quad\", \"quad\": %d", G->quad_of[c][0]);
+        return;
+    case FIT_SANDWICH_ROW: case FIT_SANDWICH_COL:
+        printf(", \"rule\": \"sandwich\", \"line\": %d", why == FIT_SANDWICH_ROW ? r : 9 + q);
+        return;
+    default:
+        printf(", \"rule\": \"other\", \"code\": %d, \"fits\": %d", why, sudoku_fits(G, v, c, d));
+    }
+}
+
+/* the board's layout as JSON fields: tinted cells, regions, marks, cages, thermometers, circles, sums */
+static void layout_json(const sudoku_geom_t *G)
+{
+    printf(" \"region\": [");
+    for (int i = 0; i < 81; i++) printf("%s%d", i ? "," : "", G->used[i] ? G->region[i] : -1);
+    printf("],\n \"tint\": [");
+    for (int i = 0; i < 81; i++) printf("%s%d", i ? "," : "", sudoku_geom_tinted(G, i));
+    printf("],\n \"parity\": [");
+    for (int i = 0; i < 81; i++) printf("%s%d", i ? "," : "", G->parity[i]);
+    printf("],\n \"consec_on\": %s, \"consec\": [", G->consec_on ? "true" : "false");
+    for (int i = 0; i < 81; i++) printf("%s%d", i ? "," : "", G->consec[i]);
+    printf("],\n \"edge_kind\": %d, \"edge\": [", G->edge_kind);
+    for (int i = 0; i < 81; i++) printf("%s%d", i ? "," : "", G->edge[i]);
+    printf("],\n \"cages\": [");
+    for (int k = 0; k < G->ncages; k++) {
+        printf("%s{\"sum\": %d, \"cells\": [", k ? ", " : "", G->cage_sum[k]);
+        for (int j = 0; j < G->cage_n[k]; j++) printf("%s%d", j ? "," : "", G->cage_cell[k][j]);
+        printf("]}");
+    }
+    printf("],\n \"thermos\": [");
+    for (int t = 0; t < G->nthermos; t++) {
+        printf("%s[", t ? ", " : "");
+        for (int j = 0; j < G->thermo_n[t]; j++) printf("%s%d", j ? "," : "", G->thermo_cell[t][j]);
+        printf("]");
+    }
+    printf("],\n \"quads\": [");
+    for (int qd = 0; qd < G->nquads; qd++) {
+        printf("%s{\"at\": %d, \"digits\": [", qd ? ", " : "", G->quad_at[qd]);
+        for (int j = 0; j < G->quad_n[qd]; j++) printf("%s%d", j ? "," : "", G->quad_dig[qd][j]);
+        printf("]}");
+    }
+    printf("],\n \"sandwich\": ");
+    if (G->sandwich) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) printf("%s%d", lu ? "," : "", G->sandwich_sum[lu]);
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n");
+}
+
+/* the example of variant var (as main() picks it), solved to the end as JSON on stdout */
+static void walkthrough(int var, const sudoku_geom_t *G, const uint8_t giv[81], int level, uint32_t seed)
+{
+    uint8_t v[81], sol[81];
+    memcpy(v, giv, 81);
+    sudoku_solve(G, giv, sol);
+    char via[48];
+    printf("{\"variant\": \"%s\", \"level\": \"%s\", \"seed\": %u, \"n\": %d, \"box_h\": %d, \"box_w\": %d,\n",
+           variant_name(var), gen_level_name(level), (unsigned)seed, G->n, G->box_h, G->box_w);
+    printf(" \"givens\": [");
+    for (int i = 0; i < 81; i++) printf("%s%d", i ? "," : "", giv[i]);
+    printf("],\n \"solution\": [");
+    for (int i = 0; i < 81; i++) printf("%s%d", i ? "," : "", sol[i]);
+    printf("],\n");
+    layout_json(G);
+    printf(" \"steps\": [\n");
+    static single_t s[2048];
+    for (int step = 0;; step++) {
+        int n = singles(G, v, false, s), best = -1, rank = 9;
+        for (int i = 0; i < n; i++) {                   /* a box's hidden single, a line's, a naked one */
+            int r = s[i].naked ? 2 : s[i].unit >= 18 && s[i].unit < 27 ? 0 : 1;
+            if (r < rank) { rank = r; best = i; }
+        }
+        if (best < 0) break;
+        single_t *t = &s[best];
+        if (sol[t->cell] != t->digit) { fprintf(stderr, "a wrong single?\n"); exit(1); }
+        char un[40] = "";
+        if (!t->naked) unit_name(G, t->unit, un);
+        printf("  %s{\"cell\": %d, \"digit\": %d, \"kind\": \"%s\", \"unit\": %d, \"unit_name\": \"%s\", \"area\": [",
+               step ? "," : "", t->cell, t->digit, t->naked ? "naked" : "hidden", t->naked ? -1 : t->unit, un);
+        bool in[81] = {false};                          /* what the picture tints: the unit, or the cell's units */
+        if (!t->naked) for (int k = 0; k < G->n; k++) in[G->unit[t->unit][k]] = true;
+        else for (int j = 0; j < G->ncu[t->cell]; j++) for (int k = 0; k < G->n; k++) in[G->unit[G->cu[t->cell][j]][k]] = true;
+        for (int i = 0, f = 1; i < 81; i++) if (in[i]) { printf("%s%d", f ? "" : ",", i); f = 0; }
+        printf("], \"reasons\": [");
+        bool first = true;
+        if (t->naked) {                                 /* each other digit: who rules it out */
+            for (int d = 1; d <= G->n; d++) {
+                if (d == t->digit) continue;
+                int b = blocker(G, v, t->cell, d, via);
+                printf("%s{\"digit\": %d, \"by\": %d, \"via\": \"%s\"", first ? "" : ", ", d, b, via);
+                if (!strcmp(via, "RULE")) rule_json(G, v, t->cell, d);
+                printf("}");
+                first = false;
+            }
+        } else {                                        /* each other cell of the unit */
+            for (int k = 0; k < G->n; k++) {
+                int o = G->unit[t->unit][k];
+                if (o == t->cell) continue;
+                if (v[o]) {
+                    printf("%s{\"cell\": %d, \"filled\": %d}", first ? "" : ", ", o, v[o]);
+                } else {
+                    int b = blocker(G, v, o, t->digit, via);
+                    printf("%s{\"cell\": %d, \"by\": %d, \"via\": \"%s\"", first ? "" : ", ", o, b, via);
+                    if (!strcmp(via, "RULE")) rule_json(G, v, o, t->digit);
+                    printf("}");
+                }
+                first = false;
+            }
+        }
+        printf("]}\n");
+        v[t->cell] = (uint8_t)t->digit;
+    }
+    int left = 0;
+    for (int k = 0; k < G->ncells; k++) left += !v[G->cells[k]];
+    printf(" ], \"left\": %d}\n", left);
+}
+
 int main(int argc, char **argv)
 {
+    bool json = argc > 1 && !strcmp(argv[1], "--json");
+    if (json) { argv[1] = "-"; }
     const char *out = argc > 1 ? argv[1] : "-";
     const char *only = argc > 2 ? argv[2] : NULL;
     FILE *f = strcmp(out, "-") ? fopen(out, "w") : NULL;
@@ -324,6 +520,10 @@ int main(int argc, char **argv)
         }
         if (!best_seed) { printf("== %s: no example found\n", variant_name(var)); continue; }
         const sudoku_geom_t *G = &best_board;
+        if (json) {
+            walkthrough(var, G, best_giv, best_level, best_seed);
+            return 0;
+        }
         uint8_t sol[81], v[81];
         sudoku_solve(G, best_giv, sol);
         static char cages[1024], marks[1024], thermos[1024];
