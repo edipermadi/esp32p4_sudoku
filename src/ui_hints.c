@@ -877,10 +877,11 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
         int at = spot < 9 ? LINE_THICK + (spot / 3) * (box_w + LINE_THICK) + (spot % 3) * (cs + LINE_THIN) - 1
                           : LINE_THICK + 2 * (box_w + LINE_THICK) + box_w + 1;
         lv_obj_t *l = clues[(top ? 10 : 0) + spot];   /* (one label per place) */
-        if (!lv_obj_has_flag(l, LV_OBJ_FLAG_USER_1)) {             /* (the arrow: drawn by the label, once set up) */
-            lv_obj_add_flag(l, LV_OBJ_FLAG_USER_1);
-            lv_obj_add_event_cb(l, lk_clue_draw_cb, LV_EVENT_DRAW_POST, NULL);
+        bool has_arrow = false;                                     /* (the arrow: drawn by the label, set up once) */
+        for (uint32_t k2 = 0; k2 < lv_obj_get_event_count(l); k2++) {
+            has_arrow |= lv_event_dsc_get_cb(lv_obj_get_event_dsc(l, k2)) == lk_clue_draw_cb;
         }
+        if (!has_arrow) lv_obj_add_event_cb(l, lk_clue_draw_cb, LV_EVENT_DRAW_POST, NULL);
         lv_obj_set_user_data(l, (void *)(intptr_t)(1 + geo->lk_dir[k]));
         lv_obj_set_style_text_font(l, &lv_font_montserrat_16, 0);
         lv_label_set_text_fmt(l, "%d", geo->lk_sum[k]);

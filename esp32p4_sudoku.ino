@@ -31,6 +31,7 @@
 #include "src/devctl.h"
 #include "src/gibberlink.h"
 #include "src/avatar_store.h"
+#include "src/settings_core.h"
 #include "src/stats_db.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
@@ -146,7 +147,7 @@ void loop()
   static bool kept;
   if (!kept && millis() > KEEP_FIRMWARE_AFTER_MS) {   /* started up and ran fine: this firmware stays */
     kept = true;
-    sudoku_ui_mark_ok();
+    fw_mark_running_ok();
   }
   devctl_poll();                     /* commands from tools/devctl.py, if any */
   gibberlink_poll();                 /* commands heard as sound (Settings > Sound > Gibberlink) */

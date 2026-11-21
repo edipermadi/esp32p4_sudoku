@@ -63,11 +63,6 @@ void sudoku_ui_screen_name(char *buf, size_t n);
  * "Received" and offered to play. out: "OK pz 1/3", "OK pz done" or "ERR pz: ...". */
 bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n);
 
-/* Call once start-up went well (screens up, sudoku.db open): a firmware just
- * installed from update.bin is kept; until then, a restart goes back to the
- * previous one (the bootloader's rollback). */
-void sudoku_ui_mark_ok(void);
-
 /* What's using the microSD card right now (an MP4 export, a screenshot, Files, a firmware update,
  * formatting, the USB drive, sudoku.db's worker), as a few words; NULL when nothing is.
  * (devctl genbench waits for none.) */

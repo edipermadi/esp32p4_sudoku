@@ -676,10 +676,10 @@ esp_err_t sudoku_ui_start(void)
      * comes first. Card setup also has to happen before Wi-Fi starts (they
      * share the SDMMC host, see the microSD section). */
     sd_probe_card();
-    if (ui_sd_present()) {
+    if (sd_present()) {
         char sz[24];
-        fmt_gb(sz, sizeof(sz), ui_sd_bytes());
-        printf("microSD: \"%s\", %s\n", ui_sd_name(), sz);
+        fmt_gb(sz, sizeof(sz), sd_bytes());
+        printf("microSD: \"%s\", %s\n", sd_name(), sz);
         stats_db_start();
         if (stats_db_wait_open(4000)) {
             store_prefs_t prefs;
@@ -694,7 +694,7 @@ esp_err_t sudoku_ui_start(void)
     } else {
         printf("microSD: no card\n");
     }
-    if (ui_sd_present() && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
+    if (sd_present() && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
         printf("usb_msc: USB didn't start\n");
     }
     wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */

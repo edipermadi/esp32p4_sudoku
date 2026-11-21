@@ -43,6 +43,7 @@
 #include "esp_app_desc.h"
 #include "esp_image_format.h"
 #include "esp_heap_caps.h"
+#include "settings_core.h"
 
 /* Background work (generator, Learn, the puzzle check, firmware update, card
  * format) runs on core 0: LVGL runs in loopTask on core 1, and core 0 otherwise
@@ -322,34 +323,7 @@ typedef stats_level_t level_stat_t;
 #define PLOT_T  14
 #define PLOT_B  44                      /* room for the legend */
 
-/* ------------------------------------------------------------- firmware update (from the card) */
-/*
- * Settings > Data > Firmware update: update.bin in the card's root (the
- * sketch's .ino.bin from the Arduino IDE's Export Compiled Binary, or the
- * build folder) goes into the other app slot (two 4.44 MiB slots, ota_0 /
- * ota_1: partitions.csv; the avatars are in a partition of their own). esp_ota_end() checks the whole image (format, chip, SHA-256)
- * before the board is told to start it, so a broken file changes nothing.
- * The new firmware starts on probation (the bootloader's rollback): it is
- * kept once the screens are up and sudoku.db has opened (sudoku_ui_mark_ok());
- * if it crashes before that, the next restart goes back to the old one.
- * Afterwards update.bin is renamed update.done.
- */
-#define FW_FILE  BSP_SD_MOUNT_POINT "/update.bin"
-#define FW_DONE  BSP_SD_MOUNT_POINT "/update.done"
-#define FW_CHUNK (16 * 1024)
-
-/* ------------------------------------------------------------- microSD format */
-/* The card work runs in a short-lived task; sd_poll_cb (LVGL timer) follows
- * its state and drives the dialogs. Only one job at a time.
- *
- * The card shares the SDMMC host with the Wi-Fi link, and initialising a card
- * (400 kHz) disturbs that link badly enough that ESP-Hosted restarts the
- * board. So the card is detected at boot, before Wi-Fi starts (see
- * sudoku_ui_start()), and formatting then only transfers data at the link's
- * own 40 MHz. A card inserted later can only be detected while
- * Wi-Fi has not been started since boot. */
-typedef enum { SD_IDLE, SD_PROBING, SD_FOUND, SD_NO_CARD, SD_FORMATTING, SD_DONE, SD_FAILED } sd_state_t;
-typedef enum { SD_JOB_PROBE, SD_JOB_FORMAT } sd_job_t;
+/* firmware update, microSD card, factory reset, power off, USB drive: settings_core.h */
 
 /* ============================================================= trophies */
 /*
@@ -577,9 +551,6 @@ lv_obj_t *settings_wifi_eye(void);
 lv_obj_t *settings_wifi_lbl(void);
 const uint8_t *sleep_minutes(void);
 bool ui_night(void);
-uint64_t ui_sd_bytes(void);
-const char *ui_sd_name(void);
-bool ui_sd_present(void);
 uint8_t ui_sleep_min(void);
 void ui_set_sleep_min(uint8_t v);
 /* ui_stats.c */
@@ -696,8 +667,6 @@ void wifi_back_cb(lv_event_t *e);
 void clock_cb(lv_timer_t *t);
 void stats_player_dd_update(void);
 void refresh_stats(void);
-void sd_probe_card(void);
-void fmt_gb(char *buf, size_t n, uint64_t bytes);
 void sd_poll_cb(lv_timer_t *t);
 void apply_loaded_prefs(void);
 void power_off_cb(lv_event_t *e);

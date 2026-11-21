@@ -1,4 +1,6 @@
-/* sudoku_ui.c split: Settings, and its card and firmware actions: update, microSD format, factory reset, power off, USB drive. See sudoku_ui.c for the whole. */
+/* sudoku_ui.c split: the Settings screen, and the dialogs of its card and firmware actions (update, microSD
+ * format, factory reset, power off, USB drive). What those do to the board is in settings_core.c. See
+ * sudoku_ui.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -18,10 +20,7 @@ static void sound_sw_cb(lv_event_t *e);
 static void bright_sl_cb(lv_event_t *e);
 static void vol_sl_cb(lv_event_t *e);
 static lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_cb_t cb, lv_obj_t **lbl);
-static bool fw_file_desc(esp_app_desc_t *d, uint32_t *size);
-static void fw_build_id(const esp_app_desc_t *d, char out[9]);
 static void fw_row_update(void);
-static void fw_task(void *arg);
 static void fw_poll_cb(lv_timer_t *t);
 static void fw_start_cb(lv_timer_t *t);
 static void fw_go_cb(lv_event_t *e);
@@ -34,8 +33,6 @@ static void accent_dd_cb(lv_event_t *e);
 static void assist_dd_cb(lv_event_t *e);
 static lv_obj_t *settings_dropdown(lv_obj_t *row, const char *options, uint32_t sel, int width, lv_event_cb_t cb);
 static void sleep_dd_cb(lv_event_t *e);
-static void sd_task(void *arg);
-static bool sd_run(sd_job_t job);
 static void sd_btn_text(const char *t, bool enabled);
 static void sd_format_confirm_cb(lv_event_t *e);
 static void sd_format_cancel_cb(lv_event_t *e);
@@ -88,35 +85,7 @@ static lv_obj_t *st_tab_btn[ST_TABS], *st_pane[ST_TABS];
 static int st_tab;                                  /* the open tab; Settings opens on Network */
 
 static lv_obj_t *st_fw_btn, *st_fw_hint;
-static lv_timer_t *fw_timer;
-static volatile int fw_state;                       /* 0 writing, 1 done, 2 failed */
-static volatile uint32_t fw_done_bytes, fw_size;
-static char fw_err[96];
-
-/* update.bin's app description (its build date, version); false if it isn't an ESP app image */
-static bool fw_file_desc(esp_app_desc_t *d, uint32_t *size)
-{
-    struct stat st;
-    if (stat(FW_FILE, &st) != 0 || st.st_size < (off_t)(sizeof(esp_image_header_t) + 256)) return false;
-    FILE *f = fopen(FW_FILE, "rb");
-    if (!f) return false;
-    esp_image_header_t h;
-    bool ok = fread(&h, sizeof(h), 1, f) == 1 && h.magic == ESP_IMAGE_HEADER_MAGIC && h.chip_id == ESP_CHIP_ID_ESP32P4;
-    /* the app description is the start of the first segment */
-    ok = ok && fseek(f, sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t), SEEK_SET) == 0 &&
-         fread(d, sizeof(*d), 1, f) == 1 && d->magic_word == ESP_APP_DESC_MAGIC_WORD;
-    fclose(f);
-    if (ok && size) *size = (uint32_t)st.st_size;
-    return ok;
-}
-
-/* a build's ID: the start of its ELF file's SHA-256 (as a crash log prints it). (The app description's
- * date is when the Arduino core's libraries were built: the same for every sketch build.) */
-static void fw_build_id(const esp_app_desc_t *d, char out[9])
-{
-    for (int i = 0; i < 4; i++) snprintf(out + 2 * i, 3, "%02x", d->app_elf_sha256[i]);
-}
-
+static lv_timer_t *fw_timer;                        /* the card's wait, then following the write */
 /* the Firmware update row: what's running, and what update.bin is */
 static void fw_row_update(void)
 {
@@ -134,40 +103,6 @@ static void fw_row_update(void)
         lv_label_set_text_fmt(st_fw_hint, "Running build %s; put update.bin on the card", run_id);
     }
     lv_obj_set_state(st_fw_btn, LV_STATE_DISABLED, !have);
-}
-
-static void fw_task(void *arg)
-{
-    uint8_t *buf = heap_caps_malloc(FW_CHUNK, MALLOC_CAP_SPIRAM);
-    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
-    FILE *f = fopen(FW_FILE, "rb");
-    esp_ota_handle_t h = 0;
-    esp_err_t err = !buf ? ESP_ERR_NO_MEM : !part ? ESP_ERR_NOT_FOUND : !f ? ESP_ERR_INVALID_STATE : ESP_OK;
-    /* erases what the image needs, all at once (the screen is dark: sudoku_ui_flash_dark) */
-    if (err == ESP_OK) err = esp_ota_begin(part, fw_size, &h);
-    while (err == ESP_OK) {
-        size_t n = fread(buf, 1, FW_CHUNK, f);
-        if (!n) break;
-        err = esp_ota_write(h, buf, n);
-        fw_done_bytes += (uint32_t)n;
-    }
-    if (f) fclose(f);
-    if (h) {
-        esp_err_t end = esp_ota_end(h);             /* the whole image checked (format, chip, hash) */
-        if (err == ESP_OK) err = end;
-    }
-    if (err == ESP_OK) err = esp_ota_set_boot_partition(part);
-    if (err == ESP_OK) {
-        remove(FW_DONE);
-        rename(FW_FILE, FW_DONE);                   /* not again at the next look */
-        printf("update: %u bytes into %s, starting it\n", (unsigned)fw_done_bytes, part->label);
-    } else {
-        snprintf(fw_err, sizeof(fw_err), "Update failed (%s): the running firmware stays.", esp_err_to_name(err));
-        printf("update: %s\n", fw_err);
-    }
-    heap_caps_free(buf);
-    fw_state = err == ESP_OK ? 1 : 2;
-    vTaskDelete(NULL);
 }
 
 /* The screen is dark while the flash is written: any flash erase or write keeps the display
@@ -233,26 +168,24 @@ void sudoku_ui_flash_done(void)
 
 static void fw_poll_cb(lv_timer_t *t)
 {
-    if (fw_state == 0) return;
+    fw_state_t st = fw_update_state();
+    if (st == FW_WRITING) return;
     lv_timer_delete(fw_timer);
     fw_timer = NULL;
-    if (fw_state == 2) {
+    if (st == FW_FAILED) {
         sudoku_ui_flash_done();
-        sudoku_ui_notice(fw_err, 6000);
+        sudoku_ui_notice(fw_update_error(), 6000);
         fw_row_update();
         return;
     }
-    stats_db_suspend();                             /* sudoku.db closed, the card unmounted */
-    vTaskDelay(pdMS_TO_TICKS(300));
-    esp_restart();                                  /* (the screen comes back with the new firmware) */
+    fw_restart_into_new();                          /* (the screen comes back with the new firmware) */
 }
 
 /* after the card has been on screen a moment: dark, then the write */
 static void fw_start_cb(lv_timer_t *t)
 {
     sudoku_ui_flash_dark();
-    printf("update: writing %u bytes, the screen dark meanwhile\n", (unsigned)fw_size);
-    if (xTaskCreatePinnedToCore(fw_task, "fwupdate", 8192, NULL, 3, NULL, WORKER_CORE) != pdPASS) {
+    if (!fw_update_start((uint32_t)(uintptr_t)lv_timer_get_user_data(t))) {
         fw_timer = NULL;
         sudoku_ui_flash_done();
         sudoku_ui_notice("Couldn't start the update.", 4000);
@@ -267,14 +200,11 @@ static void fw_go_cb(lv_event_t *e)
     esp_app_desc_t d;
     uint32_t size;
     if (fw_timer || !fw_file_desc(&d, &size)) return;
-    fw_size = size;
-    fw_done_bytes = 0;
-    fw_state = 0;
     char text[160];
     snprintf(text, sizeof(text), "The screen goes dark while the firmware is written (about %u seconds), then "
-             "the board restarts into it by itself.", (unsigned)(fw_size / (100 * 1024)) + 5);
+             "the board restarts into it by itself.", (unsigned)(size / (100 * 1024)) + 5);
     sudoku_ui_flash_busy(LV_SYMBOL_DOWNLOAD "  Updating the firmware", text);
-    fw_timer = lv_timer_create(fw_start_cb, 3000, NULL);
+    fw_timer = lv_timer_create(fw_start_cb, 3000, (void *)(uintptr_t)size);
     lv_timer_set_repeat_count(fw_timer, 1);
 }
 
@@ -300,16 +230,6 @@ static void fw_update_cb(lv_event_t *e)
     lv_obj_set_width(m, 600);
     msgbox_button(m, "Cancel", mbox_close_cb, false);
     msgbox_button(m, LV_SYMBOL_DOWNLOAD "  Update", fw_go_cb, true);
-}
-
-void sudoku_ui_mark_ok(void)
-{
-    const esp_partition_t *run = esp_ota_get_running_partition();
-    esp_ota_img_states_t st;
-    if (esp_ota_get_state_partition(run, &st) == ESP_OK && st == ESP_OTA_IMG_PENDING_VERIFY) {
-        esp_ota_mark_app_valid_cancel_rollback();
-        printf("update: the new firmware started fine: kept\n");
-    }
 }
 
 static void timer_sw_cb(lv_event_t *e)
@@ -395,57 +315,8 @@ static void sleep_dd_cb(lv_event_t *e)
     s_sleep_min = SLEEP_MIN[sel];
     store_set_screen_timeout_min(s_sleep_min);
 }
-static volatile sd_state_t s_sd_state = SD_IDLE;
-static volatile bool s_sd_present;
-static sd_state_t s_sd_seen = SD_IDLE;
-static uint64_t   s_sd_bytes;
-static char       s_sd_name[8];
-
-/* is a card there: its size and name (at start-up, before Wi-Fi) */
-void sd_probe_card(void)
-{
-    s_sd_present = bsp_sdcard_probe(&s_sd_bytes, s_sd_name) == ESP_OK;
-}
-static esp_err_t  s_sd_err;
+static sd_state_t s_sd_seen = SD_IDLE;              /* the card state sd_poll_cb has shown */
 static lv_obj_t  *s_sd_busy;          /* "Formatting..." box */
-
-static void sd_task(void *arg)
-{
-    sd_job_t job = (sd_job_t)(intptr_t)arg;
-    esp_err_t err;
-    switch (job) {
-    case SD_JOB_PROBE:
-        err = bsp_sdcard_probe(&s_sd_bytes, s_sd_name);
-        s_sd_present = err == ESP_OK;
-        s_sd_state = s_sd_present ? SD_FOUND : SD_NO_CARD;
-        break;
-    case SD_JOB_FORMAT:
-        stats_db_suspend();                        /* close sudoku.db, unmount */
-        err = bsp_sdcard_check();                  /* still the card found earlier? */
-        if (err == ESP_OK) err = bsp_sdcard_format_fat32();
-        s_sd_err = err;
-        if (err == ESP_OK) stats_db_start_fresh(); /* new sudoku.db: current settings, no statistics */
-        s_sd_state = err == ESP_OK ? SD_DONE : SD_FAILED;
-        break;
-    }
-    vTaskDelete(NULL);
-}
-
-static bool sd_run(sd_job_t job)
-{
-    s_sd_state = job == SD_JOB_PROBE ? SD_PROBING : SD_FORMATTING;
-    if (xTaskCreatePinnedToCore(sd_task, "sd_card", 8192, (void *)(intptr_t)job, 4, NULL, WORKER_CORE) != pdPASS) {
-        s_sd_state = SD_IDLE;
-        return false;
-    }
-    return true;
-}
-
-void fmt_gb(char *buf, size_t n, uint64_t bytes)
-{
-    uint32_t tenths = (uint32_t)((bytes + 50000000ULL) / 100000000ULL);   /* GB as printed on cards */
-    snprintf(buf, n, "%lu.%lu GB", (unsigned long)(tenths / 10), (unsigned long)(tenths % 10));
-}
 
 static void sd_btn_text(const char *t, bool enabled)
 {
@@ -467,14 +338,14 @@ static void sd_format_confirm_cb(lv_event_t *e)
 static void sd_format_cancel_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-    s_sd_state = SD_IDLE;
+    sd_set_state(SD_IDLE);
 }
 
 static void sd_format_cb(lv_event_t *e)
 {
-    if (s_sd_state != SD_IDLE) return;
-    if (s_sd_present) {
-        s_sd_state = SD_FOUND;                     /* found at boot: straight to the question */
+    if (sd_state() != SD_IDLE) return;
+    if (sd_present()) {
+        sd_set_state(SD_FOUND);                    /* found at boot: straight to the question */
     } else if (!wifi_mgr_radio_started()) {
         if (sd_run(SD_JOB_PROBE)) sd_btn_text("Checking...", false);
     } else {
@@ -549,7 +420,7 @@ void sd_poll_cb(lv_timer_t *t)
     char msg[96];
     if (stats_db_take_message(msg, sizeof(msg))) sudoku_ui_notice(msg, 4000);
 
-    sd_state_t st = s_sd_state;
+    sd_state_t st = sd_state();
     if (st == s_sd_seen) return;
     s_sd_seen = st;
     char sz[24], text[320];
@@ -557,11 +428,11 @@ void sd_poll_cb(lv_timer_t *t)
     case SD_FOUND: {
         sd_btn_text("Format", true);
         stats_db_start();                          /* card found after boot: use it for stats too */
-        fmt_gb(sz, sizeof(sz), s_sd_bytes);
+        fmt_gb(sz, sizeof(sz), sd_bytes());
         snprintf(text, sizeof(text),
                  "Card \"%s\", %s.\nEverything on it will be erased, including sudoku.db with your "
                  "statistics and solve history. It gets one FAT32 partition using the whole card, "
-                 "and a new sudoku.db with your current settings and the game in progress.", s_sd_name, sz);
+                 "and a new sudoku.db with your current settings and the game in progress.", sd_name(), sz);
         lv_obj_t *m = make_msgbox("Format microSD card?", text);
         msgbox_button(m, "Cancel", sd_format_cancel_cb, false);
         msgbox_button(m, "Format", sd_format_confirm_cb, true);
@@ -570,7 +441,7 @@ void sd_poll_cb(lv_timer_t *t)
     case SD_NO_CARD:
         sd_btn_text("Format", true);
         sudoku_ui_notice("No microSD card found. Insert one and try again.", 5000);
-        s_sd_state = s_sd_seen = SD_IDLE;
+        sd_set_state(s_sd_seen = SD_IDLE);
         break;
     case SD_FORMATTING:
         sd_btn_text("Formatting...", false);
@@ -588,22 +459,22 @@ void sd_poll_cb(lv_timer_t *t)
             if (act == scr_home) refresh_home();
             else if (act == scr_list) refresh_list();
             else if (act == scr_stats) refresh_stats();
-            fmt_gb(sz, sizeof(sz), s_sd_bytes);
+            fmt_gb(sz, sizeof(sz), sd_bytes());
             snprintf(text, sizeof(text), "microSD card formatted: FAT32, one %s partition. New sudoku.db "
                                          "with your current settings; statistics start fresh.", sz);
-        } else if (s_sd_err == ESP_ERR_TIMEOUT || s_sd_err == ESP_ERR_INVALID_CRC ||
-                   s_sd_err == ESP_ERR_INVALID_RESPONSE) {
-            s_sd_present = false;
+        } else if (sd_last_error() == ESP_ERR_TIMEOUT || sd_last_error() == ESP_ERR_INVALID_CRC ||
+                   sd_last_error() == ESP_ERR_INVALID_RESPONSE) {
+            sd_forget();
             snprintf(text, sizeof(text), "The microSD card isn't answering. If it was swapped, restart the "
                                          "board with the card inserted.");
-        } else if (s_sd_err == ESP_ERR_INVALID_SIZE) {
+        } else if (sd_last_error() == ESP_ERR_INVALID_SIZE) {
             snprintf(text, sizeof(text), "Format failed: the card is too small for FAT32.");
         } else {
             snprintf(text, sizeof(text), "Format failed (%s). The card may need formatting on a computer.",
-                     esp_err_to_name(s_sd_err));
+                     esp_err_to_name(sd_last_error()));
         }
         sudoku_ui_notice(text, 6000);
-        s_sd_state = s_sd_seen = SD_IDLE;
+        sd_set_state(s_sd_seen = SD_IDLE);
         break;
     default:
         break;
@@ -639,14 +510,9 @@ void apply_loaded_prefs(void)
 static void factory_reset_confirm_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-    printf("factory reset\n");
-    wifi_mgr_forget();                             /* network gone (Wi-Fi's NVS keys) */
-    wifi_mgr_set_enabled(false);
-    store_factory_reset();                         /* defaults, no stats, old NVS keys erased */
     u_reload_home = true;
-    if (stats_db_ready()) {
+    if (device_factory_reset()) {
         u_reloading = true;                        /* sd_poll_cb applies the rebuilt sudoku.db */
-        stats_db_factory_reset();
         sudoku_ui_notice("Factory reset: rebuilding sudoku.db...", 3000);
     } else {
         apply_loaded_prefs();
@@ -671,7 +537,6 @@ static void factory_reset_cb(lv_event_t *e)
 static void power_off_confirm_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-    printf("power off\n");
     /* black first, so nothing half-drawn shows while the light goes out */
     lv_obj_t *black = lv_obj_create(lv_layer_sys());
     lv_obj_remove_style_all(black);
@@ -681,8 +546,7 @@ static void power_off_confirm_cb(lv_event_t *e)
     lv_refr_now(NULL);
     bsp_display_brightness_set(0);
     vTaskDelay(pdMS_TO_TICKS(150));                /* the confirm tap's tick finishes */
-    stats_db_suspend();                            /* queued writes done, sudoku.db closed, card unmounted */
-    bsp_power_off();                               /* deep sleep until RESET */
+    device_power_off();                            /* sudoku.db closed, then deep sleep until RESET */
 }
 
 void power_off_cb(lv_event_t *e)
@@ -700,11 +564,10 @@ void power_off_cb(lv_event_t *e)
 void usb_finish(void)
 {
     if (!u_ovl) return;
-    usb_msc_set_enabled(false);                    /* the computer lets go first */
+    usb_drive_return();                            /* the computer lets go; sudoku.db reopened */
     lv_obj_delete_async(u_ovl);
     u_ovl = NULL;
     u_reloading = true;                            /* sd_poll_cb applies what sudoku.db has */
-    stats_db_start();                              /* remount + reopen (a new skeleton if it was deleted) */
     sudoku_ui_notice("Card back on the board: reopening sudoku.db...", 2500);
 }
 
@@ -713,8 +576,8 @@ void usb_btn_update(void)
 {
     if (!st_usb_btn) return;
     bool host = usb_msc_host_connected();
-    lv_obj_set_state(st_usb_btn, LV_STATE_DISABLED, !(s_sd_present && host));
-    const char *hint = !s_sd_present ? "No microSD card"
+    lv_obj_set_state(st_usb_btn, LV_STATE_DISABLED, !(sd_present() && host));
+    const char *hint = !sd_present() ? "No microSD card"
                      : host ? "Back up or restore sudoku.db on a computer"
                      : "Plug the USB OTG port (not UART) into a computer";
     if (strcmp(lv_label_get_text(st_usb_hint), hint) != 0) lv_label_set_text(st_usb_hint, hint);
@@ -727,15 +590,13 @@ static void usb_done_cb(lv_event_t *e)
 
 static void usb_connect_cb(lv_event_t *e)
 {
-    if (!s_sd_present) {
+    if (!sd_present()) {
         sudoku_ui_notice("No microSD card. Insert one before switching on.", 4000);
         return;
     }
-    if (s_sd_state != SD_IDLE) return;             /* formatting */
+    if (sd_state() != SD_IDLE) return;             /* formatting */
     if (!usb_msc_host_connected()) return;         /* greyed out anyway (see usb_btn_update) */
-    stats_db_suspend();                            /* save, close sudoku.db, unmount: the card is free */
-    if (usb_msc_set_enabled(true) != ESP_OK) {
-        stats_db_start();
+    if (usb_drive_lend() != ESP_OK) {              /* sudoku.db closed, the card to the computer */
         sudoku_ui_notice("Couldn't start the USB drive.", 4000);
         return;
     }
@@ -1071,7 +932,7 @@ void build_settings(void)
     lv_obj_set_style_bg_color(st_sd_btn, C_CARD2, 0);
     lv_obj_set_style_bg_opa(st_sd_btn, LV_OPA_50, LV_STATE_DISABLED);
     lv_obj_align(st_sd_btn, LV_ALIGN_RIGHT_MID, 0, 0);
-    if (s_sd_state == SD_FORMATTING) sd_btn_text("Formatting...", false);
+    if (sd_state() == SD_FORMATTING) sd_btn_text("Formatting...", false);
 
 
     r = settings_row(col, "USB drive", "");
@@ -1380,16 +1241,13 @@ lv_obj_t *settings_wifi_eye(void) { return st_wifi_eye; }
 lv_obj_t *settings_lock_dd(void) { return st_lock_dd; }
 lv_obj_t *settings_pin_btn(void) { return st_pin_btn; }
 lv_obj_t *settings_sd_hint(void) { return st_sd_hint; }
-bool ui_sd_present(void) { return s_sd_present; }
-uint64_t ui_sd_bytes(void) { return s_sd_bytes; }
-const char *ui_sd_name(void) { return s_sd_name; }
 
 /* card work Settings is doing: a firmware update, probing or formatting the card, the card
  * lent to a computer (USB drive); NULL when none (devctl genbench) */
 const char *settings_card_busy(void)
 {
     if (fw_timer) return "a firmware update is being written";
-    if (s_sd_state == SD_PROBING || s_sd_state == SD_FORMATTING) return "the microSD card is being set up or formatted";
+    if (sd_state() == SD_PROBING || sd_state() == SD_FORMATTING) return "the microSD card is being set up or formatted";
     if (u_ovl) return "the card is lent to a computer (USB drive)";
     return NULL;
 }

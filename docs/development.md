@@ -112,7 +112,8 @@ src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Learn, Ent
 src/ui_list.c           the Puzzles screen
 src/ui_home.c           Home: the week, Continue and unfinished games, the menu
 src/ui_stats.c          Statistics and the progress chart
-src/ui_settings.c       Settings, firmware update from the card, microSD format, factory reset, power off, USB drive
+src/ui_settings.c       the Settings screen, and the dialogs of its card actions (and the dark screen while the flash is written)
+src/settings_core.c     what those do, without LVGL: firmware update from the card, microSD probe and format, factory reset, power off, USB drive
 src/ui_history.c        History and Gameplays
 src/ui_trophies.c       Trophies: achievements, leaderboards, records
 src/ui_players.c        the name dialog, Players, avatars
@@ -138,10 +139,11 @@ src/generator.c         variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
 src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code, camera and vertical-dots (menu) icons at 24/20 px (lv_font_conv)
-src/avatars.c           the players' avatars: Noto Color Emoji as 36 px RGB565A8 images (generated, ~7 MB of flash)
+src/avatars.c           the players' avatars: their groups (generated); the pixels are extras/avatars.bin (7 MB)
+src/avatar_store.c      the avatars from their own flash partition, and installing avatars.bin from the card
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
-tools/gen_avatars.py    regenerates src/avatars.c / .h from Noto Color Emoji (Pillow with raqm)
+tools/gen_avatars.py    regenerates extras/avatars.bin and src/avatars.c / .h from Noto Color Emoji (Pillow with raqm)
 tools/avatars_order.txt the avatars' order (sudoku.db keeps their numbers: only add at the end)
 tools/devctl.py         screenshots (PNG) and touches over the serial port
 tools/make_flasher_site.sh  the GitHub Pages site: web flasher + docs
@@ -153,4 +155,4 @@ tools/opensudoku/       the downloaded .opensudoku collections
 
 To change the embedded puzzles, edit `COLLECTIONS` in `tools/gen_puzzles.py` and run `python3 tools/gen_puzzles.py`.
 
-To regenerate the avatars (a newer Noto Color Emoji, or a different size), run `python3 tools/gen_avatars.py --keep tools/avatars_order.txt`: it needs Pillow with raqm, `NotoColorEmoji.ttf` and Unicode's `emoji-test.txt` (Debian: `fonts-noto-color-emoji`, `unicode-data`), and `--keep` keeps the numbers players already have (new emoji go at the end). The first build after that compiles the 23 MB `src/avatars.c` (a few minutes); later builds reuse it.
+To regenerate the avatars (a newer Noto Color Emoji, or a different size), run `python3 tools/gen_avatars.py --keep tools/avatars_order.txt`: it needs Pillow with raqm, `NotoColorEmoji.ttf` and Unicode's `emoji-test.txt` (Debian: `fonts-noto-color-emoji`, `unicode-data`), and `--keep` keeps the numbers players already have (new emoji go at the end). It writes `extras/avatars.bin` (the pixels) and a small `src/avatars.c`; `AVATAR_CRC` in `src/avatars.h` changes with the pixels, so boards ignore an older set in flash and need the new `avatars.bin` installed (see [Building](building.md)).
