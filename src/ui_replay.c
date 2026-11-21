@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: replay, screenshots, mistake insights, MP4 export. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: replay, screenshots, mistake insights, MP4 export. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -59,7 +59,7 @@ static void rp_render(void)
         }
         bool bad = false;
         for (int j = 0; j < 81 && val[i] && !bad; j++) {
-            bad = j != i && val[j] == val[i] && sudoku_geom_peer(rp_geo, i, j);
+            bad = j != i && val[j] == val[i] && is_sudoku_geom_peer(rp_geo, i, j);
         }
         lv_color_t bg = cell_base_bg(rp_geo, i, rp_given[i]);
         if (i == last) {
@@ -279,7 +279,7 @@ void screenshot_cb(lv_event_t *e)
     if (ss_state) {
         return;    /* (one at a time) */
     }
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("Screenshots go on the microSD card: there's none to write to.", 3000);
         return;
     }
@@ -456,7 +456,7 @@ void insights_cb(lv_event_t *e)
     lv_obj_set_scroll_dir(ins_body, LV_DIR_VER);
     make_wrap_text(ins_body, &lv_font_montserrat_18, C_MUTED, "Reading your move logs...");
     msgbox_button(m, "Close", ins_close_cb, false);
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         lv_obj_clean(ins_body);
         make_wrap_text(ins_body, &lv_font_montserrat_18, C_MUTED, "This needs sudoku.db on a microSD card.");
         return;
@@ -688,7 +688,7 @@ static int rx_k_at(int f, bool *playing)
 
 static void rx_timer_cb(lv_timer_t *t)
 {
-    if (rx_cancel || !stats_db_ready()) {          /* cancelled, or the card went away */
+    if (rx_cancel || !is_stats_db_ready()) {          /* cancelled, or the card went away */
         rx_finish(false);
         return;
     }
@@ -758,7 +758,7 @@ static void export_start(const stats_replay_t *r)
     if (rx_busy) {
         return;
     }
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("Can't export: no sudoku.db on a microSD card.", 3000);
         return;
     }
@@ -852,8 +852,8 @@ static void export_start(const stats_replay_t *r)
 
 /* ---- accessors: the other UI files reach this file's state through these */
 lv_obj_t *screen_replay(void) { return scr_replay; }
-bool replay_want_export(void) { return rp_want_export; }
-bool replay_exporting(void) { return rx_busy || rp_want_export; }   /* an MP4 export on its way or running */
-bool screenshot_busy(void) { return ss_state != 0; }               /* a screenshot being written */
+bool is_replay_want_export(void) { return rp_want_export; }
+bool is_replay_exporting(void) { return rx_busy || rp_want_export; }   /* an MP4 export on its way or running */
+bool is_screenshot_busy(void) { return ss_state != 0; }               /* a screenshot being written */
 void replay_set_want_export(bool v) { rp_want_export = v; }
-bool replay_busy(void) { return rx_busy; }
+bool is_replay_busy(void) { return rx_busy; }

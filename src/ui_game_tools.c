@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: time attack, the rules card, Share (QR code), Send by sound, save to a collection. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: time attack, the rules card, Share (QR code), Send by sound, save to a collection. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -33,7 +33,7 @@ static int s_nsaved;
 
 void atk_open_next(void)
 {
-    if (!game_attack()) {
+    if (!is_game_attack()) {
         return;    /* stopped meanwhile */
     }
     const puzzle_collection_t *pc = puzzle_collection(0);   /* Easy */
@@ -832,7 +832,7 @@ static void pz_check_poll(lv_timer_t *t)
     const char *cages = p->cages[0] ? p->cages : NULL, *marks = p->marks[0] ? p->marks : NULL;
     const char *thermos = p->thermos[0] ? p->thermos : NULL;
     int number = 0;                               /* "Received #3": numbered like My puzzles */
-    int gid = stats_db_ready() ? stats_db_gen_add_from(PZ_SOURCE, p->variant, level, p->givens, regions, cages, marks,
+    int gid = is_stats_db_ready() ? stats_db_gen_add_from(PZ_SOURCE, p->variant, level, p->givens, regions, cages, marks,
               thermos, &number)
               : -1;
     uint16_t id;
@@ -1103,7 +1103,7 @@ void save_cb(lv_event_t *e)
     if (game_practice() >= 0 || !puzzle_is_generated(game_id()) || game_id() >= PUZZLE_GEN_RAM_BASE) {
         return;
     }
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("Collections are kept in sudoku.db on a microSD card: there's none.", 3000);
         return;
     }

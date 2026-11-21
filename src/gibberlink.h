@@ -31,7 +31,7 @@ extern "C" {
 
 /* Turns listening on or off (starts the worker on first use). */
 void gibberlink_set_enabled(bool on);
-bool gibberlink_enabled(void);
+bool is_gibberlink_enabled(void);
 
 /* Call from loop() (the LVGL task): runs a received command, if any. */
 void gibberlink_poll(void);

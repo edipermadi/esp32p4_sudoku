@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: the Puzzles screen. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: the Puzzles screen. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -37,7 +37,7 @@ static const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];
 
 /* ============================================================= list screen */
 
-bool game_in_progress(uint16_t id)
+bool is_game_in_progress(uint16_t id)
 {
     if (store_saved_game()->id == id) {
         return true;
@@ -68,7 +68,7 @@ static void list_btnm_draw_cb(lv_event_t *e)
     uint16_t id = coll_puzzle(l_coll, (int)base->id1);
     bool solved = l_coll < PUZZLE_COLLECTION_COUNT ? store_best_time(id) != 0
                   : (base->id1 < 128 && (l_solved_bits[base->id1 >> 3] >> (base->id1 & 7) & 1));
-    bool active = game_in_progress(id);
+    bool active = is_game_in_progress(id);
     if (!solved && !active) {
         return;
     }
@@ -171,7 +171,7 @@ void list_fill_rows(int lc)
         char sub[96];
         int v = VAR_CLASSIC, lv = 0;
         gen_lookup(id, NULL, &v, &lv);
-        bool solved = l_solved_bits[i >> 3] >> (i & 7) & 1, active = game_in_progress(id);
+        bool solved = l_solved_bits[i >> 3] >> (i & 7) & 1, active = is_game_in_progress(id);
         snprintf(sub, sizeof(sub), "%s %s   -   %s", v >= 0 && v < VAR_COUNT ? variant_name(v) : "",
                  lv >= 0 && lv < GEN_LEVELS ? gen_level_name(lv) : "",
                  solved ? "Solved" : active ? "In progress" : "Not solved yet");
@@ -242,9 +242,9 @@ static void list_fill_starred(void)
             fmt_time(t, sizeof(t), b);
             snprintf(sub, sizeof(sub), "Solved   -   best %s", t);
         } else {
-            snprintf(sub, sizeof(sub), game_in_progress(id) ? "In progress" : "Not solved yet");
+            snprintf(sub, sizeof(sub), is_game_in_progress(id) ? "In progress" : "Not solved yet");
         }
-        list_add_row(i, id, sub, b ? C_GREEN : game_in_progress(id) ? C_ORANGE : C_MUTED, star_row_cb,
+        list_add_row(i, id, sub, b ? C_GREEN : is_game_in_progress(id) ? C_ORANGE : C_MUTED, star_row_cb,
                      SYMBOL_STAR, C_ORANGE, star_row_off_cb);
     }
 }
@@ -749,4 +749,4 @@ void list_set_tab(int v) { l_tab = v; }
 int list_coll(void) { return l_coll; }
 void list_set_coll(int v) { l_coll = v; }
 lv_obj_t *list_new_btn(void) { return l_new_btn; }
-bool list_starred(void) { return l_starred; }
+bool is_list_starred(void) { return l_starred; }

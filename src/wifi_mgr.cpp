@@ -436,7 +436,7 @@ extern "C" void wifi_mgr_scan(void)                            { send(CMD_SCAN);
 extern "C" void wifi_mgr_connect(const char *ssid, const char *pass) { send(CMD_CONNECT, ssid, pass); }
 extern "C" void wifi_mgr_forget(void)                          { send(CMD_FORGET); }
 
-extern "C" bool wifi_mgr_radio_started(void)
+extern "C" bool is_wifi_mgr_radio_started(void)
 {
     return s_radio_started;
 }

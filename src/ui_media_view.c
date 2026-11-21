@@ -1,5 +1,5 @@
 /*
- * Picture and video viewer (see media_view.h).
+ * Picture and video viewer (see ui_media_view.h).
  *
  * A worker task (core 0) decodes into one of two 720x720 RGB565 buffers in
  * PSRAM while the screen shows the other: it fills the back buffer, flushes it
@@ -17,7 +17,7 @@
  * Seeking decodes from the key frame before the target and shows only the
  * target. tinyh264 takes about 55 KB of internal RAM while a video is open.
  */
-#include "media_view.h"
+#include "ui_media_view.h"
 #include "mp4_reader.h"
 #include <stdio.h>
 #include <stdarg.h>

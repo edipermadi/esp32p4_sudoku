@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <lvgl.h>
 #include "bsp/bsp_board.h"
-#include "sudoku_ui.h"
+#include "ui_sudoku.h"
 #include "stats_db.h"
 #include "generator.h"
 #include <strings.h>
@@ -300,11 +300,11 @@ static bool card_path(const char *word, char *out, size_t n, const char **why)
 }
 
 /* sudoku.db or its journal, while it is open */
-static bool db_busy(const char *full)
+static bool is_db_busy(const char *full)
 {
     const char *db = BSP_SD_MOUNT_POINT "/sudoku.db";
     size_t n = strlen(db);
-    return stats_db_ready() && !strncasecmp(full, db, n) && (full[n] == 0 || full[n] == '-');
+    return is_stats_db_ready() && !strncasecmp(full, db, n) && (full[n] == 0 || full[n] == '-');
 }
 
 static void print_name(const char *s)          /* %XX for spaces, '%' and control bytes */
@@ -618,7 +618,7 @@ static bool run_file(char *line)
         return true;
     }
     if (is_rm || is_mkdir) {
-        if (db_busy(p1)) {
+        if (is_db_busy(p1)) {
             Serial.printf("ERR %s: sudoku.db is open (use Settings > USB drive)\n", cmd);
             return true;
         }
@@ -636,7 +636,7 @@ static bool run_file(char *line)
             Serial.printf("ERR mv: %s\n", n < 3 ? "needs two paths" : why);
             return true;
         }
-        if (db_busy(p1) || db_busy(p2)) {
+        if (is_db_busy(p1) || is_db_busy(p2)) {
             Serial.println("ERR mv: sudoku.db is open (use Settings > USB drive)");
             return true;
         }
@@ -660,7 +660,7 @@ static bool run_file(char *line)
         Serial.println("ERR put: put <path> <size> <crc32 hex> [z <compressed size>]");
         return true;
     }
-    if (db_busy(p1)) {
+    if (is_db_busy(p1)) {
         Serial.println("ERR put: sudoku.db is open (use Settings > USB drive)");
         return true;
     }
@@ -1002,7 +1002,7 @@ static void run(char *line)
         cmd_state();
         return;
     }
-    if (!strcmp(cmd, "pz")) {                      /* pz <id> <i>/<n> <part>: a puzzle sent by sound (sudoku_ui.c) */
+    if (!strcmp(cmd, "pz")) {                      /* pz <id> <i>/<n> <part>: a puzzle sent by sound (ui_sudoku.c) */
         char o[96];
         sudoku_ui_puzzle_part(line + 2, o, sizeof(o));
         reply("%s\n", o);

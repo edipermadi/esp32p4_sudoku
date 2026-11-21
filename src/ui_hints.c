@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: hints (the next step and its explanation) and the game screen tour. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: hints (the next step and its explanation) and the game screen tour. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -118,9 +118,9 @@ static void mark_unit(int u, uint8_t v)
 
 /* closes the hint without redrawing (the caller does) */
 /* Settings > Game > Hints: Nudge only: where to look, nothing more (Learn keeps the full hint) */
-bool hint_nudge(void)
+bool is_hint_nudge(void)
 {
-    return store_hint_nudge() && game_practice() < 0;
+    return is_store_hint_nudge() && game_practice() < 0;
 }
 
 void hint_drop(void)
@@ -384,7 +384,7 @@ void hint_render(void)
             }
             break;
         default:
-            snprintf(text, sizeof(text), hint_nudge() ? "No simple step here: this needs advanced techniques."
+            snprintf(text, sizeof(text), is_hint_nudge() ? "No simple step here: this needs advanced techniques."
                      : "No simple step here: this needs advanced techniques. More shows one cell.");
             break;
         }
@@ -414,7 +414,7 @@ void hint_render(void)
         lv_label_set_text(lv_obj_get_child(hint_act(), 0), h->kind == STEP_WRONG ? "Erase it" : "Place it");
     }
     lv_label_set_text(hint_text(), text);
-    lv_obj_set_hidden(hint_act(), hint_step() == 1 && hint_nudge());   /* Settings > Game > Hints: Nudge only */
+    lv_obj_set_hidden(hint_act(), hint_step() == 1 && is_hint_nudge());   /* Settings > Game > Hints: Nudge only */
 
     /* the card at the bottom, or at the top when the bottom row matters */
     /* as tall as its text needs (a technique and its single take 4-6 lines), at least the
@@ -488,7 +488,7 @@ void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary
 
 void restart_cb(lv_event_t *e)
 {
-    if (!game_solved() && !has_progress()) {
+    if (!is_game_solved() && !has_progress()) {
         reset_game();
         return;
     }
@@ -513,7 +513,7 @@ static void atk_keep_cb(lv_event_t *e)
 
 void back_cb(lv_event_t *e)
 {
-    if (game_attack() && !game_solved()) {
+    if (is_game_attack() && !is_game_solved()) {
         set_paused(true);
         lv_obj_t *m = make_msgbox(LV_SYMBOL_CHARGE "  Stop the run?", "A time attack only counts when its 10 "
                                   "minutes are up. Puzzles solved so far still count as solves.");
@@ -528,11 +528,11 @@ void back_cb(lv_event_t *e)
 void tick_cb(lv_timer_t *t)
 {
     uint32_t now = lv_tick_get();
-    bool running = game_id() != STORE_NO_GAME && lv_screen_active() == screen_game() && !game_solved() && !game_paused() && !tour_ovl;
+    bool running = game_id() != STORE_NO_GAME && lv_screen_active() == screen_game() && !is_game_solved() && !is_game_paused() && !tour_ovl;
     if (running) {
         game_set_elapsed_ms(game_elapsed_ms() + (now - game_last_tick()));
         update_timer_label();
-        if (game_attack() && attack_used_ms() + game_elapsed_ms() >= ATK_MS) {
+        if (is_game_attack() && attack_used_ms() + game_elapsed_ms() >= ATK_MS) {
             atk_finish();
         }
     }
@@ -1070,7 +1070,7 @@ void game_layout(void)
     if (!game_geo()) {
         game_set_geo(sudoku_geom(game_var()));
     }
-    const bool left = store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
+    const bool left = is_store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
     if (game_layout_var() == game_var() && g_layout_left == left && game_var() != VAR_JIGSAW && game_var() != VAR_KILLER &&
             game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH &&
             game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD &&
@@ -1244,7 +1244,7 @@ static void tour_show(int step)
     lv_obj_t *t = make_label(card, &lv_font_montserrat_22, C_TEXT);
     lv_label_set_text_fmt(t, "%s", TITLE[step]);
     const char *text = TEXT[step];
-    if (step == 3 && store_hint_nudge()) {
+    if (step == 3 && is_store_hint_nudge()) {
         text = "Shows where to look next (Settings > Game > Hints: Nudge only).";
     }
     lv_obj_t *x = make_wrap_text(card, &lv_font_montserrat_18, C_TEXT, text);
@@ -1279,7 +1279,7 @@ static void tour_show(int step)
 
 static void tour_check_cb(lv_timer_t *t)
 {
-    if (tour_ovl || lv_screen_active() != screen_game() || game_practice() >= 0 || game_attack() || game_solved() || !stats_db_ready()) {
+    if (tour_ovl || lv_screen_active() != screen_game() || game_practice() >= 0 || is_game_attack() || is_game_solved() || !is_stats_db_ready()) {
         return;
     }
     lv_obj_t *top = lv_layer_top();                 /* the rules card, a notice: another time */
@@ -1288,7 +1288,7 @@ static void tour_check_cb(lv_timer_t *t)
             return;
         }
     }
-    if (stats_db_seen("tour")) {
+    if (is_stats_db_seen("tour")) {
         return;
     }
     hint_drop();

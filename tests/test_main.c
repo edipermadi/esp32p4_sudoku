@@ -51,7 +51,7 @@ static uint32_t fnv1a(const uint8_t *p, size_t n)
 }
 
 /* every active unit of the board holds 1..n once each, and the givens are kept */
-static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const uint8_t sol[81])
+static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const uint8_t sol[81])
 {
     for (int i = 0; i < g->nunits; i++) {
         int u = g->unit_ids[i];
@@ -89,10 +89,10 @@ static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const ui
         }
     }
     for (int c = 0; g->edge_kind && c < 81; c++) {  /* Kropki, XV, Greater-Than: the marks (and none) */
-        if (c % 9 < 8 && !sudoku_edge_ok(g->edge_kind, EDGE_RIGHT(g->edge[c]), sol[c], sol[c + 1])) {
+        if (c % 9 < 8 && !is_sudoku_edge_ok(g->edge_kind, EDGE_RIGHT(g->edge[c]), sol[c], sol[c + 1])) {
             return false;
         }
-        if (c < 72 && !sudoku_edge_ok(g->edge_kind, EDGE_DOWN(g->edge[c]), sol[c], sol[c + 9])) {
+        if (c < 72 && !is_sudoku_edge_ok(g->edge_kind, EDGE_DOWN(g->edge[c]), sol[c], sol[c + 9])) {
             return false;
         }
     }
@@ -169,7 +169,7 @@ static bool solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const ui
 }
 
 /* givens only on the board's cells, digits 1..n */
-static bool givens_ok(const sudoku_geom_t *g, const uint8_t givens[81])
+static bool is_givens_ok(const sudoku_geom_t *g, const uint8_t givens[81])
 {
     for (int c = 0; c < 81; c++) {
         if (givens[c] > g->n) {
@@ -183,7 +183,7 @@ static bool givens_ok(const sudoku_geom_t *g, const uint8_t givens[81])
 }
 
 /* the parts of two boards a puzzle's layout decides */
-static bool same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
+static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
 {
     return a->variant == b->variant && a->n == b->n && !memcmp(a->region, b->region, 81) &&
            a->ncages == b->ncages && !memcmp(a->cage_of, b->cage_of, 81) &&
@@ -269,17 +269,17 @@ static void test_geometry(void)
     }
     /* X: the corner sees its diagonal too (6 beyond its box); Hyper: cell (1,1) its window (3 more) */
     CHECKF(sudoku_geom(VAR_HYPER)->npeers[10] == 23, "Hyper peers of cell 10: %d", sudoku_geom(VAR_HYPER)->npeers[10]);
-    CHECK(sudoku_geom_on_diag(sudoku_geom(VAR_X), 80) && !sudoku_geom_on_diag(sudoku_geom(VAR_X), 1));
+    CHECK(is_sudoku_geom_on_diag(sudoku_geom(VAR_X), 80) && !is_sudoku_geom_on_diag(sudoku_geom(VAR_X), 1));
     CHECK(strcmp(variant_name(VAR_KIDS), "Kids 4x4") == 0);
     /* Anti-King: cell 2 (row 0, column 2) touches (1, 3) diagonally, outside its box */
     CHECKF(sudoku_geom(VAR_KING)->npeers[2] == 21, "Anti-King peers of cell 2: %d", sudoku_geom(VAR_KING)->npeers[2]);
-    CHECK(sudoku_geom_peer(sudoku_geom(VAR_KING), 2, 12) && !sudoku_geom_peer(sudoku_geom(VAR_CLASSIC), 2, 12));
+    CHECK(is_sudoku_geom_peer(sudoku_geom(VAR_KING), 2, 12) && !is_sudoku_geom_peer(sudoku_geom(VAR_CLASSIC), 2, 12));
     /* Disjoint: cell 0's group is the top-left cell of every box */
-    CHECK(sudoku_geom_peer(sudoku_geom(VAR_DISJOINT), 0, 30) && sudoku_geom_peer(sudoku_geom(VAR_DISJOINT), 0, 60));
+    CHECK(is_sudoku_geom_peer(sudoku_geom(VAR_DISJOINT), 0, 30) && is_sudoku_geom_peer(sudoku_geom(VAR_DISJOINT), 0, 60));
     /* Asterisk: its cell 13 sees the six others it shares no row, column or box with */
     CHECKF(sudoku_geom(VAR_ASTERISK)->npeers[13] == 26, "Asterisk peers of cell 13: %d",
            sudoku_geom(VAR_ASTERISK)->npeers[13]);
-    CHECK(sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 40) && !sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 41));
+    CHECK(is_sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 40) && !is_sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 41));
     CHECK(sudoku_geom(VAR_NONCONSEC)->consec_on && strcmp(variant_name(VAR_NONCONSEC), "Non-Consecutive") == 0);
     CHECK(sudoku_geom(VAR_KIDS)->box_w == 2 && sudoku_geom(VAR_KIDS)->box_h == 2);
 }
@@ -297,8 +297,8 @@ static void test_builtin(void)
             continue;
         }
         unique++;
-        CHECKF(sudoku_solve(G, g, sol) && solved_ok(G, g, sol), "puzzle %d: solve", id);
-        CHECKF(sudoku_classic_unique(g), "puzzle %d: classic_unique", id);
+        CHECKF(sudoku_solve(G, g, sol) && is_solved_ok(G, g, sol), "puzzle %d: solve", id);
+        CHECKF(is_sudoku_classic_unique(g), "puzzle %d: classic_unique", id);
     }
     CHECK(unique == PUZZLE_COUNT);
     CHECK(puzzle_collection_of(0) == 0 && puzzle_collection_of(PUZZLE_COUNT - 1) >= 0);
@@ -321,10 +321,10 @@ static void test_generate(void)
                 continue;
             }
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
-            CHECKF(givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));
+            CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));
             CHECKF(sudoku_count_solutions(&board, g, 2) == 1, "%s %s: one solution", variant_name(v),
                    gen_level_name(lv));
-            CHECKF(sudoku_solve(&board, g, sol) && solved_ok(&board, g, sol), "%s %s: solution valid",
+            CHECKF(sudoku_solve(&board, g, sol) && is_solved_ok(&board, g, sol), "%s %s: solution valid",
                    variant_name(v), gen_level_name(lv));
             int graded = sudoku_grade(&board, g);
             CHECKF(graded == (int)got, "%s %s: graded %d, generator said %d", variant_name(v),
@@ -356,7 +356,7 @@ static void test_determinism(void)
         gen_level_t l1, l2;
         sudoku_generate(GOLD[i].variant, (gen_level_t)GOLD[i].level, GOLD[i].seed, g1, &b1, &l1);
         sudoku_generate(GOLD[i].variant, (gen_level_t)GOLD[i].level, GOLD[i].seed, g2, &b2, &l2);
-        CHECKF(!memcmp(g1, g2, 81) && l1 == l2 && same_layout(&b1, &b2), "%s seed %u: not the same twice",
+        CHECKF(!memcmp(g1, g2, 81) && l1 == l2 && is_same_layout(&b1, &b2), "%s seed %u: not the same twice",
                variant_name(GOLD[i].variant), GOLD[i].seed);
         uint8_t key[81 + 81 + 81];                  /* givens, regions, cages: the whole puzzle */
         memcpy(key, g1, 81);
@@ -396,7 +396,7 @@ static void test_texts_and_sdx(void)
             CHECKF(sdx_parse(line, &p), "%s: sdx_parse (packed %d)", variant_name(v), pack);
             CHECKF(p.variant == v && p.level == (int)got && !memcmp(p.givens, g, 81), "%s: fields back (packed %d)",
                    variant_name(v), pack);
-            CHECKF(sdx_geom(&p, &back) && same_layout(&board, &back), "%s: layout back (packed %d)",
+            CHECKF(sdx_geom(&p, &back) && is_same_layout(&board, &back), "%s: layout back (packed %d)",
                    variant_name(v), pack);
             CHECKF(sudoku_count_solutions(&back, p.givens, 2) == 1, "%s: still one solution", variant_name(v));
         }

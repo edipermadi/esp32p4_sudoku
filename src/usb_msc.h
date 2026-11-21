@@ -23,19 +23,19 @@ esp_err_t usb_msc_start(void);
 
 /* True while a computer has the board enumerated on the OTG port and the bus
  * isn't suspended (unplugging suspends it). The UART port never counts. */
-bool usb_msc_host_connected(void);
+bool is_usb_msc_host_connected(void);
 
 /* On: shows the card to the computer. Off: reports "no media" again, so the
  * computer lets go of it. */
 esp_err_t usb_msc_set_enabled(bool on);
 
 /* True once the computer has ejected the drive since it was enabled. */
-bool usb_msc_ejected(void);
+bool is_usb_msc_ejected(void);
 
 /* True once the computer has gone away while the drive was enabled: the OTG
  * port is no longer enumerated, or its bus has been suspended for 1.5 s
  * (an unplugged cable, or a computer gone to sleep). */
-bool usb_msc_unplugged(void);
+bool is_usb_msc_unplugged(void);
 
 #ifdef __cplusplus
 }

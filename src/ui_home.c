@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: Home: the week, Continue and unfinished games, building the menu. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: Home: the week, Continue and unfinished games, building the menu. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -150,7 +150,7 @@ void home_player_update(void)
             av = players_all()[i].avatar;
         }
     }
-    if (players_count() < 0 && !asked && stats_db_ready()) {
+    if (players_count() < 0 && !asked && is_stats_db_ready()) {
         asked = true;
         stats_db_list_players();                    /* (render_players calls back here when it comes) */
     }
@@ -169,7 +169,7 @@ void refresh_home(void)
     }
     h_total_n = total;
     home_total_text();
-    if (stats_db_ready() && time(NULL) > 1700000000) {
+    if (is_stats_db_ready() && time(NULL) > 1700000000) {
         stats_db_query_weeksum();    /* (clock_cb picks it up) */
     }
     lv_label_set_text_fmt(h_player, "Playing as %s", store_player_name());
@@ -204,7 +204,7 @@ void refresh_home(void)
         lv_label_set_text(h_continue_sub, "No game in progress");
     }
     daily_btn_update();
-    if (stats_db_ready()) {
+    if (is_stats_db_ready()) {
         stats_db_query_achievements();    /* the Trophies line (trophy_poll) */
     }
     home_layout();
@@ -298,7 +298,7 @@ void clock_cb(lv_timer_t *t)
     if (strcmp(key, daily_key) != 0) {
         strcpy(daily_key, key);
         daily_btn_update();
-        if (valid && stats_db_ready()) {
+        if (valid && is_stats_db_ready()) {
             stats_db_query_weeksum();    /* the clock is set, or a new day */
         }
     }
@@ -335,7 +335,7 @@ static bool resume_game(uint16_t id)
 {
     if (store_saved_game()->id != id) {
         saved_game_t g;
-        if (!stats_db_ready() || !stats_db_load_game(id, &g)) {
+        if (!is_stats_db_ready() || !stats_db_load_game(id, &g)) {
             return false;
         }
         store_set_game(&g);                              /* the one being played now */
@@ -378,7 +378,7 @@ static void ug_discard_cb(lv_event_t *e)
     } else {
         stats_db_clear_game(id);
     }
-    if (game_id() == id && !game_solved()) {
+    if (game_id() == id && !is_game_solved()) {
         game_set_id(STORE_NO_GAME);    /* the game screen held it */
     }
     char name[40], msg[80];
@@ -464,13 +464,13 @@ void open_puzzle(uint16_t id)
 {
     const saved_game_t *s = store_saved_game();
     if (s->id == STORE_NO_GAME || s->id == id) {
-        if (s->id != id && stats_db_ready() && resume_game(id)) {
+        if (s->id != id && is_stats_db_ready() && resume_game(id)) {
             return;    /* an unfinished game in sudoku.db */
         }
         start_game(id, s->id == id);
         return;
     }
-    if (stats_db_ready()) {
+    if (is_stats_db_ready()) {
         /* sudoku.db keeps several unfinished games: the current one is saved,
          * this one is resumed if it was started before, else begun */
         if (!resume_game(id)) {
@@ -607,7 +607,7 @@ void build_home(void)
     lv_obj_t *tb = home_btn(menu, SYMBOL_TROPHY "  Trophies", trophy_cb, &trophy_sub);   /* achievements, leaderboard */
     home_set_trophy_sub(trophy_sub);
     lv_obj_set_style_text_font(lv_obj_get_child(tb, 0), &font_icons_24, 0);
-    lv_label_set_text(home_trophy_sub(), stats_db_ready() ? "Achievements and daily leaderboard" : "Needs a microSD card");
+    lv_label_set_text(home_trophy_sub(), is_stats_db_ready() ? "Achievements and daily leaderboard" : "Needs a microSD card");
     home_btn(menu, LV_SYMBOL_CHARGE "  Time attack", attack_cb, NULL);              /* 10 minutes of Easy puzzles */
     home_btn(menu, LV_SYMBOL_DIRECTORY "  Files", files_open_cb, NULL);              /* the microSD card */
     home_btn(menu, LV_SYMBOL_SETTINGS "  Settings", settings_cb, NULL);              /* (the second page) */
@@ -649,13 +649,13 @@ static void daily_btn_update(void)
 /* the unfinished games, from sudoku.db (without it: just the one in RAM) */
 void games_refresh(void)
 {
-    int n = stats_db_ready() ? stats_db_list_games(s_games) : -1;
+    int n = is_stats_db_ready() ? stats_db_list_games(s_games) : -1;
     s_ngames = n < 0 ? 0 : n;
 }
 
 static void stats_cb(lv_event_t *e)
 {
-    if (stats_db_ready()) {
+    if (is_stats_db_ready()) {
         stats_db_list_players();    /* fresh list for the player dropdown */
     }
     refresh_stats();
@@ -671,7 +671,7 @@ static void plays_cb(lv_event_t *e)
 static void profile_cb(lv_event_t *e)
 {
     render_players();
-    if (stats_db_ready()) {
+    if (is_stats_db_ready()) {
         stats_db_list_players();    /* fresh counts; drawn when they arrive */
     }
     lv_screen_load(screen_profile());

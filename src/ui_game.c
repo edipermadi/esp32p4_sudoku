@@ -1,10 +1,10 @@
-/* sudoku_ui.c split: the game: rules check, saving, the board view, confetti, input events, building its screen. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: the game: rules check, saving, the board view, confetti, input events, building its screen. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
 static bool is_peer(int a, int b);
-static bool digit_wrong(int i);
-static bool unit_complete(int u);
+static bool is_digit_wrong(int i);
+static bool is_unit_complete(int u);
 static int units_completed_by(int i);
 static lv_color_t cell_color(int k);
 static int filled_count(void);
@@ -112,7 +112,7 @@ static lv_obj_t *g_hint_btn, *g_bulb_btn, *g_timer_btn, *g_fill_btn;   /* (the t
 /* cells a and b share a unit of the puzzle being played (row, column, box, diagonal) */
 static bool is_peer(int a, int b)
 {
-    return sudoku_geom_peer(g_geo, a, b);
+    return is_sudoku_geom_peer(g_geo, a, b);
 }
 
 /* Marks every filled cell that shares a row, column, box (or diagonal) with the same digit. */
@@ -277,7 +277,7 @@ int compute_conflicts(void)
             if ((k == 0 && i % 9 == 8) || o > 80 || !g_b.val[i] || !g_b.val[o]) {
                 continue;
             }
-            if (!sudoku_edge_ok(g_geo->edge_kind, m, g_b.val[i], g_b.val[o])) {
+            if (!is_sudoku_edge_ok(g_geo->edge_kind, m, g_b.val[i], g_b.val[o])) {
                 g_conflict[i] = g_conflict[o] = true;
             }
         }
@@ -318,7 +318,7 @@ int compute_conflicts(void)
 /* Is cell i's digit wrong by the Mistake check setting (Settings)? Off:
  * nothing; Rules: it breaks a rule (g_conflict); Solution: also a digit
  * that isn't the solution's. Shown red; placing one buzzes. */
-static bool digit_wrong(int i)
+static bool is_digit_wrong(int i)
 {
     if (!g_b.val[i]) {
         return false;
@@ -334,7 +334,7 @@ static bool digit_wrong(int i)
 }
 
 /* Does the unit hold 1-n, each once? */
-static bool unit_complete(int u)
+static bool is_unit_complete(int u)
 {
     uint16_t seen = 0;
     for (int k = 0; k < g_geo->n; k++) {
@@ -352,7 +352,7 @@ static int units_completed_by(int i)
 {
     int n = 0;
     for (int k = 0; k < g_geo->ncu[i]; k++) {
-        n += unit_complete(g_geo->cu[i][k]);
+        n += is_unit_complete(g_geo->cu[i][k]);
     }
     return n;
 }
@@ -371,7 +371,7 @@ lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given)
     if (geo->parity[i] == PARITY_EVEN) {
         bg = lv_color_mix(C_GRID_THIN, bg, 150);    /* Even-Odd: even cells shaded */
     }
-    return sudoku_geom_tinted(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
+    return is_sudoku_geom_tinted(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
 }
 
 static int filled_count(void)
@@ -449,7 +449,7 @@ void update_timer_label(void)
         return;
     }
     fmt_time(buf, sizeof(buf), g_elapsed_ms / 1000);
-    if (!store_show_timer() && !g_solved) {
+    if (!is_store_show_timer() && !g_solved) {
         snprintf(buf, sizeof(buf), "--:--");    /* Settings > Show timer off */
     }
     if (strcmp(lv_label_get_text(g_timer), buf) != 0) {
@@ -472,7 +472,7 @@ void update_header(void)
     }
     lv_label_set_text(g_title, name);
     /* the star: puzzles that stay (not Learn's, nor ones kept only in RAM) */
-    bool can_star = g_practice < 0 && stats_db_ready() && g_id < PUZZLE_GEN_RAM_BASE;
+    bool can_star = g_practice < 0 && is_stats_db_ready() && g_id < PUZZLE_GEN_RAM_BASE;
     g_can_star = can_star;
     lv_obj_set_hidden(g_title_star, !(can_star && g_starred));   /* right after the title's text */
     lv_obj_update_layout(g_title);
@@ -530,7 +530,7 @@ void refresh_board(void)
         if (h_step && !g_solved && hint_mark()[i]) {
             bg = hint_mark()[i] == 2 ? (h_info.kind == STEP_WRONG ? C_CELL_BAD : C_CELL_SEL) : C_CELL_SAME;
         }
-        bool wrong = !g_solved && digit_wrong(i);
+        bool wrong = !g_solved && is_digit_wrong(i);
         if (wrong && !g_given[i] && i != g_sel) {
             bg = C_CELL_BAD;
         }
@@ -576,7 +576,7 @@ void refresh_board(void)
     /* status line */
     int bad = 0;
     for (int i = 0; i < 81; i++) {
-        bad += digit_wrong(i);
+        bad += is_digit_wrong(i);
     }
     bool full = filled_count() == g_geo->ncells;
     if (g_solved) {
@@ -612,7 +612,7 @@ static void solve_commit_cb(lv_timer_t *t)
     /* head-to-head: where this leaves the player among everyone who solved it (after the solve above) */
     stats_h2h_t h;
     char line[96] = "";
-    if (stats_db_ready() && stats_db_puzzle_rank(s_solve_id, &h) && h.rank) {
+    if (is_stats_db_ready() && stats_db_puzzle_rank(s_solve_id, &h) && h.rank) {
         char t[16];
         fmt_time(t, sizeof(t), h.leader_seconds);
         if (!h.leader[0]) {
@@ -853,7 +853,7 @@ static void on_solved(void)
     char day[12] = "";                              /* a daily puzzle: its result can be shared */
     lv_obj_set_hidden(g_win_share, !(puzzle_is_generated(g_id) && gen_lookup_day(g_id, NULL, NULL, NULL, day) &&
                                      day[0]));
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("No sudoku.db on a microSD card: this result is kept only until the board is "
                          "switched off.", 6000);
     }
@@ -1200,7 +1200,7 @@ static void cell_draw_cb(lv_event_t *e)
     int vpitch = pitch;
     lv_draw_label_dsc_t d;
     lv_draw_label_dsc_init(&d);
-    const bool big = store_big_digits();            /* (Digit size: Large) */
+    const bool big = is_store_big_digits();            /* (Digit size: Large) */
     d.font = size >= 80 ? (big ? &lv_font_montserrat_24 : &lv_font_montserrat_22)
              : (big ? &lv_font_montserrat_18 : &lv_font_montserrat_16);
     if (g_geo->ncages) {                            /* Killer: smaller, below the cage sum in the corner */
@@ -1613,7 +1613,7 @@ static void hint_act_cb(lv_event_t *e)
     if (!h_step || g_solved || g_paused) {
         return;
     }
-    if (h_step == 1 && hint_nudge()) {
+    if (h_step == 1 && is_hint_nudge()) {
         return;
     }
     if (h_step == 1) {
@@ -1657,7 +1657,7 @@ static void hint_cb(lv_event_t *e)
         return;
     }
     if (h_step) {                                   /* already open: same as More / Place it */
-        if (hint_nudge()) {
+        if (is_hint_nudge()) {
             return;    /* (a nudge goes no further) */
         }
         hint_act_cb(e);
@@ -1697,7 +1697,7 @@ void reset_game(void)
     g_elapsed_ms = 0;
     g_mistakes = 0;
     g_hints = 0;
-    g_flags = store_no_notes() ? GAME_FLAG_NO_NOTES : 0;   /* (Settings > Game: the no-notes challenge) */
+    g_flags = is_store_no_notes() ? GAME_FLAG_NO_NOTES : 0;   /* (Settings > Game: the no-notes challenge) */
     g_nmoves = 0;                                   /* a new attempt, a new log */
     hint_drop();
     mark_started();                                 /* opened or restarted: a new attempt */
@@ -1820,7 +1820,7 @@ void start_game(uint16_t id, bool resume)
     g_last_tick = lv_tick_get();
     compute_conflicts();
     refresh_board();
-    g_starred = id < PUZZLE_GEN_RAM_BASE && stats_db_bookmarked(id);
+    g_starred = id < PUZZLE_GEN_RAM_BASE && is_stats_db_bookmarked(id);
     update_header();
     lv_screen_load(screen_game());
     rules_first_time();
@@ -1904,11 +1904,11 @@ const uint8_t *game_given(void) { return g_given; }
 const board_t *game_b(void) { return &g_b; }
 int game_sel(void) { return g_sel; }
 void game_set_sel(int v) { g_sel = v; }
-bool game_notes_mode(void) { return g_notes_mode; }
+bool is_game_notes_mode(void) { return g_notes_mode; }
 void game_set_notes_mode(bool v) { g_notes_mode = v; }
-bool game_solved(void) { return g_solved; }
+bool is_game_solved(void) { return g_solved; }
 void game_set_solved(bool v) { g_solved = v; }
-bool game_paused(void) { return g_paused; }
+bool is_game_paused(void) { return g_paused; }
 uint32_t game_elapsed_ms(void) { return g_elapsed_ms; }
 void game_set_elapsed_ms(uint32_t v) { g_elapsed_ms = v; }
 uint16_t game_mistakes(void) { return g_mistakes; }
@@ -1921,9 +1921,9 @@ const sudoku_step_t *hint_info(void) { return &h_info; }
 void hint_set_info(const sudoku_step_t *v) { h_info = *v; }
 int game_practice(void) { return g_practice; }
 void game_set_practice(int v) { g_practice = v; }
-bool game_attack(void) { return g_attack; }
+bool is_game_attack(void) { return g_attack; }
 void game_set_attack(bool v) { g_attack = v; }
-bool game_starred(void) { return g_starred; }
+bool is_game_starred(void) { return g_starred; }
 void game_set_starred(bool v) { g_starred = v; }
 lv_obj_t *hint_card(void) { return h_card; }
 lv_obj_t *hint_text(void) { return h_text; }

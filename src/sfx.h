@@ -27,12 +27,12 @@ typedef enum {
 esp_err_t sfx_init(void);
 void sfx_play(sfx_id_t id);
 void sfx_set_enabled(bool on);
-bool sfx_enabled(void);
+bool is_sfx_enabled(void);
 /* Plays mono 16-bit PCM at sfx_rate() over the effects, whatever sfx_set_enabled
  * says (gibberlink's replies). One clip at a time; the caller keeps the samples
- * until sfx_pcm_busy() is false. false: one is still playing. */
+ * until is_sfx_pcm_busy() is false. false: one is still playing. */
 bool sfx_play_pcm(const int16_t *mono, size_t frames);
-bool sfx_pcm_busy(void);
+bool is_sfx_pcm_busy(void);
 uint32_t sfx_rate(void);
 
 #ifdef __cplusplus

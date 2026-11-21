@@ -3,7 +3,7 @@
  * the generator, whose opening position has a single that the classic rules alone don't
  * give, only the variant's own rule (for Classic, Mini 6x6 and Kids 4x4: a hidden single in
  * a box). Everything in a worked example follows from the digits on the board and the
- * rules (sudoku_fits), no candidate chains, so it can be written out step by step.
+ * rules (is_sudoku_fits), no candidate chains, so it can be written out step by step.
  *
  * Writes the puzzles as an .sdx collection (import it on the board to follow along, and for
  * the screenshots) and prints, per variant, the puzzle, its solution and three steps with
@@ -26,19 +26,19 @@
 
 #define STEPS 3
 
-static bool same_box(int a, int b, int bh, int bw)
+static bool is_same_box(int a, int b, int bh, int bw)
 {
     return a / 9 / bh == b / 9 / bh && a % 9 / bw == b % 9 / bw;
 }
 
 /* candidates by the classic rules only (row, column, box), against the filled digits */
-static bool classic_fits(const uint8_t v[81], int c, int d, int n, int bh, int bw)
+static bool is_classic_fits(const uint8_t v[81], int c, int d, int n, int bh, int bw)
 {
     for (int o = 0; o < 81; o++) {
         if (o == c || v[o] != d) {
             continue;
         }
-        if (o / 9 == c / 9 || o % 9 == c % 9 || same_box(o, c, bh, bw)) {
+        if (o / 9 == c / 9 || o % 9 == c % 9 || is_same_box(o, c, bh, bw)) {
             return false;
         }
     }
@@ -77,7 +77,7 @@ static const char *unit_name(const sudoku_geom_t *G, int u, char *b)
     return b;
 }
 
-static bool in_unit(const sudoku_geom_t *G, int u, int c)
+static bool is_in_unit(const sudoku_geom_t *G, int u, int c)
 {
     for (int k = 0; k < G->n; k++) {
         if (G->unit[u][k] == c) {
@@ -93,7 +93,7 @@ static void why(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char 
     int u[64], nu = units_of(G, u);
     char ub[40];
     for (int i = 0; i < nu; i++) {                 /* the same row, column, box or extra unit */
-        if (!in_unit(G, u[i], c)) {
+        if (!is_in_unit(G, u[i], c)) {
             continue;
         }
         for (int k = 0; k < G->n; k++) {
@@ -125,7 +125,7 @@ static int blocker(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, ch
 {
     int u[64], nu = units_of(G, u);
     for (int i = 0; i < nu; i++) {
-        if (!in_unit(G, u[i], c)) {
+        if (!is_in_unit(G, u[i], c)) {
             continue;
         }
         for (int k = 0; k < G->n; k++) {
@@ -208,7 +208,7 @@ static void context(const sudoku_geom_t *G, const uint8_t v[81], int c)
 
 typedef struct { int cell, digit, unit; bool naked, rule; } single_t;
 
-/* the singles of position v by the rules against the filled digits (sudoku_fits); classic:
+/* the singles of position v by the rules against the filled digits (is_sudoku_fits); classic:
  * by the classic rules only */
 static int singles(const sudoku_geom_t *G, const uint8_t v[81], bool classic, single_t *out)
 {
@@ -219,7 +219,7 @@ static int singles(const sudoku_geom_t *G, const uint8_t v[81], bool classic, si
             continue;
         }
         for (int d = 1; d <= G->n; d++) {
-            bool ok = classic ? classic_fits(v, c, d, G->n, G->box_h, G->box_w) : sudoku_fits(G, v, c, d);
+            bool ok = classic ? is_classic_fits(v, c, d, G->n, G->box_h, G->box_w) : is_sudoku_fits(G, v, c, d);
             if (ok) {
                 only = d;
                 cnt++;
@@ -262,7 +262,7 @@ static int singles(const sudoku_geom_t *G, const uint8_t v[81], bool classic, si
                     placed = true;
                     break;
                 }
-                bool ok = !v[c] && (classic ? classic_fits(v, c, d, G->n, G->box_h, G->box_w) : sudoku_fits(G, v, c, d));
+                bool ok = !v[c] && (classic ? is_classic_fits(v, c, d, G->n, G->box_h, G->box_w) : is_sudoku_fits(G, v, c, d));
                 if (ok) {
                     where = c;
                     cnt++;
@@ -359,7 +359,7 @@ static void print_step(const sudoku_geom_t *G, const uint8_t v[81], const single
     }
 }
 
-static bool plain(int v) { return v == VAR_CLASSIC || v == VAR_MINI || v == VAR_KIDS; }
+static bool is_plain(int v) { return v == VAR_CLASSIC || v == VAR_MINI || v == VAR_KIDS; }
 
 /* the best opening single of position v for variant var: not a classic one (plain variants:
  * a hidden single in a box), with the fewest reasons that need the variant's rule spelled out
@@ -371,7 +371,7 @@ static int pick(int var, const sudoku_geom_t *G, const uint8_t v[81], single_t *
     *score = 1 << 30;
     for (int i = 0; i < n; i++) {
         int special, rules = rule_count(G, v, &s[i], &special), sc;
-        if (plain(var)) {
+        if (is_plain(var)) {
             if (s[i].naked || s[i].unit < 18) {
                 continue;
             }
@@ -479,7 +479,7 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
                 }
             } else {
                 m = k < 2 ? EDGE_RIGHT(G->edge[top]) : EDGE_DOWN(G->edge[top]);
-                if (sudoku_edge_ok(G->edge_kind, m, a, b)) {
+                if (is_sudoku_edge_ok(G->edge_kind, m, a, b)) {
                     continue;
                 }
             }
@@ -569,7 +569,7 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
         printf(", \"rule\": \"sandwich\", \"line\": %d", why == FIT_SANDWICH_ROW ? r : 9 + q);
         return;
     default:
-        printf(", \"rule\": \"other\", \"code\": %d, \"fits\": %d", why, sudoku_fits(G, v, c, d));
+        printf(", \"rule\": \"other\", \"code\": %d, \"fits\": %d", why, is_sudoku_fits(G, v, c, d));
     }
 }
 
@@ -582,7 +582,7 @@ static void layout_json(const sudoku_geom_t *G)
     }
     printf("],\n \"tint\": [");
     for (int i = 0; i < 81; i++) {
-        printf("%s%d", i ? "," : "", sudoku_geom_tinted(G, i));
+        printf("%s%d", i ? "," : "", is_sudoku_geom_tinted(G, i));
     }
     printf("],\n \"parity\": [");
     for (int i = 0; i < 81; i++) {

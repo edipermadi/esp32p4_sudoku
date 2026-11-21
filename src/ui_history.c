@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: History and Gameplays. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: History and Gameplays. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -235,7 +235,7 @@ static void history_day_cb(lv_event_t *e)
     }
     hz_sel = d;
     lv_obj_invalidate(lv_calendar_get_btnmatrix(hz_cal));
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         return;
     }
     stats_db_query_day(d.year, d.month, d.day);
@@ -245,7 +245,7 @@ void history_cb(lv_event_t *e)
 {
     lv_label_set_text(hz_title, "Tap a day to see who played what");
     hz_sel.year = 0;                                /* nothing picked yet */
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         history_hint("No sudoku.db: insert a FAT32 microSD card before switching on to keep a history.");
     } else {
         history_hint("Highlighted days had games; the badge says how many. Solves from before the "
@@ -291,7 +291,7 @@ void history_poll(void)
     if (stats_db_take_day(&d)) {
         render_day(&d);
     }
-    if (lv_screen_active() == screen_history() && stats_db_ready() && !hz_latest_pending) {
+    if (lv_screen_active() == screen_history() && is_stats_db_ready() && !hz_latest_pending) {
         const lv_calendar_date_t *sh = lv_calendar_get_showed_date(hz_cal);
         if (sh->year != hz_year || sh->month != hz_month) {
             history_ask_month(sh->year, sh->month);
@@ -360,7 +360,7 @@ static void plays_hint(const char *text)
 static void plays_row_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) {
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || is_replay_busy()) {
         return;
     }
     replay_set_want_export(false);
@@ -370,7 +370,7 @@ static void plays_row_cb(lv_event_t *e)
 static void plays_export_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || replay_busy()) {
+    if (i < 0 || i >= STATS_MAX_DAY_ROWS || !pl_row_solve[i] || is_replay_busy()) {
         return;
     }
     replay_set_want_export(true);
@@ -452,7 +452,7 @@ static void render_plays(const stats_plays_t *p)
 
 void plays_ask(int offset)
 {
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         lv_label_set_text(pl_count, "");
         plays_hint("No sudoku.db: insert a FAT32 microSD card before switching on to keep recorded games.");
         pl_total = 0;

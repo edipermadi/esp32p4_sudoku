@@ -58,7 +58,7 @@ bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82]);
 void sudoku_ui_screen_name(char *buf, size_t n);
 
 /* A part of a puzzle sent by sound (devctl / Gibberlink "pz <id> <i>/<n> <part>",
- * another board's Share > Send by sound; the format is in sudoku_ui.c). When the
+ * another board's Share > Send by sound; the format is in ui_sudoku.c). When the
  * last part is in, the puzzle is checked (one solution), kept in Puzzles > Saved >
  * "Received" and offered to play. out: "OK pz 1/3", "OK pz done" or "ERR pz: ...". */
 bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n);

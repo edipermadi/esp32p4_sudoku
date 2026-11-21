@@ -16,7 +16,7 @@ bool device_factory_reset(void)
     wifi_mgr_forget();                             /* network gone (Wi-Fi's NVS keys) */
     wifi_mgr_set_enabled(false);
     store_factory_reset();                         /* defaults, no stats, old NVS keys erased */
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         return false;
     }
     stats_db_factory_reset();                      /* sudoku.db deleted and made again */

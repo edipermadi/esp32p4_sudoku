@@ -69,7 +69,7 @@ static void hint_mode_dd_cb(lv_event_t *e)
  */
 static void tour_again_cb(lv_event_t *e)
 {
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("The tour needs sudoku.db on a microSD card.", 3000);
         return;
     }
@@ -83,19 +83,19 @@ void settings_tab_game(lv_obj_t *pane)
     lv_obj_t *col = pane;
     lv_obj_t *r;
     r = settings_row(col, "Show timer", "Off: hidden while you play (times are still kept)");
-    settings_switch(r, store_show_timer(), timer_sw_cb);
+    settings_switch(r, is_store_show_timer(), timer_sw_cb);
 
     r = settings_row(col, "Mistake check", "Red digits: none, rule breakers, or any wrong digit");
     st_assist_dd = settings_dropdown(r, "Off\nRules\nSolution", store_assist(), 150, assist_dd_cb);
 
     r = settings_row(col, "No-notes challenge", "New games: Notes and Auto off; solves get a badge");
-    settings_switch(r, store_no_notes(), no_notes_sw_cb);
+    settings_switch(r, is_store_no_notes(), no_notes_sw_cb);
 
     r = settings_row(col, "Left-handed", "The number pad on the left of the board");
-    settings_switch(r, store_left_hand(), left_hand_sw_cb);
+    settings_switch(r, is_store_left_hand(), left_hand_sw_cb);
 
     r = settings_row(col, "Hints", "Nudge only: where to look, without More and Place it");
-    settings_dropdown(r, "Full\nNudge only", store_hint_nudge() ? 1 : 0, 170, hint_mode_dd_cb);
+    settings_dropdown(r, "Full\nNudge only", is_store_hint_nudge() ? 1 : 0, 170, hint_mode_dd_cb);
 
     r = settings_row(col, "Game screen tour", "A first look at the board and its buttons");
     lv_obj_t *tb = make_btn(r, 0, 0, 170, 52, "Show again", &lv_font_montserrat_18, tour_again_cb, NULL);

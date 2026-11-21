@@ -60,9 +60,9 @@ Public entry points built on it:
 | Function | Used for |
 |---|---|
 | `sudoku_count_solutions()` | the tests and the grader's fallback |
-| `sudoku_unique()` / `sudoku_classic_unique()` | importing, Enter a puzzle (capped at 400 000 / 200 000 nodes) |
+| `is_sudoku_unique()` / `is_sudoku_classic_unique()` | importing, Enter a puzzle (capped at 400 000 / 200 000 nodes) |
 | `sudoku_solve()` | the game's solution (mistake check, Fill, hints), Learn |
-| `sudoku_fits()` / `sudoku_fits_why()` | the Rules mistake check: may this digit go here, and if not, which rule says no |
+| `is_sudoku_fits()` / `sudoku_fits_why()` | the Rules mistake check: may this digit go here, and if not, which rule says no |
 
 `sudoku_fits_why()` is `grid_free()` run once with a hook. A `WHY(code)` checkpoint after each rule records the first rule that removed the digit asked about (`FIT_UNIT`, `FIT_EDGE`, `FIT_SKY_ROW` ...). With nobody asking, each checkpoint is one predictable branch.
 

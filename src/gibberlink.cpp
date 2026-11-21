@@ -82,7 +82,7 @@ static bool make_ggwave(void)
 /* encodes text and starts it playing */
 static void send_text(const char *text)
 {
-    while (sfx_pcm_busy()) {
+    while (is_sfx_pcm_busy()) {
         vTaskDelay(pdMS_TO_TICKS(20));    /* (the last one first) */
     }
     if (!s_gg->init(text, GGWAVE_PROTOCOL_AUDIBLE_FAST, TX_VOLUME)) {
@@ -150,7 +150,7 @@ static void worker(void *arg)
             }
             xQueueReceive(s_txq, out, 0);
             send_text(out);
-            while (sfx_pcm_busy()) {
+            while (is_sfx_pcm_busy()) {
                 vTaskDelay(pdMS_TO_TICKS(20));
             }
             vTaskDelay(pdMS_TO_TICKS(TX_GAP_MS));
@@ -168,7 +168,7 @@ static void worker(void *arg)
                 mic = false;
                 printf("gibberlink: off\n");
             }
-            if (sfx_pcm_busy()) {                       /* a reply still playing from s_tx: let it end */
+            if (is_sfx_pcm_busy()) {                       /* a reply still playing from s_tx: let it end */
                 vTaskDelay(pdMS_TO_TICKS(100));
                 continue;
             }
@@ -215,7 +215,7 @@ static void worker(void *arg)
             continue;
         }
         int64_t now = esp_timer_get_time();
-        if (sfx_pcm_busy()) {
+        if (is_sfx_pcm_busy()) {
             deaf_until = now + ECHO_MS * 1000;
         }
         if (now < deaf_until) {
@@ -341,7 +341,7 @@ void gibberlink_set_enabled(bool on)
     }
 }
 
-bool gibberlink_enabled(void)
+bool is_gibberlink_enabled(void)
 {
     return s_on;
 }

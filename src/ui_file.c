@@ -1,5 +1,5 @@
 /*
- * Files page (see file_ui.h).
+ * Files page (see ui_file.h).
  *
  * A folder is read by a short worker task (core 0, away from LVGL): stat() of
  * each entry walks the FAT directory, which adds up in a folder of hundreds of
@@ -7,8 +7,8 @@
  * and run on the spot. Everything goes through the POSIX file API on the card's
  * FAT volume (BSP_SD_MOUNT_POINT), which stats_db keeps mounted.
  */
-#include "file_ui.h"
-#include "media_view.h"
+#include "ui_file.h"
+#include "ui_media_view.h"
 #include "ui_palette.h"
 #include "stats_db.h"
 #include "generator.h"
@@ -78,12 +78,12 @@ static char s_job_path[PATH_MAX_B + NAME_MAX_B];   /* "" = every item in the bin
 static char s_job_msg[96];
 
 /* ------------------------------------------------------------- helpers */
-static bool at_root(void)
+static bool is_at_root(void)
 {
     return strcmp(s_path, BSP_SD_MOUNT_POINT) == 0;
 }
 
-static bool in_trash(void)
+static bool is_in_trash(void)
 {
     return strcmp(s_path, TRASH_DIR) == 0;
 }
@@ -218,7 +218,7 @@ static void job_start(const char *path)
 
 static bool is_protected_name(const char *name)
 {
-    if (!at_root()) {
+    if (!is_at_root()) {
         return false;
     }
     for (size_t i = 0; i < sizeof(PROTECTED) / sizeof(PROTECTED[0]); i++) {
@@ -440,12 +440,12 @@ static void do_trash(void)
         return;
     }
     const entry_t *e = &s_ent[s_dlg_idx];
-    if (is_protected_name(e->name) || (at_root() && !strcmp(e->name, TRASH_NAME))) {   /* (no button) */
+    if (is_protected_name(e->name) || (is_at_root() && !strcmp(e->name, TRASH_NAME))) {   /* (no button) */
         dlg_close();
         return;
     }
     char rel[PATH_MAX_B + NAME_MAX_B], enc[NAME_MAX_B], from[PATH_MAX_B + NAME_MAX_B], to[PATH_MAX_B + NAME_MAX_B];
-    snprintf(rel, sizeof(rel), "%s/%s", s_path + strlen(BSP_SD_MOUNT_POINT) + (at_root() ? 0 : 1), e->name);
+    snprintf(rel, sizeof(rel), "%s/%s", s_path + strlen(BSP_SD_MOUNT_POINT) + (is_at_root() ? 0 : 1), e->name);
     if (rel[0] == '/') {
         memmove(rel, rel + 1, strlen(rel));
     }
@@ -677,7 +677,7 @@ static void on_rename(lv_event_t *e)
 static void on_delete(lv_event_t *e)
 {
     if (!s_busy && !s_job_busy) {
-        dlg_open((int)(intptr_t)lv_event_get_user_data(e), in_trash() ? DLG_PURGE : DLG_TRASH);
+        dlg_open((int)(intptr_t)lv_event_get_user_data(e), is_in_trash() ? DLG_PURGE : DLG_TRASH);
     }
 }
 
@@ -713,7 +713,7 @@ static uint8_t s_pv_givens[81];                  /* ... and digits */
 static int s_pv_var, s_pv_lv;                    /* its variant, level (-1: none given) */
 static bool s_pv_shown;                          /* a puzzle could be drawn */
 
-static bool ends_with_ci(const char *s, const char *suffix)
+static bool is_ends_with_ci(const char *s, const char *suffix)
 {
     size_t a = strlen(s), b = strlen(suffix);
     return a >= b && strcasecmp(s + a - b, suffix) == 0;
@@ -721,7 +721,7 @@ static bool ends_with_ci(const char *s, const char *suffix)
 
 static bool is_puzzle_file(const char *name)
 {
-    return ends_with_ci(name, ".sdm") || ends_with_ci(name, ".sdx") || ends_with_ci(name, ".opensudoku");
+    return is_ends_with_ci(name, ".sdm") || is_ends_with_ci(name, ".sdx") || is_ends_with_ci(name, ".opensudoku");
 }
 
 /* one line (sdx.h: an .sdx line, or just 81 digits as in .sdm) into variant, level, givens and
@@ -779,7 +779,7 @@ static void pv_draw_cb(lv_event_t *e)
         for (int c = 0; c < n; c++) {
             int cell = r * 9 + c;
             lv_area_t ca = {a.x1 + c * cs, a.y1 + r * cs, a.x1 + (c + 1) * cs - 1, a.y1 + (r + 1) * cs - 1};
-            rd.bg_color = sudoku_geom_tinted(g, cell) ? C_CELL_PEER : (s_pv_givens[cell] ? C_CELL_GIVEN : C_CELL);
+            rd.bg_color = is_sudoku_geom_tinted(g, cell) ? C_CELL_PEER : (s_pv_givens[cell] ? C_CELL_GIVEN : C_CELL);
             lv_draw_rect(layer, &rd, &ca);
             if (s_pv_givens[cell]) {
                 char t[2] = {(char)('0' + s_pv_givens[cell]), 0};
@@ -938,7 +938,7 @@ static int pv_load(const char *path, char *summary, size_t n)
     fclose(f);
     s_pv_buf[len] = 0;
     int kinds[VAR_COUNT] = {0}, bad = 0;
-    if (ends_with_ci(path, ".opensudoku")) {        /* OpenSudoku's XML: each data="..." (or '...') is a Classic one */
+    if (is_ends_with_ci(path, ".opensudoku")) {        /* OpenSudoku's XML: each data="..." (or '...') is a Classic one */
         for (char *q = s_pv_buf; s_pv_n < PV_MAX && (q = strstr(q, "data=")) != NULL; q += 5) {
             char quote = q[5];
             if (quote != '"' && quote != '\'') {
@@ -960,7 +960,7 @@ static int pv_load(const char *path, char *summary, size_t n)
             q = end;
         }
     }
-    for (char *p = s_pv_buf; !ends_with_ci(path, ".opensudoku") && *p && s_pv_n < PV_MAX;) {
+    for (char *p = s_pv_buf; !is_ends_with_ci(path, ".opensudoku") && *p && s_pv_n < PV_MAX;) {
         char *nl = strchr(p, '\n');
         if (nl) {
             *nl = 0;
@@ -997,7 +997,7 @@ static int pv_load(const char *path, char *summary, size_t n)
     }
     if (bad && o < (int)n)
         o += snprintf(summary + o, n - o, "  -  %d %s that %s", bad,
-                      ends_with_ci(path, ".opensudoku") ? (bad == 1 ? "entry" : "entries")
+                      is_ends_with_ci(path, ".opensudoku") ? (bad == 1 ? "entry" : "entries")
                       : (bad == 1 ? "line" : "lines"),
                       bad == 1 ? "isn't a puzzle" : "aren't puzzles");
     if ((cut || s_pv_n == PV_MAX) && o < (int)n) {
@@ -1048,7 +1048,7 @@ static void pv_open(int i)
     lv_obj_set_pos(s_pv_pos, (720 - PV_BOARD) / 2 + 56 + 8, 84 + PV_BOARD + 12 + 13);
 
     /* what Import does (or why it can't) */
-    bool db = stats_db_ready();
+    bool db = is_stats_db_ready();
     lv_obj_t *note = label(s_pv, &lv_font_montserrat_14, C_MUTED,
                            !db ? "Importing needs sudoku.db: insert the card before switching on."
                            : !s_pv_n ? "Nothing here to import."
@@ -1103,7 +1103,7 @@ static void open_media(int i)
 static void on_row(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= s_n || s_busy || s_job_busy || in_trash()) {
+    if (i < 0 || i >= s_n || s_busy || s_job_busy || is_in_trash()) {
         return;
     }
     if (!s_ent[i].dir) {
@@ -1124,7 +1124,7 @@ static void on_row(lv_event_t *e)
 
 static void on_up(lv_event_t *e)
 {
-    if (at_root() || s_busy) {
+    if (is_at_root() || s_busy) {
         return;
     }
     char *slash = strrchr(s_path, '/');
@@ -1140,9 +1140,9 @@ static void show_list(void)
 {
     lv_obj_clean(s_list);
     lv_obj_scroll_to_y(s_list, 0, LV_ANIM_OFF);
-    lv_label_set_text(s_path_lbl, in_trash() ? "Recycle bin" : s_path);
-    lv_obj_set_hidden(s_up, at_root());
-    lv_obj_set_hidden(s_empty_btn, !in_trash() || s_n <= 0);
+    lv_label_set_text(s_path_lbl, is_in_trash() ? "Recycle bin" : s_path);
+    lv_obj_set_hidden(s_up, is_at_root());
+    lv_obj_set_hidden(s_empty_btn, !is_in_trash() || s_n <= 0);
 
     if (s_n < 0) {
         lv_label_set_text(s_count_lbl, "");
@@ -1160,15 +1160,15 @@ static void show_list(void)
     }
     if (s_n == 0) {
         lv_obj_t *l = label(s_list, &lv_font_montserrat_20, C_MUTED,
-                            in_trash() ? "The Recycle bin is empty." : "This folder is empty.");
+                            is_in_trash() ? "The Recycle bin is empty." : "This folder is empty.");
         lv_obj_set_style_pad_all(l, 12, 0);
         return;
     }
     for (int i = 0; i < s_n; i++) {
         const entry_t *e = &s_ent[i];
         bool prot = is_protected_name(e->name);
-        bool bin = at_root() && e->dir && !strcmp(e->name, TRASH_NAME);   /* the Recycle bin itself */
-        bool trashed = in_trash();                  /* an item in it: Restore, Delete for good */
+        bool bin = is_at_root() && e->dir && !strcmp(e->name, TRASH_NAME);   /* the Recycle bin itself */
+        bool trashed = is_in_trash();                  /* an item in it: Restore, Delete for good */
 
         lv_obj_t *r = lv_obj_create(s_list);
         lv_obj_remove_style_all(r);
@@ -1359,4 +1359,4 @@ void file_ui_set_shown(bool shown)
 }
 
 /* Files is scanning a folder or deleting / restoring (devctl genbench waits for it) */
-bool files_busy(void) { return s_busy || s_job_busy; }
+bool is_files_busy(void) { return s_busy || s_job_busy; }

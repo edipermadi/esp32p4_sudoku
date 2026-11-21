@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -17,7 +17,7 @@ static void new_puzzle_cb(lv_event_t *e);
 static int learn_variant(int target);
 static int learn_variant_tech(int target);
 static int learn_tech(int target);
-static bool learn_match(int target, const sudoku_step_t *st);
+static bool is_learn_match(int target, const sudoku_step_t *st);
 static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudoku_step_t *st);
 static int learn_variant_find(int target);
 static void learn_task(void *arg);
@@ -179,7 +179,7 @@ static void gen_poll_cb(lv_timer_t *t)
     const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
-    int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,
+    int gid = is_stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,
               thermos, gen_day[0] ? gen_day : NULL)
               : -1;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
@@ -645,7 +645,7 @@ static uint8_t learn_vals[81];
 static sudoku_step_t learn_step;
 
 /* does this step need the technique (for a naked single: a cell with one candidate is enough) */
-static bool learn_match(int target, const sudoku_step_t *st)
+static bool is_learn_match(int target, const sudoku_step_t *st)
 {
     switch (target) {
     case LEARN_HIDDEN:
@@ -770,7 +770,7 @@ static void learn_task(void *arg)
             } else if (tech && (st.tech.kind || st.kind == STEP_NONE) && sudoku_step_with(G, vals, sol, tech, &w)) {
                 st = w;                             /* stuck on singles, and this technique opens one */
                 found = 1;
-            } else if (!tech && learn_match(target, &st)) {
+            } else if (!tech && is_learn_match(target, &st)) {
                 found = 1;
             }
             if (found) {
@@ -935,7 +935,7 @@ static void ed_refresh(void)
         }
         filled += ed_val[i] != 0;
         bad += clash;
-        lv_color_t bg = i == ed_sel ? C_CELL_SEL : (ed_sel >= 0 && sudoku_geom_peer(G, i, ed_sel) ? C_CELL_PEER : C_CELL);
+        lv_color_t bg = i == ed_sel ? C_CELL_SEL : (ed_sel >= 0 && is_sudoku_geom_peer(G, i, ed_sel) ? C_CELL_PEER : C_CELL);
         if (clash) {
             bg = C_CELL_BAD;
         }
@@ -1044,7 +1044,7 @@ static void ed_check_done(lv_timer_t *t)
         level = GEN_EXPERT;
     }
     int number = 0;
-    int gid = stats_db_ready() ? stats_db_gen_add_own(ed_check_cells, level, &number) : -1;
+    int gid = is_stats_db_ready() ? stats_db_gen_add_own(ed_check_cells, level, &number) : -1;
     uint16_t id;
     if (gid > 0 && gid < PUZZLE_GEN_RAM_BASE - PUZZLE_GEN_BASE) {
         id = (uint16_t)(PUZZLE_GEN_BASE + gid);
@@ -1159,7 +1159,7 @@ void new_menu_cb(lv_event_t *e)
         {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb},      /* type one in from a book */
         {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb},             /* practise a technique */
         {
-            list_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, list_starred() ? "All puzzles" : "Starred puzzles",
+            is_list_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, is_list_starred() ? "All puzzles" : "Starred puzzles",
             list_star_cb
         },                                      /* the starred ones in the right pane, or back */
     };

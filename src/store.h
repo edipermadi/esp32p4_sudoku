@@ -121,10 +121,10 @@ void store_set_player(int32_t id, const char *name);
 uint8_t store_last_collection(void);
 void store_set_last_collection(uint8_t c);
 
-bool store_dark_mode(void);
+bool is_store_dark_mode(void);
 void store_set_dark_mode(bool dark);
 
-bool store_sound_enabled(void);
+bool is_store_sound_enabled(void);
 void store_set_sound_enabled(bool on);
 
 /* IANA time zone name, e.g. "Asia/Dubai"; "UTC" until one is chosen. */
@@ -151,7 +151,7 @@ uint8_t store_assist(void);
 void store_set_assist(uint8_t assist);
 
 /* Show the game's clock (Settings > Show timer); it runs and is recorded either way. */
-bool store_show_timer(void);
+bool is_store_show_timer(void);
 void store_set_show_timer(bool on);
 
 /* Accent colour (Settings): 0 blue, 1 teal, 2 green, 3 purple, 4 pink. */
@@ -173,23 +173,23 @@ void store_set_lock_pin(const char *pin);
 
 /* Screen-saver clock (Settings > Display): at the screen timeout, a dim clock
  * moving about for SAVER_CLOCK_MIN minutes, then dark. */
-bool store_saver_clock(void);
+bool is_store_saver_clock(void);
 void store_set_saver_clock(bool on);
-bool store_cvd(void);
+bool is_store_cvd(void);
 void store_set_cvd(bool on);
-bool store_no_notes(void);
+bool is_store_no_notes(void);
 void store_set_no_notes(bool on);
-bool store_left_hand(void);
+bool is_store_left_hand(void);
 void store_set_left_hand(bool on);
 
 /* Gibberlink: the microphones listen for remote-control commands as sound. */
-bool store_gibberlink(void);
+bool is_store_gibberlink(void);
 void store_set_gibberlink(bool on);
-bool store_big_digits(void);
-bool store_hint_nudge(void);
+bool is_store_big_digits(void);
+bool is_store_hint_nudge(void);
 void store_set_hint_nudge(bool on);
 void store_set_big_digits(bool on);
-bool store_night_mode(void);
+bool is_store_night_mode(void);
 void store_set_night_mode(bool on);
 uint8_t store_night_start(void);
 uint8_t store_night_end(void);

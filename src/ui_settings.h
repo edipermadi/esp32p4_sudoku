@@ -95,7 +95,7 @@ lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_c
  * @brief The dark look is on: dark mode, or night mode now (ui_settings.c).
  * @return true while the screens are in the dark palette
  */
-bool ui_dark(void);
+bool is_ui_dark(void);
 /**
  * @brief The settings come again (ui_settings.c): after the card was lent over USB, or a factory reset.
  * @param from_db  from sudoku.db, once it has (re)opened (sd_poll_cb() takes them then); false: from

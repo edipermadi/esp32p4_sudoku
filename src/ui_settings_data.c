@@ -52,7 +52,7 @@ static void fw_row_update(void)
     fw_build_id(esp_app_get_description(), run_id);
     esp_app_desc_t d;
     uint32_t size = 0;
-    bool have = stats_db_ready() && fw_file_desc(&d, &size);   /* (the card is mounted with sudoku.db open) */
+    bool have = is_stats_db_ready() && fw_file_desc(&d, &size);   /* (the card is mounted with sudoku.db open) */
     if (have) {
         fw_build_id(&d, new_id);
         lv_label_set_text_fmt(st_fw_hint, "update.bin: build %s, %u KB%s", new_id, (unsigned)(size / 1024),
@@ -197,9 +197,9 @@ static void sd_format_cb(lv_event_t *e)
     if (sd_state() != SD_IDLE) {
         return;
     }
-    if (sd_present()) {
+    if (is_sd_present()) {
         sd_set_state(SD_FOUND);                    /* found at boot: straight to the question */
-    } else if (!wifi_mgr_radio_started()) {
+    } else if (!is_wifi_mgr_radio_started()) {
         if (sd_run(SD_JOB_PROBE)) {
             sd_btn_text("Checking...", false);
         }
@@ -232,9 +232,9 @@ void usb_btn_update(void)
     if (!st_usb_btn) {
         return;
     }
-    bool host = usb_msc_host_connected();
-    lv_obj_set_state(st_usb_btn, LV_STATE_DISABLED, !(sd_present() && host));
-    const char *hint = !sd_present() ? "No microSD card"
+    bool host = is_usb_msc_host_connected();
+    lv_obj_set_state(st_usb_btn, LV_STATE_DISABLED, !(is_sd_present() && host));
+    const char *hint = !is_sd_present() ? "No microSD card"
                        : host ? "Back up or restore sudoku.db on a computer"
                        : "Plug the USB OTG port (not UART) into a computer";
     if (strcmp(lv_label_get_text(st_usb_hint), hint) != 0) {
@@ -257,14 +257,14 @@ static void usb_done_cb(lv_event_t *e)
  */
 static void usb_connect_cb(lv_event_t *e)
 {
-    if (!sd_present()) {
+    if (!is_sd_present()) {
         sudoku_ui_notice("No microSD card. Insert one before switching on.", 4000);
         return;
     }
     if (sd_state() != SD_IDLE) {
         return;    /* formatting */
     }
-    if (!usb_msc_host_connected()) {
+    if (!is_usb_msc_host_connected()) {
         return;    /* greyed out anyway (see usb_btn_update) */
     }
     if (usb_drive_lend() != ESP_OK) {              /* sudoku.db closed, the card to the computer */
@@ -309,7 +309,7 @@ static void usb_connect_cb(lv_event_t *e)
  */
 static void import_cb(lv_event_t *e)
 {
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("Importing needs sudoku.db on a microSD card.", 3000);
         return;
     }
@@ -323,7 +323,7 @@ static void import_cb(lv_event_t *e)
  */
 static void export_cb(lv_event_t *e)
 {
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("Export needs sudoku.db on a microSD card.", 3000);
         return;
     }
@@ -337,7 +337,7 @@ static void export_cb(lv_event_t *e)
  */
 static void backup_cb(lv_event_t *e)
 {
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         sudoku_ui_notice("Backup needs sudoku.db on a microSD card.", 3000);
         return;
     }
@@ -534,7 +534,7 @@ void settings_data_shown(void)
 /* (documented in ui_settings.h) */
 void settings_data_poll_usb(void)
 {
-    if (u_ovl && (usb_msc_ejected() || usb_msc_unplugged())) {
+    if (u_ovl && (is_usb_msc_ejected() || is_usb_msc_unplugged())) {
         usb_finish();
     }
 }

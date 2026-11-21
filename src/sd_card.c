@@ -65,7 +65,7 @@ bool sd_run(sd_job_t job)
 sd_state_t sd_state(void) { return s_sd_state; }
 void sd_set_state(sd_state_t st) { s_sd_state = st; }
 esp_err_t sd_last_error(void) { return s_sd_err; }
-bool sd_present(void) { return s_sd_present; }
+bool is_sd_present(void) { return s_sd_present; }
 void sd_forget(void) { s_sd_present = false; }
 uint64_t sd_bytes(void) { return s_sd_bytes; }
 const char *sd_name(void) { return s_sd_name; }

@@ -37,7 +37,7 @@ static esp_partition_mmap_handle_t s_map;
 static volatile int s_install;                      /* 0 idle, 1 running, 2 done, 3 failed */
 static volatile uint32_t s_done;
 
-static bool header_ok(const av_header_t *h)
+static bool is_header_ok(const av_header_t *h)
 {
     return !memcmp(h->magic, "AVTR", 4) && h->version == 1 && h->count == AVATAR_COUNT &&
            h->size == AVATAR_SIZE && h->crc == AVATAR_CRC;
@@ -61,7 +61,7 @@ static bool map_avatars(void)
 {
     const esp_partition_t *p = partition();
     av_header_t h;
-    if (!p || p->size < AV_HEADER + AV_BYTES || esp_partition_read(p, 0, &h, sizeof(h)) != ESP_OK || !header_ok(&h)) {
+    if (!p || p->size < AV_HEADER + AV_BYTES || esp_partition_read(p, 0, &h, sizeof(h)) != ESP_OK || !is_header_ok(&h)) {
         return false;
     }
     const void *ptr;
@@ -107,7 +107,7 @@ const lv_image_dsc_t *avatar_image(int i)
     return &s_dsc[i < 0 || i >= AVATAR_COUNT ? 0 : i];
 }
 
-bool avatars_ready(void) { return s_pixels != NULL; }
+bool is_avatars_ready(void) { return s_pixels != NULL; }
 
 static void install_task(void *arg)
 {
@@ -116,7 +116,7 @@ static void install_task(void *arg)
     FILE *f = fopen(AV_FILE, "rb");
     av_header_t h;
     bool ok = p && buf && f && p->size >= AV_HEADER + AV_BYTES && fread(&h, 1, sizeof(h), f) == sizeof(h) &&
-              header_ok(&h);
+              is_header_ok(&h);
     if (ok) {
         printf("avatars: installing %s into the avatars partition\n", AV_FILE);
         /* all at once, quicker than sector by sector (the screen is dark meanwhile: the caller) */
@@ -152,14 +152,14 @@ static void install_task(void *arg)
     vTaskDelete(NULL);
 }
 
-bool avatars_installable(void)
+bool is_avatars_installable(void)
 {
     if (s_pixels || s_install == 1 || !partition()) {
         return false;
     }
     FILE *f = fopen(AV_FILE, "rb");
     av_header_t h;
-    bool ok = f && fread(&h, 1, sizeof(h), f) == sizeof(h) && header_ok(&h);
+    bool ok = f && fread(&h, 1, sizeof(h), f) == sizeof(h) && is_header_ok(&h);
     if (f) {
         fclose(f);
     }
@@ -168,7 +168,7 @@ bool avatars_installable(void)
 
 bool avatars_install(void)
 {
-    if (!avatars_installable()) {
+    if (!is_avatars_installable()) {
         return false;
     }
     s_install = 1;

@@ -119,9 +119,9 @@ void stats_db_start(void);
 /* After formatting: a new, empty sudoku.db holding only the current settings
  * and the game in progress (no statistics). Also call store_reset_stats(). */
 void stats_db_start_fresh(void);
-bool stats_db_ready(void);
+bool is_stats_db_ready(void);
 /* The worker is on a command, or has some waiting (a write, an import, an export, a backup ...) */
-bool stats_db_busy(void);
+bool is_stats_db_busy(void);
 /* Waits until the open started by stats_db_start() has finished (or failed). */
 bool stats_db_wait_open(uint32_t timeout_ms);
 /* After opening: the settings and saved game from sudoku.db, on top of
@@ -191,12 +191,12 @@ void stats_db_learned(int technique);
 /* Bookmarks (the star on the game screen; Puzzles > Starred), per player.
  * stats_db_bookmarks: newest first, at most max; -1 without a database. */
 #define STATS_MAX_BOOKMARKS 64
-bool stats_db_bookmarked(uint16_t puzzle);
+bool is_stats_db_bookmarked(uint16_t puzzle);
 void stats_db_set_bookmark(uint16_t puzzle, bool on);
 int stats_db_bookmarks(uint16_t *ids, int max);
 
 /* Things the current player has seen once ("tour": the game screen's tour) */
-bool stats_db_seen(const char *what);
+bool is_stats_db_seen(const char *what);
 void stats_db_set_seen(const char *what, bool seen);
 
 /* Time attack: a finished run (Easy puzzles solved in 10 minutes), and the

@@ -61,7 +61,7 @@ static esp_err_t es_rmw(uint8_t reg, uint8_t keep, uint8_t set)
 /* ES8311 clocking for MCLK = 256 * fs. Per Espressif's coefficient table, every
  * standard rate uses pre_div 1, x1, adc/dac_div 1, single speed, LRCK div 256,
  * BCLK div 4, adc_osr 0x10; only dac_osr differs (0x20 up to 16 kHz). */
-static bool rate_supported(uint32_t r)
+static bool is_rate_supported(uint32_t r)
 {
     static const uint32_t rates[] = { 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000 };
     for (size_t i = 0; i < sizeof(rates) / sizeof(rates[0]); i++) {
@@ -162,7 +162,7 @@ esp_err_t bsp_audio_init(uint32_t sample_rate)
     if (s_tx) {
         return ESP_OK;
     }
-    ESP_RETURN_ON_FALSE(rate_supported(sample_rate), ESP_ERR_NOT_SUPPORTED, TAG,
+    ESP_RETURN_ON_FALSE(is_rate_supported(sample_rate), ESP_ERR_NOT_SUPPORTED, TAG,
                         "unsupported sample rate %lu", (unsigned long)sample_rate);
     if (!s_owner) {
         s_owner = xSemaphoreCreateMutex();
@@ -246,7 +246,7 @@ esp_err_t bsp_audio_set_sample_rate(uint32_t sample_rate)
     if (sample_rate == s_rate) {
         return ESP_OK;
     }
-    ESP_RETURN_ON_FALSE(rate_supported(sample_rate), ESP_ERR_NOT_SUPPORTED, TAG,
+    ESP_RETURN_ON_FALSE(is_rate_supported(sample_rate), ESP_ERR_NOT_SUPPORTED, TAG,
                         "unsupported sample rate %lu", (unsigned long)sample_rate);
 
     es_rmw(0x31, 0x9F, 0x60);                     /* DAC soft-mute during the switch */

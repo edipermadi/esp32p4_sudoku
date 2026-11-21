@@ -84,7 +84,7 @@ typedef enum { ST_OFF, ST_OPENING, ST_READY, ST_NOT_FAT, ST_ERROR } db_state_t;
 static QueueHandle_t s_q;
 static SemaphoreHandle_t s_suspended, s_opened, s_lock;  /* s_lock guards the results below */
 static volatile db_state_t s_state = ST_OFF;
-static volatile bool s_working;                /* the worker is on a command (stats_db_busy) */
+static volatile bool s_working;                /* the worker is on a command (is_stats_db_busy) */
 static volatile int s_solves = -1;            /* rows in solves (all players), -1 unknown */
 static sqlite3 *s_db;
 static sqlite3_stmt *s_merge, *s_solve_upsert, *s_solve_insert;
@@ -2548,7 +2548,7 @@ static int parse_file(const char *path, bool xml, uint8_t (*cells)[81], int max)
     return n;
 }
 
-static bool ends_with(const char *s, const char *suffix)
+static bool is_ends_with(const char *s, const char *suffix)
 {
     size_t a = strlen(s), b = strlen(suffix);
     return a >= b && strcasecmp(s + a - b, suffix) == 0;
@@ -2636,7 +2636,7 @@ static int import_sdx(const char *path, const char *file, const char *base, int 
         uint8_t g[81];
         memcpy(g, p.givens, 81);
         int v = p.variant;
-        int lv = p.level >= 0 ? (sudoku_unique(G, g) ? p.level : -1)
+        int lv = p.level >= 0 ? (is_sudoku_unique(G, g) ? p.level : -1)
                  : sudoku_grade(G, g);   /* no level: rated (-1: not one solution) */
         if (lv < 0) {                               /* not exactly one solution */
             (*bad)++;
@@ -2716,7 +2716,7 @@ static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], in
     char base[STATS_IMPORT_NAME];                   /* the collection's name: the file's, without the extension */
     const char *dot = strrchr(fn, '.');
     snprintf(base, sizeof(base), "%.*s", (int)(dot ? dot - fn : (int)strlen(fn)), fn);
-    if (ends_with(fn, ".sdx")) {                    /* any variant: line by line (see import_sdx) */
+    if (is_ends_with(fn, ".sdx")) {                    /* any variant: line by line (see import_sdx) */
         int got = exec("BEGIN") ? import_sdx(path, fn, base, max, bad) : -1;
         if (got > 0 && exec("COMMIT")) {
             return got;
@@ -2724,7 +2724,7 @@ static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], in
         exec("ROLLBACK");
         return got < 0 ? -1 : 0;
     }
-    int n = parse_file(path, ends_with(fn, ".opensudoku"), cells, max);
+    int n = parse_file(path, is_ends_with(fn, ".opensudoku"), cells, max);
     static uint8_t *levels;                         /* each one rated by the grader (generator.h) */
     if (!levels && !(levels = heap_caps_malloc(IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM))) {
         return -1;
@@ -2812,8 +2812,8 @@ static void do_import(void)
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && total < IMPORT_MAX_RUN) {
         const char *fn = e->d_name;
-        if (!ends_with(fn, ".opensudoku") && !ends_with(fn, ".sdx") && !ends_with(fn, ".sdm") &&
-                !ends_with(fn, ".txt")) {
+        if (!is_ends_with(fn, ".opensudoku") && !is_ends_with(fn, ".sdx") && !is_ends_with(fn, ".sdm") &&
+                !is_ends_with(fn, ".txt")) {
             continue;
         }
         if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
@@ -4107,7 +4107,7 @@ bool stats_db_take_insights(stats_insights_t *out)
 
 static bool gen_call(cmd_type_t type);
 
-bool stats_db_bookmarked(uint16_t puzzle)
+bool is_stats_db_bookmarked(uint16_t puzzle)
 {
     if (!s_genp) {
         return false;
@@ -4132,7 +4132,7 @@ int stats_db_bookmarks(uint16_t *ids, int max)
     return n;
 }
 
-bool stats_db_seen(const char *what)
+bool is_stats_db_seen(const char *what)
 {
     if (!s_genp) {
         return true;    /* no database: don't nag every time */
@@ -4233,12 +4233,12 @@ void stats_db_save_game(const saved_game_t *g, const game_move_t *moves, int nmo
     }
 }
 
-bool stats_db_ready(void)
+bool is_stats_db_ready(void)
 {
     return s_state == ST_READY;
 }
 
-bool stats_db_busy(void)
+bool is_stats_db_busy(void)
 {
     return s_working || (s_q && uxQueueMessagesWaiting(s_q) > 0);
 }
@@ -4332,7 +4332,7 @@ int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max)
 /* runs a generated-puzzle command and waits for the worker (up to 3 s) */
 static bool gen_call(cmd_type_t type)
 {
-    if (!stats_db_ready() || !s_gen_done) {
+    if (!is_stats_db_ready() || !s_gen_done) {
         return false;
     }
     xSemaphoreTake(s_gen_done, 0);                         /* clear a stale give */
@@ -4858,7 +4858,7 @@ static void do_sql(void)
 bool stats_db_sql(const char *sql, char *out, size_t cap, stats_sql_result_t *r)
 {
     memset(r, 0, sizeof(*r));
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         snprintf(r->err, sizeof(r->err), "no sudoku.db (no card, or it's lent over USB)");
         return false;
     }

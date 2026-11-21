@@ -3,7 +3,7 @@
  * @ingroup settings
  * @brief Settings > Network: Wi-Fi and the time zone.
  *
- * The Wi-Fi row opens the Wi-Fi screen (wifi_ui.c); the eye on it shows the network's name. The time
+ * The Wi-Fi row opens the Wi-Fi screen (ui_wifi.c); the eye on it shows the network's name. The time
  * zone is one of the built-in IANA zones (timezones.h), applied at once.
  */
 #include "ui_settings.h"

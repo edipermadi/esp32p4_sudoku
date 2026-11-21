@@ -228,7 +228,7 @@ void sfx_set_enabled(bool on)
     s_enabled = on;
 }
 
-bool sfx_enabled(void)
+bool is_sfx_enabled(void)
 {
     return s_enabled;
 }
@@ -250,7 +250,7 @@ bool sfx_play_pcm(const int16_t *mono, size_t frames)
     return true;
 }
 
-bool sfx_pcm_busy(void)
+bool is_sfx_pcm_busy(void)
 {
     return s_pcm_busy;
 }

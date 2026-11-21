@@ -46,7 +46,7 @@ typedef enum {
     SD_JOB_FORMAT,                                  /**< format the card found */
 } sd_job_t;
 
-/** @brief At start-up, before Wi-Fi: is a card there (sd_present(), sd_bytes(), sd_name()). */
+/** @brief At start-up, before Wi-Fi: is a card there (is_sd_present(), sd_bytes(), sd_name()). */
 void sd_probe_card(void);
 /**
  * @brief Starts card work in a task of its own; follow it with sd_state().
@@ -74,7 +74,7 @@ esp_err_t sd_last_error(void);
  * @brief A card was found (at start-up, or by SD_JOB_PROBE).
  * @return true if there's a card
  */
-bool sd_present(void);
+bool is_sd_present(void);
 /** @brief The card stopped answering: it isn't there any more (until found again). */
 void sd_forget(void);
 /**

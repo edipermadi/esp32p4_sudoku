@@ -26,7 +26,7 @@
 #include <lvgl.h>
 #include "src/bsp/bsp_board.h"
 #include "src/store.h"
-#include "src/sudoku_ui.h"
+#include "src/ui_sudoku.h"
 #include "src/sfx.h"
 #include "src/devctl.h"
 #include "src/gibberlink.h"
@@ -129,9 +129,9 @@ static void avatars_poll(void)
         return;
     }
     next = millis() + 500;
-    if (!tried && !avatars_ready() && stats_db_ready()) {
+    if (!tried && !is_avatars_ready() && is_stats_db_ready()) {
         tried = true;
-        if (avatars_installable()) {
+        if (is_avatars_installable()) {
             sudoku_ui_flash_busy("Installing the avatars",
                                  "From avatars.bin on the card. The screen goes dark meanwhile (about a minute), "
                                  "then comes back with them.");
@@ -169,6 +169,6 @@ void loop()
     avatars_poll();
     uint32_t wait_ms = lv_timer_handler();
     /* screen dark (bsp_power_save): poll every 50 ms, still quick enough for the waking tap */
-    uint32_t max_ms = bsp_power_saving() ? 50 : 20;
+    uint32_t max_ms = is_bsp_power_saving() ? 50 : 20;
     delay(wait_ms < 5 ? 1 : (wait_ms > max_ms ? max_ms : wait_ms));
 }

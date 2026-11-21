@@ -1,7 +1,7 @@
 /*
- * Wi-Fi page (see wifi_ui.h). Polls wifi_mgr every 400 ms while shown.
+ * Wi-Fi page (see ui_wifi.h). Polls wifi_mgr every 400 ms while shown.
  */
-#include "wifi_ui.h"
+#include "ui_wifi.h"
 #include "wifi_mgr.h"
 #include "ui_palette.h"
 #include <stdio.h>

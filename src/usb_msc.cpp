@@ -106,7 +106,7 @@ extern "C" esp_err_t usb_msc_start(void)
     return ESP_OK;
 }
 
-extern "C" bool usb_msc_host_connected(void)
+extern "C" bool is_usb_msc_host_connected(void)
 {
     return s_started && (bool)USB && !s_suspended;
 }
@@ -132,12 +132,12 @@ extern "C" esp_err_t usb_msc_set_enabled(bool on)
     return ESP_OK;
 }
 
-extern "C" bool usb_msc_ejected(void)
+extern "C" bool is_usb_msc_ejected(void)
 {
     return s_ejected;
 }
 
-extern "C" bool usb_msc_unplugged(void)
+extern "C" bool is_usb_msc_unplugged(void)
 {
     if (!s_started || !s_enabled) {
         return false;

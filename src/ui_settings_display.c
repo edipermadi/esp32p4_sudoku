@@ -60,7 +60,7 @@ static void theme_sw_cb(lv_event_t *e)
 static void accent_dd_cb(lv_event_t *e)
 {
     store_set_accent((uint8_t)lv_dropdown_get_selected(lv_event_get_target_obj(e)));
-    apply_theme(ui_dark());                            /* every screen again, in the new colour */
+    apply_theme(is_ui_dark());                            /* every screen again, in the new colour */
 }
 
 /**
@@ -70,7 +70,7 @@ static void accent_dd_cb(lv_event_t *e)
 static void cvd_sw_cb(lv_event_t *e)
 {
     store_set_cvd(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
-    apply_theme(ui_dark());                            /* every screen again, in the new colours */
+    apply_theme(is_ui_dark());                            /* every screen again, in the new colours */
 }
 
 /**
@@ -98,7 +98,7 @@ static void bright_sl_cb(lv_event_t *e)
 {
     int v = lv_slider_get_value(st_bright_sl);
     int nb = store_night_brightness();
-    bsp_display_brightness_set(s_night && store_night_mode() && nb < v ? nb : v);   /* (at night: at most that) */
+    bsp_display_brightness_set(s_night && is_store_night_mode() && nb < v ? nb : v);   /* (at night: at most that) */
     lv_label_set_text_fmt(st_bright_lbl, "%d%%", v);
     if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
         store_set_brightness((uint8_t)v);
@@ -140,7 +140,7 @@ void night_check(lv_timer_t *t)
     static int waited;
     bool want = false;
     time_t now = time(NULL);
-    if (store_night_mode() && now > 1700000000) {   /* (needs the clock: Wi-Fi) */
+    if (is_store_night_mode() && now > 1700000000) {   /* (needs the clock: Wi-Fi) */
         struct tm tm;
         localtime_r(&now, &tm);
         int h = tm.tm_hour, a = store_night_start(), b = store_night_end();
@@ -159,8 +159,8 @@ void night_check(lv_timer_t *t)
     }
     waited = 0;
     s_night = want;
-    bool dark = want || store_dark_mode();
-    if (dark != ui_dark()) {
+    bool dark = want || is_store_dark_mode();
+    if (dark != is_ui_dark()) {
         apply_theme(dark);
     }
     if (!ui_saver()) {
@@ -212,16 +212,16 @@ void settings_tab_display(lv_obj_t *pane)
     lv_obj_t *col = pane;
 
     lv_obj_t *r = settings_row(col, "Dark mode", "Light text on a dark background");
-    st_theme_sw = settings_switch(r, ui_dark(), theme_sw_cb);
+    st_theme_sw = settings_switch(r, is_ui_dark(), theme_sw_cb);
 
     r = settings_row(col, "Accent colour", "Buttons, the selected cell and your digits");
     settings_dropdown(r, ACCENT_NAMES, store_accent(), 150, accent_dd_cb);
 
     r = settings_row(col, "Colour-blind friendly", "Orange-red and blue-green in place of red and green");
-    settings_switch(r, store_cvd(), cvd_sw_cb);
+    settings_switch(r, is_store_cvd(), cvd_sw_cb);
 
     r = settings_row(col, "Digit size", "The board's digits and pencil marks");
-    settings_dropdown(r, "Normal\nLarge", store_big_digits() ? 1 : 0, 150, big_digits_dd_cb);
+    settings_dropdown(r, "Normal\nLarge", is_store_big_digits() ? 1 : 0, 150, big_digits_dd_cb);
 
     r = settings_row(col, "Brightness", "Screen backlight");
     st_bright_sl = settings_slider(r, 10, 100, store_brightness(), bright_sl_cb, &st_bright_lbl);
@@ -245,10 +245,10 @@ void settings_tab_display(lv_obj_t *pane)
     lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
 
     r = settings_row(col, "Screen-saver clock", "A dim clock for 10 min before the screen goes dark");
-    settings_switch(r, store_saver_clock(), saver_clock_sw_cb);
+    settings_switch(r, is_store_saver_clock(), saver_clock_sw_cb);
 
     r = settings_row(col, "Night mode", "Dark and dimmer at night (needs the clock: Wi-Fi)");
-    settings_switch(r, store_night_mode(), night_sw_cb);
+    settings_switch(r, is_store_night_mode(), night_sw_cb);
 
     static char hours[24 * 6];                      /* "00:00\n01:00\n...23:00" */
     if (!hours[0]) {
@@ -279,7 +279,7 @@ void night_forget(void)
 /** @return the Screen off choices, in minutes (0 = never) */
 const uint8_t *sleep_minutes(void) { return SLEEP_MIN; }
 /** @return the night look is on now */
-bool ui_night(void) { return s_night; }
+bool is_ui_night(void) { return s_night; }
 /** @return the screen timeout in minutes (0 = never) */
 uint8_t ui_sleep_min(void) { return s_sleep_min; }
 /** @brief Sets the screen timeout in minutes (0 = never). @param v  the value */

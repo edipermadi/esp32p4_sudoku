@@ -258,17 +258,17 @@ bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len);
 
 /* Kropki, XV, Greater-Than: may a (the left / top cell) and b (its neighbour) stand
  * with that mark between them? */
-bool sudoku_edge_ok(int kind, int mark, int a, int b);
+bool is_sudoku_edge_ok(int kind, int mark, int a, int b);
 /* Quadruple: how many of circle q's digits the filled cells of vals still miss
  * (*empty: its empty cells) */
 int sudoku_quad_missing(const sudoku_geom_t *g, int q, const uint8_t vals[81], int *empty);
 
-static inline bool sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
+static inline bool is_sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 {
     return (g->peer_bits[a][b >> 5] >> (b & 31)) & 1u;
 }
 
-static inline bool sudoku_geom_on_diag(const sudoku_geom_t *g, int cell)
+static inline bool is_sudoku_geom_on_diag(const sudoku_geom_t *g, int cell)
 {
     int r = cell / 9, c = cell % 9;
     return g->diag && (r == c || r + c == g->n - 1);
@@ -285,7 +285,7 @@ static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
 }
 
 /* on the Asterisk (9x9: rows and columns 1, 2, 4, 6, 7 around the centre) */
-static inline bool sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
+static inline bool is_sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
 {
     if (g->variant != VAR_ASTERISK) {
         return false;
@@ -307,9 +307,9 @@ static inline bool sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
 }
 
 /* the cells drawn tinted: X diagonals, Hyper windows, the Asterisk */
-static inline bool sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
+static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 {
-    return sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || sudoku_geom_on_asterisk(g, cell);
+    return is_sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || is_sudoku_geom_on_asterisk(g, cell);
 }
 
 /* ---------------------------------------------------------------- generating */
@@ -336,16 +336,16 @@ int sudoku_grade(const sudoku_geom_t *g, const uint8_t givens[81]);
 int sudoku_count_solutions(const sudoku_geom_t *g, const uint8_t cells[81], int limit);
 /* A classic puzzle has exactly one solution (its own scratch: for the
  * database task, which checks imported puzzles while the generator may run). */
-bool sudoku_classic_unique(const uint8_t cells[81]);
-/* The same on any board (its own work space, like sudoku_classic_unique: for the
+bool is_sudoku_classic_unique(const uint8_t cells[81]);
+/* The same on any board (its own work space, like is_sudoku_classic_unique: for the
  * database task's import, alongside the UI's own solving); gives up (false) on a
  * puzzle that takes too long. */
-bool sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
+bool is_sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
 
 /* Digit d may go in the empty cell by every rule of the board, as far as the digits in vals
  * (filled, 0 = empty) tell: no solving ahead, just the rules against what's there (the
  * variant pages' worked examples, tools/variant_examples.c). */
-bool sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
+bool is_sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
 /* The same, and which rule says no: FIT_OK (it fits), or the first rule that rules d out */
 enum { FIT_OK = 0, FIT_FILLED, FIT_BROKEN, FIT_UNIT, FIT_XPEER, FIT_ALLOW, FIT_CONSEC, FIT_EDGE, FIT_QUAD,
        FIT_SANDWICH_ROW, FIT_SANDWICH_COL, FIT_THERMO, FIT_CAGE, FIT_SKY_ROW, FIT_SKY_COL, FIT_LK

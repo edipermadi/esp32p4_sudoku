@@ -60,11 +60,11 @@ void settings_tab_sound(lv_obj_t *pane)
     lv_obj_t *col = pane;
     lv_obj_t *r;
     r = settings_row(col, "Sound effects", "Taps, mistakes, finished digits, solved");
-    st_sound_sw = settings_switch(r, sfx_enabled(), sound_sw_cb);
+    st_sound_sw = settings_switch(r, is_sfx_enabled(), sound_sw_cb);
 
     r = settings_row(col, "Volume", "Speaker loudness");
     st_vol_sl = settings_slider(r, 0, 100, store_volume(), vol_sl_cb, &st_vol_lbl);
 
     r = settings_row(col, "Gibberlink", "Remote control by sound (ggwave): the mics listen");
-    settings_switch(r, store_gibberlink(), gibberlink_sw_cb);
+    settings_switch(r, is_store_gibberlink(), gibberlink_sw_cb);
 }

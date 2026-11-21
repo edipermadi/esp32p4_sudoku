@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: Trophies: achievements, leaderboards, records. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: Trophies: achievements, leaderboards, records. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -411,7 +411,7 @@ static void render_records(const stats_records_t *R)
 /* asks sudoku.db for what the open tab shows */
 void tr_ask(void)
 {
-    if (!stats_db_ready()) {
+    if (!is_stats_db_ready()) {
         tr_hint(tr_rec_list, "Records are worked out from the solves in sudoku.db: insert a FAT32 microSD card "
                 "before switching on.");
         tr_hint(tr_week_list, "The weekly challenge needs sudoku.db on a microSD card.");
@@ -694,7 +694,7 @@ void trophy_toast_poll(void)
     snprintf(s_toast_text, sizeof(s_toast_text), "%s unlocked:\n%s", n == 1 ? "Achievement" : "Achievements", titles);
     lv_timer_t *t = lv_timer_create(trophy_toast_cb, 1200, NULL);   /* after the fanfare starts */
     lv_timer_set_repeat_count(t, 1);
-    if (h_trophy_sub && stats_db_ready()) {
+    if (h_trophy_sub && is_stats_db_ready()) {
         stats_db_query_achievements();    /* the home line */
     }
 }

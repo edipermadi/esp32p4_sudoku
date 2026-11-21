@@ -310,7 +310,7 @@ void store_set_last_collection(uint8_t c)
     stats_db_set_text("last_level", puzzle_collection(c)->name);
 }
 
-bool store_dark_mode(void)
+bool is_store_dark_mode(void)
 {
     return s_p.dark_mode;
 }
@@ -321,7 +321,7 @@ void store_set_dark_mode(bool dark)
     stats_db_set_int("dark_mode", dark);
 }
 
-bool store_sound_enabled(void)
+bool is_store_sound_enabled(void)
 {
     return s_p.sound;
 }
@@ -376,7 +376,7 @@ void store_set_assist(uint8_t assist)
     stats_db_set_int("assist", assist);
 }
 
-bool store_show_timer(void)
+bool is_store_show_timer(void)
 {
     return s_p.show_timer;
 }
@@ -423,7 +423,7 @@ void store_set_lock_pin(const char *pin)
     stats_db_set_text("lock_pin", s_p.lock_pin);
 }
 
-bool store_saver_clock(void)
+bool is_store_saver_clock(void)
 {
     return s_p.saver_clock;
 }
@@ -434,7 +434,7 @@ void store_set_saver_clock(bool on)
     stats_db_set_int("saver_clock", on);
 }
 
-bool store_cvd(void)
+bool is_store_cvd(void)
 {
     return s_p.cvd;
 }
@@ -445,7 +445,7 @@ void store_set_cvd(bool on)
     stats_db_set_int("cvd", on);
 }
 
-bool store_no_notes(void)
+bool is_store_no_notes(void)
 {
     return s_p.no_notes;
 }
@@ -456,7 +456,7 @@ void store_set_no_notes(bool on)
     stats_db_set_int("no_notes", on);
 }
 
-bool store_left_hand(void)
+bool is_store_left_hand(void)
 {
     return s_p.left_hand;
 }
@@ -467,7 +467,7 @@ void store_set_left_hand(bool on)
     stats_db_set_int("left_hand", on);
 }
 
-bool store_gibberlink(void)
+bool is_store_gibberlink(void)
 {
     return s_p.gibberlink;
 }
@@ -478,7 +478,7 @@ void store_set_gibberlink(bool on)
     stats_db_set_int("gibberlink", on);
 }
 
-bool store_hint_nudge(void)
+bool is_store_hint_nudge(void)
 {
     return s_p.hint_nudge;
 }
@@ -489,7 +489,7 @@ void store_set_hint_nudge(bool on)
     stats_db_set_int("hint_nudge", on);
 }
 
-bool store_big_digits(void)
+bool is_store_big_digits(void)
 {
     return s_p.big_digits;
 }
@@ -500,7 +500,7 @@ void store_set_big_digits(bool on)
     stats_db_set_int("big_digits", on);
 }
 
-bool store_night_mode(void)
+bool is_store_night_mode(void)
 {
     return s_p.night_mode;
 }

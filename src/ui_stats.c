@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: Statistics and the progress chart. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: Statistics and the progress chart. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -143,7 +143,7 @@ void stats_player_dd_update(void)
         return;
     }
     static char opts[STATS_MAX_PLAYERS * STORE_NAME_LEN];
-    bool db = stats_db_ready() && players_count() > 0;
+    bool db = is_stats_db_ready() && players_count() > 0;
     int sel = 0;
     opts[0] = 0;
     if (db) {
@@ -184,7 +184,7 @@ void stats_player_dd_update(void)
  * dropdown's own: the selected line's highlight is drawn then too, and would cover children). */
 static void stats_player_list_draw_cb(lv_event_t *e)
 {
-    if (!(stats_db_ready() && players_count() > 0)) {
+    if (!(is_stats_db_ready() && players_count() > 0)) {
         return;
     }
     lv_obj_t *pdl = lv_event_get_current_target_obj(e);
@@ -564,7 +564,7 @@ static void stats_info_cb(lv_event_t *e)
 void refresh_stats(void)
 {
     stats_select_rows();
-    if (stats_db_ready()) {
+    if (is_stats_db_ready()) {
         stats_db_query(x_sel - 1);
     } else {
         view_from_ram(x_sel - 1, &(*x_view_p));

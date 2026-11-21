@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: palette, layout, widgets and helpers, the generated-puzzle cache, context menus. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: palette, layout, widgets and helpers, the generated-puzzle cache, context menus. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -9,7 +9,7 @@ static void ctx_backdrop_cb(lv_event_t *e);
 static void ctx_item_cb(lv_event_t *e);
 
 /* ------------------------------------------------------------- palette */
-/* palette_t and the C_* colour macros are in ui_palette.h (shared with wifi_ui.c) */
+/* palette_t and the C_* colour macros are in ui_palette.h (shared with ui_wifi.c) */
 static const palette_t PAL_DARK = {
     .bg = 0x101218, .card = 0x1B1E27, .card2 = 0x2A2F3D, .text = 0xEDEFF4, .muted = 0x8B92A5,
     .accent = 0x4F8CFF, .green = 0x3DD68C, .orange = 0xFFA94D, .red = 0xFF6B6B,
@@ -40,7 +40,7 @@ static const uint32_t ACCENTS[ACCENT_COUNT][2] = {
 int effective_brightness(void)
 {
     int b = store_brightness();
-    if (ui_night() && store_night_brightness() < b) {
+    if (is_ui_night() && store_night_brightness() < b) {
         b = store_night_brightness();
     }
     return b;
@@ -68,7 +68,7 @@ void palette_build(bool dark, int accent)
         s_pal.cell_peer = mix_hex(a, s_pal.cell, dark ? 8 : 10);
         s_pal.digit_user = dark ? mix_hex(a, 0xFFFFFF, 75) : a;
     }
-    if (store_cvd()) {
+    if (is_store_cvd()) {
         /* Colour-blind friendly (Settings > Display): the Okabe-Ito colours. Red and green
          * look alike to most colour-blind people; vermillion (mistakes), bluish green (solved,
          * complete) and yellow-orange (in progress) stay apart, and apart from the blues,
@@ -493,12 +493,12 @@ int coll_of(uint16_t id)
 
 void imports_reload(void)
 {
-    int n = stats_db_ready() ? stats_db_list_imports(s_imports) : -1;
+    int n = is_stats_db_ready() ? stats_db_list_imports(s_imports) : -1;
     s_nimports = n < 0 ? 0 : n;
     if (!s_saved) {
         s_saved = heap_caps_calloc(STATS_MAX_SAVED, sizeof(stats_saved_t), MALLOC_CAP_SPIRAM);
     }
-    int m = s_saved && stats_db_ready() ? stats_db_list_saved(s_saved) : -1;
+    int m = s_saved && is_stats_db_ready() ? stats_db_list_saved(s_saved) : -1;
     ui_set_nsaved(m < 0 ? 0 : m);
 }
 

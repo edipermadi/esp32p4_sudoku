@@ -12,7 +12,7 @@
  * - the dark screen while the flash is written (sudoku_ui_flash_busy() and friends);
  * - the screens' registry (screen_home() and the other accessors).
  *
- * Each tab is a file of its own (see ui_settings.h). Part of the sudoku_ui.c split.
+ * Each tab is a file of its own (see ui_settings.h). Part of the ui_sudoku.c split.
  */
 #include "ui_settings.h"
 
@@ -277,8 +277,8 @@ void apply_loaded_prefs(void)
 {
     game_set_id(STORE_NO_GAME);
     players_set_count(-1);
-    sfx_set_enabled(store_sound_enabled());
-    gibberlink_set_enabled(store_gibberlink());
+    sfx_set_enabled(is_store_sound_enabled());
+    gibberlink_set_enabled(is_store_gibberlink());
     bsp_audio_set_volume(store_volume());
     bsp_display_brightness_set(effective_brightness());
     tz_apply(store_timezone());
@@ -286,7 +286,7 @@ void apply_loaded_prefs(void)
     list_set_coll(store_last_collection());
     list_set_tab(coll_tab(list_coll()));
     night_forget();                                    /* (re-checked just below, from these settings) */
-    apply_theme(store_dark_mode());                    /* redraws every screen with it */
+    apply_theme(is_store_dark_mode());                    /* redraws every screen with it */
     night_check(NULL);
     if (u_reload_home) {
         u_reload_home = false;
@@ -455,7 +455,7 @@ void build_settings(void)
 }
 
 /**
- * @brief Builds the Wi-Fi screen (wifi_ui.c).
+ * @brief Builds the Wi-Fi screen (ui_wifi.c).
  */
 void build_wifi(void)
 {
@@ -464,7 +464,7 @@ void build_wifi(void)
 }
 
 /**
- * @brief Builds the system monitor screen (sysmon_ui.c).
+ * @brief Builds the system monitor screen (ui_sysmon.c).
  */
 void build_sysmon(void)
 {
@@ -473,7 +473,7 @@ void build_sysmon(void)
 }
 
 /**
- * @brief Builds the file browser screen (file_ui.c).
+ * @brief Builds the file browser screen (ui_file.c).
  */
 void build_files(void)
 {
@@ -537,8 +537,8 @@ void apply_theme(bool dark)
     build_plays();
     build_trophies();
     if (game_id() != STORE_NO_GAME) {
-        lv_obj_set_state(game_notes_btn(), LV_STATE_CHECKED, game_notes_mode());
-        lv_obj_set_hidden(game_pause_ovl(), !game_paused());
+        lv_obj_set_state(game_notes_btn(), LV_STATE_CHECKED, is_game_notes_mode());
+        lv_obj_set_hidden(game_pause_ovl(), !is_game_paused());
         compute_conflicts();
         refresh_board();
         update_header();
@@ -607,7 +607,7 @@ void apply_theme(bool dark)
 
 /* ---- accessors: the other UI files reach this file's state through these */
 /** @return the dark look is on (dark mode, or night mode now) */
-bool ui_dark(void) { return s_dark; }
+bool is_ui_dark(void) { return s_dark; }
 /** @return the Home screen */
 lv_obj_t *screen_home(void) { return scr_home; }
 /** @brief Sets the Home screen. @param v  the value */

@@ -23,7 +23,7 @@ static uint8_t s_mask_sum[1024];
  * (s_edge_bwd) */
 static uint16_t s_edge_fwd[4][3][10], s_edge_bwd[4][3][10];
 
-bool sudoku_edge_ok(int kind, int mark, int a, int b)
+bool is_sudoku_edge_ok(int kind, int mark, int a, int b)
 {
     switch (kind) {
     case EDGE_KROPKI: {
@@ -46,10 +46,10 @@ static void edge_tables(void)
             for (int a = 1; a <= 9; a++) {
                 uint16_t f = 0, b = 0;
                 for (int o = 1; o <= 9; o++) {
-                    if (sudoku_edge_ok(k, m, a, o)) {
+                    if (is_sudoku_edge_ok(k, m, a, o)) {
                         f |= (uint16_t)(1u << o);
                     }
-                    if (sudoku_edge_ok(k, m, o, a)) {
+                    if (is_sudoku_edge_ok(k, m, o, a)) {
                         b |= (uint16_t)(1u << o);
                     }
                 }
@@ -278,7 +278,7 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
         if (variant == VAR_DISJOINT) {
             ids[nid++] = UNIT_GROUP + (r % 3) * 3 + c % 3;
         }
-        if (sudoku_geom_on_asterisk(g, cell)) {
+        if (is_sudoku_geom_on_asterisk(g, cell)) {
             ids[nid++] = UNIT_ASTERISK;
         }
         for (int i = 0; i < nid; i++) {
@@ -312,7 +312,7 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
             }
             for (int j = 0; j < n; j++) {
                 int o = g->unit[u][j];
-                if (o == cell || sudoku_geom_peer(g, cell, o)) {
+                if (o == cell || is_sudoku_geom_peer(g, cell, o)) {
                     continue;
                 }
                 g->peer_bits[cell][o >> 5] |= 1u << (o & 31);
@@ -358,7 +358,7 @@ void sudoku_geom_init(void)
                     continue;
                 }
                 int o = r * 9 + q;
-                if (sudoku_geom_peer(k, c, o)) {
+                if (is_sudoku_geom_peer(k, c, o)) {
                     continue;    /* (Anti-King: only the diagonal ones are new) */
                 }
                 k->xpeers[c][k->nxpeers[c]++] = (uint8_t)o;
@@ -1033,7 +1033,7 @@ static bool geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncag
         for (int i = 0; i < n; i++) {                /* cage-mates are peers */
             for (int j = 0; j < n; j++) {
                 int a = out->cage_cell[k][i], b = out->cage_cell[k][j];
-                if (a == b || sudoku_geom_peer(out, a, b)) {
+                if (a == b || is_sudoku_geom_peer(out, a, b)) {
                     continue;
                 }
                 out->peer_bits[a][b >> 5] |= 1u << (b & 31);
@@ -1137,7 +1137,7 @@ static int cell_units(const sudoku_geom_t *G, int cell, int out[5])
     return n;
 }
 
-static bool in_unit(const sudoku_geom_t *G, int cell, int u)
+static bool is_in_unit(const sudoku_geom_t *G, int cell, int u)
 {
     int us[5], n = cell_units(G, cell, us);
     for (int i = 0; i < n; i++) {
@@ -1226,7 +1226,7 @@ static void mask_k_range(uint16_t mask, int k, int *lo, int *hi)
 }
 
 /* Skyscraper: the line's 9 digits (0 = empty, in order from the clue) can still show c buildings */
-static bool sky_line_ok(const uint8_t x[9], int c)
+static bool is_sky_line_ok(const uint8_t x[9], int c)
 {
     int seen = 0, top = 0, k = 0;
     for (; k < 9 && x[k]; k++) {
@@ -1329,7 +1329,7 @@ static uint16_t grid_free(const grid_t *g, int i)
                 continue;
             }
             x[at] = (uint8_t)d;
-            if (!sky_line_ok(x, c)) {
+            if (!is_sky_line_ok(x, c)) {
                 free &= (uint16_t)~(1u << d);
             }
         }
@@ -1570,7 +1570,7 @@ int sudoku_count_solutions(const sudoku_geom_t *G, const uint8_t cells[81], int 
     return count_bounded(G, cells, limit, 0);
 }
 
-bool sudoku_classic_unique(const uint8_t cells[81])
+bool is_sudoku_classic_unique(const uint8_t cells[81])
 {
     static grid_t g;                                 /* its own: another task than the generator's */
     if (!grid_load(&g, sudoku_geom(VAR_CLASSIC), cells)) {
@@ -1580,7 +1580,7 @@ bool sudoku_classic_unique(const uint8_t cells[81])
     return search(&g, 2, NULL) == 1 && !g.aborted;
 }
 
-bool sudoku_unique(const sudoku_geom_t *G, const uint8_t cells[81])
+bool is_sudoku_unique(const sudoku_geom_t *G, const uint8_t cells[81])
 {
     static grid_t g;                                 /* its own (the import's task) */
     if (!grid_load(&g, G, cells)) {
@@ -1622,7 +1622,7 @@ int sudoku_fits_why(const sudoku_geom_t *G, const uint8_t vals[81], int cell, in
     return w.code;
 }
 
-bool sudoku_fits(const sudoku_geom_t *G, const uint8_t vals[81], int cell, int d)
+bool is_sudoku_fits(const sudoku_geom_t *G, const uint8_t vals[81], int cell, int d)
 {
     static grid_t g;
     if (cell < 0 || cell > 80 || vals[cell] || d < 1 || d > G->n || !grid_load(&g, G, vals)) {
@@ -2010,7 +2010,7 @@ static bool sky_logic(logic_t *L)
             for (int j = 0; j < ne; j++) {
                 x[emp[j]] = (uint8_t)miss[idx[j]];
             }
-            if (sky_line_ok(x, c)) {
+            if (is_sky_line_ok(x, c)) {
                 for (int j = 0; j < ne; j++) {
                     ok[j] |= (uint16_t)(1u << miss[idx[j]]);
                 }
@@ -2221,7 +2221,7 @@ static bool locked_candidates(logic_t *L)
                     if (!(L->cand[c] & m)) {
                         continue;
                     }
-                    if (in_unit(G, c, other)) {
+                    if (is_in_unit(G, c, other)) {
                         in_both++;
                     } else {
                         box_only++;
@@ -2235,14 +2235,14 @@ static bool locked_candidates(logic_t *L)
                     if (!(L->cand[c] & m)) {
                         continue;
                     }
-                    if (!in_unit(G, c, b)) {
+                    if (!is_in_unit(G, c, b)) {
                         line_only++;
                     }
                 }
                 if (!box_only && line_only) {                 /* pointing: clear the rest of the line */
                     for (int k = 0; k < G->n; k++) {
                         int c = G->unit[other][k];
-                        if (!in_unit(G, c, b)) {
+                        if (!is_in_unit(G, c, b)) {
                             changed |= eliminate(L, c, m);
                         }
                     }
@@ -2252,7 +2252,7 @@ static bool locked_candidates(logic_t *L)
                 } else if (!line_only && box_only) {          /* claiming: clear the rest of the box */
                     for (int k = 0; k < G->n; k++) {
                         int c = G->unit[b][k];
-                        if (!in_unit(G, c, other)) {
+                        if (!is_in_unit(G, c, other)) {
                             changed |= eliminate(L, c, m);
                         }
                     }
@@ -2492,7 +2492,7 @@ static bool xy_wing(logic_t *L)
                     if (c == a || c == b || c == p) {
                         continue;
                     }
-                    if (sudoku_geom_peer(G, c, a) && sudoku_geom_peer(G, c, b)) {
+                    if (is_sudoku_geom_peer(G, c, a) && is_sudoku_geom_peer(G, c, b)) {
                         changed |= eliminate(L, c, z);
                     }
                 }
@@ -2696,7 +2696,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
 /* ---------------------------------------------------------------- Jigsaw regions */
 
 /* is region `reg` of the map one connected piece (4-neighbours)? */
-static bool region_connected(const uint8_t map[81], int reg)
+static bool is_region_connected(const uint8_t map[81], int reg)
 {
     uint8_t seen[81] = {0}, stack[81];
     int sp = 0, start = -1, total = 0, reached = 0;
@@ -2769,7 +2769,7 @@ static void jigsaw_map(uint8_t map[81], uint32_t *rng)
         int c = cand[rnd(rng) % (uint32_t)nc];
         map[a] = (uint8_t)B;
         map[c] = (uint8_t)A;
-        if (region_connected(map, A) && region_connected(map, B)) {
+        if (is_region_connected(map, A) && is_region_connected(map, B)) {
             done++;
         } else {
             map[a] = (uint8_t)A;

@@ -25,7 +25,7 @@ npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 52 --font $FONT \
 
 ## Changing the colours
 
-Both colour schemes are tables at the top of `src/sudoku_ui.c`: `PAL_DARK` and `PAL_LIGHT`. They set the background, text, grid lines and each cell highlight state.
+Both colour schemes are tables at the top of `src/ui_sudoku.c`: `PAL_DARK` and `PAL_LIGHT`. They set the background, text, grid lines and each cell highlight state.
 
 ## Tuning the sounds
 
@@ -95,7 +95,7 @@ Most take well under a second. The slow ones (seconds) are the variants whose ru
 
 ## The UI files
 
-The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `sudoku_ui.c` for start-up and the public functions. A function stays `static` in its file unless another file calls it; then it is declared once in `src/ui_internal.h` and defined, without `static`, in its file. Macros and types are all in `ui_internal.h`. When a new screen needs a function from another file, move its declaration there rather than copying it.
+The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `ui_sudoku.c` for start-up and the public functions. A function stays `static` in its file unless another file calls it; then it is declared once in `src/ui_internal.h` and defined, without `static`, in its file. Macros and types are all in `ui_internal.h`. When a new screen needs a function from another file, move its declaration there rather than copying it.
 
 Variables are always `static`: only the file that owns one touches it, and the other files call that file's accessors, declared in `ui_internal.h` under each owner. The game's state (`g_*`) belongs to `ui_game.c`, so `ui_hints.c` reads `game_sel()` and writes `game_set_sel(i)`; a screen's widget is `screen_home()`. An accessor of an array or a struct gives a `const` pointer (`game_given()[i]`, `game_b()->val[i]`), so the compiler rejects a write from another file. A change another file needs to make is a function in the owner (`game_put_value`, `players_take`, `stats_take_view`). Add an accessor only when another file needs it.
 
@@ -109,7 +109,7 @@ The P4's internal RAM (768 KB) is the tight resource; PSRAM (32 MB) is plenty. S
 
 ```
 esp32p4_sudoku.ino      setup/loop
-src/sudoku_ui.c         the UI's start-up and public functions (sudoku_ui.h), theme, notices, lock screen, screen saver
+src/ui_sudoku.c         the UI's start-up and public functions (ui_sudoku.h), theme, notices, lock screen, screen saver
 src/ui_internal.h       what the UI files share: includes, macros, types, and the functions and variables used by more than one
 src/ui_common.c         palette, widgets and helpers, the generated-puzzle cache, context menus
 src/ui_game.c           the game: rules check, saving, the board, confetti, input, building its screen
@@ -142,13 +142,14 @@ src/stats_db.c          sudoku.db on the microSD card: statistics, saved game, s
 src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
-src/wifi_ui.c           Wi-Fi screen: networks, password keyboard
-src/file_ui.c           Files screen: browse, rename and delete on the card; sudoku.db protected; puzzle file preview + Import
+src/ui_wifi.c           Wi-Fi screen: networks, password keyboard
+src/ui_file.c           Files screen: browse, rename and delete on the card; sudoku.db protected; puzzle file preview + Import
 src/gibberlink.cpp      remote control by sound: ES7210 mics -> ggwave -> devctl commands, replies by sound
 src/ggwave/             ggwave 060aec7 (MIT), data over sound, vendored unchanged
-src/media_view.c        the Files viewer: JPEG (hardware decoder), MP4 (tinyh264), full screen
+src/ui_media_view.c        the Files viewer: JPEG (hardware decoder), MP4 (tinyh264), full screen
 src/mp4_reader.c        MP4 index reader for the viewer: frame offsets, times, key frames, SPS/PPS
-src/sysmon_ui.c         system monitor screen: heap, flash, microSD, temperature, tasks, LVGL
+src/ui_sysmon.c         system monitor screen: heap, flash, microSD, temperature, tasks, LVGL
+src/sysmon_core.c       the system monitor's numbers, without LVGL: CPU load, temperature, memory, storage, the task list, the last hour
 src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task

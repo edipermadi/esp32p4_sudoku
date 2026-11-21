@@ -26,11 +26,11 @@
  *   - settings: dark mode, sound effects, screen timeout, Wi-Fi, time zone,
  *     formatting the microSD card (FAT32, one partition), and lending it to a
  *     computer as a USB drive (to back up or restore sudoku.db).
- *   - wifi: on/off, nearby networks, password keyboard (wifi_ui.c).
+ *   - wifi: on/off, nearby networks, password keyboard (ui_wifi.c).
  *   - system monitor: heap, flash, microSD, CPU temperature and load, LVGL
- *     stats and the task list (sysmon_ui.c; Settings > Data).
+ *     stats and the task list (ui_sysmon.c; Settings > Data).
  *   - files: the microSD card's folders and files, rename and delete; the
- *     database is protected (file_ui.c; Settings > Data).
+ *     database is protected (ui_file.c; Settings > Data).
  *
  * Clock: with Wi-Fi connected the time comes from NTP (wifi_mgr.cpp starts
  * SNTP) and the home screen shows it in the chosen time zone.
@@ -109,16 +109,16 @@ const char *sudoku_ui_io_busy(void)
     if (why) {
         return why;
     }
-    if (replay_exporting()) {
+    if (is_replay_exporting()) {
         return "an MP4 video is being exported";
     }
-    if (screenshot_busy()) {
+    if (is_screenshot_busy()) {
         return "a screenshot is being saved";
     }
-    if (files_busy()) {
+    if (is_files_busy()) {
         return "Files is working on the card";
     }
-    if (stats_db_busy()) {
+    if (is_stats_db_busy()) {
         return "sudoku.db is busy (saving, an import, an export or a backup)";
     }
     return NULL;
@@ -539,7 +539,7 @@ static void saver_wake_cb(lv_event_t *e)
 
 static void saver_sleep(bool lock_now)
 {
-    if (lv_screen_active() == screen_game() && game_id() != STORE_NO_GAME && !game_solved() && !game_paused()) {
+    if (lv_screen_active() == screen_game() && game_id() != STORE_NO_GAME && !is_game_solved() && !is_game_paused()) {
         set_paused(true);   /* stops the clock, hides the board, saves the game */
     }
     lock_show(lock_now);                /* (if on) under the black cover: what the waking tap shows */
@@ -552,7 +552,7 @@ static void saver_sleep(bool lock_now)
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESS_LOST, NULL);
-    if (store_saver_clock() && !lock_now) {        /* dim clock first (not for "lock now") */
+    if (is_store_saver_clock() && !lock_now) {        /* dim clock first (not for "lock now") */
         sv_clock = lv_obj_create(s_saver);
         lv_obj_remove_style_all(sv_clock);
         lv_obj_set_size(sv_clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -578,8 +578,8 @@ int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why
         snprintf(why, why_n, "no game on screen");
         return -1;
     }
-    if (game_solved() || game_paused()) {
-        snprintf(why, why_n, game_solved() ? "already solved" : "paused");
+    if (is_game_solved() || is_game_paused()) {
+        snprintf(why, why_n, is_game_solved() ? "already solved" : "paused");
         return -1;
     }
     for (int k = 0; k < n; k++) {                   /* all of them first */
@@ -597,10 +597,10 @@ int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why
             return -1;
         }
     }
-    bool notes = game_notes_mode();
+    bool notes = is_game_notes_mode();
     game_set_notes_mode(false);                           /* digits, not notes */
     int placed = 0;
-    for (int k = 0; k < n && !game_solved(); k++) {
+    for (int k = 0; k < n && !is_game_solved(); k++) {
         if (game_b()->val[cells[k]] == digits[k]) {
             continue;    /* (a second tap would clear it) */
         }
@@ -609,7 +609,7 @@ int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why
         placed++;
     }
     game_set_notes_mode(notes);
-    if (!game_solved()) {
+    if (!is_game_solved()) {
         game_set_sel(-1);
         refresh_board();
     }
@@ -676,10 +676,10 @@ bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82])
         }
     }
     board[81] = 0;
-    st->solved = game_solved();
-    st->paused = game_paused();
+    st->solved = is_game_solved();
+    st->paused = is_game_paused();
     st->practice = game_practice() >= 0;
-    st->attack = game_attack();
+    st->attack = is_game_attack();
     st->seconds = (game_elapsed_ms() + 500) / 1000;
     st->mistakes = game_mistakes();
     st->hints = game_hints();
@@ -752,7 +752,7 @@ esp_err_t sudoku_ui_start(void)
      * comes first. Card setup also has to happen before Wi-Fi starts (they
      * share the SDMMC host, see the microSD section). */
     sd_probe_card();
-    if (sd_present()) {
+    if (is_sd_present()) {
         char sz[24];
         fmt_gb(sz, sizeof(sz), sd_bytes());
         printf("microSD: \"%s\", %s\n", sd_name(), sz);
@@ -772,13 +772,13 @@ esp_err_t sudoku_ui_start(void)
     } else {
         printf("microSD: no card\n");
     }
-    if (sd_present() && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
+    if (is_sd_present() && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
         printf("usb_msc: USB didn't start\n");
     }
     wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
 
-    sfx_set_enabled(store_sound_enabled());
-    gibberlink_set_enabled(store_gibberlink());
+    sfx_set_enabled(is_store_sound_enabled());
+    gibberlink_set_enabled(is_store_gibberlink());
     bsp_audio_set_volume(store_volume());
     bsp_display_brightness_set(effective_brightness());
     for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in)) {
@@ -788,7 +788,7 @@ esp_err_t sudoku_ui_start(void)
     list_set_coll(store_last_collection());
     list_set_tab(coll_tab(list_coll()));
     ui_set_sleep_min(store_screen_timeout_min());
-    apply_theme(store_dark_mode());
+    apply_theme(is_store_dark_mode());
     lv_obj_delete(splash);
 
     game_set_last_tick(lv_tick_get());

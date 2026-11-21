@@ -1,4 +1,4 @@
-/* sudoku_ui.c split: the name dialog, Players, avatars. See sudoku_ui.c for the whole. */
+/* ui_sudoku.c split: the name dialog, Players, avatars. See ui_sudoku.c for the whole. */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
@@ -172,7 +172,7 @@ static void player_row_cb(lv_event_t *e)
 
 static void player_rename_cb(lv_event_t *e)
 {
-    if (stats_db_ready()) {
+    if (is_stats_db_ready()) {
         nd_open(store_player_id(), store_player_name());    /* who plays now */
     }
 }
@@ -219,7 +219,7 @@ static void player_delete_cb(lv_event_t *e)
 
 static void player_add_cb(lv_event_t *e)
 {
-    if (stats_db_ready()) {
+    if (is_stats_db_ready()) {
         nd_open(0, NULL);
     }
 }
@@ -433,7 +433,7 @@ static void player_avatar_cb(lv_event_t *e)
  * the only one) */
 static void player_menu_cb(lv_event_t *e)
 {
-    bool db = stats_db_ready() && p_count >= 0;
+    bool db = is_stats_db_ready() && p_count >= 0;
     const ctx_item_t items[] = {
         {LV_SYMBOL_PLUS, "Add player", player_add_cb, !db},
         {LV_SYMBOL_EDIT, "Rename player", player_rename_cb, !db},
@@ -470,7 +470,7 @@ void render_players(void)
         return;
     }
     lv_obj_clean(p_list);
-    bool db = stats_db_ready() && p_count >= 0;
+    bool db = is_stats_db_ready() && p_count >= 0;
     int n = db ? p_count : 1;
     for (int i = 0; i < n; i++) {
         stats_player_t ram = {.id = store_player_id()};
@@ -522,7 +522,7 @@ void render_players(void)
                                   (unsigned long)pl->solves);
         lv_obj_align(sub, LV_ALIGN_LEFT_MID, 58, 16);
     }
-    lv_label_set_text(p_note, stats_db_ready()
+    lv_label_set_text(p_note, is_stats_db_ready()
                       ? "Statistics and the game in progress are kept per player in sudoku.db."
                       : "No sudoku.db: insert a FAT32 microSD card before switching on to keep players.");
 }

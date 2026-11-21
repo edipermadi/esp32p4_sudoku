@@ -10,10 +10,10 @@ extern "C" {
 
 /* Finds the avatars in flash (true), else they're blank (false). At start-up, before the UI. */
 bool avatars_init(void);
-bool avatars_ready(void);
+bool is_avatars_ready(void);
 
 /* The avatars aren't in flash and the card has a matching avatars.bin in its root (mounted). */
-bool avatars_installable(void);
+bool is_avatars_installable(void);
 /* Then: writes it into the partition in the background (about a minute), true when started.
  * (Writing the flash makes the panel flicker: the caller darkens the screen first.) */
 bool avatars_install(void);
