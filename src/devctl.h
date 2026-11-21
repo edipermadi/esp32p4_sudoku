@@ -22,6 +22,16 @@
  *                             "fill 12:5 13:7", "fill (12,5),(13,7)"); all or nothing
  *                             -> "OK fill <entered>" or "ERR fill: <why>"
  *   heap [1]                  -> "HEAP internal <free>, largest <n>, ...; dma ...; psram ..." (1: per region too)
+ *   genbench <variant|all> [level|all] [n]   the puzzle generator's time: n puzzles (default 5,
+ *                             at most 200) of each, fixed seeds, on the worker core, the CPU at
+ *                             full speed even while the screen is dark (power save) -> "GENBENCH CPU
+ *                             <MHz> MHz, ...", then a line each: "GENBENCH <variant> <level>: avg <ms>
+ *                             ms, min <ms>, max <ms>; on level <k>/<n>; <clues> clues"; "ERR genbench:
+ *                             ..." when the generator is busy (New puzzle, Learn), a puzzle is being
+ *                             solved (the game screen open, not solved), the microSD card is in use
+ *                             (an MP4 export, a screenshot, Files, a firmware update, formatting,
+ *                             the USB drive, sudoku.db's worker) or a name doesn't match.
+ *                             A full-screen "Benchmarking" panel blocks the screen while it runs
  *   shot                      the screen, as lines (below)
  *
  * Files on the microSD card (paths from its root, %XX for spaces):

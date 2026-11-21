@@ -59,6 +59,20 @@ bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n);
  * previous one (the bootloader's rollback). */
 void sudoku_ui_mark_ok(void);
 
+/* What's using the microSD card right now (an MP4 export, a screenshot, Files, a firmware update,
+ * formatting, the USB drive, sudoku.db's worker), as a few words; NULL when nothing is.
+ * (devctl genbench waits for none.) */
+const char *sudoku_ui_io_busy(void);
+
+/* A full-screen panel that blocks the screen (title "Benchmarking", text under it), or
+ * updates its text; NULL takes it away. (devctl genbench) */
+void sudoku_ui_busy(const char *text);
+
+/* devctl genbench: the puzzle generator to itself while it runs (false: New puzzle or Learn
+ * is using it; then nothing to end) */
+bool gen_bench_begin(void);
+void gen_bench_end(void);
+
 #ifdef __cplusplus
 }
 #endif

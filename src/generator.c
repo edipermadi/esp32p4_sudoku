@@ -273,6 +273,35 @@ bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
         }
     }
     out->consec_on = variant == VAR_CONSEC;
+    if (ek == EDGE_GT) {                            /* each cell's range from the chains of signs */
+        /* below[c]: the cells c is bigger than, through the signs (one box at a time) */
+        uint16_t below[81] = {0};                   /* (bits: the 9 cells of c's box, row by row) */
+        for (int c = 0; c < 81; c++) {
+            for (int k = 0; k < 2; k++) {
+                int o = k ? c + 9 : c + 1, m = k ? EDGE_DOWN(out->edge[c]) : EDGE_RIGHT(out->edge[c]);
+                if (!m || o > 80 || (!k && c % 9 == 8) || out->region[c] != out->region[o]) continue;
+                int bc = (c / 9 % 3) * 3 + c % 3, bo = (o / 9 % 3) * 3 + o % 3;   /* places in the box */
+                if (m == MARK_MORE) below[c] |= (uint16_t)(1u << bo);   /* c > o */
+                else below[o] |= (uint16_t)(1u << bc);                 /* o > c */
+            }
+        }
+        for (int round = 0; round < 9; round++) {   /* through the chains (9 cells: 8 steps at most) */
+            for (int c = 0; c < 81; c++) {
+                int top = c - (c / 9 % 3) * 9 - c % 3;  /* the box's top-left cell */
+                for (int p = 0; p < 9; p++) {
+                    if (below[c] >> p & 1) below[c] |= below[top + (p / 3) * 9 + p % 3];
+                }
+            }
+        }
+        for (int c = 0; c < 81; c++) {
+            int top = c - (c / 9 % 3) * 9 - c % 3, bc = (c / 9 % 3) * 3 + c % 3, above = 0;
+            for (int p = 0; p < 9; p++) above += below[top + (p / 3) * 9 + p % 3] >> bc & 1;
+            int lo = 1 + __builtin_popcount(below[c]), hi = 9 - above;
+            uint16_t m = 0;
+            for (int d = lo; d <= hi; d++) m |= (uint16_t)(1u << d);
+            out->allow[c] &= m;
+        }
+    }
     return true;
 }
 
@@ -608,6 +637,12 @@ static uint32_t rnd(uint32_t *s)        /* xorshift32 */
 
 /* ---------------------------------------------------------------- counting / filling */
 
+/* Called now and then from the long loops (each attempt, each clue tried, every 4096 search
+ * nodes). A no-op here (and on a PC); the firmware's own gives the idle task a turn, since a
+ * puzzle can take more than the task watchdog's 5 s (Greater-Than Expert did, on core 0). */
+__attribute__((weak)) void sudoku_gen_yield(void) {}
+static uint32_t s_yield_nodes;
+
 typedef struct {
     const sudoku_geom_t *G;
     uint8_t v[81];
@@ -792,6 +827,7 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
 static int search(grid_t *g, int limit, uint32_t *rng)
 {
     const sudoku_geom_t *G = g->G;
+    if (!(++s_yield_nodes & 4095)) sudoku_gen_yield();
     if (g->node_limit && ++g->nodes > g->node_limit) {   /* a Jigsaw layout that's hard to fill: give up */
         g->aborted = true;
         return limit;
@@ -1531,6 +1567,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
      * clue (near the minimum, the plain search can take thousands of times longer) */
     const uint32_t node_limit = G->variant == VAR_CLASSIC ? 0 : G->variant == VAR_JIGSAW ? 4000 : 6000;
     for (int k = 0; k < no && clues > stop; k++) {
+        sudoku_gen_yield();
         int a = order[k], b = (n - 1 - a / 9) * 9 + (n - 1 - a % 9);
         uint8_t va = out[a], vb = out[b];
         out[a] = out[b] = 0;
@@ -1538,8 +1575,12 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
          * solution, no count needed: Greater-Than's counting is slow. Only for these, so
          * the other variants' puzzles for a seed, the daily ones among them, stay the same.) */
         bool ok;
-        if ((G->edge_kind || G->nquads) && max_tier < 3) ok = technique_tier(G, out) <= max_tier;
-        else ok = count_bounded(G, out, 2, node_limit) == 1 && (max_tier == 3 || technique_tier(G, out) <= max_tier);
+        if (G->edge_kind || G->nquads) {            /* (Expert too: count only what the logic can't solve) */
+            int tier = technique_tier(G, out);
+            ok = tier <= max_tier && (tier < 3 || count_bounded(G, out, 2, node_limit) == 1);
+        } else {
+            ok = count_bounded(G, out, 2, node_limit) == 1 && (max_tier == 3 || technique_tier(G, out) <= max_tier);
+        }
         if (ok) {
             clues -= a == b ? 1 : 2;
         } else {
@@ -1755,6 +1796,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     int best = -1;
     memset(givens, 0, 81);
     for (int t = 0; t < tries; t++) {
+        sudoku_gen_yield();
         if (jigsaw) {                               /* a new shape every few tries */
             if (t % 4 == 0) {
                 jigsaw_map(map, &rng);

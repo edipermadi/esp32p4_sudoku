@@ -118,6 +118,8 @@ void stats_db_start(void);
  * and the game in progress (no statistics). Also call store_reset_stats(). */
 void stats_db_start_fresh(void);
 bool stats_db_ready(void);
+/* The worker is on a command, or has some waiting (a write, an import, an export, a backup ...) */
+bool stats_db_busy(void);
 /* Waits until the open started by stats_db_start() has finished (or failed). */
 bool stats_db_wait_open(uint32_t timeout_ms);
 /* After opening: the settings and saved game from sudoku.db, on top of

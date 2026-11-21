@@ -1168,3 +1168,6 @@ void file_ui_set_shown(bool shown)
         pv_close();
     }
 }
+
+/* Files is scanning a folder or deleting / restoring (devctl genbench waits for it) */
+bool files_busy(void) { return s_busy || s_job_busy; }

@@ -21,6 +21,10 @@ Commands (on the command line, or one per line in a script; # starts a comment):
                             all or nothing: a given, a cell off the board or no game -> ERR
     heap [1]                free memory (internal, DMA, PSRAM); 1: per heap region too
     bench [N]               redraw the whole screen N times (default 30), print the time per frame
+    genbench VARIANT|all [LEVEL|all] [N]
+                            time the puzzle generator: N puzzles (default 5) of each variant and
+                            level, the same seeds every run, the CPU at full speed even with the
+                            screen dark; names, numbers or the start of a name ("greater", "kids")
     shot FILE.png [--blur X1,Y1,X2,Y2 ...]
                             save the screen as a PNG; --blur pixelates those
                             rectangles first (e.g. a network name)
@@ -361,6 +365,18 @@ def run(board, words):
                 break
             if line.startswith("BENCH"):
                 print(line)
+    elif cmd == "genbench":
+        board.ser.write((" ".join(words) + "\n").encode())
+        while True:                                 # minutes for "all": no overall limit
+            line = board.readline(120)              # (one puzzle takes seconds at most)
+            if line is None:
+                sys.exit("timed out waiting for genbench (is the board on %s?)" % board.ser.port)
+            if line.startswith("OK genbench"):
+                break
+            if line.startswith("ERR"):
+                sys.exit(line)
+            if line.startswith("GENBENCH"):
+                print(line, flush=True)
     elif cmd in ("screen", "expect"):
         # expect NAME ...: stop the run unless the board is on one of those screens (devctl "screen":
         # home1, home2, list, game, stats, settings, sysmon, players, trophies, ... "+dialog" when a

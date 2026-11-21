@@ -732,5 +732,7 @@ static void export_start(const stats_replay_t *r)
 /* ---- accessors: the other UI files reach this file's state through these */
 lv_obj_t *screen_replay(void) { return scr_replay; }
 bool replay_want_export(void) { return rp_want_export; }
+bool replay_exporting(void) { return rx_busy || rp_want_export; }   /* an MP4 export on its way or running */
+bool screenshot_busy(void) { return ss_state != 0; }               /* a screenshot being written */
 void replay_set_want_export(bool v) { rp_want_export = v; }
 bool replay_busy(void) { return rx_busy; }

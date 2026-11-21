@@ -129,7 +129,9 @@ int compute_conflicts(void)
         }
     }
     for (int i = 0; i < 81; i++) {                  /* Even-Odd: a digit of the wrong kind */
-        if (g_b.val[i] && !(g_geo->allow[i] >> g_b.val[i] & 1)) g_conflict[i] = true;
+        /* (only the marked cells: Greater-Than narrows allow[] too, from the chains of signs, for the
+         * solver; a digit out of that range breaks no sign by itself until its neighbours are in) */
+        if (g_b.val[i] && g_geo->parity[i] && !(g_geo->allow[i] >> g_b.val[i] & 1)) g_conflict[i] = true;
     }
     for (int i = 0; g_geo->consec_on && i < 81; i++) {   /* Consecutive: a bar and not 1 apart, or 1 apart and no bar */
         for (int k = 0; k < 2; k++) {

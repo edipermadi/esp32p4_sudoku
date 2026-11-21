@@ -68,3 +68,9 @@ void bsp_power_save(bool on)
 }
 
 bool bsp_power_saving(void) { return s_saving; }
+
+void bsp_power_cpu_full(bool on)
+{
+    if (!s_saving || !s_full_mhz) return;
+    setCpuFrequencyMhz(on ? s_full_mhz : BSP_SAVE_CPU_MHZ);
+}

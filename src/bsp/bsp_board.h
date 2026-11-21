@@ -152,6 +152,9 @@ void bsp_power_off(void) __attribute__((noreturn));
 #define BSP_SAVE_CPU_MHZ 180     /* 90 MHz: the DPI DMA underruns (memory clock follows the CPU) */
 void bsp_power_save(bool on);
 bool bsp_power_saving(void);
+/* While power saving: the CPU at full speed for a while (true) or back to BSP_SAVE_CPU_MHZ
+ * (false); the panel stays asleep. Does nothing when not saving. (devctl genbench) */
+void bsp_power_cpu_full(bool on);
 
 #ifdef __cplusplus
 }

@@ -252,6 +252,10 @@ static inline bool sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 
 /* ---------------------------------------------------------------- generating */
 
+/* A hook the generator and solver call now and then in their long loops: weak, a no-op unless
+ * the program defines its own (the firmware: a tick for the idle task, against the task watchdog). */
+void sudoku_gen_yield(void);
+
 /* Fills givens (81, 0 = empty) with a new puzzle of that variant and level.
  * seed: any random number. board (may be NULL) gets the puzzle's geometry:
  * for Jigsaw its regions (board->region), for Killer its cages

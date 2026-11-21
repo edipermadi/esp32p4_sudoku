@@ -103,6 +103,47 @@ void sudoku_ui_notice(const char *text, uint32_t ms)
     lv_timer_set_repeat_count(t, 1);
 }
 
+const char *sudoku_ui_io_busy(void)
+{
+    const char *why = settings_card_busy();
+    if (why) return why;
+    if (replay_exporting()) return "an MP4 video is being exported";
+    if (screenshot_busy()) return "a screenshot is being saved";
+    if (files_busy()) return "Files is working on the card";
+    if (stats_db_busy()) return "sudoku.db is busy (saving, an import, an export or a backup)";
+    return NULL;
+}
+
+/* A full-screen panel over everything but the screen saver, taking every touch, while devctl
+ * genbench runs (it pumps the UI meanwhile, so the panel shows and updates) */
+static lv_obj_t *busy_ovl, *busy_text;
+
+void sudoku_ui_busy(const char *text)
+{
+    if (!text) {
+        if (busy_ovl) lv_obj_delete(busy_ovl);
+        busy_ovl = busy_text = NULL;
+        return;
+    }
+    if (!busy_ovl) {
+        busy_ovl = lv_obj_create(lv_layer_top());
+        lv_obj_remove_style_all(busy_ovl);
+        lv_obj_set_size(busy_ovl, SCR_W, SCR_W);
+        lv_obj_set_style_bg_color(busy_ovl, C_BG, 0);
+        lv_obj_set_style_bg_opa(busy_ovl, LV_OPA_COVER, 0);
+        lv_obj_set_clickable(busy_ovl, true);       /* (the taps stop here) */
+        lv_obj_t *t = make_label(busy_ovl, &lv_font_montserrat_28, C_TEXT);
+        lv_label_set_text(t, LV_SYMBOL_SETTINGS "  Benchmarking");
+        lv_obj_align(t, LV_ALIGN_CENTER, 0, -60);
+        busy_text = make_label(busy_ovl, &lv_font_montserrat_20, C_MUTED);
+        lv_obj_set_width(busy_text, SCR_W - 80);
+        lv_obj_set_style_text_align(busy_text, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_long_mode(busy_text, LV_LABEL_LONG_MODE_WRAP);
+        lv_obj_align(busy_text, LV_ALIGN_CENTER, 0, 20);
+    }
+    lv_label_set_text(busy_text, text);
+}
+
 static lv_obj_t *lk_ovl, *lk_box, *lk_time, *lk_date, *lk_hint, *lk_dots[4], *lk_pad;
 static lv_timer_t *lk_timer;
 static char lk_entry[5];

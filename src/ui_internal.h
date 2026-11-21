@@ -526,6 +526,11 @@ int list_tab(void);
 void list_set_tab(int v);
 /* sudoku_ui.c */
 lv_obj_t *ui_saver(void);
+/* what's using the microSD card (or the generator) right now (sudoku_ui_io_busy) */
+bool replay_exporting(void);
+bool screenshot_busy(void);
+bool files_busy(void);
+const char *settings_card_busy(void);
 /* Kropki / XV / Greater-Than marks and Quadruple circles (board and rules card) */
 void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy);
 void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n);

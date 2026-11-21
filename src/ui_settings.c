@@ -1340,3 +1340,13 @@ lv_obj_t *settings_sd_hint(void) { return st_sd_hint; }
 bool ui_sd_present(void) { return s_sd_present; }
 uint64_t ui_sd_bytes(void) { return s_sd_bytes; }
 const char *ui_sd_name(void) { return s_sd_name; }
+
+/* card work Settings is doing: a firmware update, probing or formatting the card, the card
+ * lent to a computer (USB drive); NULL when none (devctl genbench) */
+const char *settings_card_busy(void)
+{
+    if (fw_timer) return "a firmware update is being written";
+    if (s_sd_state == SD_PROBING || s_sd_state == SD_FORMATTING) return "the microSD card is being set up or formatted";
+    if (u_ovl) return "the card is lent to a computer (USB drive)";
+    return NULL;
+}

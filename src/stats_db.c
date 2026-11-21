@@ -82,6 +82,7 @@ typedef enum { ST_OFF, ST_OPENING, ST_READY, ST_NOT_FAT, ST_ERROR } db_state_t;
 static QueueHandle_t s_q;
 static SemaphoreHandle_t s_suspended, s_opened, s_lock;  /* s_lock guards the results below */
 static volatile db_state_t s_state = ST_OFF;
+static volatile bool s_working;                /* the worker is on a command (stats_db_busy) */
 static volatile int s_solves = -1;            /* rows in solves (all players), -1 unknown */
 static sqlite3 *s_db;
 static sqlite3_stmt *s_merge, *s_solve_upsert, *s_solve_insert;
@@ -3162,7 +3163,9 @@ static void worker(void *arg)
     sqlite3_initialize();
     cmd_t c;
     for (;;) {
+        s_working = false;
         if (xQueueReceive(s_q, &c, portMAX_DELAY) != pdTRUE) continue;
+        s_working = true;
         switch (c.type) {
         case CMD_OPEN:
             do_open(c.seed);
@@ -3570,6 +3573,11 @@ void stats_db_save_game(const saved_game_t *g, const game_move_t *moves, int nmo
 bool stats_db_ready(void)
 {
     return s_state == ST_READY;
+}
+
+bool stats_db_busy(void)
+{
+    return s_working || (s_q && uxQueueMessagesWaiting(s_q) > 0);
 }
 
 void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,

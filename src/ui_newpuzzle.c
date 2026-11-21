@@ -61,6 +61,19 @@ static char *gen_thermos;                           /* STATS_THERMOS_LEN, PSRAM 
 static uint32_t gen_seed;                           /* 0 = random */
 static char gen_day[12];                            /* making a daily puzzle: its date */
 
+/* generator.h's hook: the generator and solver run for seconds on core 0 (Greater-Than
+ * Expert: 5 s+ at times), and the task watchdog restarts the board when core 0's idle task
+ * hasn't run for 5 s. A tick every 100 ms or so lets it. (Any task: the UI's own solving
+ * calls it too, where a rare 1-tick pause doesn't matter.) */
+void sudoku_gen_yield(void)
+{
+    static int64_t last;
+    int64_t now = esp_timer_get_time();
+    if (now - last < 100000) return;
+    last = now;
+    vTaskDelay(1);
+}
+
 static void gen_task(void *arg)
 {
     gen_level_t got = (gen_level_t)gen_level_req;
@@ -118,10 +131,24 @@ static void gen_poll_cb(lv_timer_t *t)
 
 /* seed 0 = a random puzzle; a daily one (always classic) has its date as the seed and day set */
 static lv_timer_t *learn_timer;                     /* (Learn: its variant lessons use the generator too) */
+static bool gen_bench;                              /* devctl genbench has the generator */
+
+/* devctl genbench: the generator to itself (false: New puzzle or Learn is using it) */
+bool gen_bench_begin(void)
+{
+    if (gen_timer || learn_timer || gen_bench) return false;
+    gen_bench = true;
+    return true;
+}
+
+void gen_bench_end(void)
+{
+    gen_bench = false;
+}
 
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
 {
-    if (gen_timer || learn_timer) return;            /* one at a time */
+    if (gen_timer || learn_timer || gen_bench) return;   /* one at a time */
     if (!gen_board && !(gen_board = heap_caps_malloc(sizeof(*gen_board), MALLOC_CAP_SPIRAM))) return;
     if (!gen_cages && !(gen_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) return;
     if (!gen_thermos && !(gen_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) return;
@@ -625,7 +652,7 @@ static void learn_pick_cb(lv_event_t *e)
     int target = (int)(intptr_t)lv_event_get_user_data(e);
     if (learn_box) lv_msgbox_close_async(learn_box);
     learn_box = NULL;
-    if (learn_timer) return;
+    if (learn_timer || gen_bench) return;            /* (genbench: the generator is busy) */
     char text[120];
     if (learn_variant(target) >= 0) {
         if (gen_timer) return;                      /* New puzzle is using the generator (one at a time) */
