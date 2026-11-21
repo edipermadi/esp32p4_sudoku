@@ -49,6 +49,35 @@ static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked sin
  * without a card) and opened like any other.
  */
 static lv_obj_t *gen_box;                           /* the "Generating..." dialog */
+static lv_obj_t *gen_bar;                           /* ... its progress bar */
+static int64_t gen_t0;                              /* when it started (esp_timer, us) */
+
+/* About how long a puzzle takes on the board, ms: the averages of devctl "genbench all all 10"
+ * (docs/development.md, 2026-11-21), by variant (generator.h's order) and level. The progress
+ * bar is a guess from these: the generator can't tell how many attempts it will need. Update
+ * them with the table when the generator gets faster or slower. */
+static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
+    {5, 69, 441, 90},       /* Classic */
+    {5, 171, 283, 235},     /* X-Sudoku */
+    {1, 2, 1052, 41},       /* Mini 6x6 */
+    {62, 233, 343, 373},    /* Hyper */
+    {297, 346, 527, 1113},  /* Jigsaw */
+    {46, 498, 1033, 1630},  /* Killer */
+    {12, 281, 442, 405},    /* Anti-Knight */
+    {6, 57, 183, 192},      /* Even-Odd */
+    {19, 300, 639, 366},    /* Consecutive */
+    {8, 86, 416, 331},      /* Thermo */
+    {297, 199, 2348, 1987}, /* Sandwich */
+    {1, 1, 1, 1},           /* Kids 4x4 (Easy and Medium only) */
+    {7, 94, 326, 191},      /* Anti-King */
+    {862, 909, 2908, 1540}, /* Non-Consecutive */
+    {7, 43, 168, 119},      /* Disjoint Groups */
+    {6, 93, 337, 186},      /* Asterisk */
+    {28, 116, 352, 189},    /* Kropki */
+    {15, 136, 307, 1743},   /* XV */
+    {7, 24, 197, 489},      /* Greater-Than */
+    {9, 72, 204, 600},      /* Quadruple */
+};
 static lv_timer_t *gen_timer;
 static volatile bool gen_done;
 static int gen_var_req;                             /* variant being made (generator.h) */
@@ -101,11 +130,21 @@ static void gen_task(void *arg)
 
 static void gen_poll_cb(lv_timer_t *t)
 {
-    if (!gen_done) return;
+    if (!gen_done) {
+        /* the bar: 1 - e^(-elapsed / expected), about two thirds full at the usual time and
+         * slowing down after it; at most 97 % until it's done */
+        int lv = gen_level_req >= 0 && gen_level_req < GEN_LEVELS ? gen_level_req : 0;
+        float expect = GEN_EXPECT_MS[gen_var_req][lv] < 50 ? 50.0f : (float)GEN_EXPECT_MS[gen_var_req][lv];
+        float ms = (float)(esp_timer_get_time() - gen_t0) / 1000.0f;
+        int v = (int)(1000.0f * (1.0f - expf(-ms / expect)));
+        if (gen_bar) lv_bar_set_value(gen_bar, v > 970 ? 970 : v, LV_ANIM_OFF);
+        return;
+    }
     lv_timer_delete(gen_timer);
     gen_timer = NULL;
     if (gen_box) lv_msgbox_close(gen_box);
     gen_box = NULL;
+    gen_bar = NULL;                                 /* (went with the box) */
     uint16_t id;
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
     const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_QUAD ? gen_cages : NULL;
@@ -166,9 +205,19 @@ static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
     else if (gen_var_req == VAR_CLASSIC) snprintf(text, sizeof(text), "Making a new %s puzzle...", gen_level_name(level));
     else snprintf(text, sizeof(text), "Making a new %s %s puzzle...", gen_level_name(level), variant_name(gen_var_req));
     gen_box = make_msgbox(LV_SYMBOL_REFRESH "  New puzzle", text);
+    gen_bar = lv_bar_create(lv_msgbox_get_content(gen_box));   /* filled by gen_poll_cb */
+    lv_obj_set_size(gen_bar, LV_PCT(100), 14);
+    lv_obj_set_style_margin_top(gen_bar, 16, 0);
+    lv_obj_set_style_bg_color(gen_bar, C_CARD2, 0);
+    lv_obj_set_style_bg_opa(gen_bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(gen_bar, C_ACCENT, LV_PART_INDICATOR);
+    lv_bar_set_range(gen_bar, 0, 1000);
+    lv_bar_set_value(gen_bar, 0, LV_ANIM_OFF);
+    gen_t0 = esp_timer_get_time();
     if (xTaskCreatePinnedToCore(gen_task, "gen", 16384, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
         lv_msgbox_close(gen_box);
         gen_box = NULL;
+        gen_bar = NULL;
         sudoku_ui_notice("Couldn't start the generator.", 3000);
         return;
     }
