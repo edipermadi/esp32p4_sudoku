@@ -59,7 +59,8 @@ BEGIN without its COMMIT is rolled back at the end of the statement batch.
 Opening the port resets the board (its auto-reset circuit), so a run starts
 from a freshly booted Home screen: the tool waits for "DEVCTL ready" first
 (--no-wait skips that, for a board that didn't reset). Then it switches to
---baud for the transfers. Needs pyserial (pip install pyserial).
+--baud for the transfers, which go compressed (zlib) both ways: screenshots, files and SQL.
+Needs pyserial (pip install pyserial).
 
 Coordinates are screen pixels, 0..719, from the top left.
 """
@@ -155,8 +156,8 @@ class Board:
         sys.exit("ls: no answer")
 
     def get(self, remote, local):
-        self.ser.write(("get %s\n" % enc(remote)).encode())
-        self.wait_for("FILE BEGIN", 20, fail="ERR")
+        self.ser.write(("get %s z\n" % enc(remote)).encode())   # z: sent compressed
+        begin = self.wait_for("FILE BEGIN", 20, fail="ERR")
         chunks, end_line = {}, None
         t0 = time.time()
         while True:
@@ -177,33 +178,37 @@ class Board:
             elif self.verbose:
                 print("  <", line)
         _, _, size, crc = end_line.split()
-        data = b"".join(chunks[i] for i in sorted(chunks))
-        if len(data) != int(size) or zlib.crc32(data) != int(crc, 16):
+        data = unpack(b"".join(chunks[i] for i in sorted(chunks)), begin.endswith(" z"))
+        if data is None or len(data) != int(size) or zlib.crc32(data) != int(crc, 16):
             sys.exit("get: %s arrived garbled (try again)" % remote)
         with open(local, "wb") as f:
             f.write(data)
         dt = max(time.time() - t0, 1e-3)
-        print("got %s -> %s, %d bytes (%.0f KB/s)" % (remote, local, len(data), len(data) / 1024 / dt))
+        print("got %s -> %s, %d bytes, %d compressed (%.0f KB/s)" % (remote, local, len(data),
+                                                                   sum(len(c) for c in chunks.values()), len(data) / 1024 / dt))
 
     def put(self, local, remote, window=12, chunk=96):
         with open(local, "rb") as f:
             data = f.read()
-        self.ser.write(("put %s %d %08x\n" % (enc(remote), len(data), zlib.crc32(data))).encode())
+        packed = zlib.compress(data, 9)              # sent compressed: the board inflates it
+        self.ser.write(("put %s %d %08x z %d\n" % (enc(remote), len(data), zlib.crc32(data), len(packed))).encode())
         self.wait_for("READY", 20, fail="ERR")
         t0 = time.time()
-        lines = [data[i:i + chunk] for i in range(0, len(data), chunk)]
+        lines = [packed[i:i + chunk] for i in range(0, len(packed), chunk)]
         for i in range(0, len(lines), window):
             batch = lines[i:i + window]
             self.ser.write(b"".join(b"D " + base64.b64encode(c) + b"\n" for c in batch))
             if i + window < len(lines):
                 self.wait_for("ACK", 20, fail="ERR")
             if sys.stdout.isatty():
-                print("\r  %d / %d bytes" % (min((i + window) * chunk, len(data)), len(data)), end="", flush=True)
+                print("\r  %d / %d bytes (compressed)" % (min((i + window) * chunk, len(packed)), len(packed)),
+                      end="", flush=True)
         if sys.stdout.isatty():
             print()
         self.wait_for("OK put", 60, fail="ERR")
         dt = max(time.time() - t0, 1e-3)
-        print("put %s -> %s, %d bytes (%.0f KB/s)" % (local, remote, len(data), len(data) / 1024 / dt))
+        print("put %s -> %s, %d bytes, %d compressed (%.0f KB/s)" % (local, remote, len(data), len(packed),
+                                                                  len(data) / 1024 / dt))
 
     def command(self, cmd, expect=None, timeout=20):
         if self.verbose:
@@ -214,8 +219,8 @@ class Board:
 
     def shot(self, path, blur=(), tries=3):
         for attempt in range(tries):
-            self.ser.write(b"shot\n")
-            self.wait_for("SHOT BEGIN", 10)
+            self.ser.write(b"shot z\n")                # z: sent compressed
+            begin = self.wait_for("SHOT BEGIN", 10)
             chunks = {}
             end_line = None
             deadline = time.time() + 120
@@ -238,8 +243,8 @@ class Board:
                     print("  <", line)
             if end_line:
                 _, _, size, crc = end_line.split()
-                data = b"".join(chunks[i] for i in sorted(chunks))
-                if len(data) == int(size) and zlib.crc32(data) == int(crc, 16):
+                data = unpack(b"".join(chunks[i] for i in sorted(chunks)), begin.endswith(" z"))
+                if data is not None and len(data) == int(size) and zlib.crc32(data) == int(crc, 16):
                     rgb = decode_rle(data, 720, 720)
                     for box in blur:
                         rgb = pixelate(rgb, 720, 720, box)
@@ -248,6 +253,16 @@ class Board:
                     return
             print("screenshot garbled, retrying (%d)" % (attempt + 1))
         sys.exit("couldn't get a clean screenshot")
+
+
+def unpack(data, compressed):
+    """A transfer's bytes as sent: inflated if they came compressed; None if that fails."""
+    if not compressed:
+        return data
+    try:
+        return zlib.decompress(data)
+    except zlib.error:
+        return None                                 # (a line lost: the caller says it's garbled)
 
 
 # ---- SQL on the board's sudoku.db
@@ -272,15 +287,14 @@ def board_sql(board, text, timeout=90):
     (rows, changes, truncated), or an error message (then the results so far, too)."""
     if board.verbose:
         print("  > sql", text)
-    coded = base64.b64encode(text.encode()).decode()
-    if len(coded) > 4090:                           # (the board's line holds 4096: longer is cut off)
-        return [], None, "the SQL is too long for the board (%d bytes; about 3000 at most)" % len(text.encode())
-    board.ser.write(("sql %s\n" % coded).encode())
-    sets, end = [], time.time() + timeout
-    while time.time() < end:
-        line = board.readline(end - time.time())
-        if line is None:
-            break
+    raw = text.encode()
+    coded = base64.b64encode(zlib.compress(raw, 9)).decode()   # sent compressed, the result comes so too
+    if len(coded) > 4070 or len(raw) > 65536:      # (the board's line holds 4096: longer is cut off)
+        return [], None, "the SQL is too long for the board (%d bytes; compressed, it must fit in 3 KB)" % len(raw)
+    board.ser.write(("sql z %d %s\n" % (len(raw), coded)).encode())
+    sets, end, packed, sql_end = [], time.time() + timeout, {}, None
+
+    def take(line):
         if line.startswith("SQL C\t") or line == "SQL C":
             sets.append(([sql_unescape(f) for f in line[6:].split("\t")], []))
         elif line.startswith("SQL R"):
@@ -288,6 +302,31 @@ def board_sql(board, text, timeout=90):
             if not sets:
                 sets.append(([""] * len(row), []))
             sets[-1][1].append(row)
+
+    while time.time() < end:
+        line = board.readline(end - time.time())
+        if line is None:
+            break
+        if line.startswith("Q "):                   # the result, compressed
+            parts = line.split(" ", 2)
+            if len(parts) == 3 and parts[1].isdigit():
+                try:
+                    packed[int(parts[1])] = base64.b64decode(parts[2])
+                except Exception:
+                    pass
+            continue
+        if line.startswith("SQL END"):
+            sql_end = line.split()
+            data = unpack(b"".join(packed[i] for i in sorted(packed)), True)
+            if data is None or len(data) != int(sql_end[2]) or zlib.crc32(data) != int(sql_end[3], 16):
+                return sets, None, "the result arrived garbled (try again)"
+            for l in data.decode("utf-8", "replace").split("\n"):
+                take("SQL " + l)
+            continue
+        if line.startswith("SQL BEGIN"):
+            continue
+        if line.startswith(("SQL C", "SQL R")):     # (a board that answers uncompressed)
+            take(line)
         elif line.startswith("OK sql"):
             w = line.split()
             return sets, (int(w[2]), int(w[3]), "truncated" in w), None

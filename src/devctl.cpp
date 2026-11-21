@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <esp_heap_caps.h>
 #include <esp_timer.h>
+#include <miniz.h>                      /* (the ESP32-P4 ROM's: deflate and inflate) */
 
 #define LINE_MAX     512                /* command line (fill: up to 81 pairs), or an upload's data line */
 #define CMD_MAX      4096               /* a line from the serial port: sql's base64 is the long one */
@@ -139,8 +140,6 @@ static void flush_chunk(void)
     }
     out[o++] = '\n';
     Serial.write((const uint8_t *)out, o);         /* one write: a whole line */
-    s_crc = crc32_update(s_crc, s_chunk, s_chunk_n);
-    s_bytes += s_chunk_n;
     s_chunk_n = 0;
 }
 
@@ -152,7 +151,64 @@ static void put(uint8_t b)
     }
 }
 
-static void shot(void)
+/* The data a command sends (a screenshot, a file, SQL's result): z_begin(), z_write() the
+ * bytes, z_end(). With z, they're compressed first (zlib format: the ROM's deflate), then
+ * the base64 lines; s_bytes / s_crc are always the data's own (uncompressed) size and CRC. */
+static tdefl_compressor *s_def;                 /* (PSRAM, made on first use: ~150 KB) */
+static bool s_zon;
+
+static mz_bool z_sink(const void *p, int n, void *user)
+{
+    const uint8_t *b = (const uint8_t *)p;
+    for (int i = 0; i < n; i++) {
+        put(b[i]);
+    }
+    return MZ_TRUE;
+}
+
+static bool z_begin(char prefix, bool z)
+{
+    s_prefix = prefix;
+    s_crc = 0;
+    s_chunk_n = s_seq = 0;
+    s_bytes = 0;
+    s_zon = false;
+    if (!z) {
+        return true;
+    }
+    if (!s_def && !(s_def = (tdefl_compressor *)heap_caps_malloc(sizeof(tdefl_compressor), MALLOC_CAP_SPIRAM))) {
+        return false;
+    }
+    if (tdefl_init(s_def, z_sink, NULL, TDEFL_WRITE_ZLIB_HEADER | 32) != TDEFL_STATUS_OKAY) {   /* 32 probes */
+        return false;
+    }
+    s_zon = true;
+    return true;
+}
+
+static void z_write(const void *p, size_t n)
+{
+    s_crc = crc32_update(s_crc, (const uint8_t *)p, (int)n);
+    s_bytes += n;
+    if (s_zon) {
+        tdefl_compress_buffer(s_def, p, n, TDEFL_NO_FLUSH);
+    } else {
+        for (size_t i = 0; i < n; i++) {
+            put(((const uint8_t *)p)[i]);
+        }
+    }
+}
+
+static void z_end(void)
+{
+    if (s_zon) {
+        tdefl_compress_buffer(s_def, NULL, 0, TDEFL_FINISH);
+    }
+    flush_chunk();
+}
+
+/* shot [z]: the screen, run-length coded (then, with z, compressed) */
+static void shot(bool z)
 {
     lv_refr_now(NULL);                              /* everything drawn and flushed */
     const uint16_t *fb = bsp_display_frame();
@@ -160,24 +216,31 @@ static void shot(void)
         Serial.println("ERR shot: no frame buffer");
         return;
     }
-    Serial.printf("SHOT BEGIN %d %d\n", BSP_LCD_H_RES, BSP_LCD_V_RES);
-    s_prefix = 'S';
-    s_crc = 0;
-    s_chunk_n = s_seq = 0;
-    s_bytes = 0;
+    if (!z_begin('S', z)) {
+        Serial.println("ERR shot: no memory");
+        return;
+    }
+    Serial.printf("SHOT BEGIN %d %d%s\n", BSP_LCD_H_RES, BSP_LCD_V_RES, z ? " z" : "");
     const int total = BSP_LCD_H_RES * BSP_LCD_V_RES;
+    uint8_t run3[3 * 256];                          /* (written a few hundred bytes at a time) */
+    int k = 0;
     for (int i = 0; i < total;) {                   /* runs of up to 256 equal pixels */
         uint16_t px = fb[i];
         int run = 1;
         while (run < 256 && i + run < total && fb[i + run] == px) {
             run++;
         }
-        put((uint8_t)(run - 1));
-        put((uint8_t)(px & 0xFF));
-        put((uint8_t)(px >> 8));
+        run3[k++] = (uint8_t)(run - 1);
+        run3[k++] = (uint8_t)(px & 0xFF);
+        run3[k++] = (uint8_t)(px >> 8);
+        if (k == sizeof(run3)) {
+            z_write(run3, k);
+            k = 0;
+        }
         i += run;
     }
-    flush_chunk();
+    z_write(run3, k);
+    z_end();
     Serial.printf("SHOT END %u %08x\n", (unsigned)s_bytes, (unsigned)s_crc);
 }
 
@@ -281,27 +344,27 @@ static bool card_ls(const char *dir)
     return true;
 }
 
-static bool card_get(const char *path)
+/* get <path> [z]: the file (with z, compressed) */
+static bool card_get(const char *path, bool z)
 {
     FILE *f = fopen(path, "rb");
     if (!f) {
         return false;
     }
+    if (!z_begin('F', z)) {
+        fclose(f);
+        errno = ENOMEM;
+        return false;
+    }
     struct stat st;
     long size = fstat(fileno(f), &st) == 0 ? (long)st.st_size : -1;
-    Serial.printf("FILE BEGIN %ld\n", size);
-    s_prefix = 'F';
-    s_crc = 0;
-    s_chunk_n = s_seq = 0;
-    s_bytes = 0;
+    Serial.printf("FILE BEGIN %ld%s\n", size, z ? " z" : "");
     uint8_t buf[CHUNK * 8];
     size_t n;
     while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
-        for (size_t i = 0; i < n; i++) {
-            put(buf[i]);
-        }
+        z_write(buf, n);
     }
-    flush_chunk();
+    z_end();
     fclose(f);
     Serial.printf("FILE END %u %08x\n", (unsigned)s_bytes, (unsigned)s_crc);
     return true;
@@ -364,9 +427,16 @@ static bool read_line(char *buf, int max, uint32_t ms)
     return false;
 }
 
-/* put: "READY", then lines "D <base64>" (an ACK after each UP_WINDOW of them) until size bytes;
- * written to <path>.part, which becomes <path> once the CRC matches */
-static void card_put(const char *path, long size, uint32_t crc)
+/* put: "READY", then lines "D <base64>" (an ACK after each UP_WINDOW of them) until size bytes
+ * (with zsize >= 0: zsize bytes of the file compressed, zlib format, inflated here); written to
+ * <path>.part, which becomes <path> once the CRC matches */
+typedef struct {
+    tinfl_decompressor inf;
+    uint8_t dict[TINFL_LZ_DICT_SIZE];               /* (the window: inflate writes round it) */
+    size_t at;
+} put_inflate_t;
+
+static void card_put(const char *path, long size, uint32_t crc, long zsize)
 {
     char part[300];
     snprintf(part, sizeof(part), "%s.part", path);
@@ -382,12 +452,26 @@ static void card_put(const char *path, long size, uint32_t crc)
         Serial.println("ERR put: no memory");
         return;
     }
+    put_inflate_t *z = NULL;
+    if (zsize >= 0 && !(z = (put_inflate_t *)heap_caps_malloc(sizeof(put_inflate_t), MALLOC_CAP_SPIRAM))) {
+        heap_caps_free(buf);
+        fclose(f);
+        remove(part);
+        Serial.println("ERR put: no memory");
+        return;
+    }
+    if (z) {
+        tinfl_init(&z->inf);
+        z->at = 0;
+    }
     Serial.println("READY");
-    long got = 0;
+    long got = 0, zgot = 0;                         /* the file's bytes; with z, the compressed ones read */
     int fill = 0, lines = 0;
     uint32_t c = 0;
     const char *err = NULL;
-    while (got < size && !err) {
+    bool zdone = false;
+    uint8_t in[CHUNK];
+    while ((z ? zgot < zsize : got < size) && !err) {
         if (!read_line(s_line, CMD_MAX, UP_TIMEOUT)) {
             err = "timed out waiting for data";
             break;
@@ -396,24 +480,76 @@ static void card_put(const char *path, long size, uint32_t crc)
             err = "expected a data line";
             break;
         }
-        if (fill + CHUNK > UP_BUF) {
-            if (fwrite(buf, 1, fill, f) != (size_t)fill) {
-                err = "write failed (card full?)";
-            }
-            fill = 0;
-        }
-        int n = b64_decode(s_line + 2, buf + fill, CHUNK);
-        if (n < 0 || got + n > size) {
+        int n = b64_decode(s_line + 2, in, CHUNK);
+        if (n < 0 || (z ? zgot + n > zsize : got + n > size)) {
             err = "bad data line";
             break;
         }
-        c = crc32_update(c, buf + fill, n);
-        fill += n;
-        got += n;
-        if (++lines % UP_WINDOW == 0 && got < size) {
-            Serial.printf("ACK %ld\n", got);
+        const uint8_t *ip = in;
+        size_t left = (size_t)n;
+        zgot += n;
+        while (!err) {                              /* the file's bytes this line makes: into buf */
+            const uint8_t *out;
+            size_t out_n;
+            if (z) {
+                size_t in_n = left, room = TINFL_LZ_DICT_SIZE - z->at;
+                tinfl_status st = zdone ? TINFL_STATUS_DONE
+                                  : tinfl_decompress(&z->inf, ip, &in_n, z->dict, z->dict + z->at, &room,
+                                                     TINFL_FLAG_PARSE_ZLIB_HEADER |
+                                                     (zgot < zsize ? TINFL_FLAG_HAS_MORE_INPUT : 0));
+                ip += in_n;
+                left -= in_n;
+                out = z->dict + z->at;
+                out_n = zdone ? 0 : room;
+                z->at = (z->at + room) & (TINFL_LZ_DICT_SIZE - 1);
+                if (st < 0) {
+                    err = "bad compressed data";
+                }
+                zdone |= st == TINFL_STATUS_DONE;
+                if (zdone && left) {
+                    err = "data after the end";
+                }
+                if (!out_n && (st != TINFL_STATUS_HAS_MORE_OUTPUT || zdone)) {
+                    left = 0;                       /* (this line's input is used up) */
+                }
+            } else {
+                out = ip;
+                out_n = left;
+                left = 0;
+            }
+            if (got + (long)out_n > size) {
+                err = "more data than the size said";
+                break;
+            }
+            for (size_t done = 0; done < out_n && !err;) {
+                if (fill == UP_BUF) {
+                    if (fwrite(buf, 1, fill, f) != (size_t)fill) {
+                        err = "write failed (card full?)";
+                    }
+                    fill = 0;
+                }
+                size_t k = out_n - done < (size_t)(UP_BUF - fill) ? out_n - done : (size_t)(UP_BUF - fill);
+                memcpy(buf + fill, out + done, k);
+                c = crc32_update(c, buf + fill, (int)k);
+                fill += (int)k;
+                got += (long)k;
+                done += k;
+            }
+            if (!left && (!z || !out_n)) {
+                break;
+            }
+        }
+        if (++lines % UP_WINDOW == 0 && (z ? zgot < zsize : got < size)) {
+            Serial.printf("ACK %ld\n", z ? zgot : got);
         }
     }
+    if (!err && z && !zdone) {
+        err = "the compressed data ended early";
+    }
+    if (!err && got != size) {
+        err = "not the size it said";
+    }
+    heap_caps_free(z);
     if (!err && fill && fwrite(buf, 1, fill, f) != (size_t)fill) {
         err = "write failed (card full?)";
     }
@@ -474,7 +610,7 @@ static bool run_file(char *line)
         return true;
     }
     if (is_get) {
-        if (!card_get(p1)) {
+        if (!card_get(p1, n >= 3 && !strcmp(b, "z"))) {
             Serial.printf("ERR get: can't read %s (%s)\n", p1, strerror(errno));
         } else {
             Serial.println("OK get");
@@ -516,16 +652,19 @@ static bool run_file(char *line)
         }
         return true;
     }
-    /* put <path> <size> <crc32 hex> */
-    if (n < 2 || sscanf(line, "%*s %*s %ld %lx", &size, &crc) != 2 || size < 0) {
-        Serial.println("ERR put: put <path> <size> <crc32 hex>");
+    /* put <path> <size> <crc32 hex> [z <compressed size>] */
+    long zsize = -1;
+    char zw[4] = "";
+    int got = n < 2 ? 0 : sscanf(line, "%*s %*s %ld %lx %3s %ld", &size, &crc, zw, &zsize);
+    if (got < 2 || size < 0 || (got >= 3 && (strcmp(zw, "z") || got < 4 || zsize < 0))) {
+        Serial.println("ERR put: put <path> <size> <crc32 hex> [z <compressed size>]");
         return true;
     }
     if (db_busy(p1)) {
         Serial.println("ERR put: sudoku.db is open (use Settings > USB drive)");
         return true;
     }
-    card_put(p1, size, (uint32_t)crc);
+    card_put(p1, size, (uint32_t)crc, got >= 4 ? zsize : -1);
     return true;
 }
 
@@ -743,38 +882,65 @@ out:
     gen_bench_end();
 }
 
-/* sql <base64 of the SQL, UTF-8>: runs it on sudoku.db (stats_db_sql), then "SQL C\t<column>..."
- * and "SQL R\t<value>..." lines, then "OK sql <rows> <changes>[ truncated]" or "ERR sql: <why>".
- * The SQL comes coded: it may hold ';', newlines and any text. */
+/* sql [z <size>] <base64>: the SQL (UTF-8; with z, compressed, zlib format, size bytes once
+ * inflated) runs on sudoku.db (stats_db_sql). The result: lines "SQL C\t<column>..." and
+ * "SQL R\t<value>..."; with z, those lines compressed instead, as "SQL BEGIN z", lines
+ * "Q <n> <base64>", "SQL END <bytes> <crc32>". Then "OK sql <rows> <changes>[ truncated]" or
+ * "ERR sql: <why>". The SQL comes coded: it may hold ';', newlines and any text. */
+#define SQL_MAX (64 * 1024)                     /* SQL, inflated */
 static void cmd_sql(const char *line)
 {
-    const char *b64 = line + 3;
-    while (*b64 == ' ') {
-        b64++;
+    const char *p = line + 3;
+    while (*p == ' ') {
+        p++;
     }
-    size_t n = strlen(b64);
-    char *sql = (char *)heap_caps_malloc(n * 3 / 4 + 4, MALLOC_CAP_SPIRAM);
+    bool z = p[0] == 'z' && p[1] == ' ';
+    long raw = 0;
+    if (z) {
+        char *end;
+        raw = strtol(p + 2, &end, 10);
+        p = end;
+        while (*p == ' ') {
+            p++;
+        }
+    }
+    size_t n = strlen(p);
+    uint8_t *coded = (uint8_t *)heap_caps_malloc(n * 3 / 4 + 4, MALLOC_CAP_SPIRAM);
+    char *sql = z ? (char *)heap_caps_malloc(raw > 0 && raw <= SQL_MAX ? raw + 1 : 1, MALLOC_CAP_SPIRAM) : (char *)coded;
     char *out = (char *)heap_caps_malloc(SQL_OUT, MALLOC_CAP_SPIRAM);
-    int len = sql ? b64_decode(b64, (uint8_t *)sql, (int)(n * 3 / 4 + 3)) : -1;
-    if (!sql || !out) {
+    int len = coded ? b64_decode(p, coded, (int)(n * 3 / 4 + 3)) : -1;
+    if (z && sql && len > 0) {
+        size_t got = raw > 0 && raw <= SQL_MAX
+                     ? tinfl_decompress_mem_to_mem(sql, (size_t)raw, coded, (size_t)len, TINFL_FLAG_PARSE_ZLIB_HEADER)
+                     : TINFL_DECOMPRESS_MEM_TO_MEM_FAILED;
+        len = got == (size_t)raw ? (int)raw : -1;
+    }
+    if (!coded || !sql || !out) {
         reply("ERR sql: no memory\n");
     } else if (len <= 0) {
-        reply("ERR sql: sql <base64 of the SQL> (tools/devctl.py --sql codes it)\n");
+        reply("ERR sql: sql [z <size>] <base64 of the SQL> (tools/devctl.py --sql codes it)\n");
     } else {
         sql[len] = 0;
         stats_sql_result_t r;
         bool ok = stats_db_sql(sql, out, SQL_OUT, &r);
-        for (char *p = out; *p;) {                  /* the result, a line at a time */
-            char *e = strchr(p, '\n');
-            if (e) {
-                *e = 0;
+        if (z && z_begin('Q', true)) {              /* the result, compressed */
+            Serial.println("SQL BEGIN z");
+            z_write(out, strlen(out));
+            z_end();
+            Serial.printf("SQL END %u %08x\n", (unsigned)s_bytes, (unsigned)s_crc);
+        } else {
+            for (char *q = out; *q;) {              /* the result, a line at a time */
+                char *e = strchr(q, '\n');
+                if (e) {
+                    *e = 0;
+                }
+                Serial.print("SQL ");
+                Serial.println(q);
+                if (!e) {
+                    break;
+                }
+                q = e + 1;
             }
-            Serial.print("SQL ");
-            Serial.println(p);
-            if (!e) {
-                break;
-            }
-            p = e + 1;
         }
         if (ok) {
             Serial.printf("OK sql %d %d%s\n", r.rows, r.changes, r.truncated ? " truncated" : "");
@@ -782,7 +948,10 @@ static void cmd_sql(const char *line)
             Serial.printf("ERR sql: %s\n", r.err);
         }
     }
-    heap_caps_free(sql);
+    if (sql != (char *)coded) {
+        heap_caps_free(sql);
+    }
+    heap_caps_free(coded);
     heap_caps_free(out);
 }
 
@@ -879,7 +1048,8 @@ static void run(char *line)
     } else if (!strcmp(cmd, "wait") && n >= 1) {
         pump(a[0] > 0 ? (uint32_t)a[0] : 0);
     } else if (!strcmp(cmd, "shot")) {
-        shot();
+        char zw[4] = "";
+        shot(sscanf(line, "%*s %3s", zw) == 1 && !strcmp(zw, "z"));
     } else if (!strcmp(cmd, "heap")) {           /* free memory: internal (and its DMA part), PSRAM */
         Serial.printf("HEAP internal %u free, largest %u, min ever %u; dma %u, largest %u; psram %u free, largest %u\n",
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),

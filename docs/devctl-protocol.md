@@ -18,7 +18,7 @@ The port also carries the firmware's log (`printf`, ESP-IDF `E (...)` lines, cra
 
 ## Framing
 
-- **Host → board:** one command per line, ended by `\n` (`\r` is ignored). Up to 255 characters. Arguments are separated by single spaces. Bytes outside printable ASCII (32–126) are dropped, so line noise left by the reset is harmless. Sending a bare `\n` first is a good way to clear any half line.
+- **Host → board:** one command per line, ended by `\n` (`\r` is ignored). Up to 4095 characters (a longer line is cut off). Arguments are separated by single spaces. Bytes outside printable ASCII (32–126) are dropped, so line noise left by the reset is harmless. Sending a bare `\n` first is a good way to clear any half line.
 - **Board → host:** lines ended by `\n`.
 - **Answers:** every command ends with exactly one final line:
   - `OK <command>` once it's done (for some commands, with extra fields, see below), or
@@ -28,6 +28,7 @@ The port also carries the firmware's log (`printf`, ESP-IDF `E (...)` lines, cra
 - **Numbers:** decimal, except CRC-32 values: 8 hex digits, lowercase from the board.
 - **CRC-32:** the usual one (zlib / PNG / Ethernet, polynomial `0xEDB88320` reflected, init and final XOR `0xFFFFFFFF`), as Python's `zlib.crc32`.
 - **Base64:** standard alphabet with `+` `/` and `=` padding.
+- **Compression (`z`):** `shot`, `get`, `put` and `sql` take a `z` that compresses what they send as base64: zlib format (deflate with the zlib header and Adler-32, as Python's `zlib.compress` / `zlib.decompress`; the board uses its ROM's miniz). The data lines then carry the compressed bytes, while the sizes and CRC-32 in the `BEGIN` / `END` lines and arguments are still those of the data itself, checked after inflating. Without `z` everything is sent as it is, as before. `tools/devctl.py` always uses it: a screenshot comes about 4× smaller, `sudoku.db` about 8×; data that doesn't compress (a firmware image, photos) stays about the same.
 
 ## Commands
 
@@ -44,7 +45,7 @@ The port also carries the firmware's log (`printf`, ESP-IDF `E (...)` lines, cra
 
 | Command | Answer | Notes |
 |---|---|---|
-| `sql <base64>` | lines `SQL C\t<column>\t<column>...` (before each statement's rows, if it has columns) and `SQL R\t<value>\t<value>...` (a row), then `OK sql <rows> <changes>[ truncated]`; or, after the lines so far, `ERR sql: <message>` | The base64 of the SQL (UTF-8): one or more statements, any text, `;` and newlines included. The whole line holds 4096 characters (about 3000 bytes of SQL); a longer line is cut off, so check the length before sending. It runs on `sudoku.db`'s own task, a statement for 20 s at most (`ERR sql: interrupted after 20 s`). Values are escaped: `\\` `\t` `\n` `\r`; NULL is `\N`; a blob `x'<hex>'`. `<rows>`: rows returned; `<changes>`: rows inserted, updated or deleted; `truncated`: more than 256 KB of result, the rest left out. A transaction left open is rolled back (`ERR sql: a transaction was left open: rolled back`). `ERR sql: no sudoku.db ...` without a card, or while it's lent over USB. Serial only. |
+| `sql [z <size>] <base64>` | lines `SQL C\t<column>\t<column>...` (before each statement's rows, if it has columns) and `SQL R\t<value>\t<value>...` (a row), then `OK sql <rows> <changes>[ truncated]`; or, after the lines so far, `ERR sql: <message>`. With `z`: `SQL BEGIN z`, lines `Q <n> <base64>` (those `C` / `R` lines, without `SQL `, compressed, framed as a screenshot), `SQL END <bytes> <crc32>`, then the `OK` or `ERR` line | The base64 of the SQL (UTF-8): one or more statements, any text, `;` and newlines included; with `z <size>`, of the SQL compressed (`<size>`: its length inflated, 64 KB at most). The whole line holds 4096 characters (about 3000 bytes of base64 data); a longer line is cut off, so check the length before sending. It runs on `sudoku.db`'s own task, a statement for 20 s at most (`ERR sql: interrupted after 20 s`). Values are escaped: `\\` `\t` `\n` `\r`; NULL is `\N`; a blob `x'<hex>'`. `<rows>`: rows returned; `<changes>`: rows inserted, updated or deleted; `truncated`: more than 256 KB of result, the rest left out. A transaction left open is rolled back (`ERR sql: a transaction was left open: rolled back`). `ERR sql: no sudoku.db ...` without a card, or while it's lent over USB. Serial only. |
 
 ### Touch and screen
 
@@ -70,10 +71,10 @@ Every release is followed by 150 ms of UI time before the `OK`, so the tap's eff
 
 ### Screenshot
 
-`shot` sends what the panel shows (its frame buffer), dialogs and notices included:
+`shot [z]` sends what the panel shows (its frame buffer), dialogs and notices included:
 
 ```
-SHOT BEGIN 720 720
+SHOT BEGIN 720 720[ z]
 S 0 <base64>
 S 1 <base64>
 ...
@@ -81,11 +82,11 @@ SHOT END <bytes> <crc32>
 OK shot
 ```
 
-- **`S` lines:** each carries up to 96 bytes (128 base64 characters), numbered from 0. Put the bytes back together in order of `n`.
-- **`SHOT END`:** `<bytes>` is the total byte count and `<crc32>` covers all of them. If a log line cut into an `S` line, the CRC doesn't match: ask again.
+- **`S` lines:** each carries up to 96 bytes (128 base64 characters), numbered from 0. Put the bytes back together in order of `n`. With `z` (`SHOT BEGIN 720 720 z`), the bytes put together are the compressed stream: inflate it first.
+- **`SHOT END`:** `<bytes>` is the total byte count of the run-length data (inflated, with `z`) and `<crc32>` covers all of it. If a log line cut into an `S` line, the CRC doesn't match (or, with `z`, inflating fails): ask again.
 - **Pixel format:** the bytes are run-length coded RGB565 pixels, row by row from the top left. Each run is three bytes, `[count − 1] [pixel low byte] [pixel high byte]`, for 1–256 equal pixels.
 - **Decoding:** RGB565 is `RRRRRGGG GGGBBBBB` (high byte first when read as a 16-bit value). For 8-bit colour, `r8 = r5<<3 | r5>>2`, `g8 = g6<<2 | g6>>4`, `b8 = b5<<3 | b5>>2`. The runs add up to exactly 720 × 720 pixels.
-- **Cost:** the size depends on the screen: flat areas code small, photos and gradients large. At 921600 baud a typical screen takes a few seconds.
+- **Cost:** the size depends on the screen: flat areas code small, photos and gradients large. At 921600 baud a typical screen takes about 1 s, or 0.35 s with `z` (about a quarter of the bytes).
 
 If the display has no frame buffer, the answer is `ERR shot: no frame buffer`, with no `OK`.
 
@@ -105,10 +106,10 @@ OK ls
 
 One line per entry, in the card's order: `L <d|f> <size> <name>`. Folders have size 0. In names the board codes spaces, `%` and control bytes as `%XX`; other bytes (UTF-8) come as they are.
 
-#### `get <path>`
+#### `get <path> [z]`
 
 ```
-FILE BEGIN <size>
+FILE BEGIN <size>[ z]
 F 0 <base64>
 F 1 <base64>
 ...
@@ -116,11 +117,11 @@ FILE END <bytes> <crc32>
 OK get
 ```
 
-The same framing as a screenshot, but with `F` lines and the raw file bytes (no run-length coding). An empty file sends no `F` lines and ends with `FILE END 0 00000000`. If the file can't be opened: `ERR get: can't read <path> (<reason>)`.
+The same framing as a screenshot, but with `F` lines and the raw file bytes (no run-length coding); with `z`, the file compressed (`<size>`, `<bytes>` and `<crc32>` are the file's own). An empty file sends no `F` lines and ends with `FILE END 0 00000000`. If the file can't be opened: `ERR get: can't read <path> (<reason>)`.
 
-#### `put <path> <size> <crc32>`
+#### `put <path> <size> <crc32> [z <zsize>]`
 
-Uploads `<size>` bytes whose CRC-32 is `<crc32>` (hex).
+Uploads `<size>` bytes whose CRC-32 is `<crc32>` (hex). With `z <zsize>`, the data lines carry the file compressed (zlib format, `<zsize>` bytes): the board inflates it as it comes, and checks `<size>` and `<crc32>` on the result. `ACK` then counts compressed bytes received.
 
 ```
 host:  put puzzles/mine.sdm 5000 1a2b3c4d
@@ -141,12 +142,14 @@ board: OK put 5000
   - `timed out waiting for data` (5 s with no line)
   - `expected a data line`
   - `bad data line` (not base64, or more than the size)
+  - with `z`: `bad compressed data`, `the compressed data ended early`, `data after the end`, `more data than the size said`
+  - `not the size it said`
   - `write failed (card full?)`
   - `CRC mismatch`
   - `couldn't rename the .part file`
   - `can't write <path>.part (<reason>)` (no such folder, for example), which comes instead of `READY`
 - **Folders:** `put` doesn't make them. Use `mkdir` first.
-- **Speed:** about 50 KB/s at 921600 baud.
+- **Speed:** about 50 KB/s at 921600 baud of what's on the wire; with `z`, text and databases go 2–3× faster.
 
 #### `mv <from> <to>`, `rm <path>`, `mkdir <path>`
 
