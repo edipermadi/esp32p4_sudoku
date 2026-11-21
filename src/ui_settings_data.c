@@ -4,7 +4,7 @@
  * @brief Settings > Data: microSD card, USB drive, firmware update, import, export, backup, factory reset.
  *
  * The rows and their dialogs. What they do to the board (the card format task, the firmware write, the
- * factory reset, lending the card over USB) is in settings_core.c; this file follows those through their
+ * factory reset, lending the card over USB) is in the settings core (settings_core.h); this file follows those through their
  * state (sd_state(), fw_update_state()) and shows the results.
  */
 #include "ui_settings.h"

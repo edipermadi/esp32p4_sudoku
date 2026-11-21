@@ -127,7 +127,11 @@ src/ui_settings_display.c  Settings > Display: theme, accent, brightness, screen
 src/ui_settings_sound.c    Settings > Sound: sound effects, volume, Gibberlink
 src/ui_settings_game.c     Settings > Game: timer, mistake check, no-notes, left-handed, hints, tour
 src/ui_settings_data.c     Settings > Data: microSD card, USB drive, firmware update, import, export, backup, factory reset
-src/settings_core.c     what those do, without LVGL: firmware update from the card, microSD probe and format, factory reset, power off, USB drive
+src/settings_core.h     what those do, without LVGL (a header for the four below)
+src/fw_update.c         firmware update from the card: update.bin into the other app slot
+src/sd_card.c           the microSD card: probe and format
+src/device_ops.c        factory reset, power off
+src/usb_drive.c         the card lent to a computer over USB
 src/ui_history.c        History and Gameplays
 src/ui_trophies.c       Trophies: achievements, leaderboards, records
 src/ui_players.c        the name dialog, Players, avatars

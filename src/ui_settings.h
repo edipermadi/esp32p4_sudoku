@@ -19,7 +19,7 @@
  * | ui_settings_display.c | dark mode, accent, colour-blind colours, digit size, brightness, screen off, lock screen and PIN, screen-saver clock, night mode |
  * | ui_settings_sound.c   | sound effects, volume, Gibberlink |
  * | ui_settings_game.c    | timer, mistake check, no-notes challenge, left-handed, hints, tour |
- * | ui_settings_data.c    | microSD card (Format), USB drive, firmware update, import, export to CSV, back up, factory reset (what those do to the board: settings_core.c) |
+ * | ui_settings_data.c    | microSD card (Format), USB drive, firmware update, import, export to CSV, back up, factory reset (what those do to the board: settings_core.h) |
  *
  * A tab's file builds its rows into the pane it's given (settings_tab_network() and the others), and
  * keeps its widgets and callbacks to itself. A row is settings_row() with a control on its right:
