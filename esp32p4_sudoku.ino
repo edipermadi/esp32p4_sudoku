@@ -10,7 +10,10 @@
  *   Board:            ESP32P4 Dev Module (esp32 core 3.3.x)
  *   PSRAM:            Enabled                 <- required (LVGL draw buffers)
  *   Flash Size:       32MB (256Mb)
- *   Partition Scheme: 32M Flash (13MB APP/6.75MB SPIFFS)
+ *   Partition Scheme: Custom                <- partitions.csv here: two 4.4 MB app
+ *                                              slots and the avatars' own 7 MB
+ * The avatars' pixels go into their partition once: from the release's flash files,
+ * esptool (docs/building.md), or avatars.bin on the card (extras/avatars.bin).
  *   Chip Variant:     match your chip (most 4B boards ship pre-v3.00 silicon)
  *
  * Libraries: lvgl 9.6.0 in ~/Arduino/libraries/lvgl,
@@ -27,6 +30,8 @@
 #include "src/sfx.h"
 #include "src/devctl.h"
 #include "src/gibberlink.h"
+#include "src/avatar_store.h"
+#include "src/stats_db.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 
@@ -84,6 +89,7 @@ void setup()
   }
   Serial.printf("Panel: %s\n", bsp_display_panel_kind() == BSP_PANEL_JD9365 ? "JD9365DA" : "ST7703");
 
+  avatars_init();                    /* the avatars' pixels in flash (else blank until installed) */
   store_init();
   err = bsp_sdcard_host_init();     /* before Wi-Fi: they share the SDMMC host */
   if (err != ESP_OK) {
@@ -103,6 +109,27 @@ void setup()
   }
 }
 
+/* The avatars, if they aren't in flash: installed from avatars.bin on the card, once the card is
+ * mounted (sudoku.db open); the screen is redrawn with them when they're there. */
+static void avatars_poll(void)
+{
+  static uint32_t next;
+  static bool tried;
+  if (millis() < next) return;
+  next = millis() + 500;
+  if (!tried && !avatars_ready() && stats_db_ready()) {
+    tried = true;
+    if (avatars_install()) sudoku_ui_notice("Installing the avatars from the card (about a minute)...", 5000);
+  }
+  int st = avatars_install_poll(NULL, NULL);
+  if (st == 2) {
+    lv_obj_invalidate(lv_screen_active());     /* (LVGL keeps no image cache here: lv_conf.h) */
+    sudoku_ui_notice("Avatars installed.", 3000);
+  } else if (st == 3) {
+    sudoku_ui_notice("Couldn't install the avatars from avatars.bin.", 5000);
+  }
+}
+
 void loop()
 {
   static bool kept;
@@ -112,6 +139,7 @@ void loop()
   }
   devctl_poll();                     /* commands from tools/devctl.py, if any */
   gibberlink_poll();                 /* commands heard as sound (Settings > Sound > Gibberlink) */
+  avatars_poll();
   uint32_t wait_ms = lv_timer_handler();
   /* screen dark (bsp_power_save): poll every 50 ms, still quick enough for the waking tap */
   uint32_t max_ms = bsp_power_saving() ? 50 : 20;

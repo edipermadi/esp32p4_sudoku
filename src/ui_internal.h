@@ -326,8 +326,8 @@ typedef stats_level_t level_stat_t;
 /*
  * Settings > Data > Firmware update: update.bin in the card's root (the
  * sketch's .ino.bin from the Arduino IDE's Export Compiled Binary, or the
- * build folder) goes into the other app slot (two 12.5 MiB slots, ota_0 /
- * ota_1). esp_ota_end() checks the whole image (format, chip, SHA-256)
+ * build folder) goes into the other app slot (two 4.44 MiB slots, ota_0 /
+ * ota_1: partitions.csv; the avatars are in a partition of their own). esp_ota_end() checks the whole image (format, chip, SHA-256)
  * before the board is told to start it, so a broken file changes nothing.
  * The new firmware starts on probation (the bootloader's rollback): it is
  * kept once the screens are up and sudoku.db has opened (sudoku_ui_mark_ok());

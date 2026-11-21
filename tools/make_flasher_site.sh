@@ -3,7 +3,7 @@
 #
 #   OUT_DIR/index.html          web/index.html (ESP Web Tools' install button)
 #   OUT_DIR/manifest.json       what to flash where, from the build's flash_args
-#   OUT_DIR/firmware/*.bin      bootloader, partition table, boot_app0, app
+#   OUT_DIR/firmware/*.bin      bootloader, partition table, boot_app0, app, avatars
 #   OUT_DIR/home.png            a screenshot for the page
 #   OUT_DIR/docs/               README.md and docs/*.md as HTML (tools/make_docs_site.py)
 #
@@ -19,6 +19,7 @@ ver=${3:?version}
 here=$(cd "$(dirname "$0")/.." && pwd)
 
 [ -f "$build/flash_args" ] || { echo "missing $build/flash_args" >&2; exit 1; }
+"$(dirname "$0")/build_extras.sh" "$build"     # avatars.bin into flash_args (the installer writes it too)
 rm -rf "$out"
 mkdir -p "$out/firmware"
 cp "$here/web/index.html" "$out/index.html"

@@ -24,7 +24,7 @@ env:
   ESP32_CORE_VERSION: 3.3.12
   LVGL_VERSION: 9.6.0
   ESP32_INDEX_URL: https://espressif.github.io/arduino-esp32/package_esp32_index.json
-  FQBN: esp32:esp32:esp32p4:PSRAM=enabled,FlashSize=32M,PartitionScheme=app13M_data7M_32MB,ChipVariant=prev3
+  FQBN: esp32:esp32:esp32p4:PSRAM=enabled,FlashSize=32M,PartitionScheme=custom,ChipVariant=prev3
 
 jobs:
   build:
@@ -64,6 +64,7 @@ jobs:
         run: |
           arduino-cli compile --fqbn "$FQBN" --build-path build --warnings default . 2>&1 | tee build.log
           grep -E "^Sketch uses" build.log >> "$GITHUB_STEP_SUMMARY" || true
+          tools/build_extras.sh build | tee -a "$GITHUB_STEP_SUMMARY"   # fails if the app outgrows its slot
 
       - name: Package
         run: |

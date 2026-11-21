@@ -1,0 +1,14 @@
+# The board's flash. Only its first 16 MiB can be mapped (read as code or data): the esp32
+# core's bootloader and ESP-IDF address the flash with 24 bits, so everything is below
+# 0x1000000 and the second 16 MiB stays unused. Two app slots for the firmware update from
+# the card (ota_0 / ota_1, 4.44 MB each), and the avatars' pixels (7 MB, extras/avatars.bin)
+# in a partition of their own that both slots share, so they aren't in each slot. nvs and
+# otadata are where the core's own tables put them, so the Wi-Fi setting survives a switch.
+# Build with Partition Scheme "Custom" (PartitionScheme=custom), which takes this file.
+# Name,   Type, SubType,  Offset,    Size,     Flags
+nvs,      data, nvs,      0x9000,    0x5000,
+otadata,  data, ota,      0xe000,    0x2000,
+app0,     app,  ota_0,    0x10000,   0x470000,
+app1,     app,  ota_1,    0x480000,  0x470000,
+avatars,  data, 0x40,     0x8F0000,  0x700000,
+coredump, data, coredump, 0xFF0000,  0x10000,

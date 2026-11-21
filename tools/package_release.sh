@@ -3,10 +3,11 @@
 #
 #   esp32p4_sudoku-VERSION-update.bin    the app only: copy to the card as update.bin
 #                                        (Settings > Data > Firmware update)
-#   esp32p4_sudoku-VERSION-factory.bin   bootloader, partition table and app in one
-#                                        image, flashed at 0x0: for a blank board (its
+#   esp32p4_sudoku-VERSION-factory.bin   bootloader, partition table, app and avatars in
+#                                        one image, flashed at 0x0: for a blank board (its
 #                                        0xFF gaps cover NVS at 0x9000: the Wi-Fi setting goes)
-#   esp32p4_sudoku-VERSION-flash.zip     the separate parts and flash_args (keeps NVS):
+#   esp32p4_sudoku-VERSION-flash.zip     the separate parts (avatars.bin among them) and
+#                                        flash_args (keeps NVS):
 #                                        esptool ... write-flash @flash_args
 #   esp32p4_sudoku-VERSION-elf.zip       the ELF file, to decode a crash's backtrace
 #   SHA256SUMS
@@ -33,6 +34,7 @@ fi
 
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
+"$(dirname "$0")/build_extras.sh" "$build"     # the app's size checked; avatars.bin into flash_args
 
 cp "$build/$name.ino.bin" "$out/$base-update.bin"
 
@@ -44,7 +46,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/$base"
 cp "$build/$name.ino.bin" "$build/$name.ino.bootloader.bin" "$build/$name.ino.partitions.bin" \
-   "$build/boot_app0.bin" "$build/flash_args" "$tmp/$base/"
+   "$build/boot_app0.bin" "$build/avatars.bin" "$build/flash_args" "$tmp/$base/"
 (cd "$tmp" && zip -qr "$out/$base-flash.zip" "$base")
 (cd "$build" && zip -qj "$out/$base-elf.zip" "$name.ino.elf")
 
@@ -54,9 +56,9 @@ app_kb=$(( $(stat -c %s "$build/$name.ino.bin") / 1024 ))
 cat > "$out/RELEASE.md" <<EOF
 Firmware for the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, built for **pre-v3.00 ESP32-P4 chips** (most 4B boards; \`ChipVariant=prev3\`), 32 MB flash, PSRAM. App: ${app_kb} KB.
 
-**Update a board that already runs Sudoku**: copy \`$base-update.bin\` to the microSD card's root as \`update.bin\` (for example with \`python3 tools/devctl.py --port /dev/ttyACM0 "put $base-update.bin update.bin"\`, or Settings → Data → USB drive), then **Settings → Data → Firmware update**. Game data on the card is kept.
+**Update a board that already runs Sudoku with the 4.4 MB app slots** (Settings → System → Storage says "of 4.4 MB"): copy \`$base-update.bin\` to the microSD card's root as \`update.bin\` (for example with \`python3 tools/devctl.py --port /dev/ttyACM0 "put $base-update.bin update.bin"\`, or Settings → Data → USB drive), then **Settings → Data → Firmware update**. Game data on the card is kept. A board with the older flash layout (one 12.5 MB slot) needs one USB flash, below, first.
 
-**Flash over USB** (the UART port), keeping the board's Wi-Fi setting: unzip \`$base-flash.zip\` and, in its folder,
+**Flash over USB** (the UART port), keeping the board's Wi-Fi setting (it also writes the avatars, \`avatars.bin\`, into their own flash partition): unzip \`$base-flash.zip\` and, in its folder,
 \`\`\`
 esptool --chip esp32p4 --port /dev/ttyACM0 --baud 921600 write-flash @flash_args
 \`\`\`

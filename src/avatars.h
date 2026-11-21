@@ -12,7 +12,10 @@ extern "C" {
 #define AVATAR_COUNT  1867
 #define AVATAR_SIZE   36                       /* px, square */
 #define AVATAR_GROUPS 9                       /* Smileys & Emotion, People & Body, ... */
+#define AVATAR_CRC    0xFE212BBAu                /* CRC-32 of extras/avatars.bin's pixels */
 
+/* avatar_store.c: the pixels are in the flash's "avatars" partition. avatar_image() is a
+ * blank (transparent) image until avatars_init() finds them there. */
 const lv_image_dsc_t *avatar_image(int i);   /* 0..AVATAR_COUNT-1 */
 const char *avatar_group_name(int g);        /* 0..AVATAR_GROUPS-1 */
 int avatar_group_first(int g);               /* the group's first avatar, from 0 */
