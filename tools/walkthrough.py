@@ -43,7 +43,7 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "thermo": "Thermo", "sandwich": "Sandwich", "kids-4x4": "Kids", "anti-king": "Anti-King",
          "non-consecutive": "Non-Consecutive", "disjoint-groups": "Disjoint", "asterisk": "Asterisk",
          "kropki": "Kropki", "xv": "XV", "greater-than": "Greater", "quadruple": "Quadruple", "arrow": "Arrow",
-         "renban": "Renban", "german-whispers": "German"}
+         "renban": "Renban", "german-whispers": "German", "skyscraper": "Skyscraper", "little-killer": "Little"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -119,6 +119,10 @@ def rule_words(d, vals, c, v, r):
         smaller = (r["mark"] == 1) == r["cell_first"]       # LESS: the left / top one is the smaller
         return "the sign says it's %s than the %d in %s" % ("smaller" if smaller else "bigger", w, at)
     if rule == "range":
+        if d.get("sky"):                                    # Skyscraper: the clue keeps it below a height
+            if r["lo"] == r["hi"]:
+                return "a clue of its row or column makes it %s (see the rules above)" % a_n(r["lo"])
+            return "it's near a clue of its row or column, which keeps it at most %d" % r["hi"]
         if d.get("line_kind") == 3 and v == 5:              # German Whispers: no 5 on a line
             return "it's on a green line, and nothing is 5 or more away from a 5"
         if d["thermos"]:
@@ -191,6 +195,42 @@ def rule_words(d, vals, c, v, r):
                     (vals[circle], rc(circle), a_n(v), "%d" % (filled + v) if not empty else
                      "at least %d" % (filled + v + empty)))
         return "it's on an arrow's shaft, which adds up to one digit: %s would take it past 9" % a_n(v)
+    if rule == "sky":
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["sky"][lu]
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        seen, top, k = 0, 0, 0
+        while k < 9 and x[k]:
+            if x[k] > top:
+                top, seen = x[k], seen + 1
+            k += 1
+        side = "the left" if lu < 9 else "the top"
+        shown = [x[j] for j in range(k) if x[j] > max(x[:j] or [0])]
+        if top != 9 and k < 9 and seen >= clue:
+            return ("seen from %s of %s, %s there would leave %s seen and the 9 still to come, "
+                    "more than its clue %d" % (side, name, a_n(v), listing(map(str, shown)), clue))
+        if seen > clue:
+            return "seen from %s of %s, %d buildings would already show with %s there, more than its clue %d" % (
+                side, name, seen, a_n(v), clue)
+        if top == 9 or k == 9:
+            return "seen from %s of %s, exactly %d buildings would show with %s there, not its clue %d" % (
+                side, name, seen, a_n(v), clue)
+        return "seen from %s of %s, %s there would leave too few buildings to make its clue %d" % (
+            side, name, a_n(v), clue)
+    if rule == "lk":
+        diag = d["lk"][r["diag"]]
+        filled = [vals[o] for o in diag["cells"] if vals[o] and o != c]
+        empty = sum(1 for o in diag["cells"] if not vals[o] and o != c)
+        left = diag["sum"] - sum(filled) - v
+        has = " (with %s already on it)" % listing(map(str, filled)) if filled else ""
+        if not empty:
+            return "its diagonal of %d%s needs %d there" % (diag["sum"], has, diag["sum"] - sum(filled))
+        other = "cell" if empty == 1 else "%d cells" % empty
+        return "on its diagonal of %d%s, %s would leave %d for its other %s, too %s" % (
+            diag["sum"], has, a_n(v), left, other, "little" if left < empty else "much")
     if rule == "sandwich":
         line = r["line"]
         name = "row %d" % (line + 1) if line < 9 else "column %d" % (line - 8)
@@ -249,7 +289,7 @@ def step_text(d, vals, s):
 # ------------------------------------------------------------------ the pictures
 
 def make_drawer(d, fonts):
-    n, band = d["n"], BAND if d["sandwich"] else 0
+    n, band = d["n"], BAND if d["sandwich"] or d.get("sky") or d.get("lk") else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -401,6 +441,28 @@ def make_drawer(d, fonts):
             digs = "".join(map(str, q["digits"]))
             txt = digs if len(digs) <= 2 else digs[:2] + "\n" + digs[2:]
             g.multiline_text((cx, cy), txt, font=tiny, fill=GIVEN_FG, anchor="mm", align="center", spacing=0)
+        for k in d.get("lk", []):                           # Little Killer: a sum before its diagonal, its arrow
+            first, top, dr = k["cells"][0], k["top"], k["dir"]
+            i = first % 9 if top else first // 9
+            spot = i + (0 if dr == 0 else 1)                # the line before / after that column or row
+            dx, dy = (-1 if dr == 1 else 1), (-1 if dr == 2 else 1)
+            if top:
+                x, y = PAD + band + spot * CELL + (-7 if dr == 0 else 7), PAD + band / 2 - 4
+            else:
+                x, y = PAD + band / 2 - 4, PAD + band + spot * CELL + (-7 if dr == 0 else 7)
+            g.text((x - 3 * dx, y), str(k["sum"]), font=tiny, fill=SUM_FG, anchor="mm")
+            ax, ay = x + 7 * dx, y + 8 * dy
+            g.line([(ax, ay), (ax + 6 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
+            g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 2 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
+            g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 6 * dx, ay + 2 * dy)], fill=SUM_FG, width=2)
+        if d.get("sky"):                                    # Skyscraper: the clues (none: nothing drawn)
+            for i in range(9):
+                x, y = xy(i * 9)
+                if d["sky"][i]:
+                    g.text((PAD + band / 2, y + CELL / 2), str(d["sky"][i]), font=small, fill=SUM_FG, anchor="mm")
+                x, y = xy(i)
+                if d["sky"][9 + i]:
+                    g.text((x + CELL / 2, PAD + band / 2), str(d["sky"][9 + i]), font=small, fill=SUM_FG, anchor="mm")
         if d["sandwich"]:                                   # the sums: left of the rows, above the columns
             for i in range(9):
                 x, y = xy(i * 9)

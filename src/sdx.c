@@ -100,6 +100,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_RENBAN:
     case VAR_WHISPER:  return sudoku_geom_lines_text(p->variant, p->thermos, out);   /* (lines go in thermos) */
     case VAR_SANDWICH: return sudoku_geom_sandwich_text(p->marks, out);
+    case VAR_SKY:      return sudoku_geom_sky_text(p->marks, out);            /* (its clues go in marks) */
+    case VAR_LK:       return sudoku_geom_lk_text(p->cages, out);             /* (its sums where cages go) */
     default: {
         if (p->variant < 0 || p->variant >= VAR_COUNT) return false;
         memcpy(out, sudoku_geom(p->variant), sizeof(*out));

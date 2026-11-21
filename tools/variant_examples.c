@@ -297,6 +297,22 @@ static int pick(int var, const sudoku_geom_t *G, const uint8_t v[81], single_t *
     return got;
 }
 
+/* singles alone (by the rules against the filled digits) solve the puzzle to the end: the
+ * walkthrough can explain every step */
+static bool singles_solve(const sudoku_geom_t *G, const uint8_t giv[81])
+{
+    static single_t s[2048];
+    uint8_t v[81];
+    memcpy(v, giv, 81);
+    for (;;) {
+        int n = singles(G, v, false, s);
+        if (!n) break;
+        v[s[0].cell] = (uint8_t)s[0].digit;
+    }
+    for (int k = 0; k < G->ncells; k++) if (!v[G->cells[k]]) return false;
+    return true;
+}
+
 static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, char *marks, char *thermos, int len)
 {
     regions[0] = cages[0] = marks[0] = thermos[0] = 0;
@@ -310,6 +326,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_EVENODD: case VAR_CONSEC: case VAR_KROPKI: case VAR_XV: case VAR_GT:
         sudoku_marks_text(g, marks, len); break;
     case VAR_SANDWICH: sudoku_sandwich_text(g, marks, len); break;
+    case VAR_SKY: sudoku_sky_text(g, marks, len); break;
+    case VAR_LK: sudoku_lk_text(g, cages, len); break;
     case VAR_THERMO: case VAR_ARROW: case VAR_RENBAN: case VAR_WHISPER: sudoku_thermos_text(g, thermos, len); break;
     default: break;
     }
@@ -375,6 +393,23 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
         }
         printf(", \"rule\": \"quad\", \"quad\": %d", G->quad_of[c][0]);
         return;
+    case FIT_SKY_ROW: case FIT_SKY_COL:
+        printf(", \"rule\": \"sky\", \"line\": %d", why == FIT_SKY_ROW ? r : 9 + q);
+        return;
+    case FIT_LK:
+        for (int s = 0; s < 2; s++) {               /* the diagonal whose sum says no */
+            int k = G->lk_of[c][s], sum = 0, empty = 0;
+            if (k == LK_NONE) continue;
+            for (int j = 0; j < G->lk_n[k]; j++) {
+                int o = G->lk_cell[k][j];
+                if (o == c) continue;
+                if (v[o]) sum += v[o]; else empty++;
+            }
+            int left = G->lk_sum[k] - sum - d;
+            if (left < empty || left > 9 * empty) { printf(", \"rule\": \"lk\", \"diag\": %d", k); return; }
+        }
+        printf(", \"rule\": \"lk\", \"diag\": %d", G->lk_of[c][0] != LK_NONE ? G->lk_of[c][0] : G->lk_of[c][1]);
+        return;
     case FIT_SANDWICH_ROW: case FIT_SANDWICH_COL:
         printf(", \"rule\": \"sandwich\", \"line\": %d", why == FIT_SANDWICH_ROW ? r : 9 + q);
         return;
@@ -412,6 +447,21 @@ static void layout_json(const sudoku_geom_t *G)
     for (int qd = 0; qd < G->nquads; qd++) {
         printf("%s{\"at\": %d, \"digits\": [", qd ? ", " : "", G->quad_at[qd]);
         for (int j = 0; j < G->quad_n[qd]; j++) printf("%s%d", j ? "," : "", G->quad_dig[qd][j]);
+        printf("]}");
+    }
+    printf("],\n \"sky\": ");
+    if (G->skyscraper) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) printf("%s%d", lu ? "," : "", G->sky[lu]);
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"lk\": [");
+    for (int k = 0; k < G->nlk; k++) {
+        printf("%s{\"sum\": %d, \"dir\": %d, \"top\": %s, \"cells\": [", k ? ", " : "", G->lk_sum[k], G->lk_dir[k],
+               G->lk_from_top[k] ? "true" : "false");
+        for (int j = 0; j < G->lk_n[k]; j++) printf("%s%d", j ? "," : "", G->lk_cell[k][j]);
         printf("]}");
     }
     printf("],\n \"sandwich\": ");
@@ -519,6 +569,7 @@ int main(int argc, char **argv)
                 single_t one;
                 int sc;
                 if (pick(var, &board, giv, &one, &sc) < 0 || sc >= best_score) continue;
+                if (!singles_solve(&board, giv)) continue;   /* (the walkthrough must reach the end) */
                 best_score = sc;
                 best_seed = seed;
                 best_level = lv;

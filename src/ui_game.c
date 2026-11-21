@@ -95,7 +95,7 @@ static int g_from_coll = -1;              /* the collection the game was opened 
 
 /* game screen */
 static lv_obj_t *g_grid, *g_boxes[9], *g_cells[81], *g_cell_lbl[81];
-static lv_obj_t *g_clues[18];                       /* Sandwich: the sums by the rows and columns */
+static lv_obj_t *g_clues[BOARD_CLUES];              /* the clues outside the grid (Sandwich, Skyscraper, Little Killer) */
 static lv_obj_t *g_pad[9], *g_pad_cnt[9];
 static int       g_layout_var = -1;     /* variant the board and pad are laid out for */
 static lv_obj_t *g_title, *g_best, *g_timer, *g_timer_icon, *g_status, *g_notes_btn;
@@ -156,6 +156,27 @@ int compute_conflicts(void)
         }
         if (sum > g_geo->sandwich_sum[lu] || (!empty && sum != g_geo->sandwich_sum[lu])) {
             for (int k = a; k <= b; k++) if (g_b.val[cells[k]]) g_conflict[cells[k]] = true;
+        }
+    }
+    for (int lu = 0; g_geo->skyscraper && lu < 18; lu++) {   /* Skyscraper: more seen than the clue, or (full) not it */
+        int c = g_geo->sky[lu], seen = 0, top = 0, k = 0, cells[9];
+        if (!c) continue;
+        for (int j = 0; j < 9; j++) cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        for (; k < 9 && g_b.val[cells[k]]; k++) {
+            if (g_b.val[cells[k]] > top) { top = g_b.val[cells[k]]; seen++; }
+        }
+        if (seen > c || ((k == 9 || top == 9) && seen != c)) {
+            for (int j = 0; j < k; j++) g_conflict[cells[j]] = true;
+        }
+    }
+    for (int d = 0; d < g_geo->nlk; d++) {          /* Little Killer: a diagonal over its sum, or (full) not it */
+        int sum = 0, empty = 0;
+        for (int j = 0; j < g_geo->lk_n[d]; j++) {
+            sum += g_b.val[g_geo->lk_cell[d][j]];
+            empty += !g_b.val[g_geo->lk_cell[d][j]];
+        }
+        if (sum + empty > g_geo->lk_sum[d] || (!empty && sum != g_geo->lk_sum[d])) {
+            for (int j = 0; j < g_geo->lk_n[d]; j++) if (g_b.val[g_geo->lk_cell[d][j]]) g_conflict[g_geo->lk_cell[d][j]] = true;
         }
     }
     for (int t = 0; t < g_geo->nthermos; t++) {     /* the lines: digits that break theirs */
@@ -1217,7 +1238,7 @@ void build_game(void)
         lv_obj_set_clickable(box, false);
         g_boxes[b] = box;
     }
-    for (int i = 0; i < 18; i++) {
+    for (int i = 0; i < BOARD_CLUES; i++) {
         g_clues[i] = make_label(screen_game(), &lv_font_montserrat_20, C_ACCENT);
         lv_obj_set_style_text_align(g_clues[i], LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_hidden(g_clues[i], true);

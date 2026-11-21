@@ -223,6 +223,7 @@ typedef struct {
     const uint8_t *edges;               /* per mark: a cell and its MARK_* on the line to its right; ends 0xFF */
     const char *quad;                   /* Quadruple: a circle's digits at the picture's centre, may be NULL */
     uint8_t line_kind;                  /* the kind of the thermo line: LINE_* (Arrow, Renban, Whispers) */
+    int8_t lk_clue;                     /* Little Killer: a sum above the top-left cell, the diagonal down-right; 0 none */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound */
@@ -536,6 +537,10 @@ const char *settings_card_busy(void);
 void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy);
 void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n);
 void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, int cs);
+void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len);
+/* the labels for the clues outside the grid: Sandwich and Skyscraper use 18 (rows, then columns),
+ * Little Killer one per place on a line between cells (10 above, 10 left) */
+#define BOARD_CLUES 20
 /* ui_newpuzzle.c */
 const char *const *learn_names(void);
 lv_obj_t *screen_edit(void);

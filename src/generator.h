@@ -46,6 +46,11 @@
  *                consecutive digits, in any order (3-5-4-6)
  *   VAR_WHISPER  German Whispers: Classic rules, and neighbours along a line
  *                differ by at least 5 (so no 5 on a line)
+ *   VAR_SKY      Skyscraper: Classic rules, and a clue left of some rows and above
+ *                some columns: how many "buildings" (digits) are seen from there,
+ *                a taller one hiding the shorter ones behind it
+ *   VAR_LK       Little Killer: Classic rules, and clues outside the grid with an
+ *                arrow: the sum of the digits along that diagonal (repeats allowed)
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -93,11 +98,11 @@ const char *gen_level_name(int level);   /* 0..GEN_LEVELS-1: "Easy", "Medium", "
 typedef enum { VAR_CLASSIC = 0, VAR_X, VAR_MINI, VAR_HYPER, VAR_JIGSAW, VAR_KILLER, VAR_KNIGHT, VAR_EVENODD,
                VAR_CONSEC, VAR_THERMO, VAR_SANDWICH, VAR_KIDS, VAR_KING, VAR_NONCONSEC, VAR_DISJOINT,
                VAR_ASTERISK, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
-               VAR_COUNT } sudoku_variant_t;
+               VAR_SKY, VAR_LK, VAR_COUNT } sudoku_variant_t;
 
 /* "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd", "Consecutive",
  * "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki",
- * "XV", "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers" */
+ * "XV", "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers", "Skyscraper", "Little Killer" */
 const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku", ... */
 #define UNIT_DIAG_MAIN 27
 #define UNIT_DIAG_ANTI 28
@@ -110,6 +115,12 @@ const char *variant_name(int variant);   /* 0..VAR_COUNT-1: "Classic", "X-Sudoku
 #define THERMOS_MAX    16
 #define THERMO_NONE    0xFF
 enum { LINE_THERMO = 0, LINE_ARROW, LINE_RENBAN, LINE_WHISPER };
+#define LK_MAX         16
+#define LK_NONE        0xFF
+/* Little Killer: a diagonal's direction from its clue: a clue above a column points down-right or
+ * down-left, one left of a row down-right or up-right. The board draws a clue on the line between
+ * two cells, half a cell before its first cell (the generator keeps one clue per place). */
+enum { LK_DOWN_RIGHT = 0, LK_DOWN_LEFT, LK_UP_RIGHT };
 #define QUADS_MAX      32
 #define QUAD_NONE      0xFF
 
@@ -168,6 +179,17 @@ typedef struct {
     /* Sandwich: per row (0..8) and column (9..17), the sum between its 1 and 9 */
     bool sandwich;
     uint8_t sandwich_sum[18];
+    /* Skyscraper: per row (0..8, seen from the left) and column (9..17, from the top), the
+     * buildings seen, 0 = no clue */
+    bool skyscraper;
+    uint8_t sky[18];
+    /* Little Killer: diagonals, each from its first cell (on the top row or the left column) in
+     * its direction (LK_*), with the sum of its cells; a cell is on two at most (lk_of: the
+     * down-right one, then the other way) */
+    uint8_t nlk;
+    uint8_t lk_dir[LK_MAX], lk_sum[LK_MAX], lk_n[LK_MAX], lk_cell[LK_MAX][9];
+    bool lk_from_top[LK_MAX];           /* its clue above the column (else left of the row) */
+    uint8_t lk_of[81][2];
     /* Kropki, XV, Greater-Than: EDGE_*, and per cell its marks (EDGE_RIGHT, EDGE_DOWN) */
     uint8_t edge_kind;
     uint8_t edge[81];
@@ -216,6 +238,17 @@ bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
  * sudoku_sandwich_text() writes it. */
 bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out);
 bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len);
+/* A Skyscraper board from its clues as text: 18 numbers 0..9 (0: no clue), the rows from the
+ * left top to bottom, then the columns from the top left to right, comma-separated (kept in
+ * marks); sudoku_sky_text() writes it. */
+bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out);
+bool sudoku_sky_text(const sudoku_geom_t *g, char *buf, int len);
+/* A Little Killer board from its clues as text: "top|left index,direction,sum;..." e.g.
+ * "t3,r,21;l5,u,14" (t: above column 0..8, l: left of row 0..8; r down-right, l down-left
+ * (from the top only), u up-right (from the left only)), kept where Killer keeps its cages;
+ * sudoku_lk_text() writes it. */
+bool sudoku_geom_lk_text(const char *text, sudoku_geom_t *out);
+bool sudoku_lk_text(const sudoku_geom_t *g, char *buf, int len);
 /* A Quadruple board from its circles as text: "cell:digits;cell:digits;..." (cell
  * 0..79 the top-left of the four, not in the last column; 1-4 digits 1-9 each);
  * sudoku_quads_text() writes it. Kept where Killer keeps its cages. */
@@ -300,7 +333,7 @@ bool sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
 bool sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
 /* The same, and which rule says no: FIT_OK (it fits), or the first rule that rules d out */
 enum { FIT_OK = 0, FIT_FILLED, FIT_BROKEN, FIT_UNIT, FIT_XPEER, FIT_ALLOW, FIT_CONSEC, FIT_EDGE, FIT_QUAD,
-       FIT_SANDWICH_ROW, FIT_SANDWICH_COL, FIT_THERMO, FIT_CAGE };
+       FIT_SANDWICH_ROW, FIT_SANDWICH_COL, FIT_THERMO, FIT_CAGE, FIT_SKY_ROW, FIT_SKY_COL, FIT_LK };
 int sudoku_fits_why(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
 
 /* Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
@@ -315,7 +348,7 @@ int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);   /* the k-th cel
 typedef enum { TECH_NONE = 0, TECH_POINTING, TECH_CLAIMING, TECH_NAKED_PAIR, TECH_HIDDEN_PAIR,
                TECH_CAGE, TECH_CONSEC, TECH_THERMO, TECH_SANDWICH,
                TECH_NAKED_TRIPLE, TECH_X_WING, TECH_SWORDFISH, TECH_XY_WING,
-               TECH_EDGE, TECH_QUAD, TECH_LINE } tech_kind_t;
+               TECH_EDGE, TECH_QUAD, TECH_LINE, TECH_SKY, TECH_LK } tech_kind_t;
 typedef struct {
     int kind;                /* tech_kind_t */
     int unit, unit2, unit3;  /* pointing: box, line; claiming: line, box; pairs, triple: the unit; cage: the
@@ -323,6 +356,7 @@ typedef struct {
                                 thermo: the thermometer; sandwich: the row or column; edge (Kropki, XV,
                                 Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
                                 the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
+                                sky: the row or column (0..17), cell1 the cell; lk: the diagonal, cell1;
                                 X-Wing, Swordfish:
                                 the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
     int digit, digit2;       /* pointing/claiming, X-Wing, Swordfish: digit; pairs: the two digits; triple:

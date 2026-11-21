@@ -80,6 +80,8 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {9, 320, 518, 497},   /* Arrow */
     {9, 174, 525, 477},   /* Renban */
     {12, 450, 1784, 1111}, /* German Whispers */
+    {38, 159, 677, 304},    /* Skyscraper */
+    {15, 471, 1102, 1225},  /* Little Killer */
 };
 static lv_timer_t *gen_timer;
 static volatile bool gen_done;
@@ -119,6 +121,8 @@ static void gen_task(void *arg)
     if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC || gen_board->edge_kind)
         sudoku_marks_text(gen_board, gen_marks, 82);
     if (gen_var_req == VAR_SANDWICH) sudoku_sandwich_text(gen_board, gen_marks, 82);
+    if (gen_var_req == VAR_SKY) sudoku_sky_text(gen_board, gen_marks, 82);
+    if (gen_var_req == VAR_LK) sudoku_lk_text(gen_board, gen_cages, STATS_CAGES_LEN);   /* (where cages go) */
     gen_thermos[0] = 0;
     if (gen_board->nthermos) sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);   /* (any lines) */
     int clues = 0;
@@ -150,7 +154,7 @@ static void gen_poll_cb(lv_timer_t *t)
     gen_bar = NULL;                                 /* (went with the box) */
     uint16_t id;
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
-    const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_QUAD ? gen_cages : NULL;
+    const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,
@@ -333,7 +337,8 @@ static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, 
                                                  VAR_KNIGHT, VAR_KING, VAR_EVENODD, VAR_SANDWICH,
                                                  VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK,
                                                  VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
-                                                 VAR_ARROW, VAR_RENBAN, VAR_WHISPER};
+                                                 VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
+                                                 VAR_SKY, VAR_LK};
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
@@ -358,6 +363,8 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_ARROW] = "9x9 with arrows: the digits along each shaft add up to the digit in its circle.",
     [VAR_RENBAN] = "9x9 with purple lines: each line's digits are a run of consecutive digits, in any order.",
     [VAR_WHISPER] = "9x9 with green lines (German Whispers): neighbours along a line differ by 5 or more.",
+    [VAR_SKY] = "9x9: a clue by a row or column is how many buildings are seen from there (taller ones hide shorter).",
+    [VAR_LK] = "9x9: a clue with an arrow outside the grid is the sum of the digits along that diagonal.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /* the level buttons (Kids 4x4: Hard and Expert off) */
 
@@ -418,7 +425,8 @@ static void new_puzzle_cb(lv_event_t *e)
                                           "Anti-Knight", "Anti-King", "Even-Odd", "Sandwich", "\n",
                                           "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", "\n",
                                           "Kropki", "XV", "Greater-Than", "Quadruple", "\n",
-                                          "Arrow", "Renban", "Whispers", ""};
+                                          "Arrow", "Renban", "Whispers", "\n",
+                                          "Skyscraper", "Little Killer", ""};
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);
     lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
@@ -426,7 +434,7 @@ static void new_puzzle_cb(lv_event_t *e)
     for (uint32_t i = 0; i < VAR_COUNT; i++) {
         if (GEN_VAR_ORDER[i] == gen_pick_var) lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
     }
-    lv_obj_set_size(vm, LV_PCT(100), 316);          /* six rows */
+    lv_obj_set_size(vm, LV_PCT(100), 344);          /* seven rows */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);

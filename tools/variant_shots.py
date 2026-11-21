@@ -30,7 +30,8 @@ import devctl  # noqa: E402  (tools/devctl.py: the serial connection, commands a
 # the pages, in the order of docs/variant-examples.sdx (variant-examples #1 .. #20)
 PAGES = ["classic", "x-sudoku", "mini-6x6", "hyper", "jigsaw", "killer", "anti-knight", "even-odd",
          "consecutive", "thermo", "sandwich", "kids-4x4", "anti-king", "non-consecutive", "disjoint-groups",
-         "asterisk", "kropki", "xv", "greater-than", "quadruple", "arrow", "renban", "german-whispers"]
+         "asterisk", "kropki", "xv", "greater-than", "quadruple", "arrow", "renban", "german-whispers",
+         "skyscraper", "little-killer"]
 
 ROW0, ROW_H = 168, 74          # the collection's list: the first row's centre, the row pitch (pixels)
 FIT = 6                        # rows that fit before the list has to scroll

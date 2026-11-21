@@ -356,12 +356,13 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                   "Killer", "Anti-Knight", "Even-Odd", "Consecutive", "Thermo",
                                                   "Sandwich", "Mini 6x6", "Kids 4x4", "Anti-King",
                                                   "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki", "XV",
-                                                  "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers"};
+                                                  "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers",
+                                                  "Skyscraper", "Little Killer"};
 static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", "X-Sudoku", "Hyper", "Jigsaw", "Killer",
                                                    "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini",
                                                    "Kids", "Anti-King", "Non-Consecutive", "Disjoint", "Asterisk",
                                                    "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
-                                                   "German Whispers"};
+                                                   "German Whispers", "Skyscraper", "Little Killer"};
 const char *stats_kind_name(int kind) { return STATS_KIND_NAMES[kind]; }
 const char *stats_kind_prefix(int kind) { return STATS_KIND_PREFIX[kind]; }
 
@@ -391,6 +392,8 @@ int stats_kind_of(int variant, bool daily)
     case VAR_ARROW: return KIND_ARROW;
     case VAR_RENBAN: return KIND_RENBAN;
     case VAR_WHISPER: return KIND_WHISPER;
+    case VAR_SKY: return KIND_SKY;
+    case VAR_LK: return KIND_LK;
     default: return KIND_NEW;
     }
 }
@@ -2737,6 +2740,8 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Arrow", OF_VARIANT(20)},
     {"Fastest Renban", OF_VARIANT(21)},
     {"Fastest German Whispers", OF_VARIANT(22)},
+    {"Fastest Skyscraper", OF_VARIANT(23)},
+    {"Fastest Little Killer", OF_VARIANT(24)},
 };
 
 /* a player's records into R */

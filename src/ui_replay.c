@@ -423,8 +423,8 @@ static lv_obj_t *rp_build(uint16_t id, const char *sub, const char *player)
         rp_lbl[i] = make_label(cell, DIGIT_FONT_N(rp_geo->n), C_TEXT);
         lv_obj_center(rp_lbl[i]);
     }
-    lv_obj_t *clues[18];
-    for (int i = 0; i < 18; i++) {
+    lv_obj_t *clues[BOARD_CLUES];
+    for (int i = 0; i < BOARD_CLUES; i++) {
         clues[i] = make_label(scr, &lv_font_montserrat_20, C_ACCENT);
         lv_obj_set_style_text_align(clues[i], LV_TEXT_ALIGN_CENTER, 0);
     }

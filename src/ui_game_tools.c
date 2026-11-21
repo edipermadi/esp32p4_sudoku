@@ -187,6 +187,9 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_RENBAN] = {4, 1, 0, 0, "5364", NULL, NULL, NULL, NULL, NULL, PIC_RENBAN, NULL, -1, 0, NULL, NULL, LINE_RENBAN},
     [VAR_WHISPER] = {4, 1, 0, 0, "2816", NULL, NULL, NULL, NULL, NULL, PIC_WHISPER, NULL, -1, 0, NULL, NULL,
                      LINE_WHISPER},
+    [VAR_SKY] = {5, 1, 0, 0, "25198", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3, 0, NULL, NULL, 0, 0},
+    [VAR_LK] = {4, 4, 0, 0, "3..." ".1.." "..4." "...2", "1000010000100001", NULL, NULL, NULL, NULL, NULL, NULL, -1, 0,
+                NULL, NULL, 0, 10},
 };
 
 static const char *const RULES_TEXT[VAR_COUNT] = {
@@ -235,6 +238,11 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
                    "order: 5, 3, 6, 4 is 3 to 6. No digit repeats on a line.",
     [VAR_WHISPER] = "Classic rules, and along each green line, two neighbours differ by at least 5: 2, 8, 1, 6. "
                     "So there's never a 5 on a line.",
+    [VAR_SKY] = "Classic rules, and a clue left of a row or above a column says how many buildings are seen from "
+                "there: each digit is a building that tall, and a taller one hides the shorter ones behind it. Here "
+                "2, 5 and 9 are seen: 3.",
+    [VAR_LK] = "Classic rules, and a clue outside the grid with an arrow gives the sum of the digits along that "
+               "diagonal: 3 + 1 + 4 + 2 = 10. Digits can repeat on a diagonal where the boxes allow it.",
 };
 
 static void rules_pic_draw_cb(lv_event_t *e)
@@ -358,7 +366,21 @@ static void rules_pic_draw_cb(lv_event_t *e)
             lv_draw_label(layer, &d, &la);
         }
     }
-    if (p->left_clue >= 0) {                        /* Sandwich: the sum left of the row */
+    if (p->lk_clue > 0) {                           /* Little Killer: a sum above the corner, its arrow down-right */
+        char t[4];
+        snprintf(t, sizeof(t), "%d", p->lk_clue);
+        lv_draw_label_dsc_t d;
+        lv_draw_label_dsc_init(&d);
+        d.font = &lv_font_montserrat_20;
+        d.color = C_ACCENT;
+        d.align = LV_TEXT_ALIGN_RIGHT;
+        d.text = t;
+        d.text_local = 1;
+        lv_area_t a = {.x1 = x0 - 50, .y1 = y0 - 30, .x2 = x0 - 14, .y2 = y0 - 6};
+        lv_draw_label(layer, &d, &a);
+        draw_lk_arrow(layer, x0 - 12, y0 - 12, LK_DOWN_RIGHT, 9);
+    }
+    if (p->left_clue >= 0) {                        /* Sandwich, Skyscraper: the clue left of the row */
         char t[4];
         snprintf(t, sizeof(t), "%d", p->left_clue);
         lv_draw_label_dsc_t d;
@@ -400,7 +422,7 @@ static void rules_show(int variant)
     lv_obj_t *pic = lv_obj_create(lv_msgbox_get_content(m));
     lv_obj_remove_style_all(pic);
     const rules_pic_t *p = &RULES_PIC[variant];
-    lv_obj_set_size(pic, LV_PCT(100), p->h * RULES_PIC_CS(p) + 16);
+    lv_obj_set_size(pic, LV_PCT(100), p->h * RULES_PIC_CS(p) + 16 + (p->lk_clue > 0 ? 32 : 0));
     lv_obj_set_user_data(pic, (void *)p);
     lv_obj_add_event_cb(pic, rules_pic_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_t *t = make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT, RULES_TEXT[variant]);
@@ -464,6 +486,8 @@ static bool share_text(char *buf, size_t n)
     case VAR_RENBAN:
     case VAR_WHISPER: key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL; break;
     case VAR_SANDWICH: key = sudoku_sandwich_text(G, extra, sizeof(extra)) ? "sums" : NULL; break;
+    case VAR_SKY: key = sudoku_sky_text(G, extra, sizeof(extra)) ? "clues" : NULL; break;
+    case VAR_LK: key = sudoku_lk_text(G, extra, sizeof(extra)) ? "diagonals" : NULL; break;
     default: break;
     }
     if (key) len += snprintf(buf + len, n - (size_t)len, " %s=%s", key, extra);
@@ -559,6 +583,8 @@ static int pz_line(char *buf, size_t n)
     case VAR_XV:
     case VAR_GT:       if (sudoku_marks_text(G, extra, sizeof(extra))) marks = extra; break;
     case VAR_SANDWICH: if (sudoku_sandwich_text(G, extra, sizeof(extra))) marks = extra; break;
+    case VAR_SKY:      if (sudoku_sky_text(G, extra, sizeof(extra))) marks = extra; break;
+    case VAR_LK:       if (sudoku_lk_text(G, extra, sizeof(extra))) cages = extra; break;
     case VAR_THERMO:
     case VAR_ARROW:
     case VAR_RENBAN:

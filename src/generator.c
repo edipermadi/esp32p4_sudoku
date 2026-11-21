@@ -9,7 +9,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                               "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich",
                                               "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups",
                                               "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
-                                              "German Whispers"};
+                                              "German Whispers", "Skyscraper", "Little Killer"};
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
 const char *variant_name(int variant) { return VARIANT_NAMES[variant]; }
@@ -296,7 +296,8 @@ void sudoku_geom_init(void)
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
     g[VAR_KILLER] = g[VAR_CLASSIC];
     g[VAR_KILLER].variant = VAR_KILLER;
-    static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER};
+    static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
+                                  VAR_LK};
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
         g[OWN[i]].variant = OWN[i];
@@ -315,7 +316,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
     if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER ||
         variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH ||
         variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD ||
-        variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER) {
+        variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_SKY ||
+        variant == VAR_LK) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -479,6 +481,148 @@ static bool geom_sandwich(const uint8_t sums[18], sudoku_geom_t *out)
     for (int i = 0; i < 18; i++) {
         if (sums[i] > 35) return false;             /* 2+3+...+8 */
         out->sandwich_sum[i] = sums[i];
+    }
+    return true;
+}
+
+/* the cells of row / column lu (0..17) as seen from its clue (the left, the top) */
+static void line_cells(int lu, int cells[9])
+{
+    for (int k = 0; k < 9; k++) cells[k] = lu < 9 ? lu * 9 + k : k * 9 + (lu - 9);
+}
+
+/* buildings seen along cells (the digits in vals, in order): a taller one hides those behind it */
+static int sky_seen(const uint8_t *vals, const int cells[9])
+{
+    int seen = 0, top = 0;
+    for (int k = 0; k < 9; k++) {
+        if (vals[cells[k]] > top) { top = vals[cells[k]]; seen++; }
+    }
+    return seen;
+}
+
+static bool geom_sky(const uint8_t clues[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_SKY;
+    out->skyscraper = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int c = clues[lu], cells[9];
+        if (c > 9) return false;
+        out->sky[lu] = (uint8_t)c;
+        if (!c) continue;
+        line_cells(lu, cells);
+        /* the k-th building from the clue is at most k + 10 - c (k counted from 0): the rest
+         * seen behind it must each be taller; with 1 seen the first is the 9, with 9 seen 1..9 */
+        for (int k = 0; k < 9; k++) {
+            int hi = k + 10 - c;
+            if (hi < 9) out->allow[cells[k]] &= (uint16_t)((1u << (hi + 1)) - 1);
+            if (c == 9) out->allow[cells[k]] &= (uint16_t)(1u << (k + 1));
+        }
+        if (c == 1) out->allow[cells[0]] &= (uint16_t)(1u << 9);
+    }
+    return true;
+}
+
+bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t clues[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        char *end;
+        long v = p ? strtol(p, &end, 10) : -1;
+        if (!p || end == p || v < 0 || v > 9) return false;
+        clues[i] = (uint8_t)v;
+        p = end;
+        if (i < 17) {
+            if (*p != ',') return false;
+            p++;
+        }
+    }
+    return *p == 0 && geom_sky(clues, out);
+}
+
+bool sudoku_sky_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d", i ? "," : "", g->sky[i]);
+        if (w < 0 || w >= len - pos) return false;
+        pos += w;
+    }
+    return true;
+}
+
+/* Little Killer: a board with these diagonals (from the top: column idx, else row idx) */
+static bool geom_lk(int n, const bool *top, const uint8_t *idx, const uint8_t *dir, const uint8_t *sum,
+                    sudoku_geom_t *out)
+{
+    if (n < 1 || n > LK_MAX) return false;
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_LK;
+    memset(out->lk_of, LK_NONE, sizeof(out->lk_of));
+    for (int k = 0; k < n; k++) {
+        if (idx[k] > 8 || dir[k] > LK_UP_RIGHT || (top[k] && dir[k] == LK_UP_RIGHT) ||
+            (!top[k] && dir[k] == LK_DOWN_LEFT) || (!top[k] && idx[k] == 0 && dir[k] == LK_DOWN_RIGHT)) return false;
+        int r = top[k] ? 0 : idx[k], c = top[k] ? idx[k] : 0, dr = dir[k] == LK_UP_RIGHT ? -1 : 1;
+        int dc = dir[k] == LK_DOWN_LEFT ? -1 : 1, len = 0, slot = dir[k] == LK_DOWN_RIGHT ? 0 : 1;
+        for (; r >= 0 && r < 9 && c >= 0 && c < 9; r += dr, c += dc) {
+            int cell = r * 9 + c;
+            if (out->lk_of[cell][slot] != LK_NONE) return false;   /* (a diagonal twice) */
+            out->lk_cell[k][len++] = (uint8_t)cell;
+            out->lk_of[cell][slot] = (uint8_t)k;
+        }
+        if (len < 2 || sum[k] < 1 || sum[k] > 9 * len) return false;
+        out->lk_n[k] = (uint8_t)len;
+        out->lk_dir[k] = dir[k];
+        out->lk_sum[k] = sum[k];
+        out->lk_from_top[k] = top[k];
+    }
+    out->nlk = (uint8_t)n;
+    return true;
+}
+
+bool sudoku_geom_lk_text(const char *text, sudoku_geom_t *out)
+{
+    bool top[LK_MAX];
+    uint8_t idx[LK_MAX], dir[LK_MAX], sum[LK_MAX];
+    int n = 0;
+    const char *p = text;
+    while (p && *p) {
+        if (n >= LK_MAX || (*p != 't' && *p != 'l')) return false;
+        top[n] = *p++ == 't';
+        char *end;
+        long i = strtol(p, &end, 10);
+        if (end == p || *end != ',' || i < 0 || i > 8) return false;
+        p = end + 1;
+        if (*p != 'r' && *p != 'l' && *p != 'u') return false;
+        dir[n] = *p == 'r' ? LK_DOWN_RIGHT : *p == 'l' ? LK_DOWN_LEFT : LK_UP_RIGHT;
+        p++;
+        if (*p++ != ',') return false;
+        long s = strtol(p, &end, 10);
+        if (end == p || s < 1 || s > 81) return false;
+        p = end;
+        idx[n] = (uint8_t)i;
+        sum[n++] = (uint8_t)s;
+        if (*p == ';') p++;
+        else if (*p) return false;
+    }
+    return n > 0 && geom_lk(n, top, idx, dir, sum, out);
+}
+
+bool sudoku_lk_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    if (len < 1) return false;
+    buf[0] = 0;
+    for (int k = 0; k < g->nlk; k++) {
+        int first = g->lk_cell[k][0], i = g->lk_from_top[k] ? first % 9 : first / 9;
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%c%d,%c,%d", k ? ";" : "", g->lk_from_top[k] ? 't' : 'l', i,
+                         "rlu"[g->lk_dir[k]], g->lk_sum[k]);
+        if (w < 0 || w >= len - pos) return false;
+        pos += w;
     }
     return true;
 }
@@ -787,6 +931,19 @@ static void mask_k_range(uint16_t mask, int k, int *lo, int *hi)
     for (int d = 9, n = 0; d >= 1 && n < k; d--) if (mask >> d & 1) { *hi += d; n++; }
 }
 
+/* Skyscraper: the line's 9 digits (0 = empty, in order from the clue) can still show c buildings */
+static bool sky_line_ok(const uint8_t x[9], int c)
+{
+    int seen = 0, top = 0, k = 0;
+    for (; k < 9 && x[k]; k++) {
+        if (x[k] > top) { top = x[k]; seen++; }
+    }
+    if (seen > c) return false;
+    if (top == 9 || k == 9) return seen == c;       /* the 9 hides the rest; or the line is full */
+    int rest = 9 - k, more = 9 - top < rest ? 9 - top : rest;   /* at most this many more seen */
+    return seen < c && seen + more >= c;            /* (the 9, still to come, is seen) */
+}
+
 /* sudoku_fits_why(): which rule took the digit asked about out of grid_free()'s result (NULL:
  * nobody asks, the usual case: one predictable branch per rule) */
 typedef struct { int d, code; } why_t;   /* (one type for both ends: no aliasing surprise) */
@@ -833,6 +990,33 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_QUAD);
+    for (int line = 0; G->skyscraper && free && line < 2; line++) {   /* Skyscraper: its row's, its column's clue */
+        int lu = line ? 9 + i % 9 : i / 9, c = G->sky[lu], cells[9];
+        if (!c) continue;
+        line_cells(lu, cells);
+        uint8_t x[9];
+        for (int k = 0; k < 9; k++) x[k] = g->v[cells[k]];
+        int at = line ? i / 9 : i % 9;
+        for (int d = 1; d <= 9; d++) {
+            if (!(free >> d & 1)) continue;
+            x[at] = (uint8_t)d;
+            if (!sky_line_ok(x, c)) free &= (uint16_t)~(1u << d);
+        }
+        WHY(line ? FIT_SKY_COL : FIT_SKY_ROW);
+    }
+    for (int slot = 0; G->nlk && free && slot < 2; slot++) {   /* Little Killer: what its diagonal's sum leaves */
+        int k = G->lk_of[i][slot];
+        if (k == LK_NONE) continue;
+        int sum = 0, empty = 0;
+        for (int j = 0; j < G->lk_n[k]; j++) {
+            int o = G->lk_cell[k][j];
+            if (o == i) continue;
+            if (g->v[o]) sum += g->v[o]; else empty++;
+        }
+        int lo = G->lk_sum[k] - sum - 9 * empty, hi = G->lk_sum[k] - sum - empty;
+        for (int d = 1; d <= 9; d++) if (d < lo || d > hi) free &= (uint16_t)~(1u << d);
+    }
+    WHY(FIT_LK);
     if (G->sandwich && free) {                      /* Sandwich: a digit that can't keep a line's sum goes */
         for (int line = 0; line < 2 && free; line++) {
             int lu = line ? 9 + i % 9 : i / 9, ki = line ? i / 9 : i % 9, vals[9], p1 = -1, p9 = -1;
@@ -1276,6 +1460,87 @@ static bool quad_logic(logic_t *L)
     return false;
 }
 
+/* Skyscraper: a clue's line with at most 4 empty cells keeps, in each, the digits that some
+ * way of placing its missing digits (each where it's a candidate) that shows the clue uses */
+static bool sky_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int lu = 0; lu < 18; lu++) {
+        int c = G->sky[lu], cells[9], emp[9], ne = 0, miss[9], nm = 0;
+        if (!c) continue;
+        line_cells(lu, cells);
+        uint8_t x[9];
+        unsigned have = 0;
+        for (int k = 0; k < 9; k++) {
+            x[k] = L->v[cells[k]];
+            if (x[k]) have |= 1u << x[k]; else emp[ne++] = k;
+        }
+        if (!ne || ne > 4) continue;
+        for (int d = 1; d <= 9; d++) if (!(have >> d & 1)) miss[nm++] = d;
+        if (nm != ne) continue;
+        uint16_t ok[9] = {0};
+        int perm[4] = {0, 1, 2, 3}, np = 1;
+        for (int f = 2; f <= ne; f++) np *= f;
+        for (int p = 0; p < np; p++) {              /* every order of the missing digits */
+            int idx[4], used = 0, q = p;
+            for (int j = 0; j < ne; j++) {          /* p as a permutation (factorial number system) */
+                int r = q % (ne - j), n = 0;
+                q /= ne - j;
+                for (int t = 0; t < ne; t++) {
+                    if (used >> t & 1) continue;
+                    if (n++ == r) { idx[j] = t; used |= 1 << t; break; }
+                }
+            }
+            bool fits = true;
+            for (int j = 0; j < ne && fits; j++) fits = (L->cand[cells[emp[j]]] >> miss[idx[j]] & 1) != 0;
+            if (!fits) continue;
+            for (int j = 0; j < ne; j++) x[emp[j]] = (uint8_t)miss[idx[j]];
+            if (sky_line_ok(x, c)) for (int j = 0; j < ne; j++) ok[j] |= (uint16_t)(1u << miss[idx[j]]);
+            for (int j = 0; j < ne; j++) x[emp[j]] = 0;
+        }
+        (void)perm;
+        for (int j = 0; j < ne; j++) {
+            int cell = cells[emp[j]];
+            if (L->cand[cell] & ~ok[j]) {
+                uint16_t keep = (uint16_t)(L->cand[cell] & ok[j]);
+                eliminate(L, cell, (uint16_t)(L->cand[cell] & ~ok[j]));
+                trace(TECH_SKY, lu, -1, keep, 0, cell, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* Little Killer: each cell of a diagonal between its sum less the others' biggest and smallest */
+static bool lk_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int k = 0; k < G->nlk; k++) {
+        for (int j = 0; j < G->lk_n[k]; j++) {
+            int c = G->lk_cell[k][j], lo = G->lk_sum[k], hi = G->lk_sum[k];
+            if (L->v[c]) continue;
+            for (int t = 0; t < G->lk_n[k]; t++) {
+                int o = G->lk_cell[k][t];
+                if (o == c) continue;
+                uint16_t m = L->v[o] ? (uint16_t)(1u << L->v[o]) : L->cand[o];
+                if (!m) return false;
+                lo -= 31 - __builtin_clz(m);
+                hi -= __builtin_ctz(m);
+            }
+            uint16_t keep = 0;
+            for (int d = 1; d <= 9; d++) if (d >= lo && d <= hi) keep |= (uint16_t)(1u << d);
+            keep &= L->cand[c];
+            if (keep != L->cand[c]) {
+                eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+                trace(TECH_LK, k, -1, keep, 0, c, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static bool thermo_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
@@ -1627,6 +1892,8 @@ static int technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->sandwich && sandwich_logic(&L)) continue;   /* Sandwich: and where the 1 and 9 can be */
         if (G->edge_kind && edge_logic(&L)) continue;     /* Kropki, XV, Greater-Than: the marks */
         if (G->nquads && quad_logic(&L)) continue;         /* Quadruple: the circles */
+        if (G->skyscraper && sky_logic(&L)) continue;      /* Skyscraper: the clues' lines */
+        if (G->nlk && lk_logic(&L)) continue;              /* Little Killer: the diagonals */
         if (locked_candidates(&L) || pairs(&L)) {
             tier = 2;
             continue;
@@ -1647,6 +1914,7 @@ static int easy_min_clues(const sudoku_geom_t *G)
     if (G->edge_kind == EDGE_GT) return 16;
     if (G->nquads) return 28;
     if (G->nthermos && G->line_kind != LINE_THERMO) return 28;
+    if (G->skyscraper || G->nlk) return 28;
     if (G->consec_on) return 12;                    /* the bars say a lot */
     if (G->variant == VAR_EVENODD) return 30;
     if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT) return 32;
@@ -1977,8 +2245,9 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
     const bool thermo = variant == VAR_THERMO, sandwich = variant == VAR_SANDWICH;
     const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER;
+    const bool sky = variant == VAR_SKY, lk = variant == VAR_LK;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
-    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines;
+    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk;
     if (sandwich) bread_tables();
     if (own && !jig && !(jig = malloc(sizeof(*jig)))) return false;
     const sudoku_geom_t *G = own ? jig : sudoku_geom(variant);
@@ -2066,6 +2335,45 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 memcpy(dig[q], four, 4);
             }
             if (!geom_quad(at, n, (const uint8_t (*)[4])dig, nq, jig)) continue;
+        } else if (sky) {                           /* a grid, then some of its 18 clues */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t clues[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                int cells[9];
+                line_cells(lu, cells);
+                clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sky_seen(full, cells) : 0;
+            }
+            geom_sky(clues, jig);
+        } else if (lk) {                            /* a grid, then sums along some diagonals */
+            random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            bool top[LK_MAX];
+            uint8_t idx[LK_MAX], dir[LK_MAX], sum[LK_MAX];
+            /* a clue sits on the line between two cells, half a cell before its diagonal's first cell
+             * (above the columns: 0..9, left of the rows: 10..19): one clue per place */
+            bool spot_used[20] = {false}, dr_used[17] = {false}, ad_used[17] = {false};
+            int n = 0, want = level >= GEN_HARD ? 10 : 8;
+            for (int tries = 0; tries < 200 && n < want; tries++) {
+                bool t = rnd(&rng) & 1;
+                int i = (int)(rnd(&rng) % 9), d = t ? (rnd(&rng) & 1 ? LK_DOWN_RIGHT : LK_DOWN_LEFT)
+                                                    : (rnd(&rng) & 1 ? LK_DOWN_RIGHT : LK_UP_RIGHT);
+                int r = t ? 0 : i, c = t ? i : 0;
+                if (!t && i == 0 && d == LK_DOWN_RIGHT) continue;   /* (that one is the top's) */
+                int len = d == LK_DOWN_RIGHT ? 9 - (r > c ? r : c) : d == LK_DOWN_LEFT ? c + 1 : r + 1;
+                int line = d == LK_DOWN_RIGHT ? c - r + 8 : r + c;  /* which diagonal */
+                bool *used = d == LK_DOWN_RIGHT ? dr_used : ad_used;
+                int spot = (t ? 0 : 10) + i + (d == LK_DOWN_RIGHT ? 0 : 1);
+                if (len < 3 || spot_used[spot] || used[line]) continue;
+                int s = 0;
+                for (int dr = d == LK_UP_RIGHT ? -1 : 1, dc = d == LK_DOWN_LEFT ? -1 : 1;
+                     r >= 0 && r < 9 && c >= 0 && c < 9; r += dr, c += dc) s += full[r * 9 + c];
+                spot_used[spot] = used[line] = true;
+                top[n] = t;
+                idx[n] = (uint8_t)i;
+                dir[n] = (uint8_t)d;
+                sum[n++] = (uint8_t)s;
+            }
+            if (!geom_lk(n, top, idx, dir, sum, jig)) continue;
         } else if (lines) {                         /* a grid, then lines that keep their rule on it */
             random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!rule_paths(variant, full, &rng, level >= GEN_HARD ? 10 : 8, jig)) continue;
@@ -2188,7 +2496,8 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
         }
         if (!(G->ncages && cage_logic(&L)) && !(G->consec_on && consec_logic(&L)) &&
             !(G->nthermos && thermo_logic(&L)) && !(G->sandwich && sandwich_logic(&L)) &&
-            !(G->edge_kind && edge_logic(&L)) && !(G->nquads && quad_logic(&L)) && !locked_candidates(&L) &&
+            !(G->edge_kind && edge_logic(&L)) && !(G->nquads && quad_logic(&L)) &&
+            !(G->skyscraper && sky_logic(&L)) && !(G->nlk && lk_logic(&L)) && !locked_candidates(&L) &&
             !pairs(&L) && !naked_triple(&L) && !fish(&L, 2) && !fish(&L, 3) && !xy_wing(&L)) {
             break;                                                  /* the first one is in out->tech */
         }

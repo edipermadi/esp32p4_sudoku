@@ -10,9 +10,9 @@
  * "Easy" .. "Expert" or 0-3, empty or "-" for none (the receiver rates it); givens: 81
  * cells row by row, a digit, '0' or '.' for an empty one, or a letter a-z for a run
  * of 1-26 empty cells (sdx_pack_givens; Mini 6x6 and Kids 4x4 use the top-left 6x6 /
- * 4x4); regions: Jigsaw's 81 digits 0-8; cages (Killer; Quadruple: its circles),
- * marks (Even-Odd, Consecutive, Kropki, XV, Greater-Than: 81 characters; Sandwich:
- * its 18 sums), thermos (Thermo; Arrow, Renban, German Whispers: their lines): the texts
+ * 4x4); regions: Jigsaw's 81 digits 0-8; cages (Killer; Quadruple: its circles; Little
+ * Killer: its diagonals), marks (Even-Odd, Consecutive, Kropki, XV, Greater-Than: 81
+ * characters; Sandwich: its 18 sums; Skyscraper: its 18 clues), thermos (Thermo; Arrow, Renban, German Whispers: their lines): the texts
  * generator.h reads and writes. Fields a variant doesn't use are empty, trailing ones may be left out. A
  * line of just 81 digits (an .sdm line) is a Classic puzzle with no level.
  */

@@ -300,6 +300,8 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER) && buf &&
         sudoku_geom_lines_text(v, thermos, buf)) return buf;
     if (v == VAR_SANDWICH && buf && sudoku_geom_sandwich_text(marks, buf)) return buf;   /* (its sums are in marks) */
+    if (v == VAR_SKY && buf && sudoku_geom_sky_text(marks, buf)) return buf;             /* (its clues too) */
+    if (v == VAR_LK && buf && sudoku_geom_lk_text(cages, buf)) return buf;               /* (its sums in cages) */
     return sudoku_geom(v);                          /* (a broken map or cages: a classic board) */
 }
 
