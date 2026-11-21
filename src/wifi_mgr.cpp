@@ -122,9 +122,13 @@ static void on_disconnect(arduino_event_id_t ev, arduino_event_info_t info)
  * the radio starts it can still read all zeros: tried again when a network connects. */
 static void read_mac(void)
 {
-    if (s_st.mac[0]) return;
+    if (s_st.mac[0]) {
+        return;
+    }
     String mac = WiFi.macAddress();
-    if (mac.length() != 17 || mac == "00:00:00:00:00:00") return;
+    if (mac.length() != 17 || mac == "00:00:00:00:00:00") {
+        return;
+    }
     mac.toLowerCase();
     xSemaphoreTake(s_lock, portMAX_DELAY);
     strlcpy(s_st.mac, mac.c_str(), sizeof(s_st.mac));
@@ -383,8 +387,11 @@ static void poll(void)
 static void worker(void *arg)
 {
     if (s_st.enabled && radio_up()) {
-        if (s_st.saved_ssid[0]) begin_connect(s_st.saved_ssid, s_saved_pass);
-        else radio_forget();                 /* nothing saved: clear the C6's old network */
+        if (s_st.saved_ssid[0]) {
+            begin_connect(s_st.saved_ssid, s_saved_pass);
+        } else {
+            radio_forget();    /* nothing saved: clear the C6's old network */
+        }
     }
     cmd_t c;
     for (;;) {

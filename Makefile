@@ -8,14 +8,14 @@
 #   make site           the web flasher and docs site into site/ (tools/make_flasher_site.sh)
 #   make clean          removes build/, dist/ and site/
 #
-#   make format         formats the C sources and headers in place with astyle (.astylerc)
+#   make format         formats the C / C++ sources, headers and the sketch in place with astyle (.astylerc)
 #   make format-check   lists the files that need it, and fails if any do (changes nothing)
 #   make test           the PC tests (tests/Makefile)
 #
 # arduino-cli: from PATH, else the one inside the Arduino IDE (/opt/arduino-ide); or
 # ARDUINO_CLI=... Needs the esp32 core 3.3.x and LVGL 9.6.0 set up as docs/building.md says.
 #
-# Left out: vendored third-party code (SQLite, QR Code generator, ggwave, LVGL's lv_conf.h
+# Left out: vendored third-party code (SQLite, QR Code generator, ggwave (src/ggwave/), LVGL's lv_conf.h
 # template) and generated files (puzzles, avatars, fonts: their generators would overwrite
 # any formatting). sqlite3_esp.c, the project's own SQLite glue, is in.
 #
@@ -38,8 +38,8 @@ AVATARS_AT = $(shell awk -F, '$$1 ~ /^avatars/ {gsub(/ /, "", $$4); print $$4}' 
 
 SOURCES := $(filter-out \
 	src/avatars.c src/avatars.h src/puzzles_data.c src/puzzles_count.h, \
-	$(wildcard src/*.c src/*.h src/bsp/*.c src/bsp/*.h)) \
-	src/sqlite/sqlite3_esp.c \
+	$(wildcard src/*.c src/*.cpp src/*.h src/bsp/*.c src/bsp/*.cpp src/bsp/*.h)) \
+	src/sqlite/sqlite3_esp.c esp32p4_sudoku.ino \
 	$(wildcard tests/*.c tools/*.c)
 
 ASTYLE_RUN = $(ASTYLE) --options=.astylerc --quiet

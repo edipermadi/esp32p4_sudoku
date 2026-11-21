@@ -1,5 +1,5 @@
 # astyle options for the project's own C code (make format; the Makefile has the file list)
---mode=c
+--mode=c                    # C and C++ alike (the .ino too, which astyle can't tell by its name)
 --style=kr                  # function braces on their own line; if / for / while / else on the same line
 --indent=spaces=4
 --add-braces                # every if / for / while / else body in braces ...

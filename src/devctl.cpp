@@ -36,7 +36,9 @@ static void reply(const char *fmt, ...)
     if (s_cap) {
         vsnprintf(s_cap, s_cap_n, fmt, ap);
         size_t l = strlen(s_cap);
-        while (l && (s_cap[l - 1] == '\n' || s_cap[l - 1] == '\r')) s_cap[--l] = 0;
+        while (l && (s_cap[l - 1] == '\n' || s_cap[l - 1] == '\r')) {
+            s_cap[--l] = 0;
+        }
     } else {
         char buf[200];
         vsnprintf(buf, sizeof(buf), fmt, ap);
@@ -59,10 +61,18 @@ static void pump(uint32_t ms)
 
 static void touch(bool pressed, int x, int y)
 {
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    if (x >= BSP_LCD_H_RES) x = BSP_LCD_H_RES - 1;
-    if (y >= BSP_LCD_V_RES) y = BSP_LCD_V_RES - 1;
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    if (x >= BSP_LCD_H_RES) {
+        x = BSP_LCD_H_RES - 1;
+    }
+    if (y >= BSP_LCD_V_RES) {
+        y = BSP_LCD_V_RES - 1;
+    }
     bsp_touch_sim(true, pressed, (uint16_t)x, (uint16_t)y);
 }
 
@@ -97,7 +107,9 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t *p, int n)   /* as zlib
     crc = ~crc;
     while (n--) {
         crc ^= *p++;
-        for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+        for (int k = 0; k < 8; k++) {
+            crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+        }
     }
     return ~crc;
 }
@@ -107,13 +119,19 @@ static char s_prefix = 'S';             /* S: a screenshot's lines, F: a file's 
 static void flush_chunk(void)
 {
     static const char B64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    if (!s_chunk_n) return;
+    if (!s_chunk_n) {
+        return;
+    }
     char out[16 + CHUNK / 3 * 4 + 8];
     int o = snprintf(out, sizeof(out), "%c %d ", s_prefix, s_seq++);
     for (int i = 0; i < s_chunk_n; i += 3) {
         uint32_t v = (uint32_t)s_chunk[i] << 16;
-        if (i + 1 < s_chunk_n) v |= (uint32_t)s_chunk[i + 1] << 8;
-        if (i + 2 < s_chunk_n) v |= s_chunk[i + 2];
+        if (i + 1 < s_chunk_n) {
+            v |= (uint32_t)s_chunk[i + 1] << 8;
+        }
+        if (i + 2 < s_chunk_n) {
+            v |= s_chunk[i + 2];
+        }
         out[o++] = B64[v >> 18 & 63];
         out[o++] = B64[v >> 12 & 63];
         out[o++] = i + 1 < s_chunk_n ? B64[v >> 6 & 63] : '=';
@@ -129,7 +147,9 @@ static void flush_chunk(void)
 static void put(uint8_t b)
 {
     s_chunk[s_chunk_n++] = b;
-    if (s_chunk_n == CHUNK) flush_chunk();
+    if (s_chunk_n == CHUNK) {
+        flush_chunk();
+    }
 }
 
 static void shot(void)
@@ -149,7 +169,9 @@ static void shot(void)
     for (int i = 0; i < total;) {                   /* runs of up to 256 equal pixels */
         uint16_t px = fb[i];
         int run = 1;
-        while (run < 256 && i + run < total && fb[i + run] == px) run++;
+        while (run < 256 && i + run < total && fb[i + run] == px) {
+            run++;
+        }
         put((uint8_t)(run - 1));
         put((uint8_t)(px & 0xFF));
         put((uint8_t)(px >> 8));
@@ -194,9 +216,13 @@ static bool card_path(const char *word, char *out, size_t n, const char **why)
     }
     rel[k] = 0;
     const char *r = rel;
-    while (*r == '/') r++;
+    while (*r == '/') {
+        r++;
+    }
     size_t len = strlen(r);
-    while (len && r[len - 1] == '/') len--;      /* "puzzles/" = "puzzles" */
+    while (len && r[len - 1] == '/') {
+        len--;    /* "puzzles/" = "puzzles" */
+    }
     for (const char *s = r; s < r + len;) {      /* no ".." or "." parts */
         const char *e = (const char *)memchr(s, '/', (size_t)(r + len - s));
         size_t pl = e ? (size_t)(e - s) : (size_t)(r + len - s);
@@ -222,15 +248,20 @@ static void print_name(const char *s)          /* %XX for spaces, '%' and contro
 {
     for (; *s; s++) {
         unsigned char c = (unsigned char)*s;
-        if (c <= ' ' || c == '%' || c == 127) Serial.printf("%%%02X", c);
-        else Serial.write(c);
+        if (c <= ' ' || c == '%' || c == 127) {
+            Serial.printf("%%%02X", c);
+        } else {
+            Serial.write(c);
+        }
     }
 }
 
 static bool card_ls(const char *dir)
 {
     DIR *d = opendir(dir);
-    if (!d) return false;
+    if (!d) {
+        return false;
+    }
     struct dirent *e;
     char p[300];
     while ((e = readdir(d)) != NULL) {
@@ -253,7 +284,9 @@ static bool card_ls(const char *dir)
 static bool card_get(const char *path)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) return false;
+    if (!f) {
+        return false;
+    }
     struct stat st;
     long size = fstat(fileno(f), &st) == 0 ? (long)st.st_size : -1;
     Serial.printf("FILE BEGIN %ld\n", size);
@@ -264,7 +297,9 @@ static bool card_get(const char *path)
     uint8_t buf[CHUNK * 8];
     size_t n;
     while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
-        for (size_t i = 0; i < n; i++) put(buf[i]);
+        for (size_t i = 0; i < n; i++) {
+            put(buf[i]);
+        }
     }
     flush_chunk();
     fclose(f);
@@ -285,12 +320,16 @@ static int b64_decode(const char *s, uint8_t *out, int max)
     uint32_t acc = 0;
     for (; *s && *s != '='; s++) {
         int v = b64val(*s);
-        if (v < 0) return -1;
+        if (v < 0) {
+            return -1;
+        }
         acc = acc << 6 | (uint32_t)v;
         bits += 6;
         if (bits >= 8) {
             bits -= 8;
-            if (n >= max) return -1;
+            if (n >= max) {
+                return -1;
+            }
             out[n++] = (uint8_t)(acc >> bits);
         }
     }
@@ -308,13 +347,19 @@ static bool read_line(char *buf, int max, uint32_t ms)
             delay(1);
             continue;
         }
-        if (c == '\r') continue;
-        if (c == '\n') {
-            buf[len] = 0;
-            if (len) return true;
+        if (c == '\r') {
             continue;
         }
-        if (len < max - 1) buf[len++] = (char)c;
+        if (c == '\n') {
+            buf[len] = 0;
+            if (len) {
+                return true;
+            }
+            continue;
+        }
+        if (len < max - 1) {
+            buf[len++] = (char)c;
+        }
     }
     return false;
 }
@@ -352,7 +397,9 @@ static void card_put(const char *path, long size, uint32_t crc)
             break;
         }
         if (fill + CHUNK > UP_BUF) {
-            if (fwrite(buf, 1, fill, f) != (size_t)fill) err = "write failed (card full?)";
+            if (fwrite(buf, 1, fill, f) != (size_t)fill) {
+                err = "write failed (card full?)";
+            }
             fill = 0;
         }
         int n = b64_decode(s_line + 2, buf + fill, CHUNK);
@@ -363,15 +410,25 @@ static void card_put(const char *path, long size, uint32_t crc)
         c = crc32_update(c, buf + fill, n);
         fill += n;
         got += n;
-        if (++lines % UP_WINDOW == 0 && got < size) Serial.printf("ACK %ld\n", got);
+        if (++lines % UP_WINDOW == 0 && got < size) {
+            Serial.printf("ACK %ld\n", got);
+        }
     }
-    if (!err && fill && fwrite(buf, 1, fill, f) != (size_t)fill) err = "write failed (card full?)";
+    if (!err && fill && fwrite(buf, 1, fill, f) != (size_t)fill) {
+        err = "write failed (card full?)";
+    }
     heap_caps_free(buf);
-    if (fclose(f) != 0 && !err) err = "write failed";
-    if (!err && c != crc) err = "CRC mismatch";
+    if (fclose(f) != 0 && !err) {
+        err = "write failed";
+    }
+    if (!err && c != crc) {
+        err = "CRC mismatch";
+    }
     if (!err) {
         remove(path);                              /* (FAT's rename doesn't replace) */
-        if (rename(part, path) != 0) err = "couldn't rename the .part file";
+        if (rename(part, path) != 0) {
+            err = "couldn't rename the .part file";
+        }
     }
     if (err) {
         remove(part);
@@ -389,10 +446,14 @@ static bool run_file(char *line)
     long size = -1;
     unsigned long crc = 0;
     int n = sscanf(line, "%7s %199s %199s", cmd, a, b);
-    if (n < 1) return false;
+    if (n < 1) {
+        return false;
+    }
     bool is_ls = !strcmp(cmd, "ls"), is_get = !strcmp(cmd, "get"), is_put = !strcmp(cmd, "put"),
          is_mv = !strcmp(cmd, "mv"), is_rm = !strcmp(cmd, "rm"), is_mkdir = !strcmp(cmd, "mkdir");
-    if (!(is_ls || is_get || is_put || is_mv || is_rm || is_mkdir)) return false;
+    if (!(is_ls || is_get || is_put || is_mv || is_rm || is_mkdir)) {
+        return false;
+    }
 
     char p1[260], p2[260];
     const char *why = "";
@@ -405,13 +466,19 @@ static bool run_file(char *line)
         return true;
     }
     if (is_ls) {
-        if (!card_ls(p1)) Serial.printf("ERR ls: can't open %s (%s; is the card in?)\n", p1, strerror(errno));
-        else Serial.println("OK ls");
+        if (!card_ls(p1)) {
+            Serial.printf("ERR ls: can't open %s (%s; is the card in?)\n", p1, strerror(errno));
+        } else {
+            Serial.println("OK ls");
+        }
         return true;
     }
     if (is_get) {
-        if (!card_get(p1)) Serial.printf("ERR get: can't read %s (%s)\n", p1, strerror(errno));
-        else Serial.println("OK get");
+        if (!card_get(p1)) {
+            Serial.printf("ERR get: can't read %s (%s)\n", p1, strerror(errno));
+        } else {
+            Serial.println("OK get");
+        }
         return true;
     }
     if (is_rm || is_mkdir) {
@@ -421,8 +488,11 @@ static bool run_file(char *line)
         }
         struct stat st;
         int r = is_mkdir ? mkdir(p1, 0775) : stat(p1, &st) == 0 && S_ISDIR(st.st_mode) ? rmdir(p1) : remove(p1);
-        if (r != 0) Serial.printf("ERR %s: %s: %s\n", cmd, p1, strerror(errno));
-        else Serial.printf("OK %s\n", cmd);
+        if (r != 0) {
+            Serial.printf("ERR %s: %s: %s\n", cmd, p1, strerror(errno));
+        } else {
+            Serial.printf("OK %s\n", cmd);
+        }
         return true;
     }
     if (is_mv) {
@@ -439,8 +509,11 @@ static bool run_file(char *line)
             Serial.printf("ERR mv: %s exists (rm it first)\n", p2);
             return true;
         }
-        if (rename(p1, p2) != 0) Serial.printf("ERR mv: %s\n", strerror(errno));
-        else Serial.println("OK mv");
+        if (rename(p1, p2) != 0) {
+            Serial.printf("ERR mv: %s\n", strerror(errno));
+        } else {
+            Serial.println("OK mv");
+        }
         return true;
     }
     /* put <path> <size> <crc32 hex> */
@@ -491,20 +564,27 @@ static void __attribute__((noinline)) cmd_fill(const char *line)
     for (const char *p = line + 4;; p++) {      /* the numbers after "fill", in pairs */
         if (*p >= '0' && *p <= '9') {
             v = (v < 0 ? 0 : v * 10) + (*p - '0');
-            if (v > 255) bad = true;
+            if (v > 255) {
+                bad = true;
+            }
             continue;
         }
         if (v >= 0) {
             if (nums % 2 == 0) {
-                if (np >= 81) bad = true;
-                else cells[np] = (uint8_t)v;
+                if (np >= 81) {
+                    bad = true;
+                } else {
+                    cells[np] = (uint8_t)v;
+                }
             } else if (np < 81) {
                 digits[np++] = (uint8_t)v;
             }
             nums++;
             v = -1;
         }
-        if (!*p) break;
+        if (!*p) {
+            break;
+        }
     }
     if (bad || nums == 0 || nums % 2) {
         reply("ERR fill: pairs of <cell 0-80> <digit>, e.g. fill 12:5 13:7 (at most 81)\n");
@@ -527,13 +607,20 @@ static int gb_pick(const char *s, const char *(*name)(int), int n)
 {
     char *end;
     long v = strtol(s, &end, 10);
-    if (*s && !*end) return v >= 0 && v < n ? (int)v : -1;
+    if (*s && !*end) {
+        return v >= 0 && v < n ? (int)v : -1;
+    }
     for (int i = 0; i < n; i++) {
-        if (!strcasecmp(s, name(i))) return i;
+        if (!strcasecmp(s, name(i))) {
+            return i;
+        }
     }
     int hit = -1, hits = 0;
     for (int i = 0; i < n; i++) {
-        if (!strncasecmp(s, name(i), strlen(s))) { hit = i; hits++; }
+        if (!strncasecmp(s, name(i), strlen(s))) {
+            hit = i;
+            hits++;
+        }
     }
     return hits == 1 ? hit : hits ? -2 : -1;
 }
@@ -557,7 +644,9 @@ static void gb_task(void *arg)
     s_gb.us = (uint32_t)(esp_timer_get_time() - t0);
     s_gb.got = got;
     s_gb.clues = 0;
-    for (int i = 0; i < 81; i++) s_gb.clues += givens[i] != 0;
+    for (int i = 0; i < 81; i++) {
+        s_gb.clues += givens[i] != 0;
+    }
     s_gb.done = true;
     vTaskDelete(NULL);
 }
@@ -572,8 +661,12 @@ static void cmd_genbench(const char *line)
         reply("ERR genbench: genbench <variant|all> [level|all] [n], e.g. genbench greater expert 10\n");
         return;
     }
-    if (n < 1) n = 1;
-    if (n > 200) n = 200;
+    if (n < 1) {
+        n = 1;
+    }
+    if (n > 200) {
+        n = 200;
+    }
     bool all_v = !strcasecmp(vs, "all"), all_l = !strcasecmp(ls, "all");
     int v0 = all_v ? 0 : gb_pick(vs, variant_name, VAR_COUNT), l0 = all_l ? 0 : gb_pick(ls, gen_level_name, GEN_LEVELS);
     if (v0 < 0 || l0 < 0) {
@@ -606,7 +699,9 @@ static void cmd_genbench(const char *line)
     Serial.printf("GENBENCH CPU %u MHz, %d puzzle%s each\n", (unsigned)getCpuFrequencyMhz(), n, n == 1 ? "" : "s");
     for (int v = v0; v < (all_v ? VAR_COUNT : v0 + 1); v++) {
         for (int l = l0; l < (all_l ? GEN_LEVELS : l0 + 1); l++) {
-            if (all_l && v == VAR_KIDS && l >= GEN_HARD) continue;   /* (Kids 4x4: Easy and Medium only) */
+            if (all_l && v == VAR_KIDS && l >= GEN_HARD) {
+                continue;    /* (Kids 4x4: Easy and Medium only) */
+            }
             uint32_t sum = 0, mn = UINT32_MAX, mx = 0;
             int on = 0, clues = 0;
             for (int i = 0; i < n; i++) {
@@ -627,8 +722,12 @@ static void cmd_genbench(const char *line)
                     pump(5);
                 }
                 sum += s_gb.us;
-                if (s_gb.us < mn) mn = s_gb.us;
-                if (s_gb.us > mx) mx = s_gb.us;
+                if (s_gb.us < mn) {
+                    mn = s_gb.us;
+                }
+                if (s_gb.us > mx) {
+                    mx = s_gb.us;
+                }
                 on += s_gb.got == l;
                 clues += s_gb.clues;
             }
@@ -650,7 +749,9 @@ out:
 static void cmd_sql(const char *line)
 {
     const char *b64 = line + 3;
-    while (*b64 == ' ') b64++;
+    while (*b64 == ' ') {
+        b64++;
+    }
     size_t n = strlen(b64);
     char *sql = (char *)heap_caps_malloc(n * 3 / 4 + 4, MALLOC_CAP_SPIRAM);
     char *out = (char *)heap_caps_malloc(SQL_OUT, MALLOC_CAP_SPIRAM);
@@ -665,14 +766,21 @@ static void cmd_sql(const char *line)
         bool ok = stats_db_sql(sql, out, SQL_OUT, &r);
         for (char *p = out; *p;) {                  /* the result, a line at a time */
             char *e = strchr(p, '\n');
-            if (e) *e = 0;
+            if (e) {
+                *e = 0;
+            }
             Serial.print("SQL ");
             Serial.println(p);
-            if (!e) break;
+            if (!e) {
+                break;
+            }
             p = e + 1;
         }
-        if (ok) Serial.printf("OK sql %d %d%s\n", r.rows, r.changes, r.truncated ? " truncated" : "");
-        else Serial.printf("ERR sql: %s\n", r.err);
+        if (ok) {
+            Serial.printf("OK sql %d %d%s\n", r.rows, r.changes, r.truncated ? " truncated" : "");
+        } else {
+            Serial.printf("ERR sql: %s\n", r.err);
+        }
     }
     heap_caps_free(sql);
     heap_caps_free(out);
@@ -680,25 +788,34 @@ static void cmd_sql(const char *line)
 
 static void run(char *line)
 {
-    if (!s_cap && run_file(line)) return;           /* (files: serial only) */
+    if (!s_cap && run_file(line)) {
+        return;    /* (files: serial only) */
+    }
     char cmd[16] = "";
     int a[5] = {0, 0, 0, 0, 0};
     int n = sscanf(line, "%15s %d %d %d %d %d", cmd, &a[0], &a[1], &a[2], &a[3], &a[4]) - 1;
-    if (n < 0) return;
+    if (n < 0) {
+        return;
+    }
     if (!strcmp(cmd, "ping")) {
         reply("OK pong\n");
         return;
     }
     if (s_cap) {                                    /* over sound: touches, wait, heap, screenoff only */
         static const char *const ok[] = {"tap", "long", "swipe", "press", "move", "release", "wait", "heap", "screenoff",
-                                         "fill", "state", "pz"};
+                                         "fill", "state", "pz"
+                                        };
         bool allowed = false;
-        for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) allowed |= !strcmp(cmd, ok[i]);
+        for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) {
+            allowed |= !strcmp(cmd, ok[i]);
+        }
         if (!allowed) {
             reply("ERR not over sound: %s\n", cmd);
             return;
         }
-        if (!strcmp(cmd, "wait") && a[0] > 10000) a[0] = 10000;
+        if (!strcmp(cmd, "wait") && a[0] > 10000) {
+            a[0] = 10000;
+        }
         if (!strcmp(cmd, "heap")) {                 /* short: a reply is ~16 bytes a second */
             reply("OK heap i=%u d=%u p=%u\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
@@ -772,7 +889,9 @@ static void run(char *line)
                       (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
                       (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
-        if (n >= 1 && a[0]) heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);   /* "heap 1": per region */
+        if (n >= 1 && a[0]) {
+            heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);    /* "heap 1": per region */
+        }
     } else if (!strcmp(cmd, "bench")) {          /* N full-screen redraws of the screen shown */
         int frames = n >= 1 && a[0] > 0 ? a[0] : 30;
         lv_obj_t *scr = lv_screen_active();
@@ -784,8 +903,12 @@ static void run(char *line)
             lv_obj_invalidate(scr);
             lv_refr_now(NULL);
             uint32_t d = (uint32_t)(esp_timer_get_time() - s);
-            if (d > mx) mx = d;
-            if (d < mn) mn = d;
+            if (d > mx) {
+                mx = d;
+            }
+            if (d < mn) {
+                mn = d;
+            }
         }
         uint32_t avg = (uint32_t)((esp_timer_get_time() - t0) / frames);
         Serial.printf("BENCH %d frames: avg %u us, min %u us, max %u us (%u.%u fps)\n", frames, (unsigned)avg,
@@ -809,19 +932,27 @@ bool devctl_run_line(const char *line, char *out, size_t n)
     s_cap_n = n;
     run(buf);
     s_cap = NULL;
-    if (!out[0]) strlcpy(out, "ERR empty", n);
+    if (!out[0]) {
+        strlcpy(out, "ERR empty", n);
+    }
     return !strncmp(out, "OK", 2);
 }
 
 void devctl_poll(void)
 {
-    if (!s_line && !(s_line = (char *)heap_caps_malloc(CMD_MAX, MALLOC_CAP_SPIRAM))) return;
+    if (!s_line && !(s_line = (char *)heap_caps_malloc(CMD_MAX, MALLOC_CAP_SPIRAM))) {
+        return;
+    }
     while (Serial.available()) {
         int c = Serial.read();
-        if (c == '\r') continue;
+        if (c == '\r') {
+            continue;
+        }
         if (c == '\n') {
             s_line[s_len] = 0;
-            if (s_len) run(s_line);
+            if (s_len) {
+                run(s_line);
+            }
             s_len = 0;
         } else if (c >= ' ' && c < 127 && s_len < CMD_MAX - 1) {    /* (line noise from a reset: dropped) */
             s_line[s_len++] = (char)c;

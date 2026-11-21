@@ -64,26 +64,34 @@ void store_init(void)
     memset(s_stat.fewest, STORE_MISTAKES_UNKNOWN, sizeof(s_stat.fewest));
     memset(s_stat.solves, 0, sizeof(s_stat.solves));
     Preferences prefs;
-    if (!prefs.begin("sudoku", true)) return;      /* read only; absent on a fresh board */
+    if (!prefs.begin("sudoku", true)) {
+        return;    /* read only; absent on a fresh board */
+    }
     if (prefs.getBytesLength("best") == sizeof(s_best)) {
         prefs.getBytes("best", s_best, sizeof(s_best));
     }
     if (prefs.getBytesLength("stat") == sizeof(s_stat)) {
         prefs.getBytes("stat", &s_stat, sizeof(s_stat));
     } else {
-        for (int i = 0; i < PUZZLE_COUNT; i++) s_stat.solves[i] = s_best[i] ? 1 : 0;
+        for (int i = 0; i < PUZZLE_COUNT; i++) {
+            s_stat.solves[i] = s_best[i] ? 1 : 0;
+        }
     }
     size_t len = prefs.getBytesLength("game");     /* the two layouts NVS ever held */
     if (len == offsetof(saved_game_t, started_at) || len == offsetof(saved_game_t, mistakes)) {
         prefs.getBytes("game", &s_game, len);
-        if (s_game.id >= PUZZLE_COUNT) s_game.id = STORE_NO_GAME;
+        if (s_game.id >= PUZZLE_COUNT) {
+            s_game.id = STORE_NO_GAME;
+        }
     }
     uint8_t c = prefs.getUChar("coll", 0);
     s_p.last_collection = c < PUZZLE_COLLECTION_COUNT ? c : 0;
     s_p.dark_mode = prefs.getBool("dark", true);
     s_p.sound = prefs.getBool("snd", true);
     s_p.screen_timeout_min = prefs.getUChar("sleep", 5);
-    if (!prefs.getString("tz", s_p.timezone, sizeof(s_p.timezone))) strcpy(s_p.timezone, "UTC");
+    if (!prefs.getString("tz", s_p.timezone, sizeof(s_p.timezone))) {
+        strcpy(s_p.timezone, "UTC");
+    }
     prefs.end();
 }
 
@@ -94,16 +102,28 @@ uint32_t store_best_time(uint16_t id)
 
 bool store_record_solve(uint16_t id, uint32_t seconds, uint32_t mistakes)
 {
-    if (id >= PUZZLE_COUNT) return false;
-    if (seconds == 0) seconds = 1;           /* 0 means "unsolved" */
-    if (seconds > 0xFFFF) seconds = 0xFFFF;
-    if (mistakes > 254) mistakes = 254;
+    if (id >= PUZZLE_COUNT) {
+        return false;
+    }
+    if (seconds == 0) {
+        seconds = 1;    /* 0 means "unsolved" */
+    }
+    if (seconds > 0xFFFF) {
+        seconds = 0xFFFF;
+    }
+    if (mistakes > 254) {
+        mistakes = 254;
+    }
 
-    if (s_stat.solves[id] < 255) s_stat.solves[id]++;
+    if (s_stat.solves[id] < 255) {
+        s_stat.solves[id]++;
+    }
     if (s_stat.fewest[id] == STORE_MISTAKES_UNKNOWN || mistakes < s_stat.fewest[id]) {
         s_stat.fewest[id] = (uint8_t)mistakes;
     }
-    if (s_best[id] != 0 && s_best[id] <= seconds) return false;
+    if (s_best[id] != 0 && s_best[id] <= seconds) {
+        return false;
+    }
     s_best[id] = (uint16_t)seconds;
     return true;
 }
@@ -111,13 +131,19 @@ bool store_record_solve(uint16_t id, uint32_t seconds, uint32_t mistakes)
 void store_merge_stats(const uint16_t *best, const uint8_t *fewest, const uint8_t *solves)
 {
     for (int i = 0; i < PUZZLE_COUNT; i++) {
-        if (!best[i]) continue;
-        if (!s_best[i] || best[i] < s_best[i]) s_best[i] = best[i];
+        if (!best[i]) {
+            continue;
+        }
+        if (!s_best[i] || best[i] < s_best[i]) {
+            s_best[i] = best[i];
+        }
         if (fewest[i] != STORE_MISTAKES_UNKNOWN &&
-            (s_stat.fewest[i] == STORE_MISTAKES_UNKNOWN || fewest[i] < s_stat.fewest[i])) {
+                (s_stat.fewest[i] == STORE_MISTAKES_UNKNOWN || fewest[i] < s_stat.fewest[i])) {
             s_stat.fewest[i] = fewest[i];
         }
-        if (solves[i] > s_stat.solves[i]) s_stat.solves[i] = solves[i];
+        if (solves[i] > s_stat.solves[i]) {
+            s_stat.solves[i] = solves[i];
+        }
     }
 }
 
@@ -161,7 +187,9 @@ uint16_t store_solved_count(uint16_t first, uint16_t count)
 {
     uint16_t n = 0;
     for (uint16_t i = first; i < first + count && i < PUZZLE_COUNT; i++) {
-        if (s_best[i]) n++;
+        if (s_best[i]) {
+            n++;
+        }
     }
     return n;
 }
@@ -178,15 +206,23 @@ void store_set_game(const saved_game_t *g)
 
 static bool moves_buf(void)
 {
-    if (!s_moves) s_moves = (game_move_t *)heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    if (!s_moves) {
+        s_moves = (game_move_t *)heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    }
     return s_moves != NULL;
 }
 
 void store_set_game_moves(const game_move_t *m, int n)
 {
-    if (!moves_buf()) return;
-    if (n > GAME_MOVES_MAX) n = GAME_MOVES_MAX;
-    if (n > 0) memcpy(s_moves, m, sizeof(game_move_t) * n);
+    if (!moves_buf()) {
+        return;
+    }
+    if (n > GAME_MOVES_MAX) {
+        n = GAME_MOVES_MAX;
+    }
+    if (n > 0) {
+        memcpy(s_moves, m, sizeof(game_move_t) * n);
+    }
     s_nmoves = n > 0 ? n : 0;
 }
 
@@ -199,21 +235,29 @@ int store_game_moves(const game_move_t **out)
 void store_load_game_moves(void)
 {
     s_nmoves = 0;
-    if (s_game.id == STORE_NO_GAME || !moves_buf()) return;
+    if (s_game.id == STORE_NO_GAME || !moves_buf()) {
+        return;
+    }
     uint16_t puzzle = STORE_NO_GAME;
     int n = stats_db_copy_saved_moves(&puzzle, s_moves, GAME_MOVES_MAX);
-    if (n > 0 && puzzle == s_game.id) s_nmoves = n;
+    if (n > 0 && puzzle == s_game.id) {
+        s_nmoves = n;
+    }
 }
 
 void store_commit_game(void)
 {
-    if (s_game.id != STORE_NO_GAME) stats_db_save_game(&s_game, s_moves, s_moves ? s_nmoves : 0);
+    if (s_game.id != STORE_NO_GAME) {
+        stats_db_save_game(&s_game, s_moves, s_moves ? s_nmoves : 0);
+    }
 }
 
 void store_clear_game(void)
 {
     s_nmoves = 0;
-    if (s_game.id == STORE_NO_GAME) return;
+    if (s_game.id == STORE_NO_GAME) {
+        return;
+    }
     uint16_t id = s_game.id;
     s_game.id = STORE_NO_GAME;
     stats_db_clear_game(id);                  /* the other unfinished games stay in sudoku.db */
@@ -227,9 +271,13 @@ void store_get_prefs(store_prefs_t *out)
 void store_apply_prefs(const store_prefs_t *in)
 {
     s_p = *in;
-    if (!puzzle_id_valid(s_game.id)) s_game.id = STORE_NO_GAME;
+    if (!puzzle_id_valid(s_game.id)) {
+        s_game.id = STORE_NO_GAME;
+    }
     store_load_game_moves();
-    if (s_p.last_collection >= PUZZLE_COLLECTION_COUNT) s_p.last_collection = 0;
+    if (s_p.last_collection >= PUZZLE_COLLECTION_COUNT) {
+        s_p.last_collection = 0;
+    }
 }
 
 int32_t store_player_id(void)
@@ -255,7 +303,9 @@ uint8_t store_last_collection(void)
 
 void store_set_last_collection(uint8_t c)
 {
-    if (c >= PUZZLE_COLLECTION_COUNT || c == s_p.last_collection) return;
+    if (c >= PUZZLE_COLLECTION_COUNT || c == s_p.last_collection) {
+        return;
+    }
     s_p.last_collection = c;
     stats_db_set_text("last_level", puzzle_collection(c)->name);
 }
@@ -350,7 +400,9 @@ void store_set_accent(uint8_t accent)
 
 uint8_t store_lock_mode(void)
 {
-    if (s_p.lock_mode == LOCK_PIN && strlen(s_p.lock_pin) != 4) return LOCK_SWIPE;   /* (no PIN set: swipe) */
+    if (s_p.lock_mode == LOCK_PIN && strlen(s_p.lock_pin) != 4) {
+        return LOCK_SWIPE;    /* (no PIN set: swipe) */
+    }
     return s_p.lock_mode <= LOCK_PIN ? s_p.lock_mode : LOCK_OFF;
 }
 

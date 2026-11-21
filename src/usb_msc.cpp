@@ -26,7 +26,9 @@ static volatile uint32_t s_suspended_ms;  /* millis() when it was */
  * reject anything else rather than silently corrupting the card. */
 static int32_t on_read(uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize)
 {
-    if (!s_enabled || offset != 0 || bufsize % s_sector_size) return -1;
+    if (!s_enabled || offset != 0 || bufsize % s_sector_size) {
+        return -1;
+    }
     esp_err_t err = bsp_sdcard_read(buffer, lba, bufsize / s_sector_size);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "read lba %lu failed: %s", (unsigned long)lba, esp_err_to_name(err));
@@ -37,7 +39,9 @@ static int32_t on_read(uint32_t lba, uint32_t offset, void *buffer, uint32_t buf
 
 static int32_t on_write(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize)
 {
-    if (!s_enabled || offset != 0 || bufsize % s_sector_size) return -1;
+    if (!s_enabled || offset != 0 || bufsize % s_sector_size) {
+        return -1;
+    }
     esp_err_t err = bsp_sdcard_write(buffer, lba, bufsize / s_sector_size);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "write lba %lu failed: %s", (unsigned long)lba, esp_err_to_name(err));
@@ -59,20 +63,32 @@ static bool on_start_stop(uint8_t power_condition, bool start, bool load_eject)
 static void on_usb_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     switch (id) {
-    case ARDUINO_USB_SUSPEND_EVENT: s_suspended = true; s_suspended_ms = millis(); break;
+    case ARDUINO_USB_SUSPEND_EVENT:
+        s_suspended = true;
+        s_suspended_ms = millis();
+        break;
     case ARDUINO_USB_RESUME_EVENT:
-    case ARDUINO_USB_STARTED_EVENT: s_suspended = false; break;   /* STARTED = enumerated */
-    default: break;
+    case ARDUINO_USB_STARTED_EVENT:
+        s_suspended = false;
+        break;   /* STARTED = enumerated */
+    default:
+        break;
     }
     static const char *const names[] = {"enumerated", "disconnected", "suspended", "resumed"};
-    if (id >= 0 && id < 4) printf("usb_msc: OTG port %s\n", names[id]);
+    if (id >= 0 && id < 4) {
+        printf("usb_msc: OTG port %s\n", names[id]);
+    }
 }
 
 extern "C" esp_err_t usb_msc_start(void)
 {
-    if (s_started) return ESP_OK;
+    if (s_started) {
+        return ESP_OK;
+    }
     uint32_t sectors = bsp_sdcard_sector_count();
-    if (!sectors) return ESP_ERR_INVALID_STATE;              /* no card */
+    if (!sectors) {
+        return ESP_ERR_INVALID_STATE;    /* no card */
+    }
     s_sector_size = bsp_sdcard_sector_size();
     s_msc.vendorID("ESP32P4");
     s_msc.productID("Sudoku SD Card");
@@ -83,7 +99,9 @@ extern "C" esp_err_t usb_msc_start(void)
     s_msc.isWritable(true);
     s_msc.mediaPresent(false);                               /* the board's until Connect */
     USB.onEvent(on_usb_event);
-    if (!s_msc.begin(sectors, (uint16_t)s_sector_size) || !USB.begin()) return ESP_FAIL;
+    if (!s_msc.begin(sectors, (uint16_t)s_sector_size) || !USB.begin()) {
+        return ESP_FAIL;
+    }
     s_started = true;
     return ESP_OK;
 }
@@ -96,7 +114,9 @@ extern "C" bool usb_msc_host_connected(void)
 extern "C" esp_err_t usb_msc_set_enabled(bool on)
 {
     if (on) {
-        if (!s_started) return ESP_ERR_INVALID_STATE;
+        if (!s_started) {
+            return ESP_ERR_INVALID_STATE;
+        }
         s_ejected = false;
         s_enabled = true;
         s_msc.mediaPresent(true);
@@ -104,7 +124,9 @@ extern "C" esp_err_t usb_msc_set_enabled(bool on)
         return ESP_OK;
     }
     s_enabled = false;
-    if (s_started) s_msc.mediaPresent(false);
+    if (s_started) {
+        s_msc.mediaPresent(false);
+    }
     printf("usb_msc: card back to the board%s\n", s_ejected ? " (ejected by the computer)"
            : (s_started && (!(bool)USB || s_suspended)) ? " (USB unplugged)" : "");
     return ESP_OK;
@@ -117,7 +139,11 @@ extern "C" bool usb_msc_ejected(void)
 
 extern "C" bool usb_msc_unplugged(void)
 {
-    if (!s_started || !s_enabled) return false;
-    if (!(bool)USB) return true;                              /* not enumerated any more */
+    if (!s_started || !s_enabled) {
+        return false;
+    }
+    if (!(bool)USB) {
+        return true;    /* not enumerated any more */
+    }
     return s_suspended && millis() - s_suspended_ms > 1500;   /* bus quiet: cable out */
 }
