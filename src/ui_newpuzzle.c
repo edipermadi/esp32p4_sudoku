@@ -45,7 +45,7 @@ static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked sin
 
 /* ------------------------------------------------------------- new puzzle (generator) */
 /*
- * New puzzle: pick a level, a worker task runs the generator (generator.c)
+ * New puzzle: pick a level, a worker task runs the generator (gen_make.c)
  * while a dialog says so, then the puzzle is stored (sudoku.db, or RAM
  * without a card) and opened like any other.
  */

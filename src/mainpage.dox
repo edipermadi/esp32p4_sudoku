@@ -55,9 +55,9 @@
  *   for it, from C.
  * - @ref ui_home_menu : how Home lays out its menu buttons.
  * - The rest of the UI (start-up, Home, the game screen, hints, New puzzle, Learn, dialogs) is in
- *   `ui_sudoku.c` and the other `ui_*.c` files, which share `ui_internal.h`; the puzzle generator
- *   and grader in `generator.c`, the RAM copy of the settings and statistics in `store.c`, the
- *   `.sdx` puzzle format in `sdx.c`.
+ *   `ui_sudoku.c` and the other `ui_*.c` files, which share `ui_internal.h`. The puzzle generator, solver,
+ *   grader and hints are the @ref generator (the `gen_*.c` files); the RAM copy of the settings and
+ *   statistics is in `store.c`, the `.sdx` puzzle format in `sdx.c`.
  *
  * @section mp_running How it runs
  *

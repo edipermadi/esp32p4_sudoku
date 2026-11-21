@@ -122,6 +122,8 @@ The same framing as a screenshot, but with `F` lines and the raw file bytes (no 
 
 #### `put <path> <size> <crc32> [z <zsize>]`
 
+The board shows a toast meanwhile: "Receiving <path> from the computer (<size>)..." while the data comes (the screen is otherwise held until it's done), then "Received ..." or "Couldn't receive <path>: <why>" for a few seconds.
+
 Uploads `<size>` bytes whose CRC-32 is `<crc32>` (hex). With `z <zsize>`, the data lines carry the file compressed (zlib format, `<zsize>` bytes): the board inflates it as it comes, and checks `<size>` and `<crc32>` on the result. `ACK` then counts compressed bytes received.
 
 ```

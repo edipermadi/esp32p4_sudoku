@@ -2,7 +2,7 @@
  * PC-side tests: the parts of the firmware that are plain C (no LVGL, no ESP-IDF),
  * built with the host's compiler (tests/Makefile, `make -C tests`):
  *
- *   src/generator.c   geometry, solver, grader, generator, hints, layout texts
+ *   src/gen_*.c       geometry, solver, grader, generator, hints, layout texts
  *   src/puzzles_data.c the 1600 built-in puzzles
  *   src/sdx.c         the puzzle line format (.sdx import / export, Send by sound)
  *

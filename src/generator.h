@@ -1,3 +1,25 @@
+/**
+ * @file generator.h
+ * @ingroup generator
+ * @brief The puzzle generator, solver, grader and hints, for every variant (plain C: no ESP-IDF, no
+ *        LVGL; the PC tests build it too).
+ */
+/**
+ * @defgroup generator Puzzle generator
+ * @brief Boards for every variant, solving and counting solutions, grading the way a person would,
+ *        generating puzzles at a level, and hints; split by what it does:
+ *
+ * | File            | What |
+ * |-----------------|------|
+ * | gen_geometry.c  | the names, each variant's board, the variants' texts read and written |
+ * | gen_solver.c    | counting and filling: every variant's rules, the search |
+ * | gen_grade.c     | human-style grading: the techniques and the level they give |
+ * | gen_make.c      | generating: digging to a level; Jigsaw regions, Killer cages, lines, ... |
+ * | gen_hints.c     | the next step a person would take |
+ *
+ * generator.h is what the rest of the firmware uses; the files share gen_internal.h. How it all
+ * works: docs/internals/generator.md.
+ */
 #pragma once
 /*
  * Puzzle generator, solver and hints for the variants:

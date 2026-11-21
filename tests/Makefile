@@ -8,17 +8,18 @@ SRC      = ../src
 CFLAGS  ?= -O2 -g -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -std=gnu11 \
            -fsanitize=address,undefined -fno-omit-frame-pointer
 CPPFLAGS = -I$(SRC) -DSTATS_CAGES_LEN_T=1024
-OBJS     = test_main.c $(SRC)/generator.c $(SRC)/puzzles_data.c $(SRC)/sdx.c
+GEN      = $(SRC)/gen_geometry.c $(SRC)/gen_solver.c $(SRC)/gen_grade.c $(SRC)/gen_make.c $(SRC)/gen_hints.c
+OBJS     = test_main.c $(GEN) $(SRC)/puzzles_data.c $(SRC)/sdx.c
 
 run: sudoku_tests
 	./sudoku_tests
 
-sudoku_tests: $(OBJS) $(SRC)/generator.h $(SRC)/puzzles.h $(SRC)/sdx.h
+sudoku_tests: $(OBJS) $(SRC)/generator.h $(SRC)/gen_internal.h $(SRC)/puzzles.h $(SRC)/sdx.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(OBJS)
 
 # the variant pages' example puzzles: docs/variant-examples.sdx, and their opening steps printed
-examples: ../tools/variant_examples.c $(SRC)/generator.c $(SRC)/sdx.c $(SRC)/generator.h $(SRC)/sdx.h
-	$(CC) $(CPPFLAGS) -O2 -o variant_examples ../tools/variant_examples.c $(SRC)/generator.c $(SRC)/sdx.c
+examples: ../tools/variant_examples.c $(GEN) $(SRC)/sdx.c $(SRC)/generator.h $(SRC)/sdx.h
+	$(CC) $(CPPFLAGS) -O2 -o variant_examples ../tools/variant_examples.c $(GEN) $(SRC)/sdx.c
 	cd .. && tests/variant_examples docs/variant-examples.sdx
 
 golden: sudoku_tests

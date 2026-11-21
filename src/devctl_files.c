@@ -14,6 +14,8 @@
 #include "esp_heap_caps.h"
 #include "bsp/bsp_board.h"
 #include "stats_db.h"
+#include "ui_sudoku.h"
+#include <lvgl.h>                      /* (LV_SYMBOL_*: the toast's icons) */
 #include <miniz.h>
 
 /* ---------------------------------------------------------------- files on the card */
@@ -180,6 +182,23 @@ typedef struct {
 } put_inflate_t;
 
 /**
+ * @brief A size as text: "512 B", "3.4 KB", "7.1 MB".
+ * @param buf  gets it
+ * @param n    its size
+ * @param b    bytes
+ */
+static void put_size_text(char *buf, size_t n, long b)
+{
+    if (b < 1024) {
+        snprintf(buf, n, "%ld B", b);
+    } else if (b < 1024 * 1024) {
+        snprintf(buf, n, "%ld.%ld KB", b / 1024, b % 1024 * 10 / 1024);
+    } else {
+        snprintf(buf, n, "%ld.%ld MB", b / 1048576, b % 1048576 * 10 / 1048576);
+    }
+}
+
+/**
  * @brief put: "READY", then lines "D \<base64\>" (an ACK after each UP_WINDOW of them) until all the bytes
  *        are in; written to \<path\>.part, which becomes \<path\> once the CRC matches.
  * @param path  the file (full path)
@@ -189,11 +208,20 @@ typedef struct {
  */
 static void card_put(const char *path, long size, uint32_t crc, long zsize)
 {
+    /* the toast on the board: the file coming (shown during the transfer), then how it went */
+    const char *name = strncmp(path, BSP_SD_MOUNT_POINT "/", strlen(BSP_SD_MOUNT_POINT "/")) == 0
+                       ? path + strlen(BSP_SD_MOUNT_POINT "/") : path;
+    char sz[24], note[400];                         /* (room for the longest path) */
+    put_size_text(sz, sizeof(sz), size);
+    snprintf(note, sizeof(note), LV_SYMBOL_DOWNLOAD "  Receiving %s from the computer (%s)...", name, sz);
+    sudoku_ui_progress(note);
     char part[300];
     snprintf(part, sizeof(part), "%s.part", path);
     FILE *f = fopen(part, "wb");
     if (!f) {
         serial_printf("ERR put: can't write %s (%s)\n", part, strerror(errno));
+        snprintf(note, sizeof(note), "Couldn't receive %s: it can't be written on the card.", name);
+        sudoku_ui_progress_done(note, 4000);
         return;
     }
     uint8_t *buf = (uint8_t *)heap_caps_malloc(UP_BUF, MALLOC_CAP_SPIRAM);
@@ -201,6 +229,8 @@ static void card_put(const char *path, long size, uint32_t crc, long zsize)
         fclose(f);
         remove(part);
         serial_println("ERR put: no memory");
+        snprintf(note, sizeof(note), "Couldn't receive %s: out of memory.", name);
+        sudoku_ui_progress_done(note, 4000);
         return;
     }
     put_inflate_t *z = NULL;
@@ -209,6 +239,8 @@ static void card_put(const char *path, long size, uint32_t crc, long zsize)
         fclose(f);
         remove(part);
         serial_println("ERR put: no memory");
+        snprintf(note, sizeof(note), "Couldn't receive %s: out of memory.", name);
+        sudoku_ui_progress_done(note, 4000);
         return;
     }
     if (z) {
@@ -321,9 +353,13 @@ static void card_put(const char *path, long size, uint32_t crc, long zsize)
         remove(part);
         while (devctl_read_line(devctl_line_buf(), DEVCTL_LINE_MAX, 300)) {}   /* the rest of what the host sent */
         serial_printf("ERR put: %s\n", err);
+        snprintf(note, sizeof(note), "Couldn't receive %s: %s.", name, err);
+        sudoku_ui_progress_done(note, 4000);
         return;
     }
     serial_printf("OK put %ld\n", got);
+    snprintf(note, sizeof(note), LV_SYMBOL_OK "  Received %s from the computer (%s).", name, sz);
+    sudoku_ui_progress_done(note, 3000);
 }
 
 /* (documented in devctl_internal.h) */

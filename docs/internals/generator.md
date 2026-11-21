@@ -2,7 +2,7 @@
 
 [← Internals](README.md) · [README](../../README.md) · [Features](../features.md) · [Data & storage](../data.md) · [Development](../development.md) · [Variants](../variants/README.md)
 
-How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them and gives hints. It is all in `src/generator.c` and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`.
+How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them and gives hints. It is all in `src/gen_*.c` (`gen_geometry.c` the boards and texts, `gen_solver.c` the rules and the search, `gen_grade.c` the techniques, `gen_make.c` generating, `gen_hints.c` hints; they share `gen_internal.h`) and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`.
 
 ## In one paragraph
 
@@ -160,7 +160,7 @@ This is why `dig()` keeps a few special cases ("Classic digs as it always has"):
 
 - **A task of its own**: `gen_start_ex()` starts `gen_task` ("gen", 16 KB stack, priority 2) on `WORKER_CORE` (core 0), away from LVGL. The screen stays responsive, and the result is collected by an LVGL timer (`gen_poll_cb`, every 50 ms).
 - **Big state is static**: `grid_t` and `logic_t` are `static` inside their functions (one caller at a time per function), and `jig` lives in PSRAM. The small task stacks stay small.
-- **The watchdog**: a hard Expert puzzle can search for seconds, and the task watchdog restarts the board if core 0's idle task doesn't run for 5 s. The generator calls `sudoku_gen_yield()` once per attempt, once per pair dug, and every 4 096 search nodes. It's a weak no-op in `generator.c` (and so on a PC); `ui_newpuzzle.c` overrides it with a `vTaskDelay(1)` at most every 100 ms.
+- **The watchdog**: a hard Expert puzzle can search for seconds, and the task watchdog restarts the board if core 0's idle task doesn't run for 5 s. The generator calls `sudoku_gen_yield()` once per attempt, once per pair dug, and every 4 096 search nodes. It's a weak no-op in `gen_solver.c` (and so on a PC); `ui_newpuzzle.c` overrides it with a `vTaskDelay(1)` at most every 100 ms.
 - **The progress bar**: there is no real progress to report (an attempt may land on the first try or the 400th). The bar shows `1 − e^(−elapsed / expected)`, where *expected* is the measured average for that variant and level (`GEN_EXPECT_MS`, from the [board benchmark](../development.md#puzzle-generation-speed)). It is about two-thirds full at the usual time and never passes 97 % until done.
 - **Saving**: the finished puzzle and its clue text go into `generated` (`stats_db_gen_add`), and the puzzle opens as id 2000 + its row. Without a card it gets a RAM-only id until power-off.
 - **Benchmarking**: `devctl genbench <variant> <level|all> <count>` runs the generator on the board at full clock and reports average, min and max times, how many came out on level, and the average givens. [Development → Puzzle generation speed](../development.md#puzzle-generation-speed) has the table.
@@ -170,12 +170,12 @@ This is why `dig()` keeps a few special cases ("Classic digs as it always has"):
 The usual path, roughly in the order it was done for the last few:
 
 1. **`generator.h`**: append to `sudoku_variant_t` (never reorder: the number is stored in the database), add its name, its geometry fields and text functions, and new `FIT_*` / `TECH_*` codes at the end of their enums.
-2. **`generator.c`**:
-   - building the geometry and its text form;
-   - the rule in `grid_free()` with a `WHY()` checkpoint;
-   - a `*_logic()` step, added to `technique_tier()` and `sudoku_next_step()`;
-   - `easy_min_clues()`;
-   - a branch in `sudoku_generate()` that derives the clues from a full grid.
+2. **The `gen_*.c` files**:
+   - building the geometry and its text form (`gen_geometry.c`);
+   - the rule in `grid_free()` with a `WHY()` checkpoint (`gen_solver.c`);
+   - a `gen_*_logic()` step, added to `gen_technique_tier()` (`gen_grade.c`) and `sudoku_next_step()` (`gen_hints.c`);
+   - `gen_easy_min_clues()` (`gen_grade.c`);
+   - a branch in `sudoku_generate()` that derives the clues from a full grid (`gen_make.c`).
 3. **Elsewhere**:
    - `sdx.c` (import/export);
    - `ui_common.c` (rebuilding the board from the database);

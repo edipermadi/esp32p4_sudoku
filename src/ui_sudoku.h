@@ -14,6 +14,11 @@ esp_err_t sudoku_ui_start(void);
 
 /* Shows a message banner at the bottom of the screen for `ms` milliseconds. */
 void sudoku_ui_notice(const char *text, uint32_t ms);
+/* A banner that stays while something runs (drawn at once, so it shows even while the caller holds
+ * the UI); called again, its text changes. sudoku_ui_progress_done() gives it its last text and
+ * removes it after `ms` milliseconds (with no progress banner up: a plain notice). */
+void sudoku_ui_progress(const char *text);
+void sudoku_ui_progress_done(const char *text, uint32_t ms);
 
 /* Writing the flash makes the panel flicker cyan (the display can't reach its frame buffer
  * meanwhile), so the screen is dark during it: sudoku_ui_flash_busy() covers the screen with a

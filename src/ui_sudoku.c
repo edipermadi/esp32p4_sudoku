@@ -82,7 +82,8 @@ void notice_del_cb(lv_timer_t *t)
     lv_obj_delete((lv_obj_t *)lv_timer_get_user_data(t));
 }
 
-void sudoku_ui_notice(const char *text, uint32_t ms)
+/* the notice banner (no timer yet); its label is its only child */
+static lv_obj_t *notice_make(const char *text)
 {
     /* on the top layer so it stays visible across screen changes */
     lv_obj_t *n = lv_obj_create(lv_layer_top());
@@ -99,8 +100,38 @@ void sudoku_ui_notice(const char *text, uint32_t ms)
     lv_obj_set_width(l, LV_PCT(100));
     lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
     lv_label_set_text(l, text);
+    return n;
+}
+
+void sudoku_ui_notice(const char *text, uint32_t ms)
+{
+    lv_obj_t *n = notice_make(text);
     lv_timer_t *t = lv_timer_create(notice_del_cb, ms, n);
     lv_timer_set_repeat_count(t, 1);
+}
+
+static lv_obj_t *s_progress;                        /* the progress notice shown (NULL: none) */
+
+void sudoku_ui_progress(const char *text)
+{
+    if (s_progress) {
+        lv_label_set_text(lv_obj_get_child(s_progress, 0), text);
+    } else {
+        s_progress = notice_make(text);
+    }
+    lv_refr_now(NULL);                              /* (shown now: the caller may hold the UI meanwhile) */
+}
+
+void sudoku_ui_progress_done(const char *text, uint32_t ms)
+{
+    if (!s_progress) {
+        sudoku_ui_notice(text, ms);
+        return;
+    }
+    lv_label_set_text(lv_obj_get_child(s_progress, 0), text);
+    lv_timer_t *t = lv_timer_create(notice_del_cb, ms, s_progress);
+    lv_timer_set_repeat_count(t, 1);
+    s_progress = NULL;
 }
 
 const char *sudoku_ui_io_busy(void)

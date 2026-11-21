@@ -27,7 +27,7 @@ static bool      g_layout_left;         /* ... and on which side the pad is (Lef
 
 /* ------------------------------------------------------------- hints */
 /*
- * Hint: the next step a person would take (generator.c, sudoku_next_step),
+ * Hint: the next step a person would take (gen_hints.c, sudoku_next_step),
  * in two steps: first where to look, then (More) the cell and why, then
  * Place it. A wrong digit is pointed out first. Each hint opened counts once.
  */
