@@ -148,7 +148,12 @@ src/gibberlink.cpp      remote control by sound: ES7210 mics -> ggwave -> devctl
 src/ggwave/             ggwave 060aec7 (MIT), data over sound, vendored unchanged
 src/ui_media_view.c        the Files viewer: JPEG (hardware decoder), MP4 (tinyh264), full screen
 src/mp4_reader.c        MP4 index reader for the viewer: frame offsets, times, key frames, SPS/PPS
-src/ui_sysmon.c         system monitor screen: heap, flash, microSD, temperature, tasks, LVGL
+src/ui_sysmon.c         system monitor screen: the frame around its tabs, the refresh, the history timer (ui_sysmon_tab.h lists the tab files)
+src/ui_sysmon_system.c   System monitor > System: chip, uptime, temperature, CPU load, network; CPU, temperature and Wi-Fi graphs
+src/ui_sysmon_memory.c   System monitor > Memory: internal RAM, PSRAM, DMA; the free RAM graph
+src/ui_sysmon_storage.c  System monitor > Storage: firmware, flash, NVS, microSD
+src/ui_sysmon_graphics.c System monitor > Graphics: LVGL frame rate, draw times, objects, timers
+src/ui_sysmon_tasks.c    System monitor > Tasks: the FreeRTOS task table, sortable
 src/sysmon_core.c       the system monitor's numbers, without LVGL: CPU load, temperature, memory, storage, the task list, the last hour
 src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files
