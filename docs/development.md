@@ -47,6 +47,37 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 `make -C tests golden` prints the golden hashes: after a deliberate change to the generator, pin the new ones in `test_determinism` (and know that every board's daily puzzles change with the firmware). `./tests/sudoku_tests hints` runs only the tests whose name contains "hints". Code that touches LVGL or ESP-IDF (the screens, `sudoku.db`) isn't covered: that is still checked on the board, with devctl.
 
+## Puzzle generation speed
+
+How long **New puzzle** takes on the board, measured with devctl's `genbench` ([Remote control](devctl.md)): `python3 tools/devctl.py --port /dev/ttyACM1 "genbench all all 10"`. Ten puzzles of each variant and level, from fixed seeds (the same every run, so two builds compare puzzle for puzzle), each on the worker core like New puzzle, the CPU at 360 MHz. Measured 2026-11-21 on the Waveshare 4B board (pre-v3 ESP32-P4 silicon), firmware `0ce035d` (the generator as committed there); the whole run takes about 5 minutes.
+
+Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Kids 4x4 has no Hard or Expert.
+
+| Variant | Easy | Medium | Hard | Expert |
+|---|---|---|---|---|
+| Classic | 5 / 10 (38) | 69 / 172 (27.8) | 441 / 998 (27.5) | 90 / 209 (27.8) |
+| X-Sudoku | 5 / 10 (37.7) | 171 / 322 (22.8) | 283 / 507 (21.9) | 235 / 469 (21.2) |
+| Mini 6x6 | 0 / 1 (16.2) | 2 / 3 (11.4) | 1052 / 2664 (10.8) | 41 / 125 (11.4) |
+| Hyper | 62 / 188 (38.3) | 233 / 459 (21.5) | 343 / 764 (20.6) | 373 / 697 (20.2) |
+| Jigsaw | 297 / 1028 (38.1) | 346 / 767 (23.9) | 527 / 867 (23.2) | 1113 / 3147 (22.6) |
+| Killer | 46 / 136 (10.8) | 498 / 1179 (4.9) | 1033 / 2147 (9.5) | 1630 / 4316 (8.8) |
+| Anti-Knight | 12 / 23 (34.7) | 281 / 453 (19.1) | 442 / 953 (19.9) | 405 / 539 (17) |
+| Even-Odd | 6 / 12 (32.2) | 57 / 199 (20.1) | 183 / 374 (20.5) | 192 / 388 (19.4) |
+| Consecutive | 19 / 38 (14) | 300 / 486 (6.6) | 639 / 1828 (5.9) | 366 / 587 (3.1) |
+| Thermo | 8 / 17 (29) | 86 / 194 (21.4) | 416 / 1431 (16.8) | 331 / 603 (16.8) |
+| Sandwich | 297 / 761 (26.2) | 199 / 412 (20.9) | 2348 / 4201 (21.9) | 1987 / 2596 (14.8) |
+| Kids 4x4 | 0 / 0 (8.8) | 0 / 0 (4.4) | – | – |
+| Anti-King | 7 / 15 (34.6) | 94 / 171 (23.7) | 326 / 1123 (22.7) | 191 / 301 (21.2) |
+| Non-Consecutive | 862 / 3058 (25.4) | 909 / 1927 (14.4) | 2908 / 7173 (15) | 1540 / 3076 (11.3) |
+| Disjoint Groups | 7 / 18 (33.8) | 43 / 101 (21.3) | 168 / 526 (20.4) | 119 / 311 (20.5) |
+| Asterisk | 6 / 12 (35.7) | 93 / 186 (24.8) | 337 / 971 (24.3) | 186 / 412 (23.7) |
+| Kropki | 28 / 35 (15.6) | 116 / 146 (2.7) | 352 / 864 (2.4) | 189 / 377 (0) |
+| XV | 15 / 20 (23.9) | 136 / 181 (4.6) | 307 / 749 (3.2) | 1743 / 5422 (3.8) |
+| Greater-Than | 7 / 10 (18.5) | 24 / 35 (4.2) | 197 / 538 (3.4) | 489 / 751 (3.8) |
+| Quadruple | 9 / 13 (29.4) | 72 / 92 (13.3) | 204 / 359 (9) | 600 / 1975 (7.4) |
+
+Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
+
 ## The UI files
 
 The UI is one screen (or a few related ones) per file, `src/ui_*.c`, and `sudoku_ui.c` for start-up and the public functions. A function stays `static` in its file unless another file calls it; then it is declared once in `src/ui_internal.h` and defined, without `static`, in its file. Macros and types are all in `ui_internal.h`. When a new screen needs a function from another file, move its declaration there rather than copying it.

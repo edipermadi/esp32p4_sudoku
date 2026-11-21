@@ -38,7 +38,7 @@ Also online, as web pages: **https://edipermadi.github.io/esp32p4_sudoku/docs/**
 | [How to play](docs/how-to-play.md) | Which button does what, as a table |
 | [Data & storage](docs/data.md) | `sudoku.db` and its tables, backups, firmware update, USB drive, format, factory reset, saving |
 | [Building and releases](docs/building.md) | Arduino settings, `arduino-cli`, GitHub Actions releases, the web flasher |
-| [Development](docs/development.md) | Regenerating puzzles and fonts, colours, sounds, source layout |
+| [Development](docs/development.md) | Regenerating puzzles and fonts, colours, sounds, tests, puzzle generation speed on the board, source layout |
 | [Screenshots and remote control](docs/devctl.md) | `tools/devctl.py`: screenshots, simulated touches, files on the card over serial |
 | [devctl protocol](docs/devctl-protocol.md) | The serial wire protocol, for other tools |
 
