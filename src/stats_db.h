@@ -750,22 +750,25 @@ void stats_db_import_puzzles(void);
  * @brief Imports one file of those kinds anywhere on the card: the same, but just that file
  *        (Files' preview).
  * @param[in] path  a full path
+ * @return its ticket, for stats_db_import_result() (0: not started: no database)
  */
-void stats_db_import_file(const char *path);
-/** @brief How the last stats_db_import_file() went (stats_db_import_last()). */
+uint32_t stats_db_import_file(const char *path);
+/** @brief How a stats_db_import_file() went (stats_db_import_result()). */
 typedef struct {
-    uint32_t seq;                        /**< counts the imports finished: a new one changes it */
+    uint32_t ticket;                     /**< the import's ticket (stats_db_import_file()'s answer) */
     int got;                             /**< puzzles imported; 0: none had one solution; -1: it couldn't be
                                           *   (a collection of that name?); -2: that file is imported already */
     int bad;                             /**< puzzles left out (not exactly one solution) */
     char msg[128];                       /**< what happened, as the notice on the board says it */
 } stats_import_result_t;
 /**
- * @brief The last stats_db_import_file()'s result; a caller that waits for one notes seq first and
- *        waits for it to change (devctl "import").
+ * @brief A file import's result, once it has finished (devctl "import" waits for it). The last few
+ *        are kept, so two imports at once (one from devctl, one from the screen) each find their own.
+ * @param[in] ticket  stats_db_import_file()'s answer
  * @param[out] out  gets it
+ * @return false: not finished yet (or long gone)
  */
-void stats_db_import_last(stats_import_result_t *out);
+bool stats_db_import_result(uint32_t ticket, stats_import_result_t *out);
 /**
  * @brief Whether an import changed the collections (once).
  * @return true: reload the list

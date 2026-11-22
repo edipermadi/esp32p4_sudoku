@@ -155,7 +155,7 @@ typedef struct {
     uint32_t flags;             /**< CMD_SOLVE: GAME_FLAG_* */
     int64_t when;               /**< CMD_SOLVE: finished, Unix time, 0 = unknown */
     int64_t started;            /**< CMD_SOLVE: started, Unix time, 0 = unknown */
-    uint8_t *blob;              /**< CMD_SOLVE: packed move log (malloc'd, freed by the worker) */
+    uint8_t *blob;              /**< CMD_SOLVE: packed move log; CMD_IMPORT_FILE: the path (malloc'd, freed by the worker) */
     int blob_bytes;             /**< its size */
     int64_t solve_id;           /**< CMD_REPLAY */
     int level;                  /**< CMD_QUERY */
@@ -165,7 +165,7 @@ typedef struct {
     open_seed_t *seed;          /**< CMD_OPEN */
     char key[24];               /**< CMD_SET */
     bool is_text;               /**< CMD_SET: text holds the value (else ival) */
-    int ival;                   /**< CMD_SET value; player id for the player commands */
+    int ival;                   /**< CMD_SET value; player id for the player commands; CMD_IMPORT_FILE: its ticket */
     char text[STORE_TZ_LEN];    /**< CMD_SET text; player name */
     game_spill_t *spill;        /**< CMD_GAME_SPILL */
 } cmd_t;
@@ -589,8 +589,12 @@ int sdb_longest_daily_streak(int32_t player);
 /* ---- stats_db_import.c */
 /** @brief CMD_IMPORT: imports the files in puzzles/ (stats_db_import_puzzles()). */
 void sdb_do_import(void);
-/** @brief CMD_IMPORT_FILE: imports one file (stats_db_import_file()). */
-void sdb_do_import_file(void);
+/**
+ * @brief CMD_IMPORT_FILE: imports one file (stats_db_import_file()).
+ * @param[in] path    the file (the command's own copy)
+ * @param[in] ticket  its ticket, for stats_db_import_result()
+ */
+void sdb_do_import_file(const char *path, uint32_t ticket);
 /** @brief CMD_LIST_IMPORTS: the imported collections (s_gen.imports). */
 void sdb_do_list_imports(void);
 /** @brief CMD_SOLVED_IN: the current player's solved puzzles in a range (s_gen.solved_bits). */

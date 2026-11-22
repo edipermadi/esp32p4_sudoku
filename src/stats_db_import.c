@@ -398,43 +398,50 @@ void sdb_do_import(void)
     sdb_post_message(msg);
 }
 
-static char s_import_path[300];                 /**< CMD_IMPORT_FILE: the file (stats_db_import_file()) */
-static stats_import_result_t s_import_last;     /**< the last file import's result (stats_db_import_last(); under sdb_lock()) */
+#define IMPORT_RESULTS 4                        /**< file imports' results kept (stats_db_import_result()) */
+static stats_import_result_t s_import_res[IMPORT_RESULTS];   /**< the last few, by ticket (under sdb_lock()) */
+static uint32_t s_import_ticket;                /**< the last ticket handed out (stats_db_import_file()) */
 
 /**
- * @brief A file import finished: its result kept for stats_db_import_last(), its message for the notice.
+ * @brief A file import finished: its result kept for stats_db_import_result(), its message for the notice.
+ * @param[in] ticket  the import's ticket
  * @param[in] got  puzzles imported (or 0, -1, -2: see stats_import_result_t)
  * @param[in] bad  puzzles left out
  * @param[in] msg  what happened
  */
-static void import_finished(int got, int bad, const char *msg)
+static void import_finished(uint32_t ticket, int got, int bad, const char *msg)
 {
     xSemaphoreTake(sdb_lock(), portMAX_DELAY);
-    s_import_last.got = got;
-    s_import_last.bad = bad;
-    snprintf(s_import_last.msg, sizeof(s_import_last.msg), "%s", msg);
-    s_import_last.seq++;
+    stats_import_result_t *r = &s_import_res[ticket % IMPORT_RESULTS];
+    r->ticket = ticket;
+    r->got = got;
+    r->bad = bad;
+    snprintf(r->msg, sizeof(r->msg), "%s", msg);
     xSemaphoreGive(sdb_lock());
     sdb_post_message(msg);
 }
 
 /* (documented in stats_db.h) */
-void stats_db_import_last(stats_import_result_t *out)
+bool stats_db_import_result(uint32_t ticket, stats_import_result_t *out)
 {
-    if (!sdb_lock()) {
-        memset(out, 0, sizeof(*out));
-        return;
+    if (!sdb_lock() || !ticket) {
+        return false;
     }
     xSemaphoreTake(sdb_lock(), portMAX_DELAY);
-    *out = s_import_last;
+    const stats_import_result_t *r = &s_import_res[ticket % IMPORT_RESULTS];
+    bool done = r->ticket == ticket;
+    if (done) {
+        *out = *r;
+    }
     xSemaphoreGive(sdb_lock());
+    return done;
 }
 
 /* (documented in stats_db_internal.h) */
-void sdb_do_import_file(void)
+void sdb_do_import_file(const char *path, uint32_t ticket)
 {
     if (!sdb_db()) {
-        import_finished(-1, 0, "Importing needs sudoku.db on the microSD card.");
+        import_finished(ticket, -1, 0, "Importing needs sudoku.db on the microSD card.");
         return;
     }
     static uint8_t (*cells)[81];
@@ -442,19 +449,19 @@ void sdb_do_import_file(void)
         cells = heap_caps_malloc(81 * IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM);
     }
     if (!cells) {
-        import_finished(-1, 0, "Couldn't import: no memory.");
+        import_finished(ticket, -1, 0, "Couldn't import: no memory.");
         return;
     }
-    const char *slash = strrchr(s_import_path, '/'), *fn = slash ? slash + 1 : s_import_path;
+    const char *slash = strrchr(path, '/'), *fn = slash ? slash + 1 : path;
     char msg[128];
     if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
         snprintf(msg, sizeof(msg), "%.80s is imported already: it's in Puzzles > Saved.", fn);
-        import_finished(-2, 0, msg);
+        import_finished(ticket, -2, 0, msg);
         return;
     }
-    int bad = 0, got = import_one(s_import_path, fn, cells, IMPORT_MAX_RUN, &bad);
+    int bad = 0, got = import_one(path, fn, cells, IMPORT_MAX_RUN, &bad);
     if (got > 0) {
-        printf("stats_db: imported %d puzzles from %s\n", got, s_import_path);
+        printf("stats_db: imported %d puzzles from %s\n", got, path);
         snprintf(msg, sizeof(msg), "Imported %d puzzle%s: Puzzles > Saved%s.", got, got == 1 ? "" : "s",
                  bad ? " (some had no single solution and were left out)" : "");
         s_imports_changed = true;
@@ -463,7 +470,7 @@ void sdb_do_import_file(void)
     } else {
         snprintf(msg, sizeof(msg), "No puzzle with exactly one solution in %.70s.", fn);
     }
-    import_finished(got, bad, msg);
+    import_finished(ticket, got, bad, msg);
 }
 
 /* (documented in stats_db_internal.h) */
@@ -532,13 +539,19 @@ static int query_int_text(const char *sql, const char *text)
 }
 
 /* (documented in stats_db.h) */
-void stats_db_import_file(const char *path)
+uint32_t stats_db_import_file(const char *path)
 {
-    snprintf(s_import_path, sizeof(s_import_path), "%s", path);   /* (one at a time: the preview waits) */
-    cmd_t c = {.type = CMD_IMPORT_FILE};
-    if (!sdb_send(&c)) {
+    /* the path goes with the command (the worker frees it): two imports queued at once each import
+     * their own file */
+    char *copy = strdup(path);
+    uint32_t ticket = ++s_import_ticket ? s_import_ticket : ++s_import_ticket;   /* (never 0) */
+    cmd_t c = {.type = CMD_IMPORT_FILE, .blob = (uint8_t *)copy, .ival = (int32_t)ticket};
+    if (!copy || !sdb_send(&c)) {
+        free(copy);
         sdb_post_message("Importing needs sudoku.db on the microSD card.");
+        return 0;
     }
+    return ticket;
 }
 
 /* (documented in stats_db.h) */

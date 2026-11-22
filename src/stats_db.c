@@ -345,7 +345,8 @@ static void worker(void *arg)
             sdb_do_week(c.text);
             break;
         case CMD_IMPORT_FILE:
-            sdb_do_import_file();
+            sdb_do_import_file((const char *)c.blob, (uint32_t)c.ival);
+            free(c.blob);
             break;
         case CMD_IMPORT:
             sdb_do_import();

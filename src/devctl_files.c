@@ -382,15 +382,19 @@ static void card_import(const char *full)
         serial_println("ERR import: no sudoku.db");
         return;
     }
-    stats_import_result_t before, r;
-    stats_db_import_last(&before);
-    stats_db_import_file(full);
+    stats_import_result_t r;
+    const uint32_t ticket = stats_db_import_file(full);   /* (its own: an import from the screen meanwhile has another) */
+    if (!ticket) {
+        serial_println("ERR import: no sudoku.db");
+        return;
+    }
     const int64_t t0 = esp_timer_get_time();
+    bool done;
     do {
         devctl_pump(50);                            /* (the UI runs: its notice, the collection list) */
-        stats_db_import_last(&r);
-    } while (r.seq == before.seq && esp_timer_get_time() - t0 < (int64_t)IMPORT_TIMEOUT * 1000);
-    if (r.seq == before.seq) {
+        done = stats_db_import_result(ticket, &r);
+    } while (!done && esp_timer_get_time() - t0 < (int64_t)IMPORT_TIMEOUT * 1000);
+    if (!done) {
         serial_println("ERR import: no answer from sudoku.db");
     } else if (r.got > 0) {
         serial_printf("IMPORT %s\n", r.msg);
