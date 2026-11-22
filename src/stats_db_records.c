@@ -53,6 +53,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Palindrome", OF_VARIANT(25)},
     {"Fastest Region Sum Lines", OF_VARIANT(26)},
     {"Fastest X-Sums", OF_VARIANT(27)},
+    {"Fastest Zipper Lines", OF_VARIANT(28)},
+    {"Fastest Frame", OF_VARIANT(29)},
+    {"Fastest Between Lines", OF_VARIANT(30)},
 };
 
 /* (documented in stats_db_internal.h) */

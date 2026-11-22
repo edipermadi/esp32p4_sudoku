@@ -445,6 +445,32 @@ bool gen_xsum_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_frame_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int lu = 0; lu < 18; lu++) {
+        int cells[9];
+        if (!G->frame_sum[lu]) {
+            continue;
+        }
+        line_cells(lu, cells);
+        for (int k = 0; k < 3; k++) {
+            int cell = cells[k];
+            if (L->v[cell]) {
+                continue;
+            }
+            uint16_t keep = (uint16_t)(L->cand[cell] & gen_frame_allow(G, lu, k, L->v, L->cand));
+            if (keep != L->cand[cell]) {
+                eliminate(L, cell, (uint16_t)(L->cand[cell] & ~keep));
+                trace(TECH_FRAME, lu, -1, keep, 0, cell, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
 bool gen_lk_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
@@ -955,6 +981,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->xsums && gen_xsum_logic(&L)) {
             continue;    /* X-Sums: the clues */
         }
+        if (G->frame && gen_frame_logic(&L)) {
+            continue;    /* Frame: the clues */
+        }
         if (gen_locked_candidates(&L) || gen_pairs(&L)) {
             tier = 2;
             continue;
@@ -988,7 +1017,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->nthermos && G->line_kind != LINE_THERMO) {
         return 28;
     }
-    if (G->skyscraper || G->nlk || G->xsums) {
+    if (G->skyscraper || G->nlk || G->xsums || G->frame) {
         return 28;
     }
     if (G->consec_on) {

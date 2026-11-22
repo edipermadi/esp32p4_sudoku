@@ -110,6 +110,7 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
                 !(G->nthermos && gen_thermo_logic(&L)) && !(G->sandwich && gen_sandwich_logic(&L)) &&
                 !(G->edge_kind && gen_edge_logic(&L)) && !(G->nquads && gen_quad_logic(&L)) &&
                 !(G->skyscraper && gen_sky_logic(&L)) && !(G->nlk && gen_lk_logic(&L)) && !(G->xsums && gen_xsum_logic(&L)) &&
+                !(G->frame && gen_frame_logic(&L)) &&
                 !gen_locked_candidates(&L) &&
                 !gen_pairs(&L) && !gen_naked_triple(&L) && !gen_fish(&L, 2) && !gen_fish(&L, 3) && !gen_xy_wing(&L)) {
             break;                                                  /* the first one is in out->tech */

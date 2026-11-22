@@ -228,6 +228,24 @@ int compute_conflicts(void)
             }
         }
     }
+    for (int lu = 0; g_geo->frame && lu < 18; lu++) {   /* Frame: the first three over the clue, or (full) not it */
+        int c = g_geo->frame_sum[lu], cells[9], sum = 0, empty = 0;
+        if (!c) {
+            continue;
+        }
+        for (int j = 0; j < 3; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+            sum += g_b.val[cells[j]];
+            empty += !g_b.val[cells[j]];
+        }
+        if (sum + empty > c || (!empty && sum != c)) {
+            for (int j = 0; j < 3; j++) {
+                if (g_b.val[cells[j]]) {
+                    g_conflict[cells[j]] = true;
+                }
+            }
+        }
+    }
     for (int lu = 0; g_geo->xsums && lu < 18; lu++) {   /* X-Sums: the first X digits over the clue, or (full) not it */
         int c = g_geo->xsum[lu], cells[9], sum = 0, empty = 0;
         for (int j = 0; j < 9; j++) {
@@ -315,6 +333,35 @@ int compute_conflicts(void)
                 }
             }
             break;
+        case LINE_ZIPPER: {                         /* two full pairs (or a pair and the middle) with different totals */
+            int target = n % 2 ? g_b.val[cell[n / 2]] : 0;   /* (odd: the middle digit, once it's in) */
+            bool bad = false;
+            for (int i = 0; i < n / 2; i++) {
+                int a = g_b.val[cell[i]], b = g_b.val[cell[n - 1 - i]];
+                if (a && b) {
+                    bad |= target && a + b != target;
+                    target = a + b;
+                } else if (n % 2 && g_b.val[cell[n / 2]] && (a ? a : b) >= g_b.val[cell[n / 2]]) {
+                    bad = true;                     /* (one of the pair already at the middle digit or past it) */
+                }
+            }
+            for (int i = 0; bad && i < n; i++) {
+                if (g_b.val[cell[i]]) {
+                    g_conflict[cell[i]] = true;
+                }
+            }
+            break;
+        }
+        case LINE_BETWEEN: {                        /* a digit between not strictly between the two circles */
+            int a = g_b.val[cell[0]], b = g_b.val[cell[n - 1]], lo = a < b ? a : b, hi = a < b ? b : a;
+            for (int i = 1; a && b && i < n - 1; i++) {
+                int x = g_b.val[cell[i]];
+                if (x && (x <= lo || x >= hi)) {
+                    g_conflict[cell[i]] = g_conflict[cell[0]] = g_conflict[cell[n - 1]] = true;
+                }
+            }
+            break;
+        }
         case LINE_REGIONSUM: {                      /* two boxes' full parts that differ, or a part over a full one */
             int sum[9], np, target = -1;
             bool full[9], bad = false;

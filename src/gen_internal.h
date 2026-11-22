@@ -131,7 +131,7 @@ void gen_bread_tables(void);
 uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const uint16_t *cand);
 /**
  * @brief The digits the cell at a place of a line may hold, by the line's rule (Thermo, Arrow, Renban, Whispers,
- *        Palindrome, Region Sum Lines).
+ *        Palindrome, Region Sum, Zipper, Between Lines).
  * @param G          the board
  * @param t          the line
  * @param p          the place on it
@@ -157,6 +157,16 @@ bool is_gen_sky_line_ok(const uint8_t x[9], int c);
  * @return a candidate mask
  */
 uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand);
+/**
+ * @brief The digits the cell at a place of a Frame row or column may hold, by its clue.
+ * @param G          the board
+ * @param lu         the row (0..8) or column (9..17), with a clue
+ * @param at         the cell's place along it, from the clue (0..2: else anything)
+ * @param v          the digits (0: empty)
+ * @param cand       the candidates of the empty ones, or NULL (then any digit not on the line yet)
+ * @return a candidate mask
+ */
+uint16_t gen_frame_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand);
 /**
  * @brief Counts a puzzle's solutions, up to a limit, within a node budget.
  * @param G          the board
@@ -256,6 +266,12 @@ bool gen_sky_logic(logic_t *L);
  * @return true if it changed anything
  */
 bool gen_xsum_logic(logic_t *L);
+/**
+ * @brief A technique: Frame: what the clues leave, candidates taken out.
+ * @param L          the state
+ * @return true if it changed anything
+ */
+bool gen_frame_logic(logic_t *L);
 /**
  * @brief A technique: Little Killer: what the diagonals' sums leave, candidates taken out.
  * @param L          the state
@@ -359,6 +375,14 @@ bool gen_geom_sandwich(const uint8_t sums[18], sudoku_geom_t *out);
  * @return false if there are none or too many
  */
 bool gen_geom_lk(int n, const bool *top, const uint8_t *idx, const uint8_t *dir, const uint8_t *sum, sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Frame, a classic board with clues beside the rows and
+ *        columns.
+ * @param clues      the rows' clues, then the columns' (0: none)
+ * @param out        gets the board
+ * @return false if a clue can't be made by three different digits
+ */
+bool gen_geom_frame(const uint8_t clues[18], sudoku_geom_t *out);
 /**
  * @brief Builds a board from its decorations: X-Sums, a classic board with clues beside the rows and
  *        columns.

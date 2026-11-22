@@ -174,7 +174,7 @@ void hint_render(void)
         unit_name(t->unit, u1, sizeof(u1));
         snprintf(tech, sizeof(tech), "In %s the digits between the 1 and the 9 add up to %d: that leaves the 1 and "
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? game_geo()->sandwich_sum[t->unit] : 0);
-    } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM) {   /* a clue's line; a diagonal */
+    } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM || t->kind == TECH_FRAME) {
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         char digs[24] = "";
         size_t len = 0;
@@ -195,6 +195,11 @@ void hint_render(void)
             snprintf(tech, sizeof(tech), "The clue of %s is %d: the first digit from there says how many digits add up "
                      "to it. Of the ways that can work out, only those leave row %d, column %d %s. ", u1,
                      game_geo()->xsum[k], c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_FRAME && k >= 0 && k < 18) {
+            mark_unit(k, 1);
+            unit_name(k, u1, sizeof(u1));
+            snprintf(tech, sizeof(tech), "The first three digits of %s add up to its clue %d, so row %d, column %d can "
+                     "only be %s. ", u1, game_geo()->frame_sum[k], c / 9 + 1, c % 9 + 1, digs);
         } else if (t->kind == TECH_LK && k >= 0 && k < game_geo()->nlk) {
             for (int i = 0; i < game_geo()->lk_n[k]; i++) {
                 h_mark[game_geo()->lk_cell[k][i]] = 1;
@@ -222,6 +227,8 @@ void hint_render(void)
                  lk == LINE_RENBAN ? "The digits on this line are a run of consecutive digits" :
                  lk == LINE_PALINDROME ? "This line reads the same from both ends" :
                  lk == LINE_REGIONSUM ? "In each box this line passes through, its digits add up to the same" :
+                 lk == LINE_ZIPPER ? "Cells the same distance from this line's middle add up to the same total" :
+                 lk == LINE_BETWEEN ? "The digits on this line lie between the digits in its two circles" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -848,7 +855,7 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
     lv_draw_line_dsc_init(&ld);
     ld.round_start = ld.round_end = 1;
     int from = 0;
-    lv_point_t start = pts[0];
+    lv_point_t start = pts[0], end = pts[n - 1];
     switch (kind) {
     case LINE_ARROW:
         ld.color = C_MUTED;
@@ -883,6 +890,26 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;
+    case LINE_ZIPPER:
+        ld.color = lv_color_hex(0xE0679B);
+        ld.opa = LV_OPA_70;
+        ld.width = cs * 12 / 100;
+        break;
+    case LINE_BETWEEN:                              /* from circle edge to circle edge */
+        ld.color = C_MUTED;
+        ld.opa = LV_OPA_80;
+        ld.width = 4;
+        for (int e = 0; e < 2 && n > 1; e++) {
+            const lv_point_t c = e ? pts[n - 1] : pts[0], nx = e ? pts[n - 2] : pts[1];
+            int dx = nx.x - c.x, dy = nx.y - c.y, r = cs * 4 / 10;
+            int len = (int)sqrtf((float)(dx * dx + dy * dy));
+            if (len) {
+                lv_point_t *at = e ? &end : &start;
+                at->x = c.x + dx * r / len;
+                at->y = c.y + dy * r / len;
+            }
+        }
+        break;
     default:
         ld.color = C_MUTED;
         ld.opa = LV_OPA_40;
@@ -891,8 +918,8 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
     for (int i = from + 1; i < n; i++) {
         ld.p1.x = i == 1 ? start.x : pts[i - 1].x;
         ld.p1.y = i == 1 ? start.y : pts[i - 1].y;
-        ld.p2.x = pts[i].x;
-        ld.p2.y = pts[i].y;
+        ld.p2.x = i == n - 1 ? end.x : pts[i].x;
+        ld.p2.y = i == n - 1 ? end.y : pts[i].y;
         lv_draw_line(layer, &ld);
     }
     lv_draw_rect_dsc_t d;
@@ -904,6 +931,14 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         d.bg_color = C_MUTED;
         d.bg_opa = LV_OPA_40;
         lv_draw_rect(layer, &d, &b);
+    } else if (kind == LINE_BETWEEN) {              /* a circle at each end */
+        d.bg_opa = LV_OPA_TRANSP;
+        d.border_color = C_MUTED;
+        d.border_opa = LV_OPA_80;
+        d.border_width = 3;
+        lv_draw_rect(layer, &d, &b);
+        lv_area_t b2 = {.x1 = pts[n - 1].x - r, .y1 = pts[n - 1].y - r, .x2 = pts[n - 1].x + r, .y2 = pts[n - 1].y + r};
+        lv_draw_rect(layer, &d, &b2);
     } else if (kind == LINE_ARROW) {                /* the circle, and the arrowhead at the shaft's end */
         d.bg_opa = LV_OPA_TRANSP;
         d.border_color = C_MUTED;
@@ -1041,7 +1076,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
                      lv_obj_t *const *clues, int x0, int y0, int size_all)
 {
     lv_obj_set_user_data(grid, (void *)geo);
-    const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums;   /* clues outside the grid */
+    const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums || geo->frame;   /* clues outside the grid */
     for (int i = 0; clues && i < BOARD_CLUES; i++) {
         lv_obj_set_hidden(clues[i], true);
     }
@@ -1080,8 +1115,9 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     const int gx = x0 + band + (size - w) / 2, gy = y0 + band + (size - h) / 2;
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
-    for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums) && clues && i < 18; i++) {   /* left of the rows, above the columns */
-        int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->skyscraper ? geo->sky[i] : geo->xsum[i];
+    for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums || geo->frame) && clues && i < 18; i++) {   /* left, above */
+        int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->skyscraper ? geo->sky[i] : geo->xsums ? geo->xsum[i]
+                           : geo->frame_sum[i];
         int mid = LINE_THICK + (k / 3) * (box_w + LINE_THICK) + (k % 3) * (cs + LINE_THIN) + cs / 2;
         lv_obj_set_user_data(clues[i], NULL);
         lv_obj_set_style_text_font(clues[i], &lv_font_montserrat_20, 0);
@@ -1159,7 +1195,8 @@ void game_layout(void)
             game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD &&
             game_var() != VAR_ARROW && game_var() != VAR_RENBAN && game_var() != VAR_WHISPER &&
             game_var() != VAR_SKY && game_var() != VAR_LK && game_var() != VAR_PALINDROME &&
-            game_var() != VAR_REGIONSUM && game_var() != VAR_XSUM) {
+            game_var() != VAR_REGIONSUM && game_var() != VAR_XSUM && game_var() != VAR_ZIPPER &&
+            game_var() != VAR_FRAME && game_var() != VAR_BETWEEN) {
         lv_obj_invalidate(game_grid());
         return;
     }

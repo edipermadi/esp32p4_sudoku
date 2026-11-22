@@ -15,6 +15,7 @@ static void gen_levels_update(void);
 static void gen_pick_close(void);
 static void gen_level_cb(lv_event_t *e);
 static void gen_var_cb(lv_event_t *e);
+static void gen_cat_cb(lv_event_t *e);
 static void gen_cancel_cb(lv_event_t *e);
 static void gen_backdrop_cb(lv_event_t *e);
 static void new_puzzle_cb(lv_event_t *e);
@@ -91,6 +92,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {11, 284, 905, 756},    /* Palindrome (2026-11-22) */
     {21, 403, 1070, 1206},  /* Region Sum Lines */
     {72, 835, 3012, 2360},  /* X-Sums */
+    {12, 594, 1209, 1125},  /* Zipper Lines (2026-11-22) */
+    {14, 97, 534, 208},     /* Frame */
+    {24, 620, 3610, 1873},  /* Between Lines */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -146,6 +150,9 @@ static void gen_task(void *arg)
     }
     if (gen_var_req == VAR_XSUM) {
         sudoku_xsum_text(gen_board, gen_marks, 82);
+    }
+    if (gen_var_req == VAR_FRAME) {
+        sudoku_frame_text(gen_board, gen_marks, 82);
     }
     if (gen_var_req == VAR_LK) {
         sudoku_lk_text(gen_board, gen_cages, STATS_CAGES_LEN);    /* (where cages go) */
@@ -424,15 +431,35 @@ static lv_obj_t *gen_pick;                          /**< the level dialog */
 static lv_obj_t *gen_pick_desc;                     /**< its line about the variant chosen */
 static int gen_pick_var = VAR_CLASSIC;              /**< variant chosen there (kept until power-off) */
 
-/** @brief the variants in the New puzzle dialog, in button order */
-static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW,
-                                                 VAR_KILLER, VAR_MINI, VAR_KIDS, VAR_THERMO,
-                                                 VAR_KNIGHT, VAR_KING, VAR_EVENODD, VAR_SANDWICH,
-                                                 VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK,
-                                                 VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
-                                                 VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME,
-                                                 VAR_REGIONSUM, VAR_SKY, VAR_LK, VAR_XSUM
-                                                };
+#define GEN_CATS     4                  /**< the dialog's tabs */
+#define GEN_CAT_SLOTS 12                /**< variant buttons per tab: 3 rows of 4 (the unused ones hidden) */
+#define GEN_CAT_END  0xFF               /**< after a tab's last variant */
+
+/** @brief the New puzzle dialog's tabs: their names */
+static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "Clues"};
+/** @brief each tab's variants, in button order: the grids and their extra regions; marks and rules
+ * between cells; lines; clues (cages, and sums or counts outside the grid) */
+static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
+    {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_MINI, VAR_KIDS, VAR_DISJOINT, VAR_ASTERISK, GEN_CAT_END},
+    {VAR_KNIGHT, VAR_KING, VAR_NONCONSEC, VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, GEN_CAT_END},
+    {VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM, VAR_ZIPPER, VAR_BETWEEN, GEN_CAT_END},
+    {VAR_KILLER, VAR_SANDWICH, VAR_SKY, VAR_LK, VAR_XSUM, VAR_FRAME, GEN_CAT_END},
+};
+/** @brief each variant's button text (shorter than variant_name() where four across need it) */
+static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
+    [VAR_CLASSIC] = "Classic", [VAR_X] = "X-Sudoku", [VAR_MINI] = "Mini 6x6", [VAR_HYPER] = "Hyper",
+    [VAR_JIGSAW] = "Jigsaw", [VAR_KILLER] = "Killer", [VAR_KNIGHT] = "Anti-Knight", [VAR_EVENODD] = "Even-Odd",
+    [VAR_CONSEC] = "Consecutive", [VAR_THERMO] = "Thermo", [VAR_SANDWICH] = "Sandwich", [VAR_KIDS] = "Kids 4x4",
+    [VAR_KING] = "Anti-King", [VAR_NONCONSEC] = "Non-Consec.", [VAR_DISJOINT] = "Disjoint", [VAR_ASTERISK] = "Asterisk",
+    [VAR_KROPKI] = "Kropki", [VAR_XV] = "XV", [VAR_GT] = "Greater-Than", [VAR_QUAD] = "Quadruple", [VAR_ARROW] = "Arrow",
+    [VAR_RENBAN] = "Renban", [VAR_WHISPER] = "Whispers", [VAR_SKY] = "Skyscraper", [VAR_LK] = "Little Killer",
+    [VAR_PALINDROME] = "Palindrome", [VAR_REGIONSUM] = "Region Sum", [VAR_XSUM] = "X-Sums", [VAR_ZIPPER] = "Zipper",
+    [VAR_FRAME] = "Frame", [VAR_BETWEEN] = "Between",
+};
+/** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
+static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
+static int gen_pick_cat;                            /**< the tab shown (kept until power-off) */
+static lv_obj_t *gen_var_bm;                        /**< the variant buttons of the tab shown */
 /** each variant's rules in a sentence (New puzzle's dialog) */
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
@@ -463,6 +490,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_PALINDROME] = "9x9 with grey lines: each line reads the same from both ends.",
     [VAR_REGIONSUM] = "9x9 with blue lines: a line's digits add up to the same in each box it passes through.",
     [VAR_XSUM] = "9x9: a clue by a row or column is the sum of its first X digits, X being the first digit.",
+    [VAR_ZIPPER] = "9x9 with pink lines: cells the same distance from a line's middle add up to the same total.",
+    [VAR_FRAME] = "9x9: a clue by a row or column is the sum of the first three digits from there.",
+    [VAR_BETWEEN] = "9x9: the digits on a line between two circles lie between the circles' digits.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /**< the level buttons (Kids 4x4: Hard and Expert off) */
 
@@ -506,12 +536,59 @@ static void gen_var_cb(lv_event_t *e)
 {
     lv_obj_t *bm = lv_event_get_target_obj(e);
     uint32_t sel = lv_buttonmatrix_get_selected_button(bm);
-    if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= VAR_COUNT) {
+    if (sel == LV_BUTTONMATRIX_BUTTON_NONE || sel >= GEN_CAT_SLOTS || GEN_CAT_VARS[gen_pick_cat][sel] == GEN_CAT_END) {
         return;
     }
-    gen_pick_var = GEN_VAR_ORDER[sel];
+    gen_pick_var = GEN_CAT_VARS[gen_pick_cat][sel];
+    gen_cat_pick[gen_pick_cat] = (uint8_t)gen_pick_var;
     lv_label_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
     gen_levels_update();
+}
+
+/**
+ * @brief Shows a tab's variants in the variant buttons, with its last pick checked (and chosen).
+ * @param cat  the tab
+ */
+static void gen_cat_show(int cat)
+{
+    static const char *map[GEN_CAT_SLOTS + GEN_CAT_SLOTS / 4];   /* the labels, a "\n" after each row of four */
+    int k = 0, n = 0;
+    while (n < GEN_CAT_SLOTS && GEN_CAT_VARS[cat][n] != GEN_CAT_END) {
+        n++;
+    }
+    for (int i = 0; i < GEN_CAT_SLOTS; i++) {
+        map[k++] = i < n ? GEN_VAR_LABEL[GEN_CAT_VARS[cat][i]] : " ";   /* (" ": a slot kept, hidden below) */
+        if (i % 4 == 3 && i + 1 < GEN_CAT_SLOTS) {
+            map[k++] = "\n";
+        }
+    }
+    map[k] = "";
+    gen_pick_cat = cat;
+    gen_pick_var = gen_cat_pick[cat];
+    lv_buttonmatrix_set_map(gen_var_bm, map);       /* (the same count: LVGL keeps the old flags) */
+    lv_buttonmatrix_clear_button_ctrl_all(gen_var_bm, LV_BUTTONMATRIX_CTRL_HIDDEN | LV_BUTTONMATRIX_CTRL_CHECKED);
+    lv_buttonmatrix_set_button_ctrl_all(gen_var_bm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    for (int i = 0; i < GEN_CAT_SLOTS; i++) {
+        if (i >= n) {
+            lv_buttonmatrix_set_button_ctrl(gen_var_bm, (uint32_t)i, LV_BUTTONMATRIX_CTRL_HIDDEN);
+        } else if (GEN_CAT_VARS[cat][i] == gen_pick_var) {
+            lv_buttonmatrix_set_button_ctrl(gen_var_bm, (uint32_t)i, LV_BUTTONMATRIX_CTRL_CHECKED);
+        }
+    }
+    lv_label_set_text(gen_pick_desc, GEN_VAR_DESC[gen_pick_var]);
+    gen_levels_update();
+}
+
+/**
+ * @brief A tab tapped: its variants shown.
+ * @param e  the event (the tabs' button matrix)
+ */
+static void gen_cat_cb(lv_event_t *e)
+{
+    uint32_t sel = lv_buttonmatrix_get_selected_button(lv_event_get_target_obj(e));
+    if (sel < GEN_CATS && (int)sel != gen_pick_cat) {
+        gen_cat_show((int)sel);
+    }
 }
 
 /**
@@ -543,29 +620,50 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_t *m = make_msgbox("New puzzle", NULL);
     gen_pick = m;
     lv_obj_set_width(m, 600);
-    make_wrap_text(lv_msgbox_get_content(m), &lv_font_montserrat_16, C_TEXT,   /* (small: room for 20 variants) */
+    make_wrap_text(lv_msgbox_get_content(m), &lv_font_montserrat_16, C_TEXT,
                    "A new puzzle made on the board, with exactly one solution. Easy and Medium need only "
                    "singles; Hard needs pairs or locked candidates; Expert needs more than that.");
 
-    /* the variant (one of them checked): rows of four, in GEN_VAR_ORDER */
-    static const char *const VAR_MAP[] = {"Classic", "X-Sudoku", "Hyper", "Jigsaw", "\n",
-                                          "Killer", "Mini 6x6", "Kids 4x4", "Thermo", "\n",
-                                          "Anti-Knight", "Anti-King", "Even-Odd", "Sandwich", "\n",
-                                          "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", "\n",
-                                          "Kropki", "XV", "Greater-Than", "Quadruple", "\n",
-                                          "Arrow", "Renban", "Whispers", "Palindrome", "\n",
-                                          "Region Sum", "Skyscraper", "Little Killer", "X-Sums", ""
-                                         };
-    lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
-    lv_buttonmatrix_set_map(vm, VAR_MAP);
-    lv_buttonmatrix_set_button_ctrl_all(vm, LV_BUTTONMATRIX_CTRL_CHECKABLE);
-    lv_buttonmatrix_set_one_checked(vm, true);
-    for (uint32_t i = 0; i < VAR_COUNT; i++) {
-        if (GEN_VAR_ORDER[i] == gen_pick_var) {
-            lv_buttonmatrix_set_button_ctrl(vm, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+    /* the tabs (Grids, Marks, Lines, Clues), then the tab's variants (one checked): rows of four */
+    static const char *const CAT_MAP[] = {"Grids", "Marks", "Lines", "Clues", ""};
+    lv_obj_t *tabs = lv_buttonmatrix_create(lv_msgbox_get_content(m));
+    lv_buttonmatrix_set_map(tabs, CAT_MAP);
+    lv_buttonmatrix_set_button_ctrl_all(tabs, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    lv_buttonmatrix_set_one_checked(tabs, true);
+    for (int c = 0; c < GEN_CATS; c++) {            /* the tab of the variant picked last */
+        for (int i = 0; GEN_CAT_VARS[c][i] != GEN_CAT_END; i++) {
+            if (GEN_CAT_VARS[c][i] == gen_pick_var) {
+                gen_pick_cat = c;
+                gen_cat_pick[c] = (uint8_t)gen_pick_var;
+            }
         }
     }
-    lv_obj_set_size(vm, LV_PCT(100), 344);          /* seven rows */
+    lv_buttonmatrix_set_button_ctrl(tabs, (uint32_t)gen_pick_cat, LV_BUTTONMATRIX_CTRL_CHECKED);
+    lv_obj_set_size(tabs, LV_PCT(100), 44);
+    lv_obj_set_style_pad_all(tabs, 0, 0);
+    lv_obj_set_style_pad_column(tabs, 8, 0);
+    lv_obj_set_style_margin_top(tabs, 12, 0);
+    lv_obj_set_style_border_width(tabs, 0, 0);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_text_font(tabs, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS);   /* a tab: its name, underlined when shown */
+    lv_obj_set_style_shadow_width(tabs, 0, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(tabs, C_MUTED, LV_PART_ITEMS);
+    lv_obj_set_style_border_side(tabs, LV_BORDER_SIDE_BOTTOM, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(tabs, 2, LV_PART_ITEMS);
+    lv_obj_set_style_border_color(tabs, C_GRID_THIN, LV_PART_ITEMS);
+    lv_obj_set_style_radius(tabs, 0, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(tabs, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_border_width(tabs, 4, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(tabs, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(tabs, gen_cat_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
+    gen_var_bm = vm;
+    lv_buttonmatrix_set_one_checked(vm, true);
+    lv_obj_set_size(vm, LV_PCT(100), 148);          /* three rows */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);
@@ -611,7 +709,7 @@ static void new_puzzle_cb(lv_event_t *e)
         lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);   /* (Kids 4x4: no Hard, Expert) */
         gen_lvl_btn[lv] = b;
     }
-    gen_levels_update();
+    gen_cat_show(gen_pick_cat);                     /* (the tab's variants, its description, the levels) */
 
     /* closing: an X in the title bar (or a tap beside the dialog), no Cancel row */
     lv_obj_t *x = lv_msgbox_add_header_button(m, LV_SYMBOL_CLOSE);

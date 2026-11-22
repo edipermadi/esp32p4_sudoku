@@ -146,6 +146,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_WHISPER:
     case VAR_PALINDROME:
     case VAR_REGIONSUM:
+    case VAR_ZIPPER:
+    case VAR_BETWEEN:
         return sudoku_geom_lines_text(p->variant, p->thermos, out);   /* (lines go in thermos) */
     case VAR_SANDWICH:
         return sudoku_geom_sandwich_text(p->marks, out);
@@ -153,6 +155,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_sky_text(p->marks, out);            /* (its clues go in marks) */
     case VAR_XSUM:
         return sudoku_geom_xsum_text(p->marks, out);           /* (its clues go in marks too) */
+    case VAR_FRAME:
+        return sudoku_geom_frame_text(p->marks, out);          /* (and Frame's) */
     case VAR_LK:
         return sudoku_geom_lk_text(p->cages, out);             /* (its sums where cages go) */
     default: {

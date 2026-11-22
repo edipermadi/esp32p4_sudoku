@@ -132,6 +132,21 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
                 return false;
             }
         }
+        for (int i = 0; g->line_kind == LINE_ZIPPER && i < n / 2; i++) {   /* one total: the middle (odd) or the middle pair's */
+            int tot = n % 2 ? sol[g->thermo_cell[t][n / 2]] : sol[g->thermo_cell[t][n / 2 - 1]] + sol[g->thermo_cell[t][n / 2]];
+            if (sol[g->thermo_cell[t][i]] + sol[g->thermo_cell[t][n - 1 - i]] != tot) {
+                return false;
+            }
+        }
+        if (g->line_kind == LINE_BETWEEN) {         /* strictly between the end circles */
+            int a = sol[g->thermo_cell[t][0]], b = sol[g->thermo_cell[t][n - 1]], lo2 = a < b ? a : b, hi2 = a < b ? b : a;
+            for (int i = 1; i < n - 1; i++) {
+                int x = sol[g->thermo_cell[t][i]];
+                if (x <= lo2 || x >= hi2) {
+                    return false;
+                }
+            }
+        }
         if (g->line_kind == LINE_REGIONSUM) {
             int part[9], np;
             bool full[9];
@@ -144,6 +159,15 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             if (np < 2) {
                 return false;
             }
+        }
+    }
+    for (int lu = 0; g->frame && lu < 18; lu++) {   /* Frame: the first three digits' sums */
+        int cells[9];
+        for (int k = 0; k < 9; k++) {
+            cells[k] = lu < 9 ? lu * 9 + k : k * 9 + lu - 9;
+        }
+        if (g->frame_sum[lu] && sol[cells[0]] + sol[cells[1]] + sol[cells[2]] != g->frame_sum[lu]) {
+            return false;
         }
     }
     for (int lu = 0; g->xsums && lu < 18; lu++) {   /* X-Sums: the first X digits' sums */
@@ -214,7 +238,8 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->consec, b->consec, 81) && a->nthermos == b->nthermos &&
            !memcmp(a->thermo_of, b->thermo_of, 81) && !memcmp(a->thermo_pos, b->thermo_pos, 81) &&
            a->skyscraper == b->skyscraper && !memcmp(a->sky, b->sky, 18) && a->nlk == b->nlk &&
-           a->xsums == b->xsums && !memcmp(a->xsum, b->xsum, 18) &&
+           a->xsums == b->xsums && !memcmp(a->xsum, b->xsum, 18) && a->frame == b->frame &&
+           !memcmp(a->frame_sum, b->frame_sum, 18) &&
            !memcmp(a->lk_sum, b->lk_sum, a->nlk) && !memcmp(a->lk_dir, b->lk_dir, a->nlk) &&
            !memcmp(a->lk_cell, b->lk_cell, sizeof(a->lk_cell[0]) * a->nlk) &&
            a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
@@ -256,6 +281,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_XSUM:
         sudoku_xsum_text(g, marks, len);
         break;
+    case VAR_FRAME:
+        sudoku_frame_text(g, marks, len);
+        break;
     case VAR_LK:
         sudoku_lk_text(g, cages, len);
         break;
@@ -265,6 +293,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_WHISPER:
     case VAR_PALINDROME:
     case VAR_REGIONSUM:
+    case VAR_ZIPPER:
+    case VAR_BETWEEN:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -341,6 +371,27 @@ static void test_geometry(void)
     bool full[9];
     CHECK(sudoku_regionsum_parts(&b, 0, v, part, full) == 2 && part[0] == 8 && full[0] && part[1] == 5 && !full[1]);
     CHECK(is_sudoku_fits(&b, v, 4, 3) && !is_sudoku_fits(&b, v, 4, 4));
+    /* Zipper: 2,12,22 (odd): r1c3 + r3c5 = r2c4; with a 7 in the middle and a 3 at one end, the other is 4 */
+    CHECK(sudoku_geom_lines_text(VAR_ZIPPER, "2,12,22", &b) && b.line_kind == LINE_ZIPPER && !(b.allow[12] >> 1 & 1));
+    memset(v, 0, 81);
+    v[12] = 7;
+    v[2] = 3;
+    CHECK(is_sudoku_fits(&b, v, 22, 4) && !is_sudoku_fits(&b, v, 22, 5));
+    /* Between: circles 0 and 2, r1c2 between them; with a 3 and an 8 at the ends, 4..7 */
+    CHECK(!sudoku_geom_lines_text(VAR_BETWEEN, "0,1", &b));
+    CHECK(sudoku_geom_lines_text(VAR_BETWEEN, "0,10,2", &b));
+    memset(v, 0, 81);
+    v[0] = 3;
+    v[2] = 8;
+    CHECK(is_sudoku_fits(&b, v, 10, 5) && !is_sudoku_fits(&b, v, 10, 9) && !is_sudoku_fits(&b, v, 10, 2));
+    memset(v, 0, 81);
+    v[0] = 8;
+    v[10] = 9;                                      /* the far circle can't put a 9 between them */
+    CHECK(!is_sudoku_fits(&b, v, 2, 1));
+    /* Frame: 6 is 1 + 2 + 3, 24 is 7 + 8 + 9; 5 and 25 can't be made */
+    CHECK(!sudoku_geom_frame_text("5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));
+    CHECK(sudoku_geom_frame_text("6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,24", &b) && b.allow[0] == 0xE &&
+          b.allow[1] == 0xE && b.allow[26] == 0x380);
 }
 
 static void test_builtin(void)
@@ -482,7 +533,7 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "28|0|%s", E1);      /* no variant 28 */
+    snprintf(buf, sizeof(buf), "31|0|%s", E1);      /* no variant 31 */
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);

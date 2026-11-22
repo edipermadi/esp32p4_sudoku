@@ -560,6 +560,153 @@ static bool regionsum_paths(const uint8_t full[81], uint32_t *rng, int want, sud
 }
 
 /**
+ * @brief Would a diagonal step from a to b cross the line, path (its cells in order)? Two cells corner
+ * to corner, joined on the line, make an X with that step.
+ * @param path  the line's cells, in order
+ * @param n  how many
+ * @param a  the step's cell on the line
+ * @param b  the cell it goes to
+ * @return true if it crosses
+ */
+static bool is_line_crossing(const uint8_t *path, int n, int a, int b)
+{
+    if (a / 9 == b / 9 || a % 9 == b % 9) {
+        return false;                               /* side by side: nothing to cross */
+    }
+    const int x = (a / 9) * 9 + b % 9, y = (b / 9) * 9 + a % 9;   /* the other two corners */
+    for (int k = 0; k + 1 < n; k++) {
+        if ((path[k] == x && path[k + 1] == y) || (path[k] == y && path[k + 1] == x)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief Zipper Lines: up to want lines (3-7 cells) over the full grid, grown from the middle out, a
+ * cell at each end at a time, each pair adding up to the line's total (odd: its middle digit; even:
+ * the middle pair's sum); a line never crosses itself
+ * @param full  the solution
+ * @param rng  the random state
+ * @param want  lines wanted
+ * @param out  gets the lines
+ * @return false: fewer than 3
+ */
+static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    int n = 0;
+    for (int tries = 0; tries < 2000 && n < want; tries++) {
+        int c = (int)(rnd(rng) % 81), target = 4 + (int)(rnd(rng) % 4), nb[8];
+        if (used[c]) {
+            continue;
+        }
+        uint8_t path[9];                            /* the line so far, end to end */
+        int len = 0, total;
+        path[len++] = (uint8_t)c;
+        if (target % 2 == 0) {                      /* even: a middle pair, its sum the total */
+            int k = line_neighbours(c, used, path, len, nb);
+            if (!k) {
+                continue;
+            }
+            int o = nb[rnd(rng) % (uint32_t)k];
+            path[len++] = (uint8_t)o;
+            total = full[c] + full[o];
+        } else {
+            total = full[c];
+            if (total < 2) {
+                continue;
+            }
+        }
+        while (len + 2 <= target) {                 /* a pair, one cell at each end */
+            int a = path[0], b = path[len - 1], na[8], nbb[8];
+            int ka = line_neighbours(a, used, path, len, na), kb = line_neighbours(b, used, path, len, nbb);
+            int pa[64], pb[64], np = 0;
+            for (int i = 0; i < ka; i++) {
+                for (int j = 0; j < kb; j++) {
+                    if (na[i] != nbb[j] && full[na[i]] + full[nbb[j]] == total &&
+                            !is_line_crossing(path, len, a, na[i]) && !is_line_crossing(path, len, b, nbb[j])) {
+                        pa[np] = na[i];
+                        pb[np++] = nbb[j];
+                    }
+                }
+            }
+            if (!np) {
+                break;
+            }
+            int pick = (int)(rnd(rng) % (uint32_t)np);
+            memmove(path + 1, path, (size_t)len);
+            path[0] = (uint8_t)pa[pick];
+            path[++len] = (uint8_t)pb[pick];
+            len++;
+        }
+        if (len < 3) {
+            continue;
+        }
+        for (int j = 0; j < len; j++) {
+            cells[n][j] = path[j];
+            used[path[j]] = 1;
+        }
+        lens[n++] = (uint8_t)len;
+    }
+    return n >= 3 && gen_geom_lines(VAR_ZIPPER, cells, lens, n, out);
+}
+
+/**
+ * @brief Between Lines: up to want lines over the full grid, from a circle, a random walk of up to 7
+ * cells whose digits all lie on one side of it (above it, or below), kept at the longest length
+ * whose last cell (the other circle) lies beyond all the cells between; a line never crosses itself
+ * @param full  the solution
+ * @param rng  the random state
+ * @param want  lines wanted
+ * @param out  gets the lines
+ * @return false: fewer than 3
+ */
+static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    int n = 0;
+    for (int tries = 0; tries < 2000 && n < want; tries++) {
+        int c = (int)(rnd(rng) % 81), target = 3 + (int)(rnd(rng) % 5), len = 0, best = 0, nb[8];
+        if (used[c]) {
+            continue;
+        }
+        /* up: the cells after it are bigger (the far circle the biggest); down: smaller */
+        const bool up = full[c] < 5 || (full[c] == 5 && (rnd(rng) & 1));
+        int far = full[c];                          /* the farthest digit from the circle so far */
+        cells[n][len++] = (uint8_t)c;
+        while (len < target) {
+            int cur = cells[n][len - 1], k = line_neighbours(cur, used, cells[n], len, nb), m = 0;
+            for (int j = 0; j < k; j++) {
+                int x = full[nb[j]];
+                if ((up ? x > full[c] : x < full[c]) && !is_line_crossing(cells[n], len, cur, nb[j])) {
+                    nb[m++] = nb[j];
+                }
+            }
+            if (!m) {
+                break;
+            }
+            int o = nb[rnd(rng) % (uint32_t)m], x = full[o];
+            cells[n][len++] = (uint8_t)o;
+            if (len >= 3 && (up ? x > far : x < far)) {
+                best = len;                         /* o as the far circle: every cell between is inside */
+            }
+            if (up ? x > far : x < far) {
+                far = x;
+            }
+        }
+        if (!best) {
+            continue;
+        }
+        for (int j = 0; j < best; j++) {
+            used[cells[n][j]] = 1;
+        }
+        lens[n++] = (uint8_t)best;
+    }
+    return n >= 3 && gen_geom_lines(VAR_BETWEEN, cells, lens, n, out);
+}
+
+/**
  * @brief Thermo: up to want thermometers (3-6 cells) drawn over the full grid as random walks whose digits rise from the bulb.
  * @param full  the solution
  * @param rng  the random state
@@ -623,10 +770,11 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool thermo = variant == VAR_THERMO, sandwich = variant == VAR_SANDWICH;
     const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER;
     const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
-    const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM;
+    const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
+    const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum ||
-                     pal || rsum;
+                     pal || rsum || frame || zip || betw;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -756,10 +904,22 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_xsum_of(full, lu) : 0;
             }
             gen_geom_xsum(clues, jig);
-        } else if (pal || rsum) {                   /* a grid, then lines that keep their rule on it */
+        } else if (frame) {                         /* a grid, then some of its 18 clues */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t clues[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                int cells[9];
+                line_cells(lu, cells);
+                clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)(full[cells[0]] + full[cells[1]] + full[cells[2]]) : 0;
+            }
+            gen_geom_frame(clues, jig);
+        } else if (pal || rsum || zip || betw) {    /* a grid, then lines that keep their rule on it */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             int want = level >= GEN_HARD ? 10 : 8;
-            if (!(pal ? palindrome_paths(full, &rng, want, jig) : regionsum_paths(full, &rng, want, jig))) {
+            bool got = pal ? palindrome_paths(full, &rng, want, jig) : rsum ? regionsum_paths(full, &rng, want, jig)
+                       : zip ? zipper_paths(full, &rng, want, jig) : between_paths(full, &rng, want, jig);
+            if (!got) {
                 continue;
             }
         } else if (lk) {                            /* a grid, then sums along some diagonals */

@@ -399,7 +399,7 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
         return buf;
     }
     if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER || v == VAR_PALINDROME ||
-            v == VAR_REGIONSUM) && buf &&
+            v == VAR_REGIONSUM || v == VAR_ZIPPER || v == VAR_BETWEEN) && buf &&
             sudoku_geom_lines_text(v, thermos, buf)) {
         return buf;
     }
@@ -411,6 +411,9 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     }
     if (v == VAR_XSUM && buf && sudoku_geom_xsum_text(marks, buf)) {
         return buf;    /* (and X-Sums') */
+    }
+    if (v == VAR_FRAME && buf && sudoku_geom_frame_text(marks, buf)) {
+        return buf;    /* (and Frame's) */
     }
     if (v == VAR_LK && buf && sudoku_geom_lk_text(cages, buf)) {
         return buf;    /* (its sums in cages) */

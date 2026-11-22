@@ -210,6 +210,64 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         }
         break;
     }
+    case LINE_ZIPPER: {                             /* cells mirrored about the middle: one total */
+        /* the totals still possible (bit s = s, 2..18): each other pair's sums, and on an odd line
+         * the middle cell's digit; then the cell's digit is a total less its mirror's */
+        const int mid = n / 2, odd = n % 2, m = n - 1 - p;
+        uint32_t tot = 0x7FFFCu;
+        if (odd && p != mid) {
+            tot &= LMASK(cell[mid]);
+        }
+        for (int k = 0; k < n / 2; k++) {
+            if (k == p || n - 1 - k == p) {
+                continue;
+            }
+            uint16_t ma = LMASK(cell[k]), mb = LMASK(cell[n - 1 - k]);
+            uint32_t sums = 0;
+            for (int w = 1; w <= 9; w++) {
+                if (ma >> w & 1) {
+                    sums |= (uint32_t)mb << w;
+                }
+            }
+            tot &= sums;
+        }
+        if (odd && p == mid) {
+            free &= (uint16_t)(tot & 0x3FE);
+        } else {
+            uint16_t mw = LMASK(cell[m]), ok = 0;
+            for (int w = 1; w <= 9; w++) {
+                if (mw >> w & 1) {
+                    ok |= (uint16_t)((tot >> w) & 0x3FE);
+                }
+            }
+            free &= ok;
+        }
+        break;
+    }
+    case LINE_BETWEEN: {                            /* strictly between the circles at its two ends */
+        uint16_t ma = LMASK(cell[0]), mb = LMASK(cell[n - 1]), ok = 0;
+        if (!ma || !mb) {
+            return 0;
+        }
+        for (int a = 1; a <= 9; a++) {              /* a pair of circles that leaves every cell between a digit */
+            for (int b = 1; b <= 9; b++) {
+                int lo = a < b ? a : b, hi = a < b ? b : a;
+                if (!(ma >> a & 1) || !(mb >> b & 1) || hi - lo < 2) {
+                    continue;
+                }
+                uint16_t inner = RANGE(lo + 1, hi - 1);
+                bool fits = true;
+                for (int k = 1; k < n - 1 && fits; k++) {
+                    fits = k == p || (LMASK(cell[k]) & inner) != 0;
+                }
+                if (fits) {
+                    ok |= p == 0 ? (uint16_t)(1u << a) : p == n - 1 ? (uint16_t)(1u << b) : inner;
+                }
+            }
+        }
+        free &= ok;
+        break;
+    }
     case LINE_ARROW: {                              /* the circle (place 0) is the shaft's sum */
         int smin = 0, smax = 0;                     /* the shaft's sum, the place asked about left out */
         for (int k = 1; k < n; k++) {
@@ -458,6 +516,37 @@ uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v
 }
 
 /* (documented in gen_internal.h) */
+uint16_t gen_frame_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand)
+{
+    if (at > 2) {
+        return 0x3FE;
+    }
+    int cells[9], c = G->frame_sum[lu];
+    line_cells(lu, cells);
+    uint16_t placed = 0, m[3];
+    for (int k = 0; k < 9; k++) {
+        placed |= v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : 0;
+    }
+    for (int k = 0; k < 3; k++) {
+        m[k] = v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : cand ? cand[cells[k]] : (uint16_t)(0x3FE & ~placed);
+    }
+    const int o1 = at == 0 ? 1 : 0, o2 = at == 2 ? 1 : 2;   /* the other two of the first three */
+    uint16_t free = 0;
+    for (int d = 1; d <= 9; d++) {
+        if (!(m[at] >> d & 1)) {
+            continue;
+        }
+        for (int x = 1; x <= 9 && !(free >> d & 1); x++) {
+            int y = c - d - x;
+            if (x != d && y >= 1 && y <= 9 && y != d && y != x && (m[o1] >> x & 1) && (m[o2] >> y & 1)) {
+                free |= (uint16_t)(1u << d);
+            }
+        }
+    }
+    return free;
+}
+
+/* (documented in gen_internal.h) */
 bool is_gen_sky_line_ok(const uint8_t x[9], int c)
 {
     int seen = 0, top = 0, k = 0;
@@ -585,6 +674,13 @@ static uint16_t grid_free(const grid_t *g, int i)
             free &= gen_xsum_allow(G, lu, line ? i / 9 : i % 9, g->v, NULL);
         }
         WHY(line ? FIT_XSUM_COL : FIT_XSUM_ROW);
+    }
+    for (int line = 0; G->frame && free && line < 2; line++) {   /* Frame: its row's, its column's clue */
+        int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;
+        if (G->frame_sum[lu] && at < 3) {
+            free &= gen_frame_allow(G, lu, at, g->v, NULL);
+        }
+        WHY(line ? FIT_FRAME_COL : FIT_FRAME_ROW);
     }
     for (int slot = 0; G->nlk && free && slot < 2; slot++) {   /* Little Killer: what its diagonal's sum leaves */
         int k = G->lk_of[i][slot];

@@ -44,7 +44,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "non-consecutive": "Non-Consecutive", "disjoint-groups": "Disjoint", "asterisk": "Asterisk",
          "kropki": "Kropki", "xv": "XV", "greater-than": "Greater", "quadruple": "Quadruple", "arrow": "Arrow",
          "renban": "Renban", "german-whispers": "German", "skyscraper": "Skyscraper", "little-killer": "Little",
-         "palindrome": "Palindrome", "region-sum-lines": "Region", "x-sums": "X-Sums"}
+         "palindrome": "Palindrome", "region-sum-lines": "Region", "x-sums": "X-Sums", "zipper-lines": "Zipper",
+         "frame": "Frame", "between-lines": "Between"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -56,7 +57,7 @@ NEW_BG, NEW_FG = (205, 242, 212), (22, 120, 50)             # the step's digit
 RING, CROSS, ORANGE = (230, 126, 34), (214, 48, 49), (230, 126, 34)
 MUTED, THERMO, SUM_FG = (120, 126, 138), (196, 200, 207), (43, 111, 224)
 ARROW, RENBAN, WHISPER = (140, 146, 158), (222, 200, 245), (120, 205, 150)   # (the board's, on white)
-PALINDROME, REGIONSUM = (178, 181, 187), (119, 173, 241)
+PALINDROME, REGIONSUM, ZIPPER = (178, 181, 187), (119, 173, 241), (234, 149, 185)
 RIGHT, DOWN = 0, 1
 WINDOWS = ["top-left", "top-right", "bottom-left", "bottom-right"]
 SPOTS = ["top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right"]
@@ -125,6 +126,19 @@ def rule_words(d, vals, c, v, r):
             if r["lo"] == r["hi"]:
                 return "a clue of its row or column makes it %s (see the rules above)" % a_n(r["lo"])
             return "it's near a clue of its row or column, which keeps it at most %d" % r["hi"]
+        if d.get("frame"):                                  # Frame: what three different digits can make
+            r_, c_ = c // 9, c % 9
+            clues = [d["frame"][r_]] if c_ < 3 and d["frame"][r_] else []
+            clues += [d["frame"][9 + c_]] if r_ < 3 and d["frame"][9 + c_] else []
+            for k in clues:
+                ok = sorted({a for a in range(1, 10) for b in range(1, 10) if a != b and 1 <= k - a - b <= 9
+                             and k - a - b not in (a, b)})
+                if v not in ok:
+                    bad = [x for x in range(1, 10) if x not in ok]
+                    what = ("anything but %s" % listing(map(str, bad), "or") if len(ok) > len(bad) else
+                            "only %s" % listing(map(str, ok), "and"))
+                    return ("it's among the first three digits after a clue of %d, and three different digits adding up "
+                            "to %d can hold %s" % (k, k, what))
         if d.get("xsum"):                                   # X-Sums: a clue allows only some first digits
             if r["lo"] == r["hi"]:
                 return "it's the first cell after a clue, and that clue can only start with %s" % a_n(r["lo"])
@@ -179,6 +193,44 @@ def rule_words(d, vals, c, v, r):
             return "it's next to the %d in %s on a green line, and %d is less than 5 away from it" % (w, at, v)
         if kind == 4:                                       # Palindrome: the cell mirroring it
             return "it mirrors the %d in %s on its grey line, which reads the same from both ends" % (w, at)
+        if kind == 6:                                       # Zipper: mirrored cells add up to the line's total
+            n = len(cells)
+            i = cells.index(c)
+            m = cells[n - 1 - i]
+            tot = None
+            if n % 2 and vals[cells[n // 2]]:
+                tot = vals[cells[n // 2]]
+            for k in range(n // 2):
+                a, b = cells[k], cells[n - 1 - k]
+                if c not in (a, b) and vals[a] and vals[b]:
+                    tot = vals[a] + vals[b]
+            if n % 2 and c == cells[n // 2]:
+                return "it's the middle of its pink line, whose pairs add up to %s" % (tot if tot else "something else")
+            if tot is not None and vals[m]:
+                return "it pairs with the %d in %s on its pink line, whose pairs add up to %d: it's %d" % (
+                    vals[m], rc(m), tot, tot - vals[m])
+            if tot is not None:
+                return "its pink line's pairs add up to %d, and %s would need a %d with it" % (tot, a_n(v), tot - v)
+            return "with %s there, its pink line's pairs couldn't all add up to the same" % a_n(v)
+        if kind == 7:                                       # Between Lines: strictly between the circles
+            ends = (cells[0], cells[-1])
+            if c in ends:
+                other = ends[1] if c == ends[0] else ends[0]
+                inner = [vals[x] for x in cells[1:-1] if vals[x]]
+                if vals[other] and inner:
+                    return ("it's a circle, and its line already has %s between it and the %d in %s: %s there "
+                            "wouldn't leave them strictly between" % (listing(map(str, inner)), vals[other],
+                                                                      rc(other), a_n(v)))
+                return "it's a circle, and with %s there its line's cells couldn't all be between the circles" % a_n(v)
+            a, b = vals[ends[0]], vals[ends[1]]
+            if a and b:
+                lo, hi = min(a, b), max(a, b)
+                return "it's on the line between the circles %d and %d, so it's %d to %d" % (lo, hi, lo + 1, hi - 1)
+            known = a or b
+            if known:
+                return ("it's on a line from the circle %d in %s: %s couldn't be strictly between that and the other "
+                        "circle" % (known, rc(ends[0] if a else ends[1]), a_n(v)))
+            return "it's on a line between two circles, and %s couldn't be strictly between them" % a_n(v)
         if kind == 5:                                       # Region Sum Lines: each box's part, the same sum
             parts = {}
             for x in cells:
@@ -245,6 +297,25 @@ def rule_words(d, vals, c, v, r):
                 side, name, seen, a_n(v), clue)
         return "seen from %s of %s, %s there would leave too few buildings to make its clue %d" % (
             side, name, a_n(v), clue)
+    if rule == "frame":
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["frame"][lu]
+        line = [lu * 9 + k for k in range(3)] if lu < 9 else [k * 9 + lu - 9 for k in range(3)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        got, empty = sum(x), x.count(0)
+        if not empty:
+            return "the first three digits of %s add up to its clue %d, and with %s there they'd make %d" % (
+                name, clue, a_n(v), got)
+        need = clue - got
+        if empty == 1:
+            why = ("more than 9" if need > 9 else "less than 1" if need < 1 else
+                   "and %s is among them already" % a_n(need))
+            return ("the first three digits of %s add up to its clue %d: with %s there, its other empty cell would "
+                    "need %d, %s" % (name, clue, a_n(v), need, why))
+        return ("the first three digits of %s add up to its clue %d: with %s there, its other two cells would need %d "
+                "between them, which two different digits not there yet can't make" % (name, clue, a_n(v), need))
     if rule == "xsum":
         lu = r["line"]
         name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
@@ -338,7 +409,7 @@ def step_text(d, vals, s):
 # ------------------------------------------------------------------ the pictures
 
 def make_drawer(d, fonts):
-    n, band = d["n"], BAND if d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") else 0
+    n, band = d["n"], BAND if d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame") else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -423,6 +494,21 @@ def make_drawer(d, fonts):
                     g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=PALINDROME)
             elif kind == 5:                                 # Region Sum Lines: a narrow blue line
                 g.line(pts, fill=REGIONSUM, width=int(CELL * 0.12), joint="curve")
+            elif kind == 6:                                 # Zipper Lines: a narrow pink line
+                g.line(pts, fill=ZIPPER, width=int(CELL * 0.12), joint="curve")
+            elif kind == 7:                                 # Between Lines: a grey line, a ring at each end
+                r0 = CELL * 0.4
+                a0 = list(pts)
+                for e, (cc, nx) in enumerate(((pts[0], pts[1]), (pts[-1], pts[-2]))):
+                    ln = ((nx[0] - cc[0]) ** 2 + (nx[1] - cc[1]) ** 2) ** 0.5
+                    p_ = (cc[0] + (nx[0] - cc[0]) * r0 / ln, cc[1] + (nx[1] - cc[1]) * r0 / ln)
+                    if e == 0:
+                        a0[0] = p_
+                    else:
+                        a0[-1] = p_
+                g.line(a0, fill=ARROW, width=4, joint="curve")
+                for px, py in (pts[0], pts[-1]):
+                    g.ellipse([px - r0, py - r0, px + r0, py + r0], outline=ARROW, width=3)
             else:                                           # German Whispers: a narrow green line
                 g.line(pts, fill=WHISPER, width=int(CELL * 0.12), joint="curve")
         for c in cells:                                     # thick lines between regions, and the frame
@@ -511,8 +597,8 @@ def make_drawer(d, fonts):
             g.line([(ax, ay), (ax + 6 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 2 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 6 * dx, ay + 2 * dy)], fill=SUM_FG, width=2)
-        clues = d.get("sky") or d.get("xsum")
-        if clues:                                           # Skyscraper, X-Sums: the clues (none: nothing drawn)
+        clues = d.get("sky") or d.get("xsum") or d.get("frame")
+        if clues:                                           # Skyscraper, X-Sums, Frame: the clues (none: nothing drawn)
             for i in range(9):
                 x, y = xy(i * 9)
                 if clues[i]:

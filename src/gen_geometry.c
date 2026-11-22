@@ -18,7 +18,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups",
                                                      "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
                                                      "German Whispers", "Skyscraper", "Little Killer", "Palindrome",
-                                                     "Region Sum Lines", "X-Sums"
+                                                     "Region Sum Lines", "X-Sums", "Zipper Lines", "Frame", "Between Lines"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -240,7 +240,7 @@ void sudoku_geom_init(void)
     g[VAR_KILLER] = g[VAR_CLASSIC];
     g[VAR_KILLER].variant = VAR_KILLER;
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
-                                  VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM
+                                  VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -258,7 +258,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH ||
             variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD ||
             variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_SKY ||
-            variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM) {
+            variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
+            variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -365,7 +366,8 @@ static int line_kind_of(int variant)
 {
     return variant == VAR_ARROW ? LINE_ARROW : variant == VAR_RENBAN ? LINE_RENBAN :
            variant == VAR_WHISPER ? LINE_WHISPER : variant == VAR_PALINDROME ? LINE_PALINDROME :
-           variant == VAR_REGIONSUM ? LINE_REGIONSUM : LINE_THERMO;
+           variant == VAR_REGIONSUM ? LINE_REGIONSUM : variant == VAR_ZIPPER ? LINE_ZIPPER :
+           variant == VAR_BETWEEN ? LINE_BETWEEN : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -413,6 +415,12 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
                     return false;
                 }
             }
+        }
+        if (out->line_kind == LINE_BETWEEN && lens[t] < 3) {
+            return false;                           /* (two circles and something between them) */
+        }
+        if (out->line_kind == LINE_ZIPPER && lens[t] % 2) {   /* odd: the middle is a pair's sum, 2 at least */
+            out->allow[cells[t][lens[t] / 2]] &= (uint16_t)~(1u << 1);
         }
         if (out->line_kind == LINE_REGIONSUM) {     /* in two boxes at least */
             bool two = false;
@@ -599,6 +607,76 @@ uint16_t sudoku_xsum_firsts(int clue)
         }
     }
     return m;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_frame(const uint8_t clues[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_FRAME;
+    out->frame = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int c = clues[lu], cells[9];
+        if (c && (c < 6 || c > 24)) {               /* three different digits: 1 + 2 + 3 to 7 + 8 + 9 */
+            return false;
+        }
+        out->frame_sum[lu] = (uint8_t)c;
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        uint16_t m = 0;                             /* the digits of the first three: one with two others */
+        for (int a = 1; a <= 9; a++) {
+            for (int b = 1; b <= 9; b++) {
+                int d = c - a - b;
+                if (a != b && d >= 1 && d <= 9 && d != a && d != b) {
+                    m |= (uint16_t)(1u << a);
+                }
+            }
+        }
+        for (int k = 0; k < 3; k++) {
+            out->allow[cells[k]] &= m;
+        }
+    }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_frame_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t clues[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        char *end;
+        long v = p ? strtol(p, &end, 10) : -1;
+        if (!p || end == p || v < 0 || v > 24) {
+            return false;
+        }
+        clues[i] = (uint8_t)v;
+        p = end;
+        if (i < 17) {
+            if (*p != ',') {
+                return false;
+            }
+            p++;
+        }
+    }
+    return *p == 0 && gen_geom_frame(clues, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_frame_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d", i ? "," : "", g->frame_sum[i]);
+        if (w < 0 || w >= len - pos) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
 }
 
 /* (documented in gen_internal.h) */

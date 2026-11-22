@@ -136,6 +136,9 @@ typedef enum {
     KIND_PALINDROME,                     /**< Palindrome */
     KIND_REGIONSUM,                      /**< Region Sum Lines */
     KIND_XSUM,                           /**< X-Sums */
+    KIND_ZIPPER,                         /**< Zipper Lines */
+    KIND_FRAME,                          /**< Frame */
+    KIND_BETWEEN,                        /**< Between Lines */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**
@@ -949,7 +952,7 @@ typedef enum {
     REC_DAYS,                            /**< days */
     REC_MINUTES                          /**< minutes */
 } rec_unit_t;
-#define STATS_MAX_RECORDS 40             /**< records at most */
+#define STATS_MAX_RECORDS 43             /**< records at most */
 /** @brief A personal record. */
 typedef struct {
     const char *title;                   /**< static string */
