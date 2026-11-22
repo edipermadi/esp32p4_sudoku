@@ -111,12 +111,27 @@ esp_err_t sudoku_ui_start(void)
      * comes first. Card setup also has to happen before Wi-Fi starts (they
      * share the SDMMC host, see the microSD section). */
     sd_probe_card();
+    splash_progress(SPLASH_CARD);
     if (is_sd_present()) {
         char sz[24];
         fmt_gb(sz, sizeof(sz), sd_bytes());
         printf("microSD: \"%s\", %s\n", sd_name(), sz);
         stats_db_start();
-        if (stats_db_wait_open(4000)) {
+        /* up to 4 s, in short waits: the loading bar creeps toward SPLASH_DB_OPEN meanwhile (about a
+         * second, on the board), easing off so it never gets there before the database does */
+        const int64_t t0 = esp_timer_get_time();
+        bool open = false;
+        for (int64_t ms = 0; ms < 4000; ms = (esp_timer_get_time() - t0) / 1000) {
+            if (stats_db_wait_open(40)) {
+                open = true;
+                break;
+            }
+            if (!is_stats_db_opening()) {
+                break;                              /* (failed; or just opened: is_stats_db_ready() says) */
+            }
+            splash_progress(SPLASH_CARD + (int)((SPLASH_DB_OPEN - SPLASH_CARD) * ms / (ms + 200)));
+        }
+        if (open || is_stats_db_ready()) {
             store_prefs_t prefs;
             if (stats_db_take_prefs(&prefs)) {
                 store_apply_prefs(&prefs);
@@ -147,7 +162,8 @@ esp_err_t sudoku_ui_start(void)
     puzzles_set_coll(store_last_collection());
     puzzles_set_tab(coll_tab(puzzles_coll()));
     ui_set_sleep_min(store_screen_timeout_min());
-    apply_theme(is_store_dark_mode());
+    splash_progress(SPLASH_SCREENS_FROM);
+    apply_theme(is_store_dark_mode());              /* (the loading bar moves on with each screen: splash_built()) */
     if (picture) {
         splash_hide();                              /* (its pixels freed too) */
     } else {

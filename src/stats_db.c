@@ -500,6 +500,12 @@ bool stats_db_wait_open(uint32_t timeout_ms)
 }
 
 /* (documented in stats_db.h) */
+bool is_stats_db_opening(void)
+{
+    return s_state == ST_OPENING;
+}
+
+/* (documented in stats_db.h) */
 bool is_stats_db_ready(void)
 {
     return s_state == ST_READY;

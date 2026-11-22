@@ -302,6 +302,25 @@ typedef struct {
  * @return the image, or NULL if it couldn't be decoded (no memory, a decoder error)
  */
 lv_obj_t *splash_show(lv_obj_t *parent);
+/** @name The loading bar's milestones, % (ui_splash.c says where the weights come from)
+ *  @{ */
+#define SPLASH_SHOWN        5           /**< the splash screen up */
+#define SPLASH_CARD         8           /**< the card looked at */
+#define SPLASH_DB_OPEN      55          /**< sudoku.db open (the bar creeps toward it while it opens) */
+#define SPLASH_SCREENS_FROM 56          /**< the settings applied; the screens fill the rest, to 100 */
+/** @} */
+/**
+ * @brief The loading bar at pct (0..100), drawn at once (start-up, before LVGL's loop runs); nothing
+ * without the splash screen.
+ * @param pct  how far start-up has got
+ */
+void splash_progress(int pct);
+/**
+ * @brief apply_theme(): its step-th screen built (1, 2, ...): the loading bar moves on by that screen's
+ * share; nothing without the splash screen (a theme change later).
+ * @param step  the screens built so far
+ */
+void splash_built(int step);
 /**
  * @brief The splash screen deleted and its pixels freed (once the UI is up).
  */

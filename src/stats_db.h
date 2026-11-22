@@ -217,6 +217,11 @@ bool is_stats_db_busy(void);
  */
 bool stats_db_wait_open(uint32_t timeout_ms);
 /**
+ * @brief The open started by stats_db_start() is still under way (neither open nor failed yet).
+ * @return true if so
+ */
+bool is_stats_db_opening(void);
+/**
  * @brief After opening: the settings and saved game from sudoku.db, on top of what the board had
  *        (store_get_prefs()).
  * @param out  gets them

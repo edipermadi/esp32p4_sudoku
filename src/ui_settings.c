@@ -521,17 +521,29 @@ void apply_theme(bool dark)
     lv_obj_t *act = lv_screen_active();
 
     build_game();
+    splash_built(1);                                /* (start-up: the loading bar) */
     build_list();
+    splash_built(2);
     build_home();
+    splash_built(3);
     build_stats();
+    splash_built(4);
     build_settings();
+    splash_built(5);
     build_wifi();
+    splash_built(6);
     build_sysmon();
+    splash_built(7);
     build_files();
+    splash_built(8);
     build_profile();
+    splash_built(9);
     build_history();
+    splash_built(10);
     build_plays();
+    splash_built(11);
     build_trophies();
+    splash_built(12);
     if (game_id() != STORE_NO_GAME) {
         lv_obj_set_state(game_notes_btn(), LV_STATE_CHECKED, is_game_notes_mode());
         lv_obj_set_hidden(game_pause_ovl(), !is_game_paused());
@@ -542,6 +554,7 @@ void apply_theme(bool dark)
     refresh_list();
     refresh_home();
     refresh_stats();
+    splash_built(13);
     lv_obj_t *to = act && act == old_game     ? scr_game
                    : act && act == old_stats    ? scr_stats
                    : act && act == old_wifi     ? scr_wifi
