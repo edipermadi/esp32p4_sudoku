@@ -32,7 +32,7 @@ PAGES = ["classic", "x-sudoku", "mini-6x6", "hyper", "jigsaw", "killer", "anti-k
          "consecutive", "thermo", "sandwich", "kids-4x4", "anti-king", "non-consecutive", "disjoint-groups",
          "asterisk", "kropki", "xv", "greater-than", "quadruple", "arrow", "renban", "german-whispers",
          "skyscraper", "little-killer", "palindrome", "region-sum-lines", "x-sums",
-         "zipper-lines", "frame", "between-lines"]
+         "zipper-lines", "frame", "between-lines", "entropic-lines", "modular-lines", "center-dot"]
 
 ROW0, ROW_H = 168, 74          # the collection's list: the first row's centre, the row pitch (pixels)
 FIT = 6                        # rows that fit before the list has to scroll

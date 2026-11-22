@@ -11,7 +11,8 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki", "XV",
                                                          "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers",
                                                          "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
-                                                         "X-Sums", "Zipper Lines", "Frame", "Between Lines"
+                                                         "X-Sums", "Zipper Lines", "Frame", "Between Lines",
+                                                         "Entropic Lines", "Modular Lines", "Center Dot"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -20,7 +21,8 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Kids", "Anti-King", "Non-Consecutive", "Disjoint", "Asterisk",
                                                           "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
                                                           "German Whispers", "Skyscraper", "Little Killer", "Palindrome",
-                                                          "Region Sum", "X-Sums", "Zipper", "Frame", "Between"
+                                                          "Region Sum", "X-Sums", "Zipper", "Frame", "Between",
+                                                          "Entropic", "Modular", "Center Dot"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -96,6 +98,12 @@ int stats_kind_of(int variant, bool daily)
         return KIND_FRAME;
     case VAR_BETWEEN:
         return KIND_BETWEEN;
+    case VAR_ENTROPIC:
+        return KIND_ENTROPIC;
+    case VAR_MODULAR:
+        return KIND_MODULAR;
+    case VAR_CENTERDOT:
+        return KIND_CENTERDOT;
     default:
         return KIND_NEW;
     }

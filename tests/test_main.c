@@ -138,6 +138,15 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
                 return false;
             }
         }
+        for (int i = 0; (g->line_kind == LINE_ENTROPIC || g->line_kind == LINE_MODULAR) && i + 2 < n; i++) {
+            int seen = 0;                           /* any three in a row: three groups */
+            for (int j = i; j < i + 3; j++) {
+                seen |= 1 << sudoku_line_group(g->line_kind, sol[g->thermo_cell[t][j]]);
+            }
+            if (seen != 7) {
+                return false;
+            }
+        }
         if (g->line_kind == LINE_BETWEEN) {         /* strictly between the end circles */
             int a = sol[g->thermo_cell[t][0]], b = sol[g->thermo_cell[t][n - 1]], lo2 = a < b ? a : b, hi2 = a < b ? b : a;
             for (int i = 1; i < n - 1; i++) {
@@ -295,6 +304,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
+    case VAR_ENTROPIC:
+    case VAR_MODULAR:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -310,7 +321,7 @@ static void test_geometry(void)
         {VAR_CLASSIC, 9, 81, 27, 20}, {VAR_X, 9, 81, 29, 26}, {VAR_HYPER, 9, 81, 31, 20},
         {VAR_MINI, 6, 36, 18, 12},     {VAR_KIDS, 4, 16, 12, 7},
         {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
-        {VAR_ASTERISK, 9, 81, 28, 20},
+        {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -339,6 +350,13 @@ static void test_geometry(void)
     CHECKF(sudoku_geom(VAR_ASTERISK)->npeers[13] == 26, "Asterisk peers of cell 13: %d",
            sudoku_geom(VAR_ASTERISK)->npeers[13]);
     CHECK(is_sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 40) && !is_sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 41));
+    /* Center Dot: the centre of box 1 (cell 10) sees the eight other centres, four of them new */
+    CHECKF(sudoku_geom(VAR_CENTERDOT)->npeers[10] == 24, "Center Dot peers of cell 10: %d",
+           sudoku_geom(VAR_CENTERDOT)->npeers[10]);
+    CHECK(is_sudoku_geom_peer(sudoku_geom(VAR_CENTERDOT), 10, 70) && !is_sudoku_geom_peer(sudoku_geom(VAR_CLASSIC), 10, 70));
+    CHECK(is_sudoku_geom_tinted(sudoku_geom(VAR_CENTERDOT), 40) && !is_sudoku_geom_tinted(sudoku_geom(VAR_CENTERDOT), 41));
+    CHECK(sudoku_line_group(LINE_ENTROPIC, 3) == 0 && sudoku_line_group(LINE_ENTROPIC, 4) == 1 &&
+          sudoku_line_group(LINE_MODULAR, 4) == 1 && sudoku_line_group(LINE_MODULAR, 9) == 0);
     CHECK(sudoku_geom(VAR_NONCONSEC)->consec_on && strcmp(variant_name(VAR_NONCONSEC), "Non-Consecutive") == 0);
     CHECK(sudoku_geom(VAR_KIDS)->box_w == 2 && sudoku_geom(VAR_KIDS)->box_h == 2);
     /* X-Sums: the first digits a clue allows (1: just 1; 2: none; 3: 2 (2 + 1); 45: just 9) */
@@ -388,6 +406,19 @@ static void test_geometry(void)
     v[0] = 8;
     v[10] = 9;                                      /* the far circle can't put a 9 between them */
     CHECK(!is_sudoku_fits(&b, v, 2, 1));
+    /* Entropic: 0,10,20,30: r1c1 a 2 (low), r2c2 a 5 (middle): r3c3 high, r4c4 low like r1c1 */
+    CHECK(!sudoku_geom_lines_text(VAR_ENTROPIC, "0,10", &b));
+    CHECK(sudoku_geom_lines_text(VAR_ENTROPIC, "0,10,20,30", &b));
+    memset(v, 0, 81);
+    v[0] = 2;
+    v[10] = 5;
+    CHECK(is_sudoku_fits(&b, v, 20, 8) && !is_sudoku_fits(&b, v, 20, 4) && !is_sudoku_fits(&b, v, 20, 1));
+    CHECK(is_sudoku_fits(&b, v, 30, 3) && !is_sudoku_fits(&b, v, 30, 6) && !is_sudoku_fits(&b, v, 30, 9));
+    /* Modular: the same line, r1c1 a 2 (2 5 8), r2c2 a 4 (1 4 7): r3c3 is 3, 6 or 9 */
+    CHECK(sudoku_geom_lines_text(VAR_MODULAR, "0,10,20,30", &b));
+    v[10] = 4;
+    CHECK(is_sudoku_fits(&b, v, 20, 6) && !is_sudoku_fits(&b, v, 20, 7) && is_sudoku_fits(&b, v, 30, 5) &&
+          !is_sudoku_fits(&b, v, 30, 3));
     /* Frame: 6 is 1 + 2 + 3, 24 is 7 + 8 + 9; 5 and 25 can't be made */
     CHECK(!sudoku_geom_frame_text("5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));
     CHECK(sudoku_geom_frame_text("6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,24", &b) && b.allow[0] == 0xE &&
@@ -533,7 +564,7 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "31|0|%s", E1);      /* no variant 31 */
+    snprintf(buf, sizeof(buf), "34|0|%s", E1);      /* no variant 34 */
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);

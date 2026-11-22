@@ -54,8 +54,10 @@ static void unit_name(int u, char *buf, size_t n)
                                             "bottom-left", "bottom", "bottom-right"
                                            };
         snprintf(buf, n, "the %s cells of the boxes", SPOT[(u - UNIT_GROUP) % 9]);
-    } else {
+    } else if (u == UNIT_ASTERISK) {
         snprintf(buf, n, "the asterisk");
+    } else {
+        snprintf(buf, n, "the box centres");
     }
 }
 
@@ -88,6 +90,9 @@ static const char *units_word(void)
     }
     if (game_geo()->variant == VAR_ASTERISK) {
         return "row, column, box or the asterisk";
+    }
+    if (game_geo()->variant == VAR_CENTERDOT) {
+        return "row, column, box or the box centres";
     }
     if (game_geo()->nthermos)
         return game_geo()->line_kind == LINE_THERMO ? "row, column or box (or the thermometer)"
@@ -229,6 +234,10 @@ void hint_render(void)
                  lk == LINE_REGIONSUM ? "In each box this line passes through, its digits add up to the same" :
                  lk == LINE_ZIPPER ? "Cells the same distance from this line's middle add up to the same total" :
                  lk == LINE_BETWEEN ? "The digits on this line lie between the digits in its two circles" :
+                 lk == LINE_ENTROPIC ? "Any three cells in a row on this line hold a low (1-3), a middle (4-6) and a "
+                 "high (7-9) digit" :
+                 lk == LINE_MODULAR ? "Any three cells in a row on this line hold one of 1 4 7, one of 2 5 8 and one "
+                 "of 3 6 9" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -887,6 +896,16 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         break;
     case LINE_REGIONSUM:
         ld.color = lv_color_hex(0x3D8BEB);
+        ld.opa = LV_OPA_70;
+        ld.width = cs * 12 / 100;
+        break;
+    case LINE_ENTROPIC:
+        ld.color = lv_color_hex(0xE8912D);
+        ld.opa = LV_OPA_70;
+        ld.width = cs * 12 / 100;
+        break;
+    case LINE_MODULAR:
+        ld.color = lv_color_hex(0x1FA5A5);
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;

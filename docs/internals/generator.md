@@ -25,6 +25,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 | 29 – 32 | the Hyper windows |
 | 33 – 41 | the Disjoint groups |
 | 42 | the Asterisk |
+| 43 | the Center Dot (the nine box centres) |
 
 `active[]` says which ones the variant uses. `cu[c]` lists a cell's units (up to 5), `peers[c]` the cells that share one with it, and `peer_bits` the same as a bitset.
 
@@ -40,14 +41,14 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 | `consec` | Consecutive bars; with `consec_on` and no bars: Non-Consecutive |
 | `edge_kind`, `edge` | Kropki dots, XV marks, Greater-Than signs, on each cell's right and lower edge |
 | `quad_*` | Quadruple circles |
-| `thermo_*`, `line_kind` | Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper and Between Lines: one set of "paths of cells", with `line_kind` saying how to read them |
+| `thermo_*`, `line_kind` | Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper, Between, Entropic and Modular Lines: one set of "paths of cells", with `line_kind` saying how to read them |
 | `sandwich_sum` | Sandwich: 18 sums |
 | `sky` | Skyscraper: 18 clues, 0 = none |
 | `lk_*` | Little Killer diagonals |
 | `xsums`, `xsum` | X-Sums: 18 clues, 0 = none |
 | `frame`, `frame_sum` | Frame: 18 clues, 0 = none |
 
-`sudoku_geom_init()` builds the fixed boards once at start-up (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Disjoint, Asterisk ...), and `sudoku_geom(variant)` returns them. Variants whose board comes **with** its puzzle (Jigsaw's regions, Killer's cages, every variant with clues) are built per puzzle, from text with `sudoku_geom_*_text()`, and turned back into text with `sudoku_*_text()`. That text is exactly what the database's `regions`, `cages`, `marks` and `thermos` columns hold (see [Database design](database.md)).
+`sudoku_geom_init()` builds the fixed boards once at start-up (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Disjoint, Asterisk, Center Dot ...), and `sudoku_geom(variant)` returns them. Variants whose board comes **with** its puzzle (Jigsaw's regions, Killer's cages, every variant with clues) are built per puzzle, from text with `sudoku_geom_*_text()`, and turned back into text with `sudoku_*_text()`. That text is exactly what the database's `regions`, `cages`, `marks` and `thermos` columns hold (see [Database design](database.md)).
 
 ## Solving and counting: `grid_t` and `search()`
 
@@ -79,7 +80,7 @@ The exact search says *whether* a puzzle has one solution but not *how hard* it 
    |---|---|---|
    | `gen_cage_logic` | Killer | cage sums |
    | `gen_consec_logic` | Consecutive, Non-Consecutive | bars |
-   | `gen_thermo_logic` | Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum, Zipper, Between | thermometers and lines (a mirrored cell's candidates; the range of each box's part; the totals a zipper can have; the circles' pairs) |
+   | `gen_thermo_logic` | Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum, Zipper, Between, Entropic, Modular | thermometers and lines (a mirrored cell's candidates; the range of each box's part; the totals a zipper can have; the circles' pairs; the groups each third of a line can be) |
    | `gen_sandwich_logic` | Sandwich | where the 1 and 9 can be |
    | `gen_edge_logic` | Kropki, XV, Greater-Than | marks |
    | `gen_quad_logic` | Quadruple | circles |
@@ -117,7 +118,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
 
 ### 1. A full grid, and the variant's clues
 
-- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Disjoint, Asterisk): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and Non-Consecutive sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
+- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Disjoint, Asterisk, Center Dot): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and Non-Consecutive sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
 - **Jigsaw**: `jigsaw_map()` reshapes the 3×3 boxes by swapping cells across region borders while every region stays in one piece. A new shape is made every 4 attempts; one that won't fill quickly is dropped.
 - **Variants with clues**: a random **Classic** grid first, then clues that are true of it, so the solution is known to fit:
 
@@ -141,7 +142,9 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
   | Frame | each line's sum of its first three digits, kept for about 75 % of the lines (Hard/Expert 60 %) |
   | Between Lines | `between_paths()`: 8 walks (Hard/Expert 10) from a circle through digits on one side of it, cut at the longest length whose last cell lies beyond all the ones between |
 
-  The two newest line kinds, Zipper and Between, never let a line cross itself diagonally (`is_line_crossing()`); the older ones may (changing them would change their puzzles for a seed).
+  | Entropic, Modular Lines | `group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |
+
+  The newest line kinds (Zipper, Between, Entropic, Modular) never let a line cross itself diagonally (`is_line_crossing()`); the older ones may (changing them would change their puzzles for a seed).
 
   These boards go in `jig`, a geometry allocated once in PSRAM. The one that wins is copied out to the caller with the givens.
 

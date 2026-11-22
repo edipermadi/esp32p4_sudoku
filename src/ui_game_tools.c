@@ -178,6 +178,7 @@ static const uint8_t PIC_PALINDROME[] = {1, 4, 9, 14, 11, 0xFF};   /**< 3 7 5 7 
 static const uint8_t PIC_REGIONSUM[] = {1, 2, 3, 4, 0xFF};  /**< 2 6 | 5 3: 8 in each box */
 static const uint8_t PIC_ZIPPER[] = {0, 1, 2, 3, 4, 0xFF};  /**< 1 3 7 4 6: 1 + 6 = 3 + 4 = 7 */
 static const uint8_t PIC_BETWEEN[] = {0, 1, 2, 3, 0xFF};    /**< (3) 6 5 (8) */
+static const uint8_t PIC_GROUPS[] = {0, 1, 2, 3, 4, 0xFF};  /**< Entropic 2 9 4 1 8; Modular 1 5 3 7 2 */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 
 /** @brief Each variant's rules card picture. */
@@ -246,6 +247,14 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_ZIPPER] = {5, 1, 0, 0, "13746", NULL, NULL, NULL, NULL, NULL, PIC_ZIPPER, NULL, -1, 0, NULL, NULL, LINE_ZIPPER},
     [VAR_FRAME] = {6, 1, 3, 1, "625198", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 13, 0, NULL, NULL, 0, 0},
     [VAR_BETWEEN] = {4, 1, 0, 0, "3658", NULL, NULL, NULL, NULL, NULL, PIC_BETWEEN, NULL, -1, 0, NULL, NULL, LINE_BETWEEN},
+    [VAR_ENTROPIC] = {5, 1, 0, 0, "29418", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_ENTROPIC},
+    [VAR_MODULAR] = {5, 1, 0, 0, "15372", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_MODULAR},
+    [VAR_CENTERDOT] = {
+        9, 9, 3, 3, "........." ".3..7..1." "........." "........." ".6..2..9." "........."
+        "........." ".8..4..5." ".........",
+        "000000000" "010010010" "000000000" "000000000" "010010010" "000000000" "000000000"
+        "010010010" "000000000", NULL, NULL, NULL, NULL, NULL, NULL, -1
+    },
 };
 
 /** each variant's rules, for its rules card */
@@ -312,6 +321,13 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "from there (the ones in the first box): 6 + 2 + 5 = 13.",
     [VAR_BETWEEN] = "Classic rules, and the digits on a line between two circles lie strictly between the circles' "
     "digits: 6 and 5 are between 3 and 8. Either circle can be the smaller one.",
+    [VAR_ENTROPIC] = "Classic rules, and any three cells in a row on an orange line hold a low (1-3), a middle "
+    "(4-6) and a high (7-9) digit: 2 9 4, 9 4 1 and 4 1 8. So cells three apart on a line are both low, both middle "
+    "or both high.",
+    [VAR_MODULAR] = "Classic rules, and any three cells in a row on a teal line hold one digit of each of 1 4 7, "
+    "2 5 8 and 3 6 9: 1 5 3, 5 3 7 and 3 7 2. So cells three apart on a line are in the same one of those groups.",
+    [VAR_CENTERDOT] = "Classic rules, and the nine tinted cells in the centres of the boxes also hold 1 to 9, "
+    "each once.",
 };
 
 /**
@@ -641,6 +657,8 @@ static bool share_text(char *buf, size_t n)
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
+    case VAR_ENTROPIC:
+    case VAR_MODULAR:
         key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL;
         break;
     case VAR_SANDWICH:
@@ -831,6 +849,8 @@ static int pz_line(char *buf, size_t n)
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
+    case VAR_ENTROPIC:
+    case VAR_MODULAR:
         if (sudoku_thermos_text(G, extra, sizeof(extra))) {
             thermos = extra;
         }

@@ -352,6 +352,21 @@ int compute_conflicts(void)
             }
             break;
         }
+        case LINE_ENTROPIC:
+        case LINE_MODULAR:                          /* two cells 3 apart in different groups, or closer in one */
+            for (int i = 0; i < n; i++) {
+                for (int j = i + 1; j < n; j++) {
+                    int a = g_b.val[cell[i]], b = g_b.val[cell[j]];
+                    if (!a || !b) {
+                        continue;
+                    }
+                    bool same = sudoku_line_group(g_geo->line_kind, a) == sudoku_line_group(g_geo->line_kind, b);
+                    if (same != ((j - i) % 3 == 0)) {
+                        g_conflict[cell[i]] = g_conflict[cell[j]] = true;
+                    }
+                }
+            }
+            break;
         case LINE_BETWEEN: {                        /* a digit between not strictly between the two circles */
             int a = g_b.val[cell[0]], b = g_b.val[cell[n - 1]], lo = a < b ? a : b, hi = a < b ? b : a;
             for (int i = 1; a && b && i < n - 1; i++) {

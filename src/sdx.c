@@ -148,6 +148,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
+    case VAR_ENTROPIC:
+    case VAR_MODULAR:
         return sudoku_geom_lines_text(p->variant, p->thermos, out);   /* (lines go in thermos) */
     case VAR_SANDWICH:
         return sudoku_geom_sandwich_text(p->marks, out);

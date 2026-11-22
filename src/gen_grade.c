@@ -1029,7 +1029,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT) {
         return 32;
     }
-    if (G->variant == VAR_ASTERISK) {
+    if (G->variant == VAR_ASTERISK || G->variant == VAR_CENTERDOT) {
         return 34;
     }
     if (G->nthermos) {

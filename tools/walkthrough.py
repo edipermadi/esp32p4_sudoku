@@ -45,7 +45,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "kropki": "Kropki", "xv": "XV", "greater-than": "Greater", "quadruple": "Quadruple", "arrow": "Arrow",
          "renban": "Renban", "german-whispers": "German", "skyscraper": "Skyscraper", "little-killer": "Little",
          "palindrome": "Palindrome", "region-sum-lines": "Region", "x-sums": "X-Sums", "zipper-lines": "Zipper",
-         "frame": "Frame", "between-lines": "Between"}
+         "frame": "Frame", "between-lines": "Between", "entropic-lines": "Entropic", "modular-lines": "Modular",
+         "center-dot": "Center"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -58,6 +59,13 @@ RING, CROSS, ORANGE = (230, 126, 34), (214, 48, 49), (230, 126, 34)
 MUTED, THERMO, SUM_FG = (120, 126, 138), (196, 200, 207), (43, 111, 224)
 ARROW, RENBAN, WHISPER = (140, 146, 158), (222, 200, 245), (120, 205, 150)   # (the board's, on white)
 PALINDROME, REGIONSUM, ZIPPER = (178, 181, 187), (119, 173, 241), (234, 149, 185)
+ENTROPIC, MODULAR = (239, 178, 108), (98, 192, 192)
+GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
+
+
+def line_group(kind, v):
+    """Entropic (8): 1-3, 4-6, 7-9; Modular (9): the remainder mod 3"""
+    return (v - 1) // 3 if kind == 8 else v % 3
 RIGHT, DOWN = 0, 1
 WINDOWS = ["top-left", "top-right", "bottom-left", "bottom-right"]
 SPOTS = ["top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right"]
@@ -74,6 +82,16 @@ def listing(items, word="and"):
 
 def a_n(v):
     return "an %d" % v if v == 8 else "a %d" % v
+
+
+def needs(unit):
+    """the verb for a unit's name: the box centres need, row 3 needs"""
+    return "need" if unit.endswith("centres") else "needs"
+
+
+def has(unit):
+    """the box centres have, row 3 has"""
+    return "have" if unit.endswith("centres") else "has"
 
 
 def cap(t):
@@ -212,6 +230,22 @@ def rule_words(d, vals, c, v, r):
             if tot is not None:
                 return "its pink line's pairs add up to %d, and %s would need a %d with it" % (tot, a_n(v), tot - v)
             return "with %s there, its pink line's pairs couldn't all add up to the same" % a_n(v)
+        if kind in (8, 9):                                  # Entropic, Modular: groups repeat every 3 cells
+            colour, names = ("orange" if kind == 8 else "teal"), GROUP_NAMES[kind]
+            i = cells.index(c)
+            same = [x for k, x in enumerate(cells) if k != i and (k - i) % 3 == 0 and vals[x]]
+            if same:
+                x = same[0]
+                return "it's %d cells from the %d in %s along its %s line, so it's %s like it" % (
+                    abs(cells.index(x) - i), vals[x], rc(x), colour, names[line_group(kind, vals[x])])
+            near = sorted({line_group(kind, vals[x]) for k, x in enumerate(cells)
+                           if (k - i) % 3 != 0 and vals[x] and abs(k - i) < 3})
+            if near:
+                have = listing([("a %s" if kind == 8 else "%s") % names[g] for g in near], "and")
+                return "next to it on its %s line there's %s%s already, and three in a row need one of each" % (
+                    colour, have, " digit" if kind == 8 else "")
+            return "with %s there, its %s line couldn't hold one of each group in every three in a row" % (
+                a_n(v), colour)
         if kind == 7:                                       # Between Lines: strictly between the circles
             ends = (cells[0], cells[-1])
             if c in ends:
@@ -372,8 +406,9 @@ def step_text(d, vals, s):
             else:
                 groups.setdefault((r["by"], r["via"]), []).append(r["cell"])
         if not groups and not rules:
-            return "%s needs %s, and %s is its last empty cell: **%s = %d**." % (cap(unit), a_n(v), rc(c), rc(c), v)
-        out = ["%s needs %s." % (cap(unit), a_n(v))]
+            return "%s %s %s, and %s is its last empty cell: **%s = %d**." % (cap(unit), needs(unit), a_n(v), rc(c),
+                                                                               rc(c), v)
+        out = ["%s %s %s." % (cap(unit), needs(unit), a_n(v))]
         for (by, via), cells in groups.items():
             where = listing(rc(x) for x in cells)
             if via == "a knight's move":
@@ -384,7 +419,7 @@ def step_text(d, vals, s):
             elif via in ("even", "odd"):
                 out.append("%s: %s, so not %d." % (where, "shaded (even)" if via == "even" else "ringed (odd)", v))
             else:
-                out.append("%s: %s has one (%s)." % (where, unit_words(via), rc(by)))
+                out.append("%s: %s %s one (%s)." % (where, unit_words(via), has(unit_words(via)), rc(by)))
         out += ["%s: %s." % (listing(rc(x) for x in cells), why) for why, cells in rules.items()]
         out.append("Only **%s** is left: **%s = %d**." % (rc(c), rc(c), v))
         return " ".join(out)
@@ -401,7 +436,7 @@ def step_text(d, vals, s):
         else:
             have.setdefault(unit_words(r["via"]), []).append(r["digit"])
     extra += ["Not %s: %s." % (listing(map(str, ds), "or"), why) for why, ds in rules.items()]
-    parts = ["%s has %s" % (via, listing(str(x) for x in sorted(ds))) for via, ds in have.items()]
+    parts = ["%s %s %s" % (via, has(via), listing(str(x) for x in sorted(ds))) for via, ds in have.items()]
     lead = cap("; ".join(parts)) + "." if parts else ""
     return " ".join(x for x in [lead] + extra + ["Only %d is left: **%s = %d**." % (v, rc(c), v)] if x)
 
@@ -494,6 +529,8 @@ def make_drawer(d, fonts):
                     g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=PALINDROME)
             elif kind == 5:                                 # Region Sum Lines: a narrow blue line
                 g.line(pts, fill=REGIONSUM, width=int(CELL * 0.12), joint="curve")
+            elif kind in (8, 9):                            # Entropic, Modular Lines: a narrow orange / teal line
+                g.line(pts, fill=ENTROPIC if kind == 8 else MODULAR, width=int(CELL * 0.12), joint="curve")
             elif kind == 6:                                 # Zipper Lines: a narrow pink line
                 g.line(pts, fill=ZIPPER, width=int(CELL * 0.12), joint="curve")
             elif kind == 7:                                 # Between Lines: a grey line, a ring at each end

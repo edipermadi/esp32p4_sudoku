@@ -18,7 +18,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Kids 4x4", "Anti-King", "Non-Consecutive", "Disjoint Groups",
                                                      "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
                                                      "German Whispers", "Skyscraper", "Little Killer", "Palindrome",
-                                                     "Region Sum Lines", "X-Sums", "Zipper Lines", "Frame", "Between Lines"
+                                                     "Region Sum Lines", "X-Sums", "Zipper Lines", "Frame", "Between Lines",
+                                                     "Entropic Lines", "Modular Lines", "Center Dot"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -139,6 +140,9 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
         if (is_sudoku_geom_on_asterisk(g, cell)) {
             ids[nid++] = UNIT_ASTERISK;
         }
+        if (is_sudoku_geom_on_centerdot(g, cell)) {
+            ids[nid++] = UNIT_CENTERDOT;
+        }
         for (int i = 0; i < nid; i++) {
             int u = ids[i];
             g->unit[u][fill[u]++] = (uint8_t)cell;
@@ -201,6 +205,7 @@ void sudoku_geom_init(void)
     geom_build(&g[VAR_KING], VAR_KING, 9, 3, 3, false, false, NULL);
     geom_build(&g[VAR_DISJOINT], VAR_DISJOINT, 9, 3, 3, false, false, NULL);
     geom_build(&g[VAR_ASTERISK], VAR_ASTERISK, 9, 3, 3, false, false, NULL);
+    geom_build(&g[VAR_CENTERDOT], VAR_CENTERDOT, 9, 3, 3, false, false, NULL);
     /* Anti-Knight: a knight's move away is a peer too; Anti-King: a touching cell (the diagonal
      * ones are new; side by side they share a row or column already) */
     static const int8_t KM[8][2] = {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}};
@@ -240,7 +245,8 @@ void sudoku_geom_init(void)
     g[VAR_KILLER] = g[VAR_CLASSIC];
     g[VAR_KILLER].variant = VAR_KILLER;
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
-                                  VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN
+                                  VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
+                                  VAR_ENTROPIC, VAR_MODULAR
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -259,7 +265,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD ||
             variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_SKY ||
             variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
-            variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN) {
+            variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN || variant == VAR_ENTROPIC ||
+            variant == VAR_MODULAR) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -367,7 +374,8 @@ static int line_kind_of(int variant)
     return variant == VAR_ARROW ? LINE_ARROW : variant == VAR_RENBAN ? LINE_RENBAN :
            variant == VAR_WHISPER ? LINE_WHISPER : variant == VAR_PALINDROME ? LINE_PALINDROME :
            variant == VAR_REGIONSUM ? LINE_REGIONSUM : variant == VAR_ZIPPER ? LINE_ZIPPER :
-           variant == VAR_BETWEEN ? LINE_BETWEEN : LINE_THERMO;
+           variant == VAR_BETWEEN ? LINE_BETWEEN : variant == VAR_ENTROPIC ? LINE_ENTROPIC :
+           variant == VAR_MODULAR ? LINE_MODULAR : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -416,7 +424,8 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
                 }
             }
         }
-        if (out->line_kind == LINE_BETWEEN && lens[t] < 3) {
+        if ((out->line_kind == LINE_BETWEEN || out->line_kind == LINE_ENTROPIC || out->line_kind == LINE_MODULAR) &&
+                lens[t] < 3) {
             return false;                           /* (two circles and something between them) */
         }
         if (out->line_kind == LINE_ZIPPER && lens[t] % 2) {   /* odd: the middle is a pair's sum, 2 at least */

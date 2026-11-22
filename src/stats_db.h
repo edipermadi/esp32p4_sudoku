@@ -139,6 +139,9 @@ typedef enum {
     KIND_ZIPPER,                         /**< Zipper Lines */
     KIND_FRAME,                          /**< Frame */
     KIND_BETWEEN,                        /**< Between Lines */
+    KIND_ENTROPIC,                       /**< Entropic Lines */
+    KIND_MODULAR,                        /**< Modular Lines */
+    KIND_CENTERDOT,                      /**< Center Dot */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**
@@ -952,7 +955,7 @@ typedef enum {
     REC_DAYS,                            /**< days */
     REC_MINUTES                          /**< minutes */
 } rec_unit_t;
-#define STATS_MAX_RECORDS 43             /**< records at most */
+#define STATS_MAX_RECORDS 46             /**< records at most */
 /** @brief A personal record. */
 typedef struct {
     const char *title;                   /**< static string */

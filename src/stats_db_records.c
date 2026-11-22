@@ -56,6 +56,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Zipper Lines", OF_VARIANT(28)},
     {"Fastest Frame", OF_VARIANT(29)},
     {"Fastest Between Lines", OF_VARIANT(30)},
+    {"Fastest Entropic Lines", OF_VARIANT(31)},
+    {"Fastest Modular Lines", OF_VARIANT(32)},
+    {"Fastest Center Dot", OF_VARIANT(33)},
 };
 
 /* (documented in stats_db_internal.h) */

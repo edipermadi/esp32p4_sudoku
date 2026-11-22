@@ -268,6 +268,43 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         free &= ok;
         break;
     }
+    case LINE_ENTROPIC:
+    case LINE_MODULAR: {                            /* any three in a row: one digit of each group */
+        /* so places 3 apart share a group, and places 0, 1, 2 (mod 3) take three different ones:
+         * per place mod 3, the groups every cell there can still be in (bit g = group g) */
+        uint8_t can[3] = {7, 7, 7};
+        uint16_t of[3] = {0, 0, 0};                 /* each group's digits */
+        for (int d = 1; d <= 9; d++) {
+            of[sudoku_line_group(G->line_kind, d)] |= (uint16_t)(1u << d);
+        }
+        for (int k = 0; k < n; k++) {
+            if (k == p) {
+                continue;
+            }
+            uint16_t m = LMASK(cell[k]);
+            uint8_t gm = 0;
+            for (int g = 0; g < 3; g++) {
+                gm |= (m & of[g]) ? (uint8_t)(1u << g) : 0;
+            }
+            can[k % 3] &= gm;
+        }
+        const int own = p % 3, o1 = (own + 1) % 3, o2 = (own + 2) % 3;
+        uint16_t ok = 0;
+        for (int g = 0; g < 3; g++) {               /* a group for this place that leaves the others two */
+            if (!(can[own] >> g & 1)) {
+                continue;
+            }
+            for (int a = 0; a < 3; a++) {
+                for (int b = 0; b < 3; b++) {
+                    if (a != g && b != g && a != b && (can[o1] >> a & 1) && (can[o2] >> b & 1)) {
+                        ok |= of[g];
+                    }
+                }
+            }
+        }
+        free &= ok;
+        break;
+    }
     case LINE_ARROW: {                              /* the circle (place 0) is the shaft's sum */
         int smin = 0, smax = 0;                     /* the shaft's sum, the place asked about left out */
         for (int k = 1; k < n; k++) {

@@ -71,8 +71,10 @@ static const char *unit_name(const sudoku_geom_t *G, int u, char *b)
         sprintf(b, "window %d", u - UNIT_WINDOW + 1);
     } else if (u < UNIT_ASTERISK) {
         sprintf(b, "disjoint group %d", u - UNIT_GROUP + 1);
-    } else {
+    } else if (u == UNIT_ASTERISK) {
         sprintf(b, "the asterisk");
+    } else {
+        sprintf(b, "the box centres");
     }
     return b;
 }
@@ -459,6 +461,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
+    case VAR_ENTROPIC:
+    case VAR_MODULAR:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:

@@ -2,7 +2,15 @@
 
 A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720×720 MIPI-DSI, GT911 touch, ES8311 speaker), built with LVGL 9.6 as an Arduino sketch.
 
-**[Install it from the browser with the web flasher →](https://edipermadi.github.io/esp32p4_sudoku/)** (Chrome or Edge on a desktop computer; the board's UART USB port). No Arduino IDE needed. It installs the latest release; see [Web flasher](docs/building.md#web-flasher) for details.
+## Online
+
+On GitHub Pages, updated with each release:
+
+| | Link | What's there |
+|---|---|---|
+| **Web flasher** | [edipermadi.github.io/esp32p4_sudoku](https://edipermadi.github.io/esp32p4_sudoku/) | Installs the latest release on the board from Chrome or Edge on a desktop computer, over the UART USB port, with no Arduino IDE needed ([details](docs/building.md#web-flasher)) |
+| **Documentation** | [edipermadi.github.io/esp32p4_sudoku/docs](https://edipermadi.github.io/esp32p4_sudoku/docs/) | This README and everything in [`docs/`](docs/) as web pages: features, every variant, data, building, internals |
+| **Code documentation** | [edipermadi.github.io/esp32p4_sudoku/code](https://edipermadi.github.io/esp32p4_sudoku/code/) | The firmware's code, documented with Doxygen: files, functions, structures, the screens diagram ([how it's made](docs/development.md)) |
 
 ## Screenshots
 
@@ -21,7 +29,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 ## Highlights
 
 - **1600 puzzles in flash** from the [OpenSudoku](https://opensudoku.gitlab.io/) collections, plus a generator for new ones at four levels and a daily puzzle.
-- **[Variants](docs/variants/README.md)**: [X-Sudoku](docs/variants/x-sudoku.md), [Hyper](docs/variants/hyper.md), [Jigsaw](docs/variants/jigsaw.md), [Killer](docs/variants/killer.md), [Mini 6×6](docs/variants/mini-6x6.md), [Anti-Knight](docs/variants/anti-knight.md), [Anti-King](docs/variants/anti-king.md), [Even-Odd](docs/variants/even-odd.md), [Consecutive](docs/variants/consecutive.md), [Non-Consecutive](docs/variants/non-consecutive.md), [Disjoint Groups](docs/variants/disjoint-groups.md), [Asterisk](docs/variants/asterisk.md), [Kropki](docs/variants/kropki.md), [XV](docs/variants/xv.md), [Greater-Than](docs/variants/greater-than.md), [Quadruple](docs/variants/quadruple.md), [Arrow](docs/variants/arrow.md), [Renban](docs/variants/renban.md), [German Whispers](docs/variants/german-whispers.md), [Skyscraper](docs/variants/skyscraper.md), [Little Killer](docs/variants/little-killer.md), [Palindrome](docs/variants/palindrome.md), [Region Sum Lines](docs/variants/region-sum-lines.md), [X-Sums](docs/variants/x-sums.md), [Zipper Lines](docs/variants/zipper-lines.md), [Frame](docs/variants/frame.md), [Between Lines](docs/variants/between-lines.md), [Thermo](docs/variants/thermo.md), [Sandwich](docs/variants/sandwich.md) and [Kids 4×4](docs/variants/kids-4x4.md) (and [Classic](docs/variants/classic.md)).
+- **[Variants](docs/variants/README.md)**: [X-Sudoku](docs/variants/x-sudoku.md), [Hyper](docs/variants/hyper.md), [Jigsaw](docs/variants/jigsaw.md), [Killer](docs/variants/killer.md), [Mini 6×6](docs/variants/mini-6x6.md), [Anti-Knight](docs/variants/anti-knight.md), [Anti-King](docs/variants/anti-king.md), [Even-Odd](docs/variants/even-odd.md), [Consecutive](docs/variants/consecutive.md), [Non-Consecutive](docs/variants/non-consecutive.md), [Disjoint Groups](docs/variants/disjoint-groups.md), [Asterisk](docs/variants/asterisk.md), [Kropki](docs/variants/kropki.md), [XV](docs/variants/xv.md), [Greater-Than](docs/variants/greater-than.md), [Quadruple](docs/variants/quadruple.md), [Arrow](docs/variants/arrow.md), [Renban](docs/variants/renban.md), [German Whispers](docs/variants/german-whispers.md), [Skyscraper](docs/variants/skyscraper.md), [Little Killer](docs/variants/little-killer.md), [Palindrome](docs/variants/palindrome.md), [Region Sum Lines](docs/variants/region-sum-lines.md), [X-Sums](docs/variants/x-sums.md), [Zipper Lines](docs/variants/zipper-lines.md), [Frame](docs/variants/frame.md), [Between Lines](docs/variants/between-lines.md), [Entropic Lines](docs/variants/entropic-lines.md), [Modular Lines](docs/variants/modular-lines.md), [Center Dot](docs/variants/center-dot.md), [Thermo](docs/variants/thermo.md), [Sandwich](docs/variants/sandwich.md) and [Kids 4×4](docs/variants/kids-4x4.md) (and [Classic](docs/variants/classic.md)).
 - **Helpers**: a left-handed layout, pencil marks, Auto notes, digit-first entry, cell colours, undo/redo, mistake check, step-by-step hints (up to X-Wing, Swordfish and XY-Wing, or nudges only), a Learn mode for ten techniques and four variant rules, a tour of the game screen, starred puzzles and a 10-minute time attack.
 - **Players, statistics and trophies**: per-player progress and emoji avatars, a history calendar, charts, achievements, daily and weekly leaderboards.
 - **Replays**: every solve can be played back, or exported as an H.264 MP4 video.
@@ -30,13 +38,13 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 
 ## Documentation
 
-Also online, as web pages: **https://edipermadi.github.io/esp32p4_sudoku/docs/** (updated with each release).
+Also online, as web pages, with the code documentation next to them: see [Online](#online).
 
 | Page | What's in it |
 |------|--------------|
 | [Features](docs/features.md) | Everything the game does, by topic: puzzles, playing, players & progress, settings & system |
 | [How to play](docs/how-to-play.md) | Which button does what, as a table |
-| [Variants](docs/variants/README.md) | Each of the 31 variants on its own page: rules, tips, a worked example with a screenshot, and the whole puzzle solved step by step |
+| [Variants](docs/variants/README.md) | Each of the 34 variants on its own page: rules, tips, a worked example with a screenshot, and the whole puzzle solved step by step |
 | [Data & storage](docs/data.md) | `sudoku.db` and its tables, backups, firmware update, USB drive, format, factory reset, saving |
 | [Internals](docs/internals/README.md) | How the game works inside: [puzzle generator](docs/internals/generator.md), [database design](docs/internals/database.md) (tables, how they connect, upgrades) |
 | [Building and releases](docs/building.md) | Arduino settings, `arduino-cli`, GitHub Actions releases, the web flasher |

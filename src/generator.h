@@ -88,6 +88,12 @@
  *                columns: the sum of the first three digits from there
  *   VAR_BETWEEN  Between Lines: Classic rules, and the digits on a line between two
  *                circles lie strictly between the circles' digits
+ *   VAR_ENTROPIC Entropic Lines: Classic rules, and any three cells in a row on a
+ *                line hold a low (1-3), a middle (4-6) and a high (7-9) digit
+ *   VAR_MODULAR  Modular Lines: Classic rules, and any three cells in a row on a
+ *                line hold one digit of each of 1 4 7, 2 5 8 and 3 6 9
+ *   VAR_CENTERDOT Center Dot: Classic rules, and the nine box centres also hold
+ *                1-9 once each
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -99,7 +105,7 @@
  * 6x6 board uses the top-left 6x6 of them and leaves the rest 0. Saved games,
  * move logs and the database then work the same for every variant.
  *
- * Units have fixed numbers whatever the variant: 0..8 rows, 9..17 columns,
+ * Units have fixed numbers whatever the variant (43: the Center Dot): 0..8 rows, 9..17 columns,
  * 18..26 boxes (left to right, top to bottom; on Jigsaw the regions), 27 the
  * main diagonal (top left to bottom right), 28 the other diagonal, 29..32
  * the Hyper windows (top left, top right, bottom left, bottom right), 33..41
@@ -176,6 +182,9 @@ typedef enum {
     VAR_ZIPPER,                         /**< Zipper Lines */
     VAR_FRAME,                          /**< Frame */
     VAR_BETWEEN,                        /**< Between Lines */
+    VAR_ENTROPIC,                       /**< Entropic Lines */
+    VAR_MODULAR,                        /**< Modular Lines */
+    VAR_CENTERDOT,                      /**< Center Dot */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -186,7 +195,8 @@ typedef enum {
  *         "Consecutive", "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive",
  *         "Disjoint Groups", "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow",
  *         "Renban", "German Whispers", "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
- *         "X-Sums", "Zipper Lines", "Frame", "Between Lines"
+ *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
+ *         "Center Dot"
  */
 const char *variant_name(int variant);
 
@@ -197,7 +207,8 @@ const char *variant_name(int variant);
 #define UNIT_WINDOW    29               /**< Hyper's windows: 29..32 */
 #define UNIT_GROUP     33               /**< Disjoint groups: 33..41 */
 #define UNIT_ASTERISK  42               /**< Asterisk's nine cells */
-#define UNITS_MAX      43               /**< units at most */
+#define UNIT_CENTERDOT 43               /**< Center Dot's nine box centres */
+#define UNITS_MAX      44               /**< units at most */
 /** @} */
 #define CAGES_MAX      81               /**< Killer: cages per board (1 cell each at most) */
 #define CAGE_NONE      0xFF             /**< a cell in no cage */
@@ -212,7 +223,9 @@ enum {
     LINE_PALINDROME,                    /**< Palindrome: the same digits read from either end */
     LINE_REGIONSUM,                     /**< Region Sum Lines: the same sum in each box it crosses */
     LINE_ZIPPER,                        /**< Zipper Lines: cells mirrored about the middle add up the same */
-    LINE_BETWEEN                        /**< Between Lines: digits strictly between the two end circles' */
+    LINE_BETWEEN,                       /**< Between Lines: digits strictly between the two end circles' */
+    LINE_ENTROPIC,                      /**< Entropic Lines: any three in a row: a low, a middle and a high digit */
+    LINE_MODULAR                        /**< Modular Lines: any three in a row: one of each remainder mod 3 */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -290,8 +303,8 @@ typedef struct {
     /* Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper, Between Lines: lines,
      * each a path of cells (side by side or diagonal), of the kind line_kind: a thermometer from its
      * bulb (digits rise along it), an arrow from its circle (the rest, its shaft, adds up to it), a
-     * Renban, a Whispers, a Palindrome, a Region Sum or a Zipper line, or a Between line (a circle
-     * at each end) */
+     * Renban, a Whispers, a Palindrome, a Region Sum, a Zipper, an Entropic or a Modular line, or a
+     * Between line (a circle at each end) */
     uint8_t line_kind;                  /**< the lines' kind, LINE_* */
     uint8_t nthermos;                   /**< lines */
     uint8_t thermo_n[THERMOS_MAX];      /**< each line's cells: how many */
@@ -400,11 +413,11 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief The same for any line variant (Thermo, Arrow: its circle first, Renban, German Whispers,
- * Palindrome, Region Sum, Zipper, Between Lines: its circles at both ends); sudoku_thermos_text()
- * writes them all. A Palindrome line's cells that mirror each other mustn't see each other (they hold
- * the same digit); a Between line has 3 cells at least.
+ * Palindrome, Region Sum, Zipper, Between Lines: its circles at both ends, Entropic, Modular);
+ * sudoku_thermos_text() writes them all. A Palindrome line's cells that mirror each other mustn't see
+ * each other (they hold the same digit); a Between, Entropic or Modular line has 3 cells at least.
  * @param variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM,
- *                 VAR_ZIPPER or VAR_BETWEEN
+ *                 VAR_ZIPPER, VAR_BETWEEN, VAR_ENTROPIC or VAR_MODULAR
  * @param text  the lines
  * @param out  gets the board
  * @return false if the text isn't one
@@ -636,14 +649,38 @@ static inline bool is_sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
 }
 
 /**
- * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk
+ * @brief a box's centre on a Center Dot board (rows and columns 2, 5 and 8, counted from 1)
+ * @param g  the board
+ * @param cell  the cell
+ * @return true if so
+ */
+static inline bool is_sudoku_geom_on_centerdot(const sudoku_geom_t *g, int cell)
+{
+    return g->variant == VAR_CENTERDOT && cell / 9 % 3 == 1 && cell % 9 % 3 == 1;
+}
+
+/**
+ * @brief Entropic, Modular Lines: the group a digit belongs to (Entropic: 1-3, 4-6, 7-9; Modular:
+ * its remainder mod 3)
+ * @param kind  LINE_ENTROPIC or LINE_MODULAR
+ * @param d  the digit, 1..9
+ * @return 0, 1 or 2
+ */
+static inline int sudoku_line_group(int kind, int d)
+{
+    return kind == LINE_ENTROPIC ? (d - 1) / 3 : d % 3;
+}
+
+/**
+ * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot
  * @param g  the board
  * @param cell  the cell
  * @return true if so
  */
 static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 {
-    return is_sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || is_sudoku_geom_on_asterisk(g, cell);
+    return is_sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || is_sudoku_geom_on_asterisk(g, cell) ||
+           is_sudoku_geom_on_centerdot(g, cell);
 }
 
 /* ---------------------------------------------------------------- generating */
