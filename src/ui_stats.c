@@ -45,7 +45,7 @@ static lv_obj_t *x_player_dd;             /**< whose statistics */
 static lv_obj_t *x_chart;                 /**< the progress chart's card (instead of the table) */
 static lv_obj_t *x_plot;                  /**< its plot */
 static lv_obj_t *x_trend;                 /**< the text under it */
-static lv_obj_t *x_chart_btn;             /**< Chart / Table */
+static lv_obj_t *x_menu_btn;              /**< the ⋮ menu: Insights, Chart / Table, About */
 static bool      x_chart_mode;            /**< the chart is shown (kept until power-off) */
 static char      x_player_txt[STORE_NAME_LEN + 8];    /**< the closed dropdown: icon + name */
 static lv_obj_t *x_player_av;                         /**< ... or the avatar left of the name */
@@ -481,9 +481,7 @@ static void plot_draw_cb(lv_event_t *e)
  */
 static void chart_render(const stats_view_t *v, bool from_db)
 {
-    lv_obj_set_hidden(x_chart, !x_chart_mode);
-    lv_label_set_text(lv_obj_get_child(x_chart_btn, 0), x_chart_mode ? LV_SYMBOL_LIST "  Table"
-                      : SYMBOL_CHART "  Chart");
+    lv_obj_set_hidden(x_chart, !x_chart_mode);      /* (the ⋮ menu's item says Chart or Table: stats_menu_cb()) */
     if (!x_chart_mode) {
         return;
     }
@@ -522,7 +520,7 @@ static void chart_render(const stats_view_t *v, bool from_db)
 }
 
 /**
- * @brief Chart / Table: the other one.
+ * @brief The ⋮ menu's Chart / Table: the other one shown.
  * @param[in] e  the event
  */
 static void chart_btn_cb(lv_event_t *e)
@@ -532,7 +530,7 @@ static void chart_btn_cb(lv_event_t *e)
 }
 
 /**
- * @brief The (i) button: what the numbers mean, and where they come from.
+ * @brief The ⋮ menu's About these statistics: what the numbers mean, and where they come from.
  * @param[in] e  the event
  */
 static void stats_info_cb(lv_event_t *e)
@@ -545,7 +543,7 @@ static void stats_info_cb(lv_event_t *e)
              "solved. \"-\" means mistakes weren't counted yet when it was solved.\n\n"
              "Per level: puzzles solved, the fastest and the average of the best times, and the "
              "average of the fewest mistakes.",
-             is_statistics_from_db() ? "These are the statistics of the player chosen at the top right, from sudoku.db "
+             is_statistics_from_db() ? "These are the statistics of the player chosen at the top, from sudoku.db "
              "on the microSD card."
              : "No sudoku.db: insert a FAT32 microSD card before switching on to keep statistics. "
              "This shows what the board has in memory.");
@@ -600,7 +598,22 @@ static void stats_table_draw_cb(lv_event_t *e)
     }
 }
 
-/** @brief Builds the screen: Home, the title, (i), the list, the player dropdown, Insights, Chart, the summary, the table and the chart. */
+/**
+ * @brief The ⋮ menu (top right): Insights (mistakes, from the move logs), Chart or Table (the one not shown), About
+ *        statistics.
+ * @param[in] e  the event
+ */
+static void stats_menu_cb(lv_event_t *e)
+{
+    const ctx_item_t items[] = {
+        {SYMBOL_BULB, "Insights", insights_cb, false, false},
+        {x_chart_mode ? LV_SYMBOL_LIST : SYMBOL_CHART, x_chart_mode ? "Table" : "Chart", chart_btn_cb, false, false},
+        {SYMBOL_INFO, "About statistics", stats_info_cb, false, false},
+    };
+    ctx_menu_toggle(x_menu_btn, items, (int)(sizeof(items) / sizeof(items[0])));
+}
+
+/** @brief Builds the screen: Home, the title, the ⋮ menu, the list, the player dropdown, Insights, Chart, the summary, the table and the chart. */
 void build_stats(void)
 {
     screen_set_stats(make_screen());
@@ -609,11 +622,8 @@ void build_stats(void)
     lv_obj_t *t = make_label(screen_stats(), &lv_font_montserrat_28, C_TEXT);
     lv_label_set_text(t, "Statistics");
     lv_obj_set_pos(t, 150, 20);
-    lv_obj_t *info = make_btn(screen_stats(), SCR_W - 12 - 52, 10, 52, 52, SYMBOL_INFO, &font_icons_24, stats_info_cb,
-                              NULL);                 /* top right, on the title's line */
-    lv_obj_set_style_bg_opa(info, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_opa(info, LV_OPA_COVER, LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(lv_obj_get_child(info, 0), C_ACCENT, 0);
+    x_menu_btn = make_btn(screen_stats(), SCR_W - 12 - 52, 10, 52, 52, SYMBOL_MORE, &font_icons_24, stats_menu_cb,
+                          NULL);                     /* top right, on the title's line (as the Puzzles screen's) */
 
     lv_obj_t *list = make_coll_column(screen_stats());
     lv_obj_set_pos(list, 12, X_BODY_Y);
@@ -629,11 +639,11 @@ void build_stats(void)
     }
 
     int px = PANE_X, pw = PANE_W;
-    /* top bar, right: whose statistics, as a dropdown */
+    /* the title row, right: whose statistics, as a dropdown, left of the ⋮ menu */
     x_player_dd = lv_dropdown_create(screen_stats());
     x_player_av = NULL;                                /* (a rebuild: the old one went with the old screen) */
-    lv_obj_set_pos(x_player_dd, 12, X_ROW_Y);          /* whose statistics: first in the row */
-    lv_obj_set_size(x_player_dd, 320, 52);
+    lv_obj_set_pos(x_player_dd, SCR_W - 12 - 52 - 10 - X_DD_W, 10);   /* whose statistics: next to the ⋮ menu */
+    lv_obj_set_size(x_player_dd, X_DD_W, 52);
     lv_obj_set_style_text_font(x_player_dd, &font_icons_20, 0);
     lv_obj_set_style_text_color(x_player_dd, C_TEXT, 0);
     lv_obj_set_style_bg_color(x_player_dd, C_CARD, 0);
@@ -687,13 +697,7 @@ void build_stats(void)
     lv_label_set_text(x_empty, "No puzzles solved in this level yet.");
     lv_obj_set_pos(x_empty, px + 4, X_BODY_Y + 104);
 
-    /* Chart / Table switch (top right of the pane) and the chart card in the table's place */
-    lv_obj_t *ib = make_btn(screen_stats(), SCR_W - 12 - 160 - 10 - 170, X_ROW_Y, 170, 52, SYMBOL_BULB "  Insights",
-                            &font_icons_20, insights_cb, NULL);   /* mistake insights, from the move logs */
-    lv_obj_set_style_text_color(lv_obj_get_child(ib, 0), C_ACCENT, 0);
-    x_chart_btn = make_btn(screen_stats(), SCR_W - 12 - 160, X_ROW_Y, 160, 52, SYMBOL_CHART "  Chart", &font_icons_20,
-                           chart_btn_cb, NULL);
-    lv_obj_set_style_text_color(lv_obj_get_child(x_chart_btn, 0), C_ACCENT, 0);
+    /* the chart card, in the table's place (the ⋮ menu's Chart / Table switches) */
     x_chart = lv_obj_create(screen_stats());
     lv_obj_set_pos(x_chart, px, X_BODY_Y + 82);
     lv_obj_set_size(x_chart, pw, SCR_W - X_BODY_Y - 82 - 12);

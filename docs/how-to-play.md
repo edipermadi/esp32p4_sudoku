@@ -19,7 +19,7 @@
 | Pause                           | Tap the timer; tap the board to resume           |
 | Back to the list                | **List** (top left); the game is saved           |
 | Back to the home screen         | **Home** (top left of the list, statistics, players or settings) |
-| Solve times as a chart          | **Statistics → Chart** (top right); pick a level on the left |
+| Solve times as a chart          | **Statistics → ⋮ → Chart**; pick a level on the left |
 | Achievements, daily leaderboard | **Trophies** on the home screen                  |
 | Make a new puzzle               | **Puzzles → ⋮ → New puzzle**, pick a variant, then a level |
 | Paint a cell / Killer cage sums | Press and hold the cell                          |
@@ -42,7 +42,7 @@
 | See the game screen tour again  | **Settings → Game → Game screen tour → Show again** |
 | Number pad on the left          | **Settings → Game → Left-handed**                |
 | Save a screenshot               | The picture button in the Solved dialog or on Replay |
-| See where your mistakes are     | **Statistics → Insights**                        |
+| See where your mistakes are     | **Statistics → ⋮ → Insights**                    |
 | Undo a delete on the card       | **Files → Recycle bin**, then the restore button |
 | Play without notes             | **Settings → Game → No-notes challenge**, then a new puzzle |
 | Share today's daily result       | Solve the daily puzzle, then the QR button in the Solved dialog |

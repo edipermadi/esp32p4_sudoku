@@ -390,9 +390,9 @@ typedef stats_level_t level_stat_t;
  * of the groups' first emoji above it jumps to them. */
 enum { AV_CELL = 56, AV_COLS = 8 };
 
-/* the Statistics screen, top down: title and (i); player, Chart; levels | table */
-#define X_ROW_Y   72                                /**< the row under the title */
-#define X_BODY_Y  (X_ROW_Y + 52 + 12)               /**< the level column and the pane */
+/* the Statistics screen, top down: Home, the title, the player and the ⋮ menu; levels | table */
+#define X_DD_W    300                               /**< the player list's width, left of the ⋮ menu in the title row */
+#define X_BODY_Y  72                                /**< the level column and the pane, under the title row */
 
 /* one settings row: a card with a title + hint on the left; returns the card
  * so the caller can put a control on its right */

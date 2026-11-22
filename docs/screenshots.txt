@@ -110,13 +110,19 @@ tap 206 449                 # Statistics
 wait 1500
 expect stats
 shot docs/screenshots/statistics.png
-tap 628 98                  # Chart: the progress chart instead of the table
+tap 682 36                  # the menu (vertical dots): Insights, Chart, About statistics
+wait 500
+tap 532 163                 # Chart: the progress chart instead of the table
 wait 1500
 expect stats
 shot docs/screenshots/statistics-chart.png
-tap 628 98                  # back to the table
+tap 682 36                  # the menu again
+wait 500
+tap 532 163                 # Table: back to the table
 wait 800
-tap 453 98                  # Insights: mistakes, from the move logs
+tap 682 36                  # the menu again
+wait 500
+tap 543 103                 # Insights: mistakes, from the move logs
 wait 2000
 expect stats+dialog
 shot docs/screenshots/insights.png
