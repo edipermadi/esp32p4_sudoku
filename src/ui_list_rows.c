@@ -1,7 +1,7 @@
 /**
  * @file ui_list_rows.c
  * @ingroup ui_list
- * @brief The Puzzles screen's right pane as rows: a saved or imported collection's puzzles (Saved tab:
+ * @brief The Puzzles screen's right pane as rows: a saved or imported collection's puzzles (Saved and Imported tabs:
  *        variant, level, solved; a saved one's can be taken out), and the row look Starred uses too.
  */
 #include "ui_internal.h"

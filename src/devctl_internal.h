@@ -182,7 +182,7 @@ void devctl_sql(const char *line);
  */
 void devctl_clock(void);
 /**
- * @brief colls: the saved and imported collections (Puzzles > Saved), a "COLL \<imported|saved\> \<puzzles\>
+ * @brief colls: the saved and imported collections (Puzzles > Saved, Imported), a "COLL \<imported|saved\> \<puzzles\>
  *        \<name\>" line each (the name with %XX for spaces), then "OK colls \<n\>".
  */
 void devctl_colls(void);

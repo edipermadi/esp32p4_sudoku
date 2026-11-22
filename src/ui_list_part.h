@@ -21,9 +21,9 @@ extern "C" {
  * | File               | What's in it |
  * |--------------------|--------------|
  * | ui_list.c          | the screen: the title row, the tabs, the collection column, the panel (name, solved, fastest, average), the grid of numbers; refreshing it |
- * | ui_list_rows.c     | the right pane's rows: a saved or imported collection's puzzles (Saved tab), and the row look the starred list uses too |
+ * | ui_list_rows.c     | the right pane's rows: a saved or imported collection's puzzles (Saved, Imported tabs), and the row look the starred list uses too |
  * | ui_list_starred.c  | Starred: the player's bookmarks in the right pane, unstarred from there |
- * | ui_list_manage.c   | the Saved tab's Export and Delete of the collection shown |
+ * | ui_list_manage.c   | the Saved and Imported tabs' Export and Delete of the collection shown |
  *
  * What it shows and does, apart from drawing it: @ref puzzles_core.
  * @{
@@ -69,19 +69,7 @@ void list_add_row(int i, uint16_t id, const char *sub, lv_color_t sub_c, lv_even
 int list_fill_starred(void);
 /** @} */
 
-/** @name The collection's actions (ui_list_manage.c)
- *  @{ */
-/**
- * @brief Delete: asks first, then deletes the collection shown.
- * @param[in] e  the event
- */
-void list_del_cb(lv_event_t *e);
-/**
- * @brief Export: the saved collection shown, written to the card (puzzles/\<name\>.sdx).
- * @param[in] e  the event
- */
-void list_export_cb(lv_event_t *e);
-/** @} */
+/* (the collection's actions, Export and Delete: ui_internal.h, for the ⋮ menu) */
 
 /** @} */
 

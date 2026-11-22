@@ -14,7 +14,7 @@
  *   - gameplays: every recorded solve, newest first, tap one to replay it.
  *   - list: a title row with a Starred toggle and a context menu (New puzzle,
  *     Enter, Learn), then two panes: the collections in a scrolling column on
- *     the left (Built-in | Saved tabs above it), the selected collection's 10x10
+ *     the left (Built-in | Saved | Imported tabs above it), the selected collection's 10x10
  *     grid of puzzles (or rows, Saved; or the starred puzzles) on the right.
  *     Solved puzzles are green, the game in progress is orange.
  *   - statistics: per level and per puzzle best times, mistakes, solves,

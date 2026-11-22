@@ -22,11 +22,15 @@ tap 137 159                 # the Easy collection
 wait 400
 expect list
 shot docs/screenshots/puzzles.png
-tap 202 96                  # the Saved tab: saved and imported collections
+tap 92 96                   # the Saved tab: collections made on the board
 wait 800
 expect list
 shot docs/screenshots/puzzles-saved.png
-tap 73 96                   # back to Built-in (Easy)
+tap 148 96                  # the Imported tab: collections imported from the card
+wait 800
+expect list
+shot docs/screenshots/puzzles-imported.png
+tap 36 96                   # back to Built-in (Easy)
 wait 600
 tap 682 36                  # the menu (vertical dots): New puzzle, Enter puzzle, Learn, Starred puzzles
 wait 500

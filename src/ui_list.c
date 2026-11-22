@@ -18,10 +18,8 @@ static lv_obj_t *l_colls;                 /**< the collection column */
 static lv_obj_t *l_coll_btn[L_COLLS];     /**< its rows */
 static lv_obj_t *l_coll_cnt[L_COLLS];     /**< their counts */
 static lv_obj_t *l_coll_name[L_COLLS];    /**< their names */
-static lv_obj_t *l_tab_btn[2];            /**< Built-in, Saved */
-static lv_obj_t *l_empty;                 /**< the Saved tab with nothing in it */
-static lv_obj_t *l_export;                /**< Export (a saved collection) */
-static lv_obj_t *l_del;                   /**< Delete (a saved or imported collection) */
+static lv_obj_t *l_tab_btn[COLL_TABS];    /**< Built-in, Saved, Imported */
+static lv_obj_t *l_empty;                 /**< the Saved or Imported tab with nothing in it: what goes there */
 static lv_obj_t *l_list;                  /**< the right pane's rows (ui_list_rows.c) */
 static lv_obj_t *l_name;                  /**< the collection's name */
 static lv_obj_t *l_stats;                 /**< its solved, fastest, average */
@@ -92,29 +90,28 @@ static void list_btnm_draw_cb(lv_event_t *e)
 void refresh_list(void)
 {
     games_refresh();
-    bool none = !puzzles_settle();                  /* the Saved tab, with nothing in it */
+    bool none = !puzzles_settle();                  /* the Saved or Imported tab, with nothing in it */
     const int l_tab = puzzles_tab(), l_coll = puzzles_coll();
     const bool l_starred = is_puzzles_starred();
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < COLL_TABS; i++) {
         lv_obj_set_state(l_tab_btn[i], LV_STATE_CHECKED, i == l_tab);
         lv_obj_set_style_text_color(lv_obj_get_child(l_tab_btn[i], 0), i == l_tab ? lv_color_white() : C_TEXT, 0);
     }
+    lv_label_set_text(l_empty, l_tab == COLL_TAB_IMPORTED
+                      ? "Nothing imported yet.\n\nPut puzzle files (sdm, sdx or OpenSudoku) in the puzzles folder "
+                      "on the card, then Settings > Data > Import puzzles, or import one from Files."   /* (no '.' to break at) */
+                      : "Nothing saved yet.\n\nOpen a puzzle made with New puzzle or Enter and tap "
+                      LV_SYMBOL_SAVE " next to the star to put it in a collection of your own.");
     lv_obj_set_hidden(l_empty, !none);
     lv_obj_set_hidden(l_btnm, none);
     lv_obj_set_hidden(l_name, none);
     lv_obj_set_hidden(l_stats, none);
-    bool exportable = !none && coll_saved_index(l_coll) >= 0 && l_coll >= PUZZLE_COLLECTION_COUNT;
-    bool listed = !none && l_tab == 1;              /* the Saved tab: rows, not numbers */
-    lv_obj_set_hidden(l_export, !exportable);       /* a saved collection: to the card, for Import puzzles */
-    lv_obj_set_hidden(l_del, !listed);              /* saved or imported: delete the collection */
-    lv_obj_set_width(l_name, PANE_W - 4 - (listed ? 52 + 8 : 0) - (exportable ? 130 + 8 : 0));
-    lv_obj_set_hidden(l_btnm, none || listed);
+    bool listed = !none && l_tab != COLL_TAB_BUILTIN;   /* Saved, Imported: rows, not numbers */
+    lv_obj_set_hidden(l_btnm, none || listed);       /* (Export, Delete: the ⋮ menu, list_coll_actions()) */
     lv_obj_set_hidden(l_list, !listed);
     if (l_starred) {                                /* the right pane shows Starred: no collection's things */
         lv_obj_set_hidden(l_empty, true);
         lv_obj_set_hidden(l_btnm, true);
-        lv_obj_set_hidden(l_export, true);
-        lv_obj_set_hidden(l_del, true);
         lv_obj_set_hidden(l_name, false);
         lv_obj_set_hidden(l_stats, false);
         lv_obj_set_hidden(l_list, false);
@@ -148,8 +145,7 @@ void refresh_list(void)
     if (listed && !l_starred) {
         list_fill_rows(lc);    /* (after the counts: the solved ones are lc's) */
     }
-    lv_label_set_text_fmt(l_name, "%s%s", coll_name(lc),
-                          lc >= PUZZLE_COLLECTION_COUNT && coll_saved_index(lc) < 0 ? "  (imported)" : "");
+    lv_label_set_text(l_name, coll_name(lc));       /* (the tab says whose it is) */
     if (n && best) {
         char b[16], a[16];
         fmt_time(b, sizeof(b), best);
@@ -233,7 +229,7 @@ static void coll_click_cb(lv_event_t *e)
 }
 
 /**
- * @brief Built-in / Saved: that tab, on its last collection.
+ * @brief Built-in / Saved / Imported: that tab, on its last collection.
  * @param[in] e  the event (user data: the tab)
  */
 static void list_tab_cb(lv_event_t *e)
@@ -348,13 +344,14 @@ void build_list(void)
                          new_menu_cb, NULL);
     lv_obj_align(l_total, LV_ALIGN_TOP_RIGHT, -(12 + L_ICON_W + 14), 28);
 
-    /* left pane: the tabs (the built-in collections, or the player's: imported and saved),
-     * and under them that tab's collections in a column that scrolls */
-    static const char *const TAB[2] = {"Built-in", "Saved"};
-    const int tw = (COLL_W - 6) / 2;
-    for (int i = 0; i < 2; i++) {
-        l_tab_btn[i] = make_btn(screen_list(), 12 + i * (COLL_W - tw), L_PANE_Y, tw, L_TAB_H, TAB[i],
-                                &lv_font_montserrat_16, list_tab_cb, (void *)(intptr_t)i);
+    /* left pane: the tabs (the built-in collections, the player's own made on the board, the ones
+     * imported from the card), and under them that tab's collections in a column that scrolls */
+    /* as icons: a 3x3 grid (the board's own), the game screen's Save, the Import buttons' download */
+    static const char *const TAB[COLL_TABS] = {SYMBOL_GRID, LV_SYMBOL_SAVE, LV_SYMBOL_DOWNLOAD};
+    const int gap = 8;                              /* square buttons, from the column's left edge */
+    for (int i = 0; i < COLL_TABS; i++) {
+        l_tab_btn[i] = make_btn(screen_list(), 12 + i * (L_TAB_H + gap), L_PANE_Y, L_TAB_H, L_TAB_H, TAB[i], &font_icons_24,
+                                list_tab_cb, (void *)(intptr_t)i);
         lv_obj_set_style_bg_color(l_tab_btn[i], C_CARD, 0);
         lv_obj_set_style_bg_color(l_tab_btn[i], C_ACCENT, LV_STATE_CHECKED);
         lv_obj_set_style_radius(l_tab_btn[i], 10, 0);
@@ -375,16 +372,6 @@ void build_list(void)
     lv_obj_set_pos(l_stats, PANE_X + 4, L_PANE_Y + 34);
     lv_obj_set_width(l_stats, PANE_W - 4);
     lv_label_set_long_mode(l_stats, LV_LABEL_LONG_MODE_DOTS);
-    l_export = make_btn(screen_list(), 0, 0, 130, 40, LV_SYMBOL_UPLOAD "  Export", &lv_font_montserrat_16, list_export_cb,
-                        NULL);                      /* a saved collection to puzzles/<name>.sdx */
-    lv_obj_align(l_export, LV_ALIGN_TOP_RIGHT, -12 - 52 - 8, L_PANE_Y - 4);
-    l_del = make_btn(screen_list(), 0, 0, 52, 40, LV_SYMBOL_TRASH, &lv_font_montserrat_18, list_del_cb, NULL);
-    lv_obj_set_style_bg_color(l_del, C_CARD, 0);
-    lv_obj_set_style_text_color(lv_obj_get_child(l_del, 0), C_RED, 0);
-    lv_obj_align(l_del, LV_ALIGN_TOP_RIGHT, -12, L_PANE_Y - 4);
-    lv_obj_set_hidden(l_del, true);
-    lv_obj_set_style_text_color(lv_obj_get_child(l_export, 0), C_ACCENT, 0);
-    lv_obj_set_hidden(l_export, true);
 
     l_btnm = lv_buttonmatrix_create(screen_list());
     lv_obj_set_pos(l_btnm, PANE_X, L_GRID_Y);
@@ -403,17 +390,13 @@ void build_list(void)
     lv_obj_add_event_cb(l_btnm, list_btnm_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
     lv_obj_add_event_cb(l_btnm, btnm_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    l_list = list_rows_build(screen_list());       /* the Saved tab: the collection's puzzles as rows */
+    l_list = list_rows_build(screen_list());       /* Saved, Imported: the collection's puzzles as rows */
 
-    /* the Saved tab with nothing in it */
+    /* the Saved or Imported tab with nothing in it (its text: refresh_list()) */
     l_empty = make_label(screen_list(), &lv_font_montserrat_20, C_MUTED);
     lv_obj_set_width(l_empty, PANE_W - 24);
     lv_label_set_long_mode(l_empty, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_align(l_empty, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(l_empty, "Nothing saved yet.\n\nOpen a puzzle made with New puzzle or Enter and tap "
-                      LV_SYMBOL_SAVE " next to the star to put it in a collection of your own. "
-                      "Collections imported from the card (Settings > Data > Import puzzles) are here "
-                      "too.");
     lv_obj_set_pos(l_empty, PANE_X + 12, L_GRID_Y + 20);
     lv_obj_set_hidden(l_empty, true);
     /* (the puzzles' source, opensudoku.gitlab.io, is credited on Home) */

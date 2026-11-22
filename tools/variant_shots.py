@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 The screenshots of the variant pages (docs/variants/): each variant's example puzzle opened
-on the board, from Puzzles > Saved > variant-examples, saved as
+on the board, from Puzzles > Imported > variant-examples, saved as
 docs/screenshots/variants/<page>.png.
 
     python3 tools/variant_shots.py --port /dev/ttyACM1              all 20
@@ -9,7 +9,7 @@ docs/screenshots/variants/<page>.png.
 
 First, once: import docs/variant-examples.sdx on the board (copy it to puzzles/ on the card,
 e.g. devctl "put docs/variant-examples.sdx puzzles/variant-examples.sdx", then Files > puzzles >
-variant-examples.sdx > Import). Saved must open on that collection: it does when it's the
+variant-examples.sdx > Import). Imported must open on that collection: it does when it's the
 first one there, or the one shown last. Nothing is played: a puzzle only opened isn't saved
 as a game. A rules card that pops up (the first time a variant is opened) is closed with OK.
 
@@ -88,7 +88,7 @@ def open_example(args, k, extra):
     b = devctl.Board(args.port, args.baud, True, args.verbose)
     b.command("wait 1000")                                      # (the first screen settles)
     b.command("tap 206 355"); b.command("wait 900")             # Home > Puzzles
-    b.command("tap 202 96"); b.command("wait 900")              # the Saved tab: the collection shown
+    b.command("tap 148 96"); b.command("wait 900")              # the Imported tab: the collection shown
     scroll = max(0, k - FIT) * ROW_H
     left = scroll
     while left > 0:                                             # slow swipes, up to 5 rows each

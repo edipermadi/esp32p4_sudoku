@@ -34,10 +34,17 @@ int coll_total(void);
  * @return its index in ui_saved() (\>= 0), or \< 0 for a built-in or imported one
  */
 int coll_saved_index(int c);
+/** @name The Puzzles screen's tabs, in their order on the screen (coll_tab())
+ *  @{ */
+#define COLL_TAB_BUILTIN  0             /**< the built-in collections */
+#define COLL_TAB_SAVED    1             /**< the player's own, made on the board (Save) */
+#define COLL_TAB_IMPORTED 2             /**< the ones imported from the card */
+#define COLL_TABS         3             /**< how many */
+/** @} */
 /**
  * @brief The Puzzles tab a collection is on.
  * @param[in] c  the collection
- * @return 0 Built-in, 1 Saved (imported and saved)
+ * @return COLL_TAB_BUILTIN, COLL_TAB_SAVED (made on the board) or COLL_TAB_IMPORTED (from the card)
  */
 int coll_tab(int c);
 /**

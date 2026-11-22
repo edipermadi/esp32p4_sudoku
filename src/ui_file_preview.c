@@ -284,7 +284,7 @@ void file_preview_open(int i)
     lv_obj_t *note = file_ui_label(s_pv, &lv_font_montserrat_14, C_MUTED,
                                    !db ? "Importing needs sudoku.db: insert the card before switching on."
                                    : !found ? "Nothing here to import."
-                                   : "Import adds them to Puzzles > Saved as a collection named after the file (each checked for exactly "
+                                   : "Import adds them to Puzzles > Imported as a collection named after the file (each checked for exactly "
                                    "one solution; more than 100 make several).");
     lv_obj_set_width(note, 720 - 32);
     lv_label_set_long_mode(note, LV_LABEL_LONG_MODE_WRAP);

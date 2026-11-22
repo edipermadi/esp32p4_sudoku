@@ -1,7 +1,7 @@
 /**
  * @file devctl_colls.c
  * @ingroup devctl
- * @brief colls, colldel: the saved and imported collections (Puzzles > Saved) listed, and one deleted.
+ * @brief colls, colldel: the saved and imported collections (Puzzles > Saved, Imported) listed, and one deleted.
  */
 #include "devctl_internal.h"
 #include <stdio.h>
@@ -50,7 +50,7 @@ void devctl_colls(void)
         return;
     }
     int ni = stats_db_list_imports(imp), ns = stats_db_list_saved(sav), n = 0;
-    for (int i = 0; i < ni; i++, n++) {             /* as the Saved tab lists them: imported, then saved */
+    for (int i = 0; i < ni; i++, n++) {             /* imported, then saved */
         serial_printf("COLL imported %d ", imp[i].count);
         print_coded(imp[i].name);
         serial_write_byte('\n');

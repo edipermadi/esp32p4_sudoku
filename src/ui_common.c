@@ -459,7 +459,10 @@ int import_of(uint16_t id, int *number)
 /** @brief the list's collections: the built-in ones, then the imported ones, then the saved ones */
 int coll_total(void) { return PUZZLE_COLLECTION_COUNT + s_nimports + ui_nsaved(); }
 int coll_saved_index(int c) { return c - PUZZLE_COLLECTION_COUNT - s_nimports; }   /**< >= 0: a saved one */
-int coll_tab(int c) { return c < PUZZLE_COLLECTION_COUNT ? 0 : 1; }
+int coll_tab(int c)
+{
+    return c < PUZZLE_COLLECTION_COUNT ? COLL_TAB_BUILTIN : coll_saved_index(c) >= 0 ? COLL_TAB_SAVED : COLL_TAB_IMPORTED;
+}
 /* (documented in collections.h) */
 const char *coll_name(int c)
 {

@@ -85,6 +85,7 @@ LV_FONT_DECLARE(font_icons_20)    /**< the same at 20 px + Montserrat 20 */
 #define SYMBOL_MORE     "\xEF\x85\x82"   /**< FontAwesome U+F142 (ellipsis-v): a context menu (font_icons_24 only) */
 #define SYMBOL_UNDO     "\xEF\x83\xA2"   /**< FontAwesome U+F0E2 (undo; font_icons_24 only) */
 #define SYMBOL_REDO     "\xEF\x80\x9E"   /**< FontAwesome U+F01E (redo; font_icons_24 only) */
+#define SYMBOL_GRID     "\xEF\x80\x8A"   /**< FontAwesome U+F00A (th, a 3x3 grid): the built-in puzzles (font_icons_24 only) */
 #define P ui_palette()                  /**< the active palette, short */
 
 /* ------------------------------------------------------------- geometry */
@@ -138,7 +139,7 @@ typedef struct {
 /* list screen */
 #define L_ICON_W  52                        /**< the title row's icon buttons: Starred (a toggle) and the menu */
 #define L_PANE_Y  72                        /**< the two panes, under the title row: collections left, puzzles right */
-#define L_TAB_H   48                        /**< Built-in | Saved, over the collection column */
+#define L_TAB_H   48                        /**< Built-in | Saved | Imported (as icons), over the collection column */
 #define L_GRID_Y  (L_PANE_Y + 62)           /**< the right pane's grid or rows, under name and stats */
 #define L_COLLS (PUZZLE_COLLECTION_COUNT + STATS_MAX_IMPORTS + STATS_MAX_SAVED)   /**< built-in, imported, saved */
 /** @brief Learn: the techniques there are practice puzzles for */
@@ -865,6 +866,24 @@ void home_set_menu_grid(int v);
 int home_nitems(void);
 void home_set_nitems(int v);
 lv_obj_t *list_new_btn(void);
+/**
+ * @brief Which of the ⋮ menu's collection actions apply to what the Puzzles screen shows (ui_list_manage.c):
+ *        none on the Built-in tab, with Starred shown or a tab with nothing in it.
+ * @param[out] can_export  gets whether Export does: a saved collection (to puzzles/\<name\>.sdx)
+ * @param[out] can_delete  gets whether Delete does: a saved or imported collection
+ */
+void list_coll_actions(bool *can_export, bool *can_delete);
+/**
+ * @brief The ⋮ menu's Delete collection: asks first, then deletes the collection shown (ui_list_manage.c).
+ * @param[in] e  the event
+ */
+void list_del_cb(lv_event_t *e);
+/**
+ * @brief The ⋮ menu's Export collection: the saved collection shown, written to the card as
+ *        puzzles/\<name\>.sdx (ui_list_manage.c).
+ * @param[in] e  the event
+ */
+void list_export_cb(lv_event_t *e);
 void list_star_cb(lv_event_t *e);       /**< ... toggles that */
 /* ui_saver.c */
 lv_obj_t *ui_saver(void);
@@ -1448,7 +1467,8 @@ void open_puzzle(uint16_t id);
 lv_obj_t *make_coll_column(lv_obj_t *parent);
 lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name_lbl, lv_obj_t **cnt_lbl, lv_event_cb_t cb, int user);
 /**
- * @brief Puzzles' ⋮ menu: New puzzle, Enter puzzle, Learn, Starred.
+ * @brief Puzzles' ⋮ menu: New puzzle, Enter puzzle, Learn, Starred, and the collection shown's Export and Delete
+ *        (dimmed where they don't apply: list_coll_actions()).
  * @param[in] e  the event
  */
 void new_menu_cb(lv_event_t *e);

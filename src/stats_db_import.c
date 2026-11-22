@@ -455,14 +455,14 @@ void sdb_do_import_file(const char *path, uint32_t ticket)
     const char *slash = strrchr(path, '/'), *fn = slash ? slash + 1 : path;
     char msg[128];
     if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
-        snprintf(msg, sizeof(msg), "%.80s is imported already: it's in Puzzles > Saved.", fn);
+        snprintf(msg, sizeof(msg), "%.80s is imported already: it's in Puzzles > Imported.", fn);
         import_finished(ticket, -2, 0, msg);
         return;
     }
     int bad = 0, got = import_one(path, fn, cells, IMPORT_MAX_RUN, &bad);
     if (got > 0) {
         printf("stats_db: imported %d puzzles from %s\n", got, path);
-        snprintf(msg, sizeof(msg), "Imported %d puzzle%s: Puzzles > Saved%s.", got, got == 1 ? "" : "s",
+        snprintf(msg, sizeof(msg), "Imported %d puzzle%s: Puzzles > Imported%s.", got, got == 1 ? "" : "s",
                  bad ? " (some had no single solution and were left out)" : "");
         s_imports_changed = true;
     } else if (got < 0) {

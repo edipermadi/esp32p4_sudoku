@@ -129,9 +129,9 @@ void sudoku_ui_screen_name(char *buf, size_t n);
  * @brief Deletes a saved or imported collection, as the Puzzles screen's Delete does (devctl
  *        "colldel"): its puzzles stay on the board, with their solves, History and Gameplays; an
  *        imported one's file can be imported again. The screens are brought up to date; the Puzzles
- *        screen keeps the collection it showed (by name), or the Saved tab's first if that one went.
+ *        screen keeps the collection it showed (by name), or its tab's first if that one went.
  * @param[in] saved  true: a saved collection (made on the board); false: an imported one
- * @param[in] name   its name, as the Saved tab lists it
+ * @param[in] name   its name, as the Saved or Imported tab lists it
  * @param[out] msg    gets what happened ("variant-examples deleted", or why not)
  * @param[in] n      its size
  * @return true if it was deleted

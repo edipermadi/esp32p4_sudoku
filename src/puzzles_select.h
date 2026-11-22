@@ -20,12 +20,12 @@ extern "C" {
 
 /**
  * @brief The tab shown.
- * @return 0 Built-in, 1 Saved
+ * @return COLL_TAB_BUILTIN, COLL_TAB_SAVED or COLL_TAB_IMPORTED
  */
 int puzzles_tab(void);
 /**
  * @brief Shows a tab (puzzles_settle() then picks its collection).
- * @param[in] t  0 Built-in, 1 Saved
+ * @param[in] t  COLL_TAB_BUILTIN, COLL_TAB_SAVED or COLL_TAB_IMPORTED
  */
 void puzzles_set_tab(int t);
 /**
@@ -51,10 +51,10 @@ void puzzles_set_starred(bool on);
 /**
  * @brief Makes the collection shown fit the tab shown: the tab's last, or its first (and remembers it
  *        as the tab's last).
- * @return false: the tab has no collection (the Saved tab with nothing in it)
+ * @return false: the tab has no collection (the Saved or Imported tab with nothing in it)
  */
 bool puzzles_settle(void);
-/** @brief A saved or imported collection was deleted: the Saved tab starts at its first again. */
+/** @brief A saved or imported collection was deleted: the Saved and Imported tabs start at their first again. */
 void puzzles_forget_saved(void);
 /**
  * @brief Shows a collection and its tab (the one the puzzle just played is in).

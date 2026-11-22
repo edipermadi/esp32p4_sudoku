@@ -69,7 +69,7 @@ extern "C" {
  *                             (imported already, no puzzle with one solution, no sudoku.db)
  * sudoku.db is open: it can be read, not replaced, renamed or deleted.
  *
- * Collections on the Puzzles screen's Saved tab (names with %XX for a space, as paths):
+ * Collections on the Puzzles screen's Saved and Imported tabs (names with %XX for a space, as paths):
  *   colls                     -> "COLL imported <puzzles> <name>" / "COLL saved <puzzles> <name>" lines,
  *                                then "OK colls <n>"
  *   colldel saved|imported <name>   deletes it as the screen's Delete does: its puzzles stay on

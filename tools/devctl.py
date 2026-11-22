@@ -45,13 +45,13 @@ Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
     rm PATH                 delete a file or an empty folder
     mkdir PATH              make a folder
     import LOCAL [REMOTE]   a puzzle file from this computer (.sdm, .sdx, .txt, .opensudoku) into
-                            Puzzles > Saved in one go: put to the card (puzzles/<its name> by
+                            Puzzles > Imported in one go: put to the card (puzzles/<its name> by
                             default; the collection is named after the file), then imported as
                             Settings > Data > Import does, each puzzle checked and graded
 sudoku.db is open while the board runs: get works, put/mv/rm on it don't
 (use Settings > Data > USB drive). Paths with spaces: quote them.
 
-Collections on the Puzzles screen's Saved tab:
+Collections on the Puzzles screen's Saved and Imported tabs:
     colls                   list them: imported or saved, how many puzzles, the name
     colldel KIND NAME       delete one (KIND: imported or saved; quote a name with spaces), as
                             the screen's Delete does: its puzzles stay on the board, with their

@@ -15,7 +15,7 @@ extern "C" {
 /**
  * @defgroup puzzles_colls Collections' actions
  * @ingroup puzzles_core
- * @brief What the Saved tab does to an imported or saved collection in sudoku.db.
+ * @brief What the Saved and Imported tabs do to a saved or imported collection in sudoku.db.
  * @{
  */
 
