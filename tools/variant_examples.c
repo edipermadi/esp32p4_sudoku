@@ -442,6 +442,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_SKY:
         sudoku_sky_text(g, marks, len);
         break;
+    case VAR_XSUM:
+        sudoku_xsum_text(g, marks, len);
+        break;
     case VAR_LK:
         sudoku_lk_text(g, cages, len);
         break;
@@ -449,6 +452,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_ARROW:
     case VAR_RENBAN:
     case VAR_WHISPER:
+    case VAR_PALINDROME:
+    case VAR_REGIONSUM:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -505,8 +510,11 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     }
     case FIT_THERMO: {
         int t = G->thermo_of[c], p = G->thermo_pos[c];
-        if (G->line_kind != LINE_THERMO) {          /* Arrow, Renban, Whispers: the line (and a neighbour) */
-            int o = -1;
+        if (G->line_kind != LINE_THERMO) {          /* Arrow, Renban, Whispers, ...: the line (and a neighbour) */
+            int o = -1, m = G->thermo_n[t] - 1 - p;
+            if (G->line_kind == LINE_PALINDROME && m != p && v[G->thermo_cell[t][m]]) {
+                o = G->thermo_cell[t][m];             /* (the cell mirroring it) */
+            }
             for (int k = -1; G->line_kind == LINE_WHISPER && k <= 1; k += 2) {
                 int q = p + k;
                 if (q >= 0 && q < G->thermo_n[t] && v[G->thermo_cell[t][q]] &&
@@ -538,6 +546,10 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_SKY_ROW:
     case FIT_SKY_COL:
         printf(", \"rule\": \"sky\", \"line\": %d", why == FIT_SKY_ROW ? r : 9 + q);
+        return;
+    case FIT_XSUM_ROW:
+    case FIT_XSUM_COL:
+        printf(", \"rule\": \"xsum\", \"line\": %d", why == FIT_XSUM_ROW ? r : 9 + q);
         return;
     case FIT_LK:
         for (int s = 0; s < 2; s++) {               /* the diagonal whose sum says no */
@@ -625,6 +637,16 @@ static void layout_json(const sudoku_geom_t *G)
         printf("[");
         for (int lu = 0; lu < 18; lu++) {
             printf("%s%d", lu ? "," : "", G->sky[lu]);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"xsum\": ");
+    if (G->xsums) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->xsum[lu]);
         }
         printf("]");
     } else {

@@ -96,7 +96,7 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
-    for (int t = 0; t < g->nthermos; t++) {         /* the lines: Thermo, Arrow, Renban, Whispers */
+    for (int t = 0; t < g->nthermos; t++) {         /* the lines: Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum */
         int n = g->thermo_n[t], lo = 10, hi = 0, sum = 0;
         unsigned seen = 0;
         for (int i = 0; i < n; i++) {
@@ -125,6 +125,29 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
         if (g->line_kind == LINE_ARROW && sum != sol[g->thermo_cell[t][0]]) {
+            return false;
+        }
+        for (int i = 0; g->line_kind == LINE_PALINDROME && i < n / 2; i++) {
+            if (sol[g->thermo_cell[t][i]] != sol[g->thermo_cell[t][n - 1 - i]]) {
+                return false;
+            }
+        }
+        if (g->line_kind == LINE_REGIONSUM) {
+            int part[9], np;
+            bool full[9];
+            np = sudoku_regionsum_parts(g, t, sol, part, full);
+            for (int j = 1; j < np; j++) {
+                if (part[j] != part[0]) {
+                    return false;
+                }
+            }
+            if (np < 2) {
+                return false;
+            }
+        }
+    }
+    for (int lu = 0; g->xsums && lu < 18; lu++) {   /* X-Sums: the first X digits' sums */
+        if (g->xsum[lu] && sudoku_xsum_of(sol, lu) != g->xsum[lu]) {
             return false;
         }
     }
@@ -191,6 +214,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->consec, b->consec, 81) && a->nthermos == b->nthermos &&
            !memcmp(a->thermo_of, b->thermo_of, 81) && !memcmp(a->thermo_pos, b->thermo_pos, 81) &&
            a->skyscraper == b->skyscraper && !memcmp(a->sky, b->sky, 18) && a->nlk == b->nlk &&
+           a->xsums == b->xsums && !memcmp(a->xsum, b->xsum, 18) &&
            !memcmp(a->lk_sum, b->lk_sum, a->nlk) && !memcmp(a->lk_dir, b->lk_dir, a->nlk) &&
            !memcmp(a->lk_cell, b->lk_cell, sizeof(a->lk_cell[0]) * a->nlk) &&
            a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
@@ -229,6 +253,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_SKY:
         sudoku_sky_text(g, marks, len);
         break;
+    case VAR_XSUM:
+        sudoku_xsum_text(g, marks, len);
+        break;
     case VAR_LK:
         sudoku_lk_text(g, cages, len);
         break;
@@ -236,6 +263,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_ARROW:
     case VAR_RENBAN:
     case VAR_WHISPER:
+    case VAR_PALINDROME:
+    case VAR_REGIONSUM:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -282,6 +311,36 @@ static void test_geometry(void)
     CHECK(is_sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 40) && !is_sudoku_geom_tinted(sudoku_geom(VAR_ASTERISK), 41));
     CHECK(sudoku_geom(VAR_NONCONSEC)->consec_on && strcmp(variant_name(VAR_NONCONSEC), "Non-Consecutive") == 0);
     CHECK(sudoku_geom(VAR_KIDS)->box_w == 2 && sudoku_geom(VAR_KIDS)->box_h == 2);
+    /* X-Sums: the first digits a clue allows (1: just 1; 2: none; 3: 2 (2 + 1); 45: just 9) */
+    CHECK(sudoku_xsum_firsts(1) == 1u << 1 && sudoku_xsum_firsts(2) == 0 && sudoku_xsum_firsts(3) == 1u << 2);
+    CHECK(sudoku_xsum_firsts(45) == 1u << 9 && (sudoku_xsum_firsts(10) >> 3 & 1) && !(sudoku_xsum_firsts(10) >> 1 & 1));
+    static sudoku_geom_t b;
+    CHECK(!sudoku_geom_xsum_text("2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));   /* (2 can't be made) */
+    CHECK(sudoku_geom_xsum_text("1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,45", &b) && b.allow[0] == 1u << 1 &&
+          b.allow[8] == 1u << 9);                   /* row 1 starts with 1; column 9 with 9 */
+    uint8_t v[81] = {0};
+    v[0] = 3;
+    v[1] = 4;
+    v[2] = 2;
+    CHECK(sudoku_xsum_of(v, 0) == 9 && sudoku_xsum_of(v, 9) == 0);
+    /* Palindrome: the ends of 0,10,20 hold one digit, so they mustn't see each other (0 and 20 share a box) */
+    CHECK(!sudoku_geom_lines_text(VAR_PALINDROME, "0,10,20", &b));
+    CHECK(!sudoku_geom_lines_text(VAR_PALINDROME, "0,10,20,30", &b));   /* (10 and 20: one box) */
+    CHECK(sudoku_geom_lines_text(VAR_PALINDROME, "2,12,22", &b) && b.line_kind == LINE_PALINDROME);
+    memset(v, 0, 81);
+    v[2] = 7;                                       /* its first cell: its last is 7 too */
+    CHECK(is_sudoku_fits(&b, v, 22, 7) && !is_sudoku_fits(&b, v, 22, 5) && is_sudoku_fits(&b, v, 12, 5));
+    /* Region Sum Lines: in one box only isn't a line; two boxes' parts add up the same */
+    CHECK(!sudoku_geom_lines_text(VAR_REGIONSUM, "0,1,2", &b));
+    CHECK(sudoku_geom_lines_text(VAR_REGIONSUM, "1,2,3,4", &b) && b.line_kind == LINE_REGIONSUM);
+    memset(v, 0, 81);
+    v[1] = 2;
+    v[2] = 6;
+    v[3] = 5;
+    int part[9];
+    bool full[9];
+    CHECK(sudoku_regionsum_parts(&b, 0, v, part, full) == 2 && part[0] == 8 && full[0] && part[1] == 5 && !full[1]);
+    CHECK(is_sudoku_fits(&b, v, 4, 3) && !is_sudoku_fits(&b, v, 4, 4));
 }
 
 static void test_builtin(void)
@@ -423,7 +482,7 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "25|0|%s", E1);      /* no variant 25 */
+    snprintf(buf, sizeof(buf), "28|0|%s", E1);      /* no variant 28 */
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);

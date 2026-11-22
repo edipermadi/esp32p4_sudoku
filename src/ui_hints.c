@@ -174,7 +174,7 @@ void hint_render(void)
         unit_name(t->unit, u1, sizeof(u1));
         snprintf(tech, sizeof(tech), "In %s the digits between the 1 and the 9 add up to %d: that leaves the 1 and "
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? game_geo()->sandwich_sum[t->unit] : 0);
-    } else if (t->kind == TECH_SKY || t->kind == TECH_LK) {   /* Skyscraper: a clue's line; Little Killer: a diagonal */
+    } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM) {   /* a clue's line; a diagonal */
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         char digs[24] = "";
         size_t len = 0;
@@ -189,7 +189,13 @@ void hint_render(void)
             snprintf(tech, sizeof(tech), "From the clue of %s, %d buildings are seen: of the ways its empty cells can "
                      "be filled, only those leave row %d, column %d %s. ", u1, game_geo()->sky[k], c / 9 + 1, c % 9 + 1,
                      digs);
-        } else if (k >= 0 && k < game_geo()->nlk) {
+        } else if (t->kind == TECH_XSUM && k >= 0 && k < 18) {
+            mark_unit(k, 1);
+            unit_name(k, u1, sizeof(u1));
+            snprintf(tech, sizeof(tech), "The clue of %s is %d: the first digit from there says how many digits add up "
+                     "to it. Of the ways that can work out, only those leave row %d, column %d %s. ", u1,
+                     game_geo()->xsum[k], c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_LK && k >= 0 && k < game_geo()->nlk) {
             for (int i = 0; i < game_geo()->lk_n[k]; i++) {
                 h_mark[game_geo()->lk_cell[k][i]] = 1;
             }
@@ -197,7 +203,7 @@ void hint_render(void)
             snprintf(tech, sizeof(tech), "This diagonal adds up to %d, so row %d, column %d can only be %s. ",
                      game_geo()->lk_sum[k], c / 9 + 1, c % 9 + 1, digs);
         }
-    } else if (t->kind == TECH_LINE) {              /* Arrow, Renban, Whispers: the line */
+    } else if (t->kind == TECH_LINE) {              /* Arrow, Renban, Whispers, Palindrome, Region Sum: the line */
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         for (int i = 0; k >= 0 && k < game_geo()->nthermos && i < game_geo()->thermo_n[k]; i++) {
             h_mark[game_geo()->thermo_cell[k][i]] = 1;
@@ -214,6 +220,8 @@ void hint_render(void)
         snprintf(tech, sizeof(tech), "%s, so row %d, column %d can only be %s. ",
                  lk == LINE_ARROW ? "The arrow's shaft adds up to its circle" :
                  lk == LINE_RENBAN ? "The digits on this line are a run of consecutive digits" :
+                 lk == LINE_PALINDROME ? "This line reads the same from both ends" :
+                 lk == LINE_REGIONSUM ? "In each box this line passes through, its digits add up to the same" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -865,6 +873,16 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;
+    case LINE_PALINDROME:
+        ld.color = lv_color_hex(0x8A8F98);
+        ld.opa = LV_OPA_60;
+        ld.width = cs * 20 / 100;
+        break;
+    case LINE_REGIONSUM:
+        ld.color = lv_color_hex(0x3D8BEB);
+        ld.opa = LV_OPA_70;
+        ld.width = cs * 12 / 100;
+        break;
     default:
         ld.color = C_MUTED;
         ld.opa = LV_OPA_40;
@@ -910,7 +928,7 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
 }
 
 /**
- * @brief the board's lines (Thermo, Arrow, Renban, Whispers) through the cells' centres
+ * @brief the board's lines (Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum) through the cells' centres
  * @param grid  the board
  * @param geo  its board
  * @param layer  where
@@ -1023,7 +1041,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
                      lv_obj_t *const *clues, int x0, int y0, int size_all)
 {
     lv_obj_set_user_data(grid, (void *)geo);
-    const bool clued = geo->sandwich || geo->skyscraper || geo->nlk;   /* clues outside the grid */
+    const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums;   /* clues outside the grid */
     for (int i = 0; clues && i < BOARD_CLUES; i++) {
         lv_obj_set_hidden(clues[i], true);
     }
@@ -1052,7 +1070,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     lv_obj_set_style_border_width(grid, 0, 0);
     const int n = geo->n, bw = geo->box_w, bh = geo->box_h;
     const int across = n / bw, down = n / bh;                  /* boxes */
-    const int band = clued ? 36 : 0;           /* Sandwich, Skyscraper, Little Killer: room for the clues, top and left */
+    const int band = clued ? 36 : 0;           /* Sandwich, Skyscraper, Little Killer, X-Sums: room for the clues, top and left */
     const int size = size_all - band;
     int cw = (size - (across + 1) * LINE_THICK - across * (bw - 1) * LINE_THIN) / n;
     int ch = (size - (down + 1) * LINE_THICK - down * (bh - 1) * LINE_THIN) / n;
@@ -1062,8 +1080,8 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     const int gx = x0 + band + (size - w) / 2, gy = y0 + band + (size - h) / 2;
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
-    for (int i = 0; (geo->sandwich || geo->skyscraper) && clues && i < 18; i++) {   /* left of the rows, above the columns */
-        int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->sky[i];
+    for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums) && clues && i < 18; i++) {   /* left of the rows, above the columns */
+        int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->skyscraper ? geo->sky[i] : geo->xsum[i];
         int mid = LINE_THICK + (k / 3) * (box_w + LINE_THICK) + (k % 3) * (cs + LINE_THIN) + cs / 2;
         lv_obj_set_user_data(clues[i], NULL);
         lv_obj_set_style_text_font(clues[i], &lv_font_montserrat_20, 0);
@@ -1074,7 +1092,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
         } else {
             lv_obj_set_pos(clues[i], gx + mid - (band - 6) / 2, gy - band + 4);
         }
-        lv_obj_set_hidden(clues[i], geo->skyscraper && !v);         /* (a Skyscraper line without a clue) */
+        lv_obj_set_hidden(clues[i], !geo->sandwich && !v);          /* (a Skyscraper, X-Sums line without a clue) */
     }
     for (int k = 0; geo->nlk && clues && k < geo->nlk; k++) {   /* Little Killer: a sum on the line before its diagonal */
         int first = geo->lk_cell[k][0], top = geo->lk_from_top[k], i = top ? first % 9 : first / 9;
@@ -1140,7 +1158,8 @@ void game_layout(void)
             game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH &&
             game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD &&
             game_var() != VAR_ARROW && game_var() != VAR_RENBAN && game_var() != VAR_WHISPER &&
-            game_var() != VAR_SKY && game_var() != VAR_LK) {
+            game_var() != VAR_SKY && game_var() != VAR_LK && game_var() != VAR_PALINDROME &&
+            game_var() != VAR_REGIONSUM && game_var() != VAR_XSUM) {
         lv_obj_invalidate(game_grid());
         return;
     }

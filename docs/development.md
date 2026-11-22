@@ -61,7 +61,7 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 How long **New puzzle** takes on the board, measured with devctl's `genbench` ([Remote control](devctl.md)): `python3 tools/devctl.py --port /dev/ttyACM1 "genbench all all 10"`. Ten puzzles of each variant and level, from fixed seeds (the same every run, so two builds compare puzzle for puzzle), each on the worker core like New puzzle, the CPU at 360 MHz. Measured 2026-11-21 on the Waveshare 4B board (pre-v3 ESP32-P4 silicon), firmware `0ce035d` (the generator as committed there); the whole run takes about 5 minutes.
 
-Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert.
+Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert. Palindrome, Region Sum Lines and X-Sums were added on 2026-11-22, the same way.
 
 | Variant | Easy | Medium | Hard | Expert |
 |---|---|---|---|---|
@@ -90,8 +90,11 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | German Whispers | 12 / 26 (29.7) | 450 / 1265 (14.6) | 1784 / 3302 (13.2) | 1111 / 2311 (11.4) |
 | Skyscraper | 38 / 121 (29.9) | 159 / 235 (22.2) | 677 / 1665 (22.8) | 304 / 828 (21.3) |
 | Little Killer | 15 / 29 (29.7) | 471 / 692 (20.7) | 1102 / 2132 (18.8) | 1225 / 1638 (16.6) |
+| Palindrome | 11 / 20 (29.3) | 284 / 449 (15.2) | 905 / 2445 (13) | 756 / 1250 (12.2) |
+| Region Sum Lines | 21 / 47 (29.7) | 403 / 810 (20.1) | 1070 / 1731 (18) | 1206 / 1780 (15.4) |
+| X-Sums | 72 / 122 (29.7) | 835 / 1605 (11.3) | 3012 / 7914 (14.7) | 2360 / 4324 (11.6) |
 
-Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
+Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), X-Sums Hard (up to 7.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
 ## The UI files
 

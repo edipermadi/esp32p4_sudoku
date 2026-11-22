@@ -74,6 +74,13 @@
  *                a taller one hiding the shorter ones behind it
  *   VAR_LK       Little Killer: Classic rules, and clues outside the grid with an
  *                arrow: the sum of the digits along that diagonal (repeats allowed)
+ *   VAR_PALINDROME Palindrome: Classic rules, and each grey line reads the same
+ *                from both ends (its first and last cells hold the same digit, ...)
+ *   VAR_REGIONSUM Region Sum Lines: Classic rules, and on each blue line the digits
+ *                in each box it passes through add up to the same total
+ *   VAR_XSUM     X-Sums: Classic rules, and a clue left of some rows and above some
+ *                columns: the sum of the first X digits from there, X being the
+ *                first of them
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -156,6 +163,9 @@ typedef enum {
     VAR_WHISPER,                        /**< German Whispers */
     VAR_SKY,                            /**< Skyscraper */
     VAR_LK,                             /**< Little Killer */
+    VAR_PALINDROME,                     /**< Palindrome */
+    VAR_REGIONSUM,                      /**< Region Sum Lines */
+    VAR_XSUM,                           /**< X-Sums */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -165,7 +175,8 @@ typedef enum {
  * @return "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd",
  *         "Consecutive", "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive",
  *         "Disjoint Groups", "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow",
- *         "Renban", "German Whispers", "Skyscraper", "Little Killer"
+ *         "Renban", "German Whispers", "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
+ *         "X-Sums"
  */
 const char *variant_name(int variant);
 
@@ -187,7 +198,9 @@ enum {
     LINE_THERMO = 0,                    /**< Thermo: digits rise from the bulb */
     LINE_ARROW,                         /**< Arrow: the shaft adds up to the circle */
     LINE_RENBAN,                        /**< Renban: a run of consecutive digits, any order */
-    LINE_WHISPER                        /**< German Whispers: neighbours differ by 5 or more */
+    LINE_WHISPER,                       /**< German Whispers: neighbours differ by 5 or more */
+    LINE_PALINDROME,                    /**< Palindrome: the same digits read from either end */
+    LINE_REGIONSUM                      /**< Region Sum Lines: the same sum in each box it crosses */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -262,9 +275,10 @@ typedef struct {
     uint8_t consec[81];                 /**< Consecutive: bars, bit CONSEC_RIGHT = to the cell on the right, CONSEC_DOWN = below */
     uint8_t nxpeers[81];                /**< peers that share no unit (Anti-Knight: the knight's moves; Anti-King: the touching cells): how many */
     uint8_t xpeers[81][8];              /**< which */
-    /* Thermo, Arrow, Renban, German Whispers: lines, each a path of cells (side by side or
-     * diagonal), of the kind line_kind: a thermometer from its bulb (digits rise along it), an
-     * arrow from its circle (the rest, its shaft, adds up to it), a Renban or a Whispers line */
+    /* Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum Lines: lines, each a path of
+     * cells (side by side or diagonal), of the kind line_kind: a thermometer from its bulb (digits
+     * rise along it), an arrow from its circle (the rest, its shaft, adds up to it), a Renban, a
+     * Whispers, a Palindrome or a Region Sum line */
     uint8_t line_kind;                  /**< the lines' kind, LINE_* */
     uint8_t nthermos;                   /**< lines */
     uint8_t thermo_n[THERMOS_MAX];      /**< each line's cells: how many */
@@ -275,6 +289,8 @@ typedef struct {
     uint8_t sandwich_sum[18];           /**< per row (0..8) and column (9..17), the sum between its 1 and 9 */
     bool skyscraper;                    /**< Skyscraper: the clues are rules */
     uint8_t sky[18];                    /**< per row (0..8, seen from the left) and column (9..17, from the top), the buildings seen, 0 = no clue */
+    bool xsums;                         /**< X-Sums: the clues are rules */
+    uint8_t xsum[18];                   /**< per row (0..8, from the left) and column (9..17, from the top), the sum of the first X digits, 0 = no clue */
     /* Little Killer: diagonals, each from its first cell (on the top row or the left column) in
      * its direction (LK_*), with the sum of its cells; a cell is on two at most (lk_of: the
      * down-right one, then the other way) */
@@ -368,9 +384,10 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
  */
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
 /**
- * @brief The same for any line variant (Thermo, Arrow: its circle first, Renban, German Whispers);
- * sudoku_thermos_text() writes them all
- * @param variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN or VAR_WHISPER
+ * @brief The same for any line variant (Thermo, Arrow: its circle first, Renban, German Whispers,
+ * Palindrome, Region Sum Lines); sudoku_thermos_text() writes them all. A Palindrome line's cells that
+ * mirror each other mustn't see each other (they hold the same digit).
+ * @param variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME or VAR_REGIONSUM
  * @param text  the lines
  * @param out  gets the board
  * @return false if the text isn't one
@@ -419,6 +436,38 @@ bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out);
  */
 bool sudoku_sky_text(const sudoku_geom_t *g, char *buf, int len);
 /**
+ * @brief An X-Sums board from its clues as text: 18 numbers 0..45 (0: no clue), the rows from the
+ * left top to bottom, then the columns from the top left to right, comma-separated (kept in
+ * marks, like Skyscraper's); sudoku_xsum_text() writes it.
+ * @param text  the clues
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_xsum_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief An X-Sums board's clues as text.
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
+bool sudoku_xsum_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief X-Sums: the first digits (X) a clue allows: X itself and X - 1 other digits must be able to
+ * add up to it (1: X = 1; 2: none; 45: X = 9).
+ * @param clue  the clue, 1..45
+ * @return the digits (bit d = d)
+ */
+uint16_t sudoku_xsum_firsts(int clue);
+/**
+ * @brief X-Sums: the clue of a row or column with these digits in it (the sum of the first X
+ * from the clue's side, X being the first).
+ * @param vals  the cells
+ * @param lu  the row (0..8, from the left) or column (9..17, from the top)
+ * @return the sum, 0 if the first X aren't all filled
+ */
+int sudoku_xsum_of(const uint8_t vals[81], int lu);
+/**
  * @brief A Little Killer board from its clues as text: "top|left index,direction,sum;..." e.g.
  * "t3,r,21;l5,u,14" (t: above column 0..8, l: left of row 0..8; r down-right, l down-left
  * (from the top only), u up-right (from the left only)), kept where Killer keeps its cages;
@@ -464,6 +513,17 @@ bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len);
  * @return true if they may
  */
 bool is_sudoku_edge_ok(int kind, int mark, int a, int b);
+/**
+ * @brief Region Sum Lines: the line's digits added up box by box (a box it enters twice counts
+ * once, both parts together).
+ * @param g  the board
+ * @param t  the line
+ * @param vals  the cells, 0 = empty
+ * @param sum  gets each part's sum, in the order the line enters the boxes (9 at most)
+ * @param full  gets whether each part is filled
+ * @return the parts
+ */
+int sudoku_regionsum_parts(const sudoku_geom_t *g, int t, const uint8_t vals[81], int sum[9], bool full[9]);
 /**
  * @brief Quadruple: how many of circle q's digits the filled cells of vals still miss
  * (*empty: its empty cells)
@@ -635,11 +695,13 @@ enum {
     FIT_QUAD,                           /**< Quadruple: a circle's digits */
     FIT_SANDWICH_ROW,                   /**< Sandwich: the row's sum */
     FIT_SANDWICH_COL,                   /**< Sandwich: the column's sum */
-    FIT_THERMO,                         /**< a line (Thermo, Arrow, Renban, Whispers) */
+    FIT_THERMO,                         /**< a line (Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum) */
     FIT_CAGE,                           /**< Killer: the cage's sum */
     FIT_SKY_ROW,                        /**< Skyscraper: the row's clue */
     FIT_SKY_COL,                        /**< Skyscraper: the column's clue */
-    FIT_LK                              /**< Little Killer: a diagonal's sum */
+    FIT_LK,                             /**< Little Killer: a diagonal's sum */
+    FIT_XSUM_ROW,                       /**< X-Sums: the row's clue */
+    FIT_XSUM_COL                        /**< X-Sums: the column's clue */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -689,9 +751,10 @@ typedef enum {
     TECH_XY_WING,            /**< XY-Wing (hints and Learn only) */
     TECH_EDGE,               /**< Kropki, XV, Greater-Than: the marks */
     TECH_QUAD,               /**< Quadruple: a circle */
-    TECH_LINE,               /**< Arrow, Renban, Whispers: a line */
+    TECH_LINE,               /**< Arrow, Renban, Whispers, Palindrome, Region Sum: a line */
     TECH_SKY,                /**< Skyscraper: a clue */
-    TECH_LK                  /**< Little Killer: a diagonal */
+    TECH_LK,                 /**< Little Killer: a diagonal */
+    TECH_XSUM                /**< X-Sums: a clue */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {
@@ -701,7 +764,7 @@ typedef struct {
      *  thermo: the thermometer; sandwich: the row or column; edge (Kropki, XV,
      *  Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
      *  the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
-     *  sky: the row or column (0..17), cell1 the cell; lk: the diagonal, cell1;
+     *  sky, xsum: the row or column (0..17), cell1 the cell; lk: the diagonal, cell1;
      *  X-Wing, Swordfish: the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
     int unit;
     int unit2;               /**< the second unit (see unit) */

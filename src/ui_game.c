@@ -228,6 +228,27 @@ int compute_conflicts(void)
             }
         }
     }
+    for (int lu = 0; g_geo->xsums && lu < 18; lu++) {   /* X-Sums: the first X digits over the clue, or (full) not it */
+        int c = g_geo->xsum[lu], cells[9], sum = 0, empty = 0;
+        for (int j = 0; j < 9; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        }
+        int x = g_b.val[cells[0]];
+        if (!c || !x) {
+            continue;
+        }
+        for (int j = 0; j < x; j++) {
+            sum += g_b.val[cells[j]];
+            empty += !g_b.val[cells[j]];
+        }
+        if (sum + empty > c || (!empty && sum != c)) {
+            for (int j = 0; j < x; j++) {
+                if (g_b.val[cells[j]]) {
+                    g_conflict[cells[j]] = true;
+                }
+            }
+        }
+    }
     for (int d = 0; d < g_geo->nlk; d++) {          /* Little Killer: a diagonal over its sum, or (full) not it */
         int sum = 0, empty = 0;
         for (int j = 0; j < g_geo->lk_n[d]; j++) {
@@ -281,6 +302,34 @@ int compute_conflicts(void)
             for (int i = 0; i < n; i++) {
                 int x = g_b.val[cell[i]];
                 if (x && (hi - lo > n - 1 || (twice >> x & 1))) {
+                    g_conflict[cell[i]] = true;
+                }
+            }
+            break;
+        }
+        case LINE_PALINDROME:                       /* two cells mirroring each other that differ */
+            for (int i = 0; i < n / 2; i++) {
+                int a = cell[i], b = cell[n - 1 - i];
+                if (g_b.val[a] && g_b.val[b] && g_b.val[a] != g_b.val[b]) {
+                    g_conflict[a] = g_conflict[b] = true;
+                }
+            }
+            break;
+        case LINE_REGIONSUM: {                      /* two boxes' full parts that differ, or a part over a full one */
+            int sum[9], np, target = -1;
+            bool full[9], bad = false;
+            np = sudoku_regionsum_parts(g_geo, t, g_b.val, sum, full);
+            for (int j = 0; j < np; j++) {
+                if (full[j]) {
+                    bad |= target >= 0 && sum[j] != target;
+                    target = sum[j];
+                }
+            }
+            for (int j = 0; j < np && target >= 0; j++) {
+                bad |= !full[j] && sum[j] >= target;    /* (an empty cell still adds 1 at least) */
+            }
+            for (int i = 0; bad && i < n; i++) {
+                if (g_b.val[cell[i]]) {
                     g_conflict[cell[i]] = true;
                 }
             }

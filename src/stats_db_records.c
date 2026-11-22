@@ -50,6 +50,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest German Whispers", OF_VARIANT(22)},
     {"Fastest Skyscraper", OF_VARIANT(23)},
     {"Fastest Little Killer", OF_VARIANT(24)},
+    {"Fastest Palindrome", OF_VARIANT(25)},
+    {"Fastest Region Sum Lines", OF_VARIANT(26)},
+    {"Fastest X-Sums", OF_VARIANT(27)},
 };
 
 /* (documented in stats_db_internal.h) */

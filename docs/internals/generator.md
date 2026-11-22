@@ -30,7 +30,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 
 **Extra peers**: `xpeers` are cells that must differ without sharing a unit: a knight's move (Anti-Knight) or a diagonal touch (Anti-King).
 
-**`allow[c]`**: a bitmask of the digits a cell may hold at all (bit *d* = digit *d*). Even-Odd narrows it to even or odd. Skyscraper clues and Greater-Than sign chains narrow it near the clue. The rest of the code starts from it instead of from "1–9".
+**`allow[c]`**: a bitmask of the digits a cell may hold at all (bit *d* = digit *d*). Even-Odd narrows it to even or odd. Skyscraper clues, X-Sums clues (the first cell: only the X that can make the clue) and Greater-Than sign chains narrow it near the clue. The rest of the code starts from it instead of from "1–9".
 
 **Variant clues**, each in its own fields:
 
@@ -40,10 +40,11 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 | `consec` | Consecutive bars; with `consec_on` and no bars: Non-Consecutive |
 | `edge_kind`, `edge` | Kropki dots, XV marks, Greater-Than signs, on each cell's right and lower edge |
 | `quad_*` | Quadruple circles |
-| `thermo_*`, `line_kind` | Thermo, Arrow, Renban and German Whispers: one set of "paths of cells", with `line_kind` saying how to read them |
+| `thermo_*`, `line_kind` | Thermo, Arrow, Renban, German Whispers, Palindrome and Region Sum Lines: one set of "paths of cells", with `line_kind` saying how to read them |
 | `sandwich_sum` | Sandwich: 18 sums |
 | `sky` | Skyscraper: 18 clues, 0 = none |
 | `lk_*` | Little Killer diagonals |
+| `xsums`, `xsum` | X-Sums: 18 clues, 0 = none |
 
 `sudoku_geom_init()` builds the fixed boards once at start-up (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Disjoint, Asterisk ...), and `sudoku_geom(variant)` returns them. Variants whose board comes **with** its puzzle (Jigsaw's regions, Killer's cages, every variant with clues) are built per puzzle, from text with `sudoku_geom_*_text()`, and turned back into text with `sudoku_*_text()`. That text is exactly what the database's `regions`, `cages`, `marks` and `thermos` columns hold (see [Database design](database.md)).
 
@@ -77,12 +78,13 @@ The exact search says *whether* a puzzle has one solution but not *how hard* it 
    |---|---|---|
    | `gen_cage_logic` | Killer | cage sums |
    | `gen_consec_logic` | Consecutive, Non-Consecutive | bars |
-   | `gen_thermo_logic` | Thermo, Arrow, Renban, Whispers | thermometers and lines |
+   | `gen_thermo_logic` | Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum | thermometers and lines (a mirrored cell's candidates; the range of each box's part) |
    | `gen_sandwich_logic` | Sandwich | where the 1 and 9 can be |
    | `gen_edge_logic` | Kropki, XV, Greater-Than | marks |
    | `gen_quad_logic` | Quadruple | circles |
    | `gen_sky_logic` | Skyscraper | every order of a nearly full line's missing digits |
    | `gen_lk_logic` | Little Killer | the range a diagonal's other cells allow |
+   | `gen_xsum_logic` | X-Sums | each first digit a clue allows, against the range the next X − 1 cells can make |
 
 3. **Locked candidates** (pointing and claiming) and **naked and hidden pairs**: needing any of these makes the puzzle tier 2.
 4. Still stuck: **tier 3**.
@@ -130,6 +132,9 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
   | Sandwich | all 18 sums |
   | Skyscraper | each line's count, kept for about 75 % of the lines (Hard/Expert 60 %) |
   | Little Killer | 8 diagonals (Hard/Expert 10) of 3+ cells, at most one clue per place on the border and per diagonal |
+  | Palindrome | `palindrome_paths()`: 8 lines (Hard/Expert 10) grown from the middle out, a cell at each end at a time, both with the same digit |
+  | Region Sum Lines | `regionsum_paths()`: 8 random walks (Hard/Expert 10) of up to 8 cells, each cut at the longest length where every box's part adds up the same |
+  | X-Sums | each line's sum of its first X digits, kept for about 75 % of the lines (Hard/Expert 60 %) |
 
   These boards go in `jig`, a geometry allocated once in PSRAM. The one that wins is copied out to the caller with the givens.
 

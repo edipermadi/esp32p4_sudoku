@@ -174,6 +174,8 @@ static const uint8_t PIC_THERMO[] = {0, 1, 2, 3, 0xFF};     /**< 2 4 5 8 */
 static const uint8_t PIC_ARROW[] = {0, 1, 2, 0xFF};         /**< 7: 4 + 3 */
 static const uint8_t PIC_RENBAN[] = {0, 1, 2, 3, 0xFF};     /**< 5 3 6 4 */
 static const uint8_t PIC_WHISPER[] = {0, 1, 2, 3, 0xFF};    /**< 2 8 1 6 */
+static const uint8_t PIC_PALINDROME[] = {1, 4, 9, 14, 11, 0xFF};   /**< 3 7 5 7 3, down and back up */
+static const uint8_t PIC_REGIONSUM[] = {1, 2, 3, 4, 0xFF};  /**< 2 6 | 5 3: 8 in each box */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 
 /** @brief Each variant's rules card picture. */
@@ -230,6 +232,15 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
         4, 4, 0, 0, "3..." ".1.." "..4." "...2", "1000010000100001", NULL, NULL, NULL, NULL, NULL, NULL, -1, 0,
         NULL, NULL, 0, 10
     },
+    [VAR_PALINDROME] = {
+        4, 4, 0, 0, ".3.." "7..." ".5.3" "..7.", NULL, NULL, NULL, NULL, NULL, PIC_PALINDROME, NULL, -1, 0, NULL,
+        NULL, LINE_PALINDROME
+    },
+    [VAR_REGIONSUM] = {
+        6, 1, 3, 1, "426538", NULL, NULL, NULL, NULL, NULL, PIC_REGIONSUM, NULL, -1, 0, NULL, NULL,
+        LINE_REGIONSUM
+    },
+    [VAR_XSUM] = {5, 1, 0, 0, "34298", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9, 0, NULL, NULL, 0, 0},
 };
 
 /** each variant's rules, for its rules card */
@@ -284,6 +295,12 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "2, 5 and 9 are seen: 3.",
     [VAR_LK] = "Classic rules, and a clue outside the grid with an arrow gives the sum of the digits along that "
     "diagonal: 3 + 1 + 4 + 2 = 10. Digits can repeat on a diagonal where the boxes allow it.",
+    [VAR_PALINDROME] = "Classic rules, and each grey line reads the same from both ends: 3, 7, 5, 7, 3. Its first "
+    "and last cells hold the same digit, so do the second and the second to last, and so on.",
+    [VAR_REGIONSUM] = "Classic rules, and on each blue line the digits in each box it passes through add up to the "
+    "same total: 2 + 6 = 5 + 3 = 8. A box the line enters twice counts both parts together.",
+    [VAR_XSUM] = "Classic rules, and a clue left of a row or above a column is the sum of the first X digits "
+    "from there, where X is the first digit itself: here X is 3, and 3 + 4 + 2 = 9.",
 };
 
 /**
@@ -346,7 +363,7 @@ static void rules_pic_draw_cb(lv_event_t *e)
     r.border_width = 3;
     lv_area_t fr = {.x1 = x0 - 1, .y1 = y0 - 1, .x2 = x0 + w + 1, .y2 = y0 + h + 1};
     lv_draw_rect(layer, &r, &fr);
-    if (p->thermo) {                                /* a thermometer (or an arrow, a Renban, a Whispers line) */
+    if (p->thermo) {                                /* a thermometer (or an arrow, a Renban, Whispers, ... line) */
         lv_point_t pts[9];
         int n = 0;
         for (; n < 9 && p->thermo[n] != 0xFF; n++) {
@@ -468,7 +485,7 @@ static void rules_pic_draw_cb(lv_event_t *e)
         lv_draw_label(layer, &d, &a);
         draw_lk_arrow(layer, x0 - 12, y0 - 12, LK_DOWN_RIGHT, 9);
     }
-    if (p->left_clue >= 0) {                        /* Sandwich, Skyscraper: the clue left of the row */
+    if (p->left_clue >= 0) {                        /* Sandwich, Skyscraper, X-Sums: the clue left of the row */
         char t[4];
         snprintf(t, sizeof(t), "%d", p->left_clue);
         lv_draw_label_dsc_t d;
@@ -609,6 +626,8 @@ static bool share_text(char *buf, size_t n)
     case VAR_ARROW:
     case VAR_RENBAN:
     case VAR_WHISPER:
+    case VAR_PALINDROME:
+    case VAR_REGIONSUM:
         key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL;
         break;
     case VAR_SANDWICH:
@@ -616,6 +635,9 @@ static bool share_text(char *buf, size_t n)
         break;
     case VAR_SKY:
         key = sudoku_sky_text(G, extra, sizeof(extra)) ? "clues" : NULL;
+        break;
+    case VAR_XSUM:
+        key = sudoku_xsum_text(G, extra, sizeof(extra)) ? "clues" : NULL;
         break;
     case VAR_LK:
         key = sudoku_lk_text(G, extra, sizeof(extra)) ? "diagonals" : NULL;
@@ -770,6 +792,11 @@ static int pz_line(char *buf, size_t n)
             marks = extra;
         }
         break;
+    case VAR_XSUM:
+        if (sudoku_xsum_text(G, extra, sizeof(extra))) {
+            marks = extra;
+        }
+        break;
     case VAR_LK:
         if (sudoku_lk_text(G, extra, sizeof(extra))) {
             cages = extra;
@@ -779,6 +806,8 @@ static int pz_line(char *buf, size_t n)
     case VAR_ARROW:
     case VAR_RENBAN:
     case VAR_WHISPER:
+    case VAR_PALINDROME:
+    case VAR_REGIONSUM:
         if (sudoku_thermos_text(G, extra, sizeof(extra))) {
             thermos = extra;
         }

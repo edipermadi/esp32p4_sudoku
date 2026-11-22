@@ -10,7 +10,8 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "Sandwich", "Mini 6x6", "Kids 4x4", "Anti-King",
                                                          "Non-Consecutive", "Disjoint Groups", "Asterisk", "Kropki", "XV",
                                                          "Greater-Than", "Quadruple", "Arrow", "Renban", "German Whispers",
-                                                         "Skyscraper", "Little Killer"
+                                                         "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
+                                                         "X-Sums"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -18,7 +19,8 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Anti-Knight", "Even-Odd", "Consecutive", "Thermo", "Sandwich", "Mini",
                                                           "Kids", "Anti-King", "Non-Consecutive", "Disjoint", "Asterisk",
                                                           "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
-                                                          "German Whispers", "Skyscraper", "Little Killer"
+                                                          "German Whispers", "Skyscraper", "Little Killer", "Palindrome",
+                                                          "Region Sum", "X-Sums"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -82,6 +84,12 @@ int stats_kind_of(int variant, bool daily)
         return KIND_SKY;
     case VAR_LK:
         return KIND_LK;
+    case VAR_PALINDROME:
+        return KIND_PALINDROME;
+    case VAR_REGIONSUM:
+        return KIND_REGIONSUM;
+    case VAR_XSUM:
+        return KIND_XSUM;
     default:
         return KIND_NEW;
     }

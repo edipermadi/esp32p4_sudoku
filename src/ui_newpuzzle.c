@@ -88,6 +88,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {12, 450, 1784, 1111}, /* German Whispers */
     {38, 159, 677, 304},    /* Skyscraper */
     {15, 471, 1102, 1225},  /* Little Killer */
+    {11, 284, 905, 756},    /* Palindrome (2026-11-22) */
+    {21, 403, 1070, 1206},  /* Region Sum Lines */
+    {72, 835, 3012, 2360},  /* X-Sums */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -140,6 +143,9 @@ static void gen_task(void *arg)
     }
     if (gen_var_req == VAR_SKY) {
         sudoku_sky_text(gen_board, gen_marks, 82);
+    }
+    if (gen_var_req == VAR_XSUM) {
+        sudoku_xsum_text(gen_board, gen_marks, 82);
     }
     if (gen_var_req == VAR_LK) {
         sudoku_lk_text(gen_board, gen_cages, STATS_CAGES_LEN);    /* (where cages go) */
@@ -424,8 +430,8 @@ static const uint8_t GEN_VAR_ORDER[VAR_COUNT] = {VAR_CLASSIC, VAR_X, VAR_HYPER, 
                                                  VAR_KNIGHT, VAR_KING, VAR_EVENODD, VAR_SANDWICH,
                                                  VAR_CONSEC, VAR_NONCONSEC, VAR_DISJOINT, VAR_ASTERISK,
                                                  VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
-                                                 VAR_ARROW, VAR_RENBAN, VAR_WHISPER,
-                                                 VAR_SKY, VAR_LK
+                                                 VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME,
+                                                 VAR_REGIONSUM, VAR_SKY, VAR_LK, VAR_XSUM
                                                 };
 /** each variant's rules in a sentence (New puzzle's dialog) */
 static const char *const GEN_VAR_DESC[VAR_COUNT] = {
@@ -454,6 +460,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_WHISPER] = "9x9 with green lines (German Whispers): neighbours along a line differ by 5 or more.",
     [VAR_SKY] = "9x9: a clue by a row or column is how many buildings are seen from there (taller ones hide shorter).",
     [VAR_LK] = "9x9: a clue with an arrow outside the grid is the sum of the digits along that diagonal.",
+    [VAR_PALINDROME] = "9x9 with grey lines: each line reads the same from both ends.",
+    [VAR_REGIONSUM] = "9x9 with blue lines: a line's digits add up to the same in each box it passes through.",
+    [VAR_XSUM] = "9x9: a clue by a row or column is the sum of its first X digits, X being the first digit.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /**< the level buttons (Kids 4x4: Hard and Expert off) */
 
@@ -544,8 +553,8 @@ static void new_puzzle_cb(lv_event_t *e)
                                           "Anti-Knight", "Anti-King", "Even-Odd", "Sandwich", "\n",
                                           "Consecutive", "Non-Consec.", "Disjoint", "Asterisk", "\n",
                                           "Kropki", "XV", "Greater-Than", "Quadruple", "\n",
-                                          "Arrow", "Renban", "Whispers", "\n",
-                                          "Skyscraper", "Little Killer", ""
+                                          "Arrow", "Renban", "Whispers", "Palindrome", "\n",
+                                          "Region Sum", "Skyscraper", "Little Killer", "X-Sums", ""
                                          };
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     lv_buttonmatrix_set_map(vm, VAR_MAP);

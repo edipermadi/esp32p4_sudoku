@@ -155,6 +155,61 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         }
         break;
     }
+    case LINE_PALINDROME: {                         /* the same digit as the cell mirroring it */
+        int m = n - 1 - p;
+        if (m != p && LMASK(cell[m])) {
+            free &= LMASK(cell[m]);
+        }
+        break;
+    }
+    case LINE_REGIONSUM: {                          /* each box's part adds up to the same total */
+        /* per box the line crosses: the range its part can add up to (its cells' digits differ: a
+         * box); the cell asked about's own box without it (own_lo, own_hi) */
+        int box[9], lo[9], hi[9], e[9], elo[9], ehi[9], nb = 0, own = -1;
+        for (int k = 0; k < n; k++) {
+            int b = G->region[cell[k]], j = 0;
+            while (j < nb && box[j] != b) {
+                j++;
+            }
+            if (j == nb) {
+                box[nb] = b;
+                lo[nb] = hi[nb] = e[nb] = elo[nb] = ehi[nb] = 0;
+                nb++;
+            }
+            if (k == p) {
+                own = j;
+                continue;
+            }
+            uint16_t m = LMASK(cell[k]);
+            if (!m) {
+                return 0;
+            }
+            if (v[cell[k]]) {
+                lo[j] += v[cell[k]];
+                hi[j] += v[cell[k]];
+            } else {
+                e[j]++;
+                elo[j] += LO(m);
+                ehi[j] += HI(m);
+            }
+        }
+        int tlo = 0, thi = 81, own_lo = 0, own_hi = 0;
+        for (int j = 0; j < nb; j++) {
+            int a = e[j] * (e[j] + 1) / 2, b = e[j] * (19 - e[j]) / 2;   /* e distinct digits: at least, at most */
+            int l = lo[j] + (elo[j] > a ? elo[j] : a), h = hi[j] + (ehi[j] < b ? ehi[j] : b);
+            if (j == own) {
+                own_lo = l;
+                own_hi = h;
+            } else {
+                tlo = l > tlo ? l : tlo;
+                thi = h < thi ? h : thi;
+            }
+        }
+        if (nb > 1) {
+            free &= RANGE(tlo - own_hi, thi - own_lo);
+        }
+        break;
+    }
     case LINE_ARROW: {                              /* the circle (place 0) is the shaft's sum */
         int smin = 0, smax = 0;                     /* the shaft's sum, the place asked about left out */
         for (int k = 1; k < n; k++) {
@@ -320,6 +375,88 @@ static void mask_k_range(uint16_t mask, int k, int *lo, int *hi)
     }
 }
 
+/**
+ * @brief X-Sums: can a row or column with these digits per place (from the clue) still make clue c?
+ * @param m  each place's digits (a filled one: its digit)
+ * @param c  the clue
+ * @return true: still possible
+ */
+static bool is_xsum_ok(const uint16_t m[9], int c)
+{
+    uint16_t xs = (uint16_t)(m[0] & sudoku_xsum_firsts(c));
+    for (int x = 1; x <= 9; x++) {
+        if (!(xs >> x & 1)) {
+            continue;
+        }
+        if (x == 1) {
+            return true;                            /* (c is 1) */
+        }
+        /* places 1..x-1: other digits than x, adding up to c - x */
+        int known = 0, ne = 0, lo = 0, hi = 0;
+        uint16_t used = (uint16_t)(1u << x), any = 0;
+        bool fits = true;
+        for (int k = 1; k < x && fits; k++) {
+            uint16_t mk = (uint16_t)(m[k] & ~(1u << x));
+            if (!mk) {
+                fits = false;
+            } else if (!(mk & (mk - 1))) {          /* one digit: placed (or forced) */
+                if (used & mk) {
+                    fits = false;
+                }
+                used |= mk;
+                known += __builtin_ctz(mk);
+            } else {
+                ne++;
+                any |= mk;
+                lo += __builtin_ctz(mk);
+                hi += 31 - __builtin_clz(mk);
+            }
+        }
+        if (!fits) {
+            continue;
+        }
+        int dlo, dhi;                               /* ne different digits, none of those placed */
+        mask_k_range((uint16_t)(any & ~used), ne, &dlo, &dhi);
+        if (ne && __builtin_popcount(any & ~used) < ne) {
+            continue;
+        }
+        lo = dlo > lo ? dlo : lo;
+        hi = dhi < hi ? dhi : hi;
+        if (c - x - known >= lo && c - x - known <= hi) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand)
+{
+    int cells[9], c = G->xsum[lu];
+    line_cells(lu, cells);
+    if (at > 0 && v[cells[0]] && at >= v[cells[0]]) {
+        return 0x3FE;                               /* past the first X: the clue doesn't reach it */
+    }
+    uint16_t placed = 0, m[9];
+    for (int k = 0; k < 9; k++) {
+        placed |= v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : 0;
+    }
+    for (int k = 0; k < 9; k++) {
+        m[k] = v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : cand ? cand[cells[k]] : (uint16_t)(0x3FE & ~placed);
+    }
+    uint16_t free = 0, mine = m[at];
+    for (int d = 1; d <= 9; d++) {
+        if (!(mine >> d & 1)) {
+            continue;
+        }
+        m[at] = (uint16_t)(1u << d);
+        if (is_xsum_ok(m, c)) {
+            free |= (uint16_t)(1u << d);
+        }
+    }
+    return free;
+}
+
 /* (documented in gen_internal.h) */
 bool is_gen_sky_line_ok(const uint8_t x[9], int c)
 {
@@ -441,6 +578,13 @@ static uint16_t grid_free(const grid_t *g, int i)
             }
         }
         WHY(line ? FIT_SKY_COL : FIT_SKY_ROW);
+    }
+    for (int line = 0; G->xsums && free && line < 2; line++) {   /* X-Sums: its row's, its column's clue */
+        int lu = line ? 9 + i % 9 : i / 9;
+        if (G->xsum[lu]) {
+            free &= gen_xsum_allow(G, lu, line ? i / 9 : i % 9, g->v, NULL);
+        }
+        WHY(line ? FIT_XSUM_COL : FIT_XSUM_ROW);
     }
     for (int slot = 0; G->nlk && free && slot < 2; slot++) {   /* Little Killer: what its diagonal's sum leaves */
         int k = G->lk_of[i][slot];

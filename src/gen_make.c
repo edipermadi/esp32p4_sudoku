@@ -369,6 +369,197 @@ static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int w
 }
 
 /**
+ * @brief a free neighbour of cell cur (side by side or diagonal) for a line: not used by another line,
+ * not on this one (on[], its cells so far)
+ * @param cur  the cell
+ * @param used  the cells on the other lines
+ * @param on  this line's cells
+ * @param n  how many
+ * @param out  gets the neighbours
+ * @return how many
+ */
+static int line_neighbours(int cur, const uint8_t used[81], const uint8_t *on, int n, int out[8])
+{
+    int r = cur / 9, q = cur % 9, nc = 0;
+    for (int dr = -1; dr <= 1; dr++) {
+        for (int dq = -1; dq <= 1; dq++) {
+            int rr = r + dr, qq = q + dq, o = rr * 9 + qq;
+            if ((!dr && !dq) || rr < 0 || rr > 8 || qq < 0 || qq > 8 || used[o]) {
+                continue;
+            }
+            bool taken = false;
+            for (int k = 0; k < n; k++) {
+                taken |= on[k] == o;
+            }
+            if (!taken) {
+                out[nc++] = o;
+            }
+        }
+    }
+    return nc;
+}
+
+/**
+ * @brief Palindrome: up to want lines (3-9 cells) over the full grid, grown from the middle out, a
+ * cell at each end at a time, both holding the same digit (so they never see each other)
+ * @param full  the solution
+ * @param rng  the random state
+ * @param want  lines wanted
+ * @param out  gets the lines
+ * @return false: fewer than 3
+ */
+static bool palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    int n = 0;
+    for (int tries = 0; tries < 2000 && n < want; tries++) {
+        int c = (int)(rnd(rng) % 81), target = 4 + (int)(rnd(rng) % 4);
+        if (used[c]) {
+            continue;
+        }
+        uint8_t line[9];                            /* the line so far, its middle first */
+        int len = 0, nb[8];
+        line[len++] = (uint8_t)c;
+        if (target % 2 == 0) {                      /* even: a middle pair, diagonal neighbours with one digit */
+            int k = line_neighbours(c, used, line, len, nb), nm = 0, m[8];
+            for (int j = 0; j < k; j++) {
+                if (full[nb[j]] == full[c]) {
+                    m[nm++] = nb[j];
+                }
+            }
+            if (!nm) {
+                target--;                           /* none: an odd one */
+            } else {
+                line[len++] = (uint8_t)m[rnd(rng) % (uint32_t)nm];
+            }
+        }
+        /* grow both ends, a cell at each: a the left end, b the right one (left[] and right[]: the
+         * cells added on each side, from the middle out) */
+        uint8_t left[5], right[5];
+        int nl = 0;
+        int a = line[0], b = line[len - 1];
+        while (len + 2 * nl + 2 <= target) {          /* (target: 9 at most) */
+            uint8_t on[9];
+            int non = 0;
+            for (int j = 0; j < len; j++) {
+                on[non++] = line[j];
+            }
+            for (int j = 0; j < nl; j++) {
+                on[non++] = left[j];
+                on[non++] = right[j];
+            }
+            int na[8], nbb[8], ka = line_neighbours(a, used, on, non, na), kb = line_neighbours(b, used, on, non, nbb);
+            int pa[64], pb[64], np = 0;
+            for (int i = 0; i < ka; i++) {
+                for (int j = 0; j < kb; j++) {
+                    if (na[i] != nbb[j] && full[na[i]] == full[nbb[j]]) {
+                        pa[np] = na[i];
+                        pb[np++] = nbb[j];
+                    }
+                }
+            }
+            if (!np) {
+                break;
+            }
+            int pick = (int)(rnd(rng) % (uint32_t)np);
+            left[nl] = (uint8_t)pa[pick];
+            right[nl++] = (uint8_t)pb[pick];
+            a = pa[pick];
+            b = pb[pick];
+        }
+        int total = len + 2 * nl;
+        if (total < 3) {
+            continue;
+        }
+        int k = 0;                                  /* end to end: the left side reversed, the middle, the right */
+        for (int j = nl - 1; j >= 0; j--) {
+            cells[n][k++] = left[j];
+        }
+        for (int j = 0; j < len; j++) {
+            cells[n][k++] = line[j];
+        }
+        for (int j = 0; j < nl; j++) {
+            cells[n][k++] = right[j];
+        }
+        for (int j = 0; j < total; j++) {
+            used[cells[n][j]] = 1;
+        }
+        lens[n++] = (uint8_t)total;
+    }
+    return n >= 3 && gen_geom_lines(VAR_PALINDROME, cells, lens, n, out);
+}
+
+/**
+ * @brief Region Sum Lines: is a line (its cells on the full grid) one: in two boxes or more, the
+ * same sum in each?
+ * @param full  the solution
+ * @param on  its cells
+ * @param n  how many
+ * @return true if so
+ */
+static bool is_regionsum_line(const uint8_t full[81], const uint8_t *on, int n)
+{
+    int box[9], sum[9], nb = 0;
+    for (int k = 0; k < n; k++) {
+        int b = (on[k] / 27) * 3 + (on[k] % 9) / 3, j = 0;
+        while (j < nb && box[j] != b) {
+            j++;
+        }
+        if (j == nb) {
+            box[nb] = b;
+            sum[nb++] = 0;
+        }
+        sum[j] += full[on[k]];
+    }
+    for (int j = 1; j < nb; j++) {
+        if (sum[j] != sum[0]) {
+            return false;
+        }
+    }
+    return nb >= 2;
+}
+
+/**
+ * @brief Region Sum Lines: up to want lines over the full grid, random walks of up to 8 cells kept at
+ * the longest length (3 or more) where each box they pass through adds up to the same
+ * @param full  the solution
+ * @param rng  the random state
+ * @param want  lines wanted
+ * @param out  gets the lines
+ * @return false: fewer than 3
+ */
+static bool regionsum_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    int n = 0;
+    for (int tries = 0; tries < 3000 && n < want; tries++) {
+        int c = (int)(rnd(rng) % 81), target = 4 + (int)(rnd(rng) % 5), len = 0, best = 0, nb[8];
+        if (used[c]) {
+            continue;
+        }
+        cells[n][len++] = (uint8_t)c;
+        while (len < target) {
+            int k = line_neighbours(cells[n][len - 1], used, cells[n], len, nb);
+            if (!k) {
+                break;
+            }
+            cells[n][len++] = (uint8_t)nb[rnd(rng) % (uint32_t)k];
+            if (len >= 3 && is_regionsum_line(full, cells[n], len)) {
+                best = len;
+            }
+        }
+        if (!best) {
+            continue;
+        }
+        for (int k = 0; k < best; k++) {
+            used[cells[n][k]] = 1;
+        }
+        lens[n++] = (uint8_t)best;
+    }
+    return n >= 3 && gen_geom_lines(VAR_REGIONSUM, cells, lens, n, out);
+}
+
+/**
  * @brief Thermo: up to want thermometers (3-6 cells) drawn over the full grid as random walks whose digits rise from the bulb.
  * @param full  the solution
  * @param rng  the random state
@@ -431,9 +622,11 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
     const bool thermo = variant == VAR_THERMO, sandwich = variant == VAR_SANDWICH;
     const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER;
-    const bool sky = variant == VAR_SKY, lk = variant == VAR_LK;
+    const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
+    const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
-    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk;
+    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum ||
+                     pal || rsum;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -555,6 +748,20 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sky_seen(full, cells) : 0;
             }
             gen_geom_sky(clues, jig);
+        } else if (xsum) {                          /* a grid, then some of its 18 clues */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t clues[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_xsum_of(full, lu) : 0;
+            }
+            gen_geom_xsum(clues, jig);
+        } else if (pal || rsum) {                   /* a grid, then lines that keep their rule on it */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            int want = level >= GEN_HARD ? 10 : 8;
+            if (!(pal ? palindrome_paths(full, &rng, want, jig) : regionsum_paths(full, &rng, want, jig))) {
+                continue;
+            }
         } else if (lk) {                            /* a grid, then sums along some diagonals */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             bool top[LK_MAX];

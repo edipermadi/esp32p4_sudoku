@@ -419,6 +419,32 @@ bool gen_sky_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_xsum_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int lu = 0; lu < 18; lu++) {
+        int cells[9];
+        if (!G->xsum[lu]) {
+            continue;
+        }
+        line_cells(lu, cells);
+        for (int k = 0; k < 9; k++) {
+            int cell = cells[k];
+            if (L->v[cell]) {
+                continue;
+            }
+            uint16_t keep = (uint16_t)(L->cand[cell] & gen_xsum_allow(G, lu, k, L->v, L->cand));
+            if (keep != L->cand[cell]) {
+                eliminate(L, cell, (uint16_t)(L->cand[cell] & ~keep));
+                trace(TECH_XSUM, lu, -1, keep, 0, cell, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
 bool gen_lk_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
@@ -461,7 +487,7 @@ bool gen_lk_logic(logic_t *L)
 bool gen_thermo_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
-    if (G->line_kind != LINE_THERMO) {              /* Arrow, Renban, Whispers: each cell by its line */
+    if (G->line_kind != LINE_THERMO) {              /* Arrow, Renban, Whispers, ...: each cell by its line */
         for (int t = 0; t < G->nthermos; t++) {
             for (int p = 0; p < G->thermo_n[t]; p++) {
                 int c = G->thermo_cell[t][p];
@@ -926,6 +952,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->nlk && gen_lk_logic(&L)) {
             continue;    /* Little Killer: the diagonals */
         }
+        if (G->xsums && gen_xsum_logic(&L)) {
+            continue;    /* X-Sums: the clues */
+        }
         if (gen_locked_candidates(&L) || gen_pairs(&L)) {
             tier = 2;
             continue;
@@ -959,7 +988,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->nthermos && G->line_kind != LINE_THERMO) {
         return 28;
     }
-    if (G->skyscraper || G->nlk) {
+    if (G->skyscraper || G->nlk || G->xsums) {
         return 28;
     }
     if (G->consec_on) {

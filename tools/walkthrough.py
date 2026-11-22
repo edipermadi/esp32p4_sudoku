@@ -43,7 +43,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "thermo": "Thermo", "sandwich": "Sandwich", "kids-4x4": "Kids", "anti-king": "Anti-King",
          "non-consecutive": "Non-Consecutive", "disjoint-groups": "Disjoint", "asterisk": "Asterisk",
          "kropki": "Kropki", "xv": "XV", "greater-than": "Greater", "quadruple": "Quadruple", "arrow": "Arrow",
-         "renban": "Renban", "german-whispers": "German", "skyscraper": "Skyscraper", "little-killer": "Little"}
+         "renban": "Renban", "german-whispers": "German", "skyscraper": "Skyscraper", "little-killer": "Little",
+         "palindrome": "Palindrome", "region-sum-lines": "Region", "x-sums": "X-Sums"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -55,6 +56,7 @@ NEW_BG, NEW_FG = (205, 242, 212), (22, 120, 50)             # the step's digit
 RING, CROSS, ORANGE = (230, 126, 34), (214, 48, 49), (230, 126, 34)
 MUTED, THERMO, SUM_FG = (120, 126, 138), (196, 200, 207), (43, 111, 224)
 ARROW, RENBAN, WHISPER = (140, 146, 158), (222, 200, 245), (120, 205, 150)   # (the board's, on white)
+PALINDROME, REGIONSUM = (178, 181, 187), (119, 173, 241)
 RIGHT, DOWN = 0, 1
 WINDOWS = ["top-left", "top-right", "bottom-left", "bottom-right"]
 SPOTS = ["top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right"]
@@ -123,6 +125,10 @@ def rule_words(d, vals, c, v, r):
             if r["lo"] == r["hi"]:
                 return "a clue of its row or column makes it %s (see the rules above)" % a_n(r["lo"])
             return "it's near a clue of its row or column, which keeps it at most %d" % r["hi"]
+        if d.get("xsum"):                                   # X-Sums: a clue allows only some first digits
+            if r["lo"] == r["hi"]:
+                return "it's the first cell after a clue, and that clue can only start with %s" % a_n(r["lo"])
+            return "it's the first cell after a clue, and that clue can only start with %d to %d" % (r["lo"], r["hi"])
         if d.get("line_kind") == 3 and v == 5:              # German Whispers: no 5 on a line
             return "it's on a green line, and nothing is 5 or more away from a 5"
         if d["thermos"]:
@@ -171,6 +177,25 @@ def rule_words(d, vals, c, v, r):
         kind = d.get("line_kind", 0)
         if kind == 3:                                       # German Whispers
             return "it's next to the %d in %s on a green line, and %d is less than 5 away from it" % (w, at, v)
+        if kind == 4:                                       # Palindrome: the cell mirroring it
+            return "it mirrors the %d in %s on its grey line, which reads the same from both ends" % (w, at)
+        if kind == 5:                                       # Region Sum Lines: each box's part, the same sum
+            parts = {}
+            for x in cells:
+                parts.setdefault(d["region"][x], []).append(x)
+            mine = d["region"][c]
+            own = [vals[x] for x in parts[mine] if vals[x] and x != c] + [v]
+            own_empty = sum(1 for x in parts[mine] if not vals[x] and x != c)
+            full = [sum(vals[x] for x in p) for b, p in parts.items() if b != mine and all(vals[x] for x in p)]
+            if full:
+                t = full[0]
+                if not own_empty and sum(own) != t:
+                    return ("its blue line adds up to %d in another box, and %s would make its part in this box %d" %
+                            (t, a_n(v), sum(own)))
+                if sum(own) + own_empty > t:
+                    return ("its blue line adds up to %d in another box, and %s would take its part in this box past "
+                            "that" % (t, a_n(v)))
+            return "with %s there, its blue line couldn't add up to the same in each box it passes through" % a_n(v)
         if kind == 2:                                       # Renban
             have = sorted(vals[x] for x in cells if vals[x] and x != c)
             if v in have:
@@ -220,6 +245,30 @@ def rule_words(d, vals, c, v, r):
                 side, name, seen, a_n(v), clue)
         return "seen from %s of %s, %s there would leave too few buildings to make its clue %d" % (
             side, name, a_n(v), clue)
+    if rule == "xsum":
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["xsum"][lu]
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        side = "the left" if lu < 9 else "the top"
+        if not x[0]:
+            return "%s's clue %d can't be made up with %s there, whatever its first digit" % (cap(name), clue, a_n(v))
+        first = x[:x[0]]
+        got, empty = sum(first), first.count(0)
+        if c == line[0]:
+            lead = "with %s first, the first %d digits of %s would add up to its clue %d" % (a_n(v), v, name, clue)
+        else:
+            lead = "%s starts with %s, so its first %d digits add up to its clue %d" % (cap(name), a_n(x[0]), x[0],
+                                                                                         clue)
+        if not empty:
+            return "%s, but with %s there they come to %d" % (lead, a_n(v), got) if c != line[0] else \
+                "%s, but they come to %d" % (lead, got)
+        other = "empty cell" if empty == 1 else "%d empty cells" % empty
+        return "%s: with %s there, its other %s would need %d, which can't be made with digits not there yet" % (
+            lead, a_n(v), other, clue - got) if c != line[0] else \
+            "%s: its other %s would need %d, which can't be made with digits not there yet" % (lead, other, clue - got)
     if rule == "lk":
         diag = d["lk"][r["diag"]]
         filled = [vals[o] for o in diag["cells"] if vals[o] and o != c]
@@ -289,7 +338,7 @@ def step_text(d, vals, s):
 # ------------------------------------------------------------------ the pictures
 
 def make_drawer(d, fonts):
-    n, band = d["n"], BAND if d["sandwich"] or d.get("sky") or d.get("lk") else 0
+    n, band = d["n"], BAND if d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -367,6 +416,13 @@ def make_drawer(d, fonts):
                 for px, py in (pts[0], pts[-1]):
                     rr = CELL * 0.175
                     g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=RENBAN)
+            elif kind == 4:                                 # Palindrome: a grey band
+                g.line(pts, fill=PALINDROME, width=int(CELL * 0.2), joint="curve")
+                for px, py in (pts[0], pts[-1]):
+                    rr = CELL * 0.1
+                    g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=PALINDROME)
+            elif kind == 5:                                 # Region Sum Lines: a narrow blue line
+                g.line(pts, fill=REGIONSUM, width=int(CELL * 0.12), joint="curve")
             else:                                           # German Whispers: a narrow green line
                 g.line(pts, fill=WHISPER, width=int(CELL * 0.12), joint="curve")
         for c in cells:                                     # thick lines between regions, and the frame
@@ -455,14 +511,15 @@ def make_drawer(d, fonts):
             g.line([(ax, ay), (ax + 6 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 2 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 6 * dx, ay + 2 * dy)], fill=SUM_FG, width=2)
-        if d.get("sky"):                                    # Skyscraper: the clues (none: nothing drawn)
+        clues = d.get("sky") or d.get("xsum")
+        if clues:                                           # Skyscraper, X-Sums: the clues (none: nothing drawn)
             for i in range(9):
                 x, y = xy(i * 9)
-                if d["sky"][i]:
-                    g.text((PAD + band / 2, y + CELL / 2), str(d["sky"][i]), font=small, fill=SUM_FG, anchor="mm")
+                if clues[i]:
+                    g.text((PAD + band / 2, y + CELL / 2), str(clues[i]), font=small, fill=SUM_FG, anchor="mm")
                 x, y = xy(i)
-                if d["sky"][9 + i]:
-                    g.text((x + CELL / 2, PAD + band / 2), str(d["sky"][9 + i]), font=small, fill=SUM_FG, anchor="mm")
+                if clues[9 + i]:
+                    g.text((x + CELL / 2, PAD + band / 2), str(clues[9 + i]), font=small, fill=SUM_FG, anchor="mm")
         if d["sandwich"]:                                   # the sums: left of the rows, above the columns
             for i in range(9):
                 x, y = xy(i * 9)
