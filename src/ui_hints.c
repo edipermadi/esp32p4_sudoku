@@ -179,7 +179,8 @@ void hint_render(void)
         unit_name(t->unit, u1, sizeof(u1));
         snprintf(tech, sizeof(tech), "In %s the digits between the 1 and the 9 add up to %d: that leaves the 1 and "
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? game_geo()->sandwich_sum[t->unit] : 0);
-    } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM || t->kind == TECH_FRAME) {
+    } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM || t->kind == TECH_FRAME ||
+               t->kind == TECH_OUTSIDE || t->kind == TECH_ROSSINI) {
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         char digs[24] = "";
         size_t len = 0;
@@ -205,6 +206,24 @@ void hint_render(void)
             unit_name(k, u1, sizeof(u1));
             snprintf(tech, sizeof(tech), "The first three digits of %s add up to its clue %d, so row %d, column %d can "
                      "only be %s. ", u1, game_geo()->frame_sum[k], c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_OUTSIDE && k >= 0 && k < 18) {
+            mark_unit(k, 1);
+            unit_name(k, u1, sizeof(u1));
+            char set[12] = "";
+            for (int d = 1, n = 0; d <= 9; d++) {
+                if (game_geo()->outside_set[k] >> d & 1) {
+                    n += snprintf(set + n, sizeof(set) - (size_t)n, "%s%d", n ? ", " : "", d);
+                }
+            }
+            snprintf(tech, sizeof(tech), "The clue of %s says %s %s among its first three cells, so row %d, column %d "
+                     "can only be %s. ", u1, set, strchr(set, ',') ? "are" : "is", c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_ROSSINI && k >= 0 && k < 18) {
+            mark_unit(k, 1);
+            unit_name(k, u1, sizeof(u1));
+            int dir = game_geo()->rossini_dir[k];
+            snprintf(tech, sizeof(tech), "The first three digits of %s %s, so row %d, column %d can only be %s. ", u1,
+                     dir == ROSSINI_UP ? "rise from its arrow's side" : dir == ROSSINI_DOWN ? "fall from its arrow's side"
+                     : "neither rise nor fall (it has no arrow)", c / 9 + 1, c % 9 + 1, digs);
         } else if (t->kind == TECH_LK && k >= 0 && k < game_geo()->nlk) {
             for (int i = 0; i < game_geo()->lk_n[k]; i++) {
                 h_mark[game_geo()->lk_cell[k][i]] = 1;
@@ -256,6 +275,24 @@ void hint_render(void)
         }
         snprintf(tech, sizeof(tech), "Along the thermometer the digits rise from the bulb, so row %d, column %d can "
                  "only be %s. ", c / 9 + 1, c % 9 + 1, digs);
+    } else if (t->kind == TECH_DIAGNC) {            /* Diagonal Non-Consecutive: the cell and its corners */
+        int c = t->unit;
+        for (int k = 0; c >= 0 && c < 81 && k < 5; k++) {
+            int r = c / 9 + (k == 4 ? 0 : k < 2 ? -1 : 1), q = c % 9 + (k == 4 ? 0 : k % 2 ? 1 : -1);
+            if (r >= 0 && r < 9 && q >= 0 && q < 9) {
+                h_mark[r * 9 + q] = 1;
+            }
+        }
+        snprintf(u1, sizeof(u1), "row %d, column %d", c / 9 + 1, c % 9 + 1);
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        snprintf(tech, sizeof(tech), "The cells touching row %d, column %d at its corners can't be 1 apart from it, "
+                 "which leaves it only %s. ", c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_CONSEC) {            /* Consecutive: the cell and its neighbours */
         int c = t->unit;
         if (c >= 0 && c < 81) {
@@ -1095,7 +1132,8 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
                      lv_obj_t *const *clues, int x0, int y0, int size_all)
 {
     lv_obj_set_user_data(grid, (void *)geo);
-    const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums || geo->frame;   /* clues outside the grid */
+    const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums || geo->frame || geo->outside ||
+                       geo->rossini;                /* clues outside the grid */
     for (int i = 0; clues && i < BOARD_CLUES; i++) {
         lv_obj_set_hidden(clues[i], true);
     }
@@ -1134,20 +1172,36 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     const int gx = x0 + band + (size - w) / 2, gy = y0 + band + (size - h) / 2;
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
-    for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums || geo->frame) && clues && i < 18; i++) {   /* left, above */
+    for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums || geo->frame || geo->outside || geo->rossini) &&
+            clues && i < 18; i++) {                 /* left of the rows, above the columns */
         int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->skyscraper ? geo->sky[i] : geo->xsums ? geo->xsum[i]
-                           : geo->frame_sum[i];
+                           : geo->frame ? geo->frame_sum[i] : geo->outside ? geo->outside_set[i] : geo->rossini_dir[i];
         int mid = LINE_THICK + (k / 3) * (box_w + LINE_THICK) + (k % 3) * (cs + LINE_THIN) + cs / 2;
+        char t[12];
+        if (geo->outside) {                         /* its digits, side by side */
+            int n = 0;
+            for (int d = 1; d <= 9; d++) {
+                if (v >> d & 1) {
+                    t[n++] = (char)('0' + d);
+                }
+            }
+            t[n] = 0;
+        } else if (geo->rossini) {                  /* an arrow toward the bigger digits */
+            snprintf(t, sizeof(t), "%s", v == ROSSINI_NONE ? "" : i < 9 ? (v == ROSSINI_UP ? LV_SYMBOL_RIGHT : LV_SYMBOL_LEFT)
+                     : (v == ROSSINI_UP ? LV_SYMBOL_DOWN : LV_SYMBOL_UP));
+        } else {
+            snprintf(t, sizeof(t), "%d", v);
+        }
         lv_obj_set_user_data(clues[i], NULL);
-        lv_obj_set_style_text_font(clues[i], &lv_font_montserrat_20, 0);
-        lv_label_set_text_fmt(clues[i], "%d", v);
+        lv_obj_set_style_text_font(clues[i], geo->outside && strlen(t) > 2 ? &lv_font_montserrat_16 : &lv_font_montserrat_20, 0);
+        lv_label_set_text(clues[i], t);
         lv_obj_set_size(clues[i], band - 6, 24);
         if (i < 9) {
             lv_obj_set_pos(clues[i], gx - band, gy + mid - 12);
         } else {
             lv_obj_set_pos(clues[i], gx + mid - (band - 6) / 2, gy - band + 4);
         }
-        lv_obj_set_hidden(clues[i], !geo->sandwich && !v);          /* (a Skyscraper, X-Sums line without a clue) */
+        lv_obj_set_hidden(clues[i], !geo->sandwich && !v);   /* (a line without a clue; Rossini: without an arrow) */
     }
     for (int k = 0; geo->nlk && clues && k < geo->nlk; k++) {   /* Little Killer: a sum on the line before its diagonal */
         int first = geo->lk_cell[k][0], top = geo->lk_from_top[k], i = top ? first % 9 : first / 9;
@@ -1215,7 +1269,8 @@ void game_layout(void)
             game_var() != VAR_ARROW && game_var() != VAR_RENBAN && game_var() != VAR_WHISPER &&
             game_var() != VAR_SKY && game_var() != VAR_LK && game_var() != VAR_PALINDROME &&
             game_var() != VAR_REGIONSUM && game_var() != VAR_XSUM && game_var() != VAR_ZIPPER &&
-            game_var() != VAR_FRAME && game_var() != VAR_BETWEEN) {
+            game_var() != VAR_FRAME && game_var() != VAR_BETWEEN && game_var() != VAR_OUTSIDE &&
+            game_var() != VAR_ROSSINI && game_var() != VAR_ENTROPIC && game_var() != VAR_MODULAR) {
         lv_obj_invalidate(game_grid());
         return;
     }

@@ -253,6 +253,7 @@ typedef struct {
     const char *quad;                   /**< Quadruple: a circle's digits at the picture's centre, may be NULL */
     uint8_t line_kind;                  /**< the kind of the thermo line: LINE_* (Arrow, Renban, Whispers) */
     int8_t lk_clue;                     /**< Little Killer: a sum above the top-left cell, the diagonal down-right; 0 none */
+    const char *left_text;              /**< Outside Sudoku, Rossini: a clue left of the first row as text (left_clue -1), may be NULL */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound */
@@ -293,6 +294,18 @@ typedef struct {
 
 /* ============================================================= replay */
 /* (the timeline: replay_timeline.h; the screen: ui_replay.c, ui_replay_part.h) */
+
+/* ------------------------------------------------------------- splash screen (ui_splash.c) */
+/**
+ * @brief The start-up splash screen (extras/splashscreen.png) decoded and put on parent, full screen.
+ * @param parent  the screen shown at start-up
+ * @return the image, or NULL if it couldn't be decoded (no memory, a decoder error)
+ */
+lv_obj_t *splash_show(lv_obj_t *parent);
+/**
+ * @brief The splash screen deleted and its pixels freed (once the UI is up).
+ */
+void splash_hide(void);
 
 /* ------------------------------------------------------------- screenshot (ui_screenshot.c) */
 /*

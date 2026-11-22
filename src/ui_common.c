@@ -416,6 +416,12 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_FRAME && buf && sudoku_geom_frame_text(marks, buf)) {
         return buf;    /* (and Frame's) */
     }
+    if (v == VAR_OUTSIDE && buf && sudoku_geom_outside_text(marks, buf)) {
+        return buf;    /* (and Outside Sudoku's) */
+    }
+    if (v == VAR_ROSSINI && buf && sudoku_geom_rossini_text(marks, buf)) {
+        return buf;    /* (and Rossini's arrows) */
+    }
     if (v == VAR_LK && buf && sudoku_geom_lk_text(cages, buf)) {
         return buf;    /* (its sums in cages) */
     }

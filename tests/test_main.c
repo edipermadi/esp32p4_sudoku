@@ -170,6 +170,27 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             }
         }
     }
+    for (int lu = 0; (g->outside || g->rossini) && lu < 18; lu++) {   /* Outside, Rossini: the first three */
+        int x[3];
+        for (int k = 0; k < 3; k++) {
+            x[k] = sol[lu < 9 ? lu * 9 + k : k * 9 + lu - 9];
+        }
+        if (g->outside && (g->outside_set[lu] & ~((1u << x[0]) | (1u << x[1]) | (1u << x[2])))) {
+            return false;
+        }
+        bool up = x[0] < x[1] && x[1] < x[2], down = x[0] > x[1] && x[1] > x[2];
+        if (g->rossini && (g->rossini_dir[lu] == ROSSINI_UP ? !up : g->rossini_dir[lu] == ROSSINI_DOWN ? !down : up || down)) {
+            return false;
+        }
+    }
+    for (int c = 0; g->diag_nc && c < 81; c++) {    /* Diagonal Non-Consecutive: corners not 1 apart */
+        if (c % 9 < 8 && c < 72 && abs(sol[c] - sol[c + 10]) == 1) {
+            return false;
+        }
+        if (c % 9 > 0 && c < 72 && abs(sol[c] - sol[c + 8]) == 1) {
+            return false;
+        }
+    }
     for (int lu = 0; g->frame && lu < 18; lu++) {   /* Frame: the first three digits' sums */
         int cells[9];
         for (int k = 0; k < 9; k++) {
@@ -248,7 +269,9 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->thermo_of, b->thermo_of, 81) && !memcmp(a->thermo_pos, b->thermo_pos, 81) &&
            a->skyscraper == b->skyscraper && !memcmp(a->sky, b->sky, 18) && a->nlk == b->nlk &&
            a->xsums == b->xsums && !memcmp(a->xsum, b->xsum, 18) && a->frame == b->frame &&
-           !memcmp(a->frame_sum, b->frame_sum, 18) &&
+           !memcmp(a->frame_sum, b->frame_sum, 18) && a->outside == b->outside &&
+           !memcmp(a->outside_set, b->outside_set, sizeof(a->outside_set)) && a->rossini == b->rossini &&
+           !memcmp(a->rossini_dir, b->rossini_dir, 18) && a->diag_nc == b->diag_nc &&
            !memcmp(a->lk_sum, b->lk_sum, a->nlk) && !memcmp(a->lk_dir, b->lk_dir, a->nlk) &&
            !memcmp(a->lk_cell, b->lk_cell, sizeof(a->lk_cell[0]) * a->nlk) &&
            a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
@@ -292,6 +315,12 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_FRAME:
         sudoku_frame_text(g, marks, len);
+        break;
+    case VAR_OUTSIDE:
+        sudoku_outside_text(g, marks, len);
+        break;
+    case VAR_ROSSINI:
+        sudoku_rossini_text(g, marks, len);
         break;
     case VAR_LK:
         sudoku_lk_text(g, cages, len);
@@ -419,6 +448,31 @@ static void test_geometry(void)
     v[10] = 4;
     CHECK(is_sudoku_fits(&b, v, 20, 6) && !is_sudoku_fits(&b, v, 20, 7) && is_sudoku_fits(&b, v, 30, 5) &&
           !is_sudoku_fits(&b, v, 30, 3));
+    /* Outside: row 1's first three hold 3 and 7; with r1c1 = 3 and r1c2 = 5, r1c3 is 7; 7 isn't further on */
+    CHECK(!sudoku_geom_outside_text("1234,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));
+    CHECK(sudoku_geom_outside_text("37,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b) && !(b.allow[5] >> 7 & 1) &&
+          (b.allow[2] >> 7 & 1));
+    memset(v, 0, 81);
+    v[0] = 3;
+    v[1] = 5;
+    CHECK(is_sudoku_fits(&b, v, 2, 7) && !is_sudoku_fits(&b, v, 2, 8));
+    /* Rossini: row 1 rising: r1c1 at most 7, r1c3 at least 3; with 2 and 6 in r1c1, r1c3, r1c2 is 3 to 5 */
+    CHECK(sudoku_geom_rossini_text("1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b) && !(b.allow[0] >> 8 & 1) &&
+          !(b.allow[2] >> 2 & 1));
+    memset(v, 0, 81);
+    v[0] = 2;
+    v[2] = 6;
+    CHECK(is_sudoku_fits(&b, v, 1, 4) && !is_sudoku_fits(&b, v, 1, 7) && !is_sudoku_fits(&b, v, 1, 1));
+    /* (no arrow on column 1: 2, 4 down it can't be followed by a 5..9 in r3c1) */
+    memset(v, 0, 81);
+    v[0] = 2;
+    v[9] = 4;
+    CHECK(!is_sudoku_fits(&b, v, 18, 7) && is_sudoku_fits(&b, v, 18, 1));
+    /* Diagonal Non-Consecutive: a 5 in r2c2 keeps 4 and 6 out of r1c1, not out of r1c2 */
+    memset(v, 0, 81);
+    v[10] = 5;
+    CHECK(!is_sudoku_fits(sudoku_geom(VAR_DIAGNC), v, 0, 4) && is_sudoku_fits(sudoku_geom(VAR_DIAGNC), v, 1, 4) &&
+          is_sudoku_fits(sudoku_geom(VAR_CLASSIC), v, 0, 4));
     /* Frame: 6 is 1 + 2 + 3, 24 is 7 + 8 + 9; 5 and 25 can't be made */
     CHECK(!sudoku_geom_frame_text("5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));
     CHECK(sudoku_geom_frame_text("6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,24", &b) && b.allow[0] == 0xE &&
@@ -564,7 +618,7 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "34|0|%s", E1);      /* no variant 34 */
+    snprintf(buf, sizeof(buf), "37|0|%s", E1);      /* no variant 37 */
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);

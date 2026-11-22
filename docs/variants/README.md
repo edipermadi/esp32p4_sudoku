@@ -4,7 +4,7 @@
 
 Every Sudoku variant the board can make, each on its own page: the rules, what it looks like on the board, how to solve it, and a worked example step by step. Make any of them with **Puzzles → ⋮ → New puzzle**, at Easy, Medium, Hard or Expert (Kids 4×4: Easy and Medium).
 
-The worked examples use the 34 puzzles in [`variant-examples.sdx`](../variant-examples.sdx), one per variant, and each page's screenshot is that puzzle on the board. To follow along, copy the file to the `puzzles` folder on the card (over **USB drive**, or the card in a computer), then **Files → puzzles → variant-examples.sdx → Import**: they land in **Puzzles → Saved → variant-examples**, numbered as below. The file is made by `make -C tests examples` ([tools/variant_examples.c](../../tools/variant_examples.c)), which picks each puzzle so that its first steps need the variant's own rule, and prints the steps with their reasons. The screenshots come from `python3 tools/variant_shots.py --port /dev/ttyACM1` (all of them, or `... kropki` for one), with the file imported. Every page also has the whole puzzle solved step by step to the end, a picture per step, written and drawn by `python3 tools/walkthrough.py --all`.
+The worked examples use the 37 puzzles in [`variant-examples.sdx`](../variant-examples.sdx), one per variant, and each page's screenshot is that puzzle on the board. To follow along, copy the file to the `puzzles` folder on the card (over **USB drive**, or the card in a computer), then **Files → puzzles → variant-examples.sdx → Import**: they land in **Puzzles → Saved → variant-examples**, numbered as below. The file is made by `make -C tests examples` ([tools/variant_examples.c](../../tools/variant_examples.c)), which picks each puzzle so that its first steps need the variant's own rule, and prints the steps with their reasons. The screenshots come from `python3 tools/variant_shots.py --port /dev/ttyACM1` (all of them, or `... kropki` for one), with the file imported. Every page also has the whole puzzle solved step by step to the end, a picture per step, written and drawn by `python3 tools/walkthrough.py --all`.
 
 | # | Variant | The extra rule |
 |---|---|---|
@@ -42,5 +42,8 @@ The worked examples use the 34 puzzles in [`variant-examples.sdx`](../variant-ex
 | 32 | [Entropic Lines](entropic-lines.md) | Any three in a row on a line: a low, a middle and a high digit |
 | 33 | [Modular Lines](modular-lines.md) | Any three in a row on a line: one each of 1 4 7, 2 5 8 and 3 6 9 |
 | 34 | [Center Dot](center-dot.md) | The nine box centres hold 1–9 |
+| 35 | [Outside Sudoku](outside-sudoku.md) | A clue lists digits among a line's first three cells |
+| 36 | [Rossini](rossini.md) | An arrow: a line's first three rise that way; no arrow: they don't |
+| 37 | [Diagonal Non-Consecutive](diagonal-non-consecutive.md) | No digits 1 apart in cells touching at a corner |
 
 Cells are written r*row*c*column*, counted from the top left: r1c3 is row 1, column 3.

@@ -90,16 +90,21 @@ esp_err_t sudoku_ui_start(void)
     lv_sysmon_hide_performance(NULL);
 #endif
 
-    /* splash while the card and sudoku.db are read (a second or two) */
+    /* the splash screen while the card and sudoku.db are read and the screens built (two seconds or
+     * so); just text if the picture can't be decoded */
     lv_obj_t *boot = lv_screen_active();
     lv_obj_set_style_bg_color(boot, lv_color_hex(ui_palette_dark()->bg), 0);
     lv_obj_set_style_bg_opa(boot, LV_OPA_COVER, 0);
-    lv_obj_t *splash = lv_label_create(boot);
-    lv_label_set_text(splash, "Sudoku\n\nStarting...");
-    lv_obj_set_style_text_align(splash, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(splash, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(splash, lv_color_hex(ui_palette_dark()->text), 0);
-    lv_obj_center(splash);
+    lv_obj_t *splash = splash_show(boot);
+    const bool picture = splash != NULL;
+    if (!picture) {
+        splash = lv_label_create(boot);
+        lv_label_set_text(splash, "Sudoku\n\nStarting...");
+        lv_obj_set_style_text_align(splash, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_font(splash, &lv_font_montserrat_28, 0);
+        lv_obj_set_style_text_color(splash, lv_color_hex(ui_palette_dark()->text), 0);
+        lv_obj_center(splash);
+    }
     lv_refr_now(NULL);
 
     /* The settings and the game in progress live in sudoku.db, so the card
@@ -143,7 +148,11 @@ esp_err_t sudoku_ui_start(void)
     puzzles_set_tab(coll_tab(puzzles_coll()));
     ui_set_sleep_min(store_screen_timeout_min());
     apply_theme(is_store_dark_mode());
-    lv_obj_delete(splash);
+    if (picture) {
+        splash_hide();                              /* (its pixels freed too) */
+    } else {
+        lv_obj_delete(splash);
+    }
 
     game_set_last_tick(lv_tick_get());
     lv_timer_create(tick_cb, 200, NULL);

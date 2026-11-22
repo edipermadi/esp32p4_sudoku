@@ -18,6 +18,7 @@ EXCLUDE                = src/sqlite/sqlite3.h \
                          src/fonts \
                          src/avatars.c \
                          src/puzzles_data.c \
+                         src/splash_data.c \
                          src/puzzles_count.h
 
 OPTIMIZE_OUTPUT_FOR_C  = YES

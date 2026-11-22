@@ -21,6 +21,7 @@ extern "C" {
  * | File          | What's in it |
  * |---------------|--------------|
  * | ui_sudoku.c   | start-up: the card and sudoku.db read, the settings applied, the screens built, the timers |
+ * | ui_splash.c   | the start-up splash screen (extras/splashscreen.png, a JPEG in splash_data.c) |
  * | ui_notice.c   | notices: a banner for a while, or one that stays while something runs |
  * | ui_saver.c    | the screen saver: the dim clock, then dark, power saving; the waking tap |
  * | ui_lock.c     | the lock screen and Settings' PIN setup (@ref topic_lock) |

@@ -61,7 +61,7 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 How long **New puzzle** takes on the board, measured with devctl's `genbench` ([Remote control](devctl.md)): `python3 tools/devctl.py --port /dev/ttyACM1 "genbench all all 10"`. Ten puzzles of each variant and level, from fixed seeds (the same every run, so two builds compare puzzle for puzzle), each on the worker core like New puzzle, the CPU at 360 MHz. Measured 2026-11-21 on the Waveshare 4B board (pre-v3 ESP32-P4 silicon), firmware `0ce035d` (the generator as committed there); the whole run takes about 5 minutes.
 
-Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert. Palindrome, Region Sum Lines, X-Sums, Zipper Lines, Frame, Between Lines, Entropic Lines, Modular Lines and Center Dot were added on 2026-11-22, the same way.
+Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert. Palindrome, Region Sum Lines, X-Sums, Zipper Lines, Frame, Between Lines, Entropic Lines, Modular Lines, Center Dot, Outside Sudoku, Rossini and Diagonal Non-Consecutive were added on 2026-11-22, the same way (Frame re-measured once Outside Sudoku and Rossini shared its checker: its puzzles are the same, about a quarter slower on the board, the same speed on a PC).
 
 | Variant | Easy | Medium | Hard | Expert |
 |---|---|---|---|---|
@@ -94,11 +94,14 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | Region Sum Lines | 21 / 47 (29.7) | 403 / 810 (20.1) | 1070 / 1731 (18) | 1206 / 1780 (15.4) |
 | X-Sums | 72 / 122 (29.7) | 835 / 1605 (11.3) | 3012 / 7914 (14.7) | 2360 / 4324 (11.6) |
 | Zipper Lines | 12 / 23 (29.7) | 594 / 1153 (15.3) | 1209 / 3120 (12.7) | 1125 / 2798 (12.7) |
-| Frame | 14 / 25 (30) | 97 / 187 (15.1) | 534 / 1577 (17.3) | 208 / 562 (13.3) |
+| Frame | 17 / 31 (30) | 116 / 237 (15.1) | 672 / 1970 (17.3) | 268 / 776 (13.3) |
 | Between Lines | 24 / 42 (29.8) | 620 / 2843 (22.3) | 3610 / 8961 (19.6) | 1873 / 3791 (19.8) |
 | Entropic Lines | 17 / 36 (30.4) | 357 / 941 (18.3) | 907 / 1733 (15.6) | 1056 / 1754 (15.2) |
 | Modular Lines | 14 / 24 (29.5) | 250 / 578 (18.2) | 877 / 1487 (16) | 1219 / 2612 (14.3) |
 | Center Dot | 9 / 20 (35.7) | 79 / 179 (26.8) | 333 / 556 (26) | 242 / 595 (24.6) |
+| Outside Sudoku | 37 / 68 (30.1) | 117 / 185 (16.4) | 1406 / 3822 (18.2) | 1360 / 4978 (17.7) |
+| Rossini | 41 / 96 (30.2) | 292 / 717 (21.9) | 1780 / 4290 (21.4) | 643 / 2608 (20.7) |
+| Diagonal Non-Consecutive | 274 / 595 (32.2) | 512 / 823 (16.8) | 798 / 1675 (16.1) | 839 / 1044 (14) |
 
 Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), Between Lines Hard (up to 9 s), X-Sums Hard (up to 7.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
@@ -236,10 +239,12 @@ src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
 src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code, camera and vertical-dots (menu) icons at 24/20 px (lv_font_conv)
 src/avatars.c           the players' avatars: their groups (generated); the pixels are extras/avatars.bin (7 MB)
+src/splash_data.c / .h  the start-up splash screen as a JPEG (generated from extras/splashscreen.png)
 src/avatar_store.c      the avatars from their own flash partition, and installing avatars.bin from the card
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
 tools/gen_avatars.py    regenerates extras/avatars.bin and src/avatars.c / .h from Noto Color Emoji (Pillow with raqm)
+tools/gen_splash.py     regenerates src/splash_data.c / .h from extras/splashscreen.png (Pillow)
 tools/avatars_order.txt the avatars' order (sudoku.db keeps their numbers: only add at the end)
 tools/devctl.py         screenshots (PNG) and touches over the serial port
 tools/make_flasher_site.sh  the GitHub Pages site: web flasher + docs + code docs (Doxygen)
@@ -252,3 +257,5 @@ tools/opensudoku/       the downloaded .opensudoku collections
 To change the embedded puzzles, edit `COLLECTIONS` in `tools/gen_puzzles.py` and run `python3 tools/gen_puzzles.py`.
 
 To regenerate the avatars (a newer Noto Color Emoji, or a different size), run `python3 tools/gen_avatars.py --keep tools/avatars_order.txt`: it needs Pillow with raqm, `NotoColorEmoji.ttf` and Unicode's `emoji-test.txt` (Debian: `fonts-noto-color-emoji`, `unicode-data`), and `--keep` keeps the numbers players already have (new emoji go at the end). It writes `extras/avatars.bin` (the pixels) and a small `src/avatars.c`; `AVATAR_CRC` in `src/avatars.h` changes with the pixels, so boards ignore an older set in flash and need the new `avatars.bin` installed (see [Building](building.md)).
+
+**Splash screen**: the picture shown at start-up is `extras/splashscreen.png` (720×720). After changing it, run `python3 tools/gen_splash.py`: it writes `src/splash_data.c` (the picture as a JPEG, about 150 KB of the firmware) and `src/splash_data.h`. The board decodes it with the hardware JPEG decoder (`src/ui_splash.c`, about 35 ms), shows it while the card and `sudoku.db` are read and the screens built (about two seconds), then frees the pixels. That decoder turns YCbCr into RGB as video does ("limited range"), so the script writes the JPEG's YCbCr squeezed into that range; with a normal JPEG the light colours came out white. If the picture can't be decoded, the board shows "Starting..." as text instead.

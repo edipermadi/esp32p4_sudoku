@@ -552,13 +552,38 @@ uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v
     return free;
 }
 
+/**
+ * @brief Do a row's or column's first three digits keep its clue (Frame, Outside Sudoku, Rossini)?
+ * @param G  the board
+ * @param lu  the row or column
+ * @param a  the first digit from the clue
+ * @param b  the second
+ * @param c  the third
+ * @return true if so
+ */
+static inline bool is_first3_ok(const sudoku_geom_t *G, int lu, int a, int b, int c)
+{
+    if (G->frame && G->frame_sum[lu] && a + b + c != G->frame_sum[lu]) {
+        return false;
+    }
+    if (G->outside && (G->outside_set[lu] & ~((1u << a) | (1u << b) | (1u << c)))) {
+        return false;                               /* a digit of the clue not among them */
+    }
+    if (G->rossini) {
+        bool up = a < b && b < c, down = a > b && b > c;
+        int dir = G->rossini_dir[lu];
+        return dir == ROSSINI_UP ? up : dir == ROSSINI_DOWN ? down : !up && !down;
+    }
+    return true;
+}
+
 /* (documented in gen_internal.h) */
-uint16_t gen_frame_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand)
+uint16_t gen_first3_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand)
 {
     if (at > 2) {
         return 0x3FE;
     }
-    int cells[9], c = G->frame_sum[lu];
+    int cells[9];
     line_cells(lu, cells);
     uint16_t placed = 0, m[3];
     for (int k = 0; k < 9; k++) {
@@ -568,15 +593,29 @@ uint16_t gen_frame_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *
         m[k] = v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : cand ? cand[cells[k]] : (uint16_t)(0x3FE & ~placed);
     }
     const int o1 = at == 0 ? 1 : 0, o2 = at == 2 ? 1 : 2;   /* the other two of the first three */
+    const int sum = G->frame ? G->frame_sum[lu] : 0;
     uint16_t free = 0;
-    for (int d = 1; d <= 9; d++) {
-        if (!(m[at] >> d & 1)) {
-            continue;
-        }
-        for (int x = 1; x <= 9 && !(free >> d & 1); x++) {
-            int y = c - d - x;
-            if (x != d && y >= 1 && y <= 9 && y != d && y != x && (m[o1] >> x & 1) && (m[o2] >> y & 1)) {
-                free |= (uint16_t)(1u << d);
+    for (uint16_t md = m[at]; md; md &= (uint16_t)(md - 1)) {   /* a digit, with two others the other two cells can hold */
+        int d = __builtin_ctz(md);
+        for (uint16_t mx = (uint16_t)(m[o1] & ~(1u << d)); mx && !(free >> d & 1); mx &= (uint16_t)(mx - 1)) {
+            int x = __builtin_ctz(mx);
+            uint16_t my = (uint16_t)(m[o2] & ~(1u << d) & ~(1u << x));
+            if (sum) {                              /* Frame: the third is what's left of the sum, nothing else to check */
+                int y = sum - d - x;
+                if (y >= 1 && y <= 9 && (my >> y & 1)) {
+                    free |= (uint16_t)(1u << d);
+                }
+                continue;
+            }
+            for (; my; my &= (uint16_t)(my - 1)) {
+                int y = __builtin_ctz(my), t[3];
+                t[at] = d;
+                t[o1] = x;
+                t[o2] = y;
+                if (is_first3_ok(G, lu, t[0], t[1], t[2])) {
+                    free |= (uint16_t)(1u << d);
+                    break;
+                }
             }
         }
     }
@@ -712,13 +751,22 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
         WHY(line ? FIT_XSUM_COL : FIT_XSUM_ROW);
     }
-    for (int line = 0; G->frame && free && line < 2; line++) {   /* Frame: its row's, its column's clue */
-        int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;
-        if (G->frame_sum[lu] && at < 3) {
-            free &= gen_frame_allow(G, lu, at, g->v, NULL);
+    for (int line = 0; (G->frame || G->outside || G->rossini) && free && line < 2; line++) {
+        int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;   /* its row's, its column's clue */
+        if (at < 3 && is_gen_first3_clued(G, lu)) {
+            free &= gen_first3_allow(G, lu, at, g->v, NULL);
         }
-        WHY(line ? FIT_FRAME_COL : FIT_FRAME_ROW);
+        WHY(G->frame ? (line ? FIT_FRAME_COL : FIT_FRAME_ROW) : G->outside ? (line ? FIT_OUTSIDE_COL : FIT_OUTSIDE_ROW)
+            : (line ? FIT_ROSSINI_COL : FIT_ROSSINI_ROW));
     }
+    for (int k = 0; G->diag_nc && free && k < 4; k++) {   /* Diagonal Non-Consecutive: the corner cells */
+        int r = i / 9 + (k < 2 ? -1 : 1), c = i % 9 + (k % 2 ? 1 : -1);
+        int w = r >= 0 && r < 9 && c >= 0 && c < 9 ? g->v[r * 9 + c] : 0;
+        if (w) {
+            free &= (uint16_t)~((1u << (w + 1)) | (1u << (w - 1)));
+        }
+    }
+    WHY(FIT_DIAGNC);
     for (int slot = 0; G->nlk && free && slot < 2; slot++) {   /* Little Killer: what its diagonal's sum leaves */
         int k = G->lk_of[i][slot];
         if (k == LK_NONE) {

@@ -59,6 +59,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Entropic Lines", OF_VARIANT(31)},
     {"Fastest Modular Lines", OF_VARIANT(32)},
     {"Fastest Center Dot", OF_VARIANT(33)},
+    {"Fastest Outside Sudoku", OF_VARIANT(34)},
+    {"Fastest Rossini", OF_VARIANT(35)},
+    {"Fastest Diagonal Non-Consecutive", OF_VARIANT(36)},
 };
 
 /* (documented in stats_db_internal.h) */

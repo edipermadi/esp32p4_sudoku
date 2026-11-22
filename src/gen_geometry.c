@@ -19,7 +19,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow", "Renban",
                                                      "German Whispers", "Skyscraper", "Little Killer", "Palindrome",
                                                      "Region Sum Lines", "X-Sums", "Zipper Lines", "Frame", "Between Lines",
-                                                     "Entropic Lines", "Modular Lines", "Center Dot"
+                                                     "Entropic Lines", "Modular Lines", "Center Dot", "Outside Sudoku",
+                                                     "Rossini", "Diagonal Non-Consecutive"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -232,6 +233,9 @@ void sudoku_geom_init(void)
     g[VAR_NONCONSEC] = g[VAR_CLASSIC];              /* Consecutive with no bars: no neighbours 1 apart */
     g[VAR_NONCONSEC].variant = VAR_NONCONSEC;
     g[VAR_NONCONSEC].consec_on = true;
+    g[VAR_DIAGNC] = g[VAR_CLASSIC];                 /* no digits 1 apart corner to corner */
+    g[VAR_DIAGNC].variant = VAR_DIAGNC;
+    g[VAR_DIAGNC].diag_nc = true;
     g[VAR_EVENODD] = g[VAR_CLASSIC];
     g[VAR_EVENODD].variant = VAR_EVENODD;
     g[VAR_CONSEC] = g[VAR_CLASSIC];
@@ -246,7 +250,7 @@ void sudoku_geom_init(void)
     g[VAR_KILLER].variant = VAR_KILLER;
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
-                                  VAR_ENTROPIC, VAR_MODULAR
+                                  VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -266,7 +270,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_SKY ||
             variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
             variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN || variant == VAR_ENTROPIC ||
-            variant == VAR_MODULAR) {
+            variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -647,6 +651,147 @@ bool gen_geom_frame(const uint8_t clues[18], sudoku_geom_t *out)
         for (int k = 0; k < 3; k++) {
             out->allow[cells[k]] &= m;
         }
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_outside(const uint16_t sets[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_OUTSIDE;
+    out->outside = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int cells[9];
+        if ((sets[lu] & ~0x3FEu) || __builtin_popcount(sets[lu]) > 3) {
+            return false;
+        }
+        out->outside_set[lu] = sets[lu];
+        line_cells(lu, cells);
+        for (int k = 3; k < 9; k++) {               /* its digits are among the first three: not further on */
+            out->allow[cells[k]] &= (uint16_t)~sets[lu];
+        }
+    }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_outside_text(const char *text, sudoku_geom_t *out)
+{
+    uint16_t sets[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        if (!p) {
+            return false;
+        }
+        sets[i] = 0;
+        if (*p == '0') {
+            p++;
+        } else {
+            int n = 0;
+            while (*p >= '1' && *p <= '9') {
+                uint16_t b = (uint16_t)(1u << (*p - '0'));
+                if ((sets[i] & b) || ++n > 3) {
+                    return false;
+                }
+                sets[i] |= b;
+                p++;
+            }
+            if (!n) {
+                return false;
+            }
+        }
+        if (i < 17) {
+            if (*p != ',') {
+                return false;
+            }
+            p++;
+        }
+    }
+    return *p == 0 && gen_geom_outside(sets, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_outside_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        char d[10];
+        int k = 0;
+        for (int x = 1; x <= 9; x++) {
+            if (g->outside_set[i] >> x & 1) {
+                d[k++] = (char)('0' + x);
+            }
+        }
+        if (!k) {
+            d[k++] = '0';
+        }
+        d[k] = 0;
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%s", i ? "," : "", d);
+        if (w < 0 || w >= len - pos) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_rossini(const uint8_t dirs[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_ROSSINI;
+    out->rossini = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int cells[9];
+        if (dirs[lu] > ROSSINI_DOWN) {
+            return false;
+        }
+        out->rossini_dir[lu] = dirs[lu];
+        if (dirs[lu] == ROSSINI_NONE) {
+            continue;
+        }
+        line_cells(lu, cells);
+        for (int k = 0; k < 3; k++) {               /* rising: the k-th is k+1 .. 7+k; falling: the other way */
+            int at = dirs[lu] == ROSSINI_UP ? k : 2 - k;
+            out->allow[cells[k]] &= (uint16_t)(((1u << (8 + at)) - 1) & ~((1u << (at + 1)) - 1));
+        }
+    }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_rossini_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t dirs[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        if (!p || *p < '0' || *p > '2') {
+            return false;
+        }
+        dirs[i] = (uint8_t)(*p++ - '0');
+        if (i < 17) {
+            if (*p != ',') {
+                return false;
+            }
+            p++;
+        }
+    }
+    return *p == 0 && gen_geom_rossini(dirs, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_rossini_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d", i ? "," : "", g->rossini_dir[i]);
+        if (w < 0 || w >= len - pos) {
+            return false;
+        }
+        pos += w;
     }
     return true;
 }

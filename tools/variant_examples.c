@@ -450,6 +450,12 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_FRAME:
         sudoku_frame_text(g, marks, len);
         break;
+    case VAR_OUTSIDE:
+        sudoku_outside_text(g, marks, len);
+        break;
+    case VAR_ROSSINI:
+        sudoku_rossini_text(g, marks, len);
+        break;
     case VAR_LK:
         sudoku_lk_text(g, cages, len);
         break;
@@ -559,6 +565,24 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_FRAME_ROW:
     case FIT_FRAME_COL:
         printf(", \"rule\": \"frame\", \"line\": %d", why == FIT_FRAME_ROW ? r : 9 + q);
+        return;
+    case FIT_OUTSIDE_ROW:
+    case FIT_OUTSIDE_COL:
+        printf(", \"rule\": \"outside\", \"line\": %d", why == FIT_OUTSIDE_ROW ? r : 9 + q);
+        return;
+    case FIT_ROSSINI_ROW:
+    case FIT_ROSSINI_COL:
+        printf(", \"rule\": \"rossini\", \"line\": %d", why == FIT_ROSSINI_ROW ? r : 9 + q);
+        return;
+    case FIT_DIAGNC:
+        for (int k = 0; k < 4; k++) {               /* the corner cell 1 away */
+            int rr = r + (k < 2 ? -1 : 1), cc = q + (k % 2 ? 1 : -1);
+            if (rr >= 0 && rr < 9 && cc >= 0 && cc < 9 && v[rr * 9 + cc] && abs(v[rr * 9 + cc] - d) == 1) {
+                printf(", \"rule\": \"diagnc\", \"with\": %d", rr * 9 + cc);
+                return;
+            }
+        }
+        printf(", \"rule\": \"diagnc\", \"with\": -1");
         return;
     case FIT_XSUM_ROW:
     case FIT_XSUM_COL:
@@ -670,6 +694,26 @@ static void layout_json(const sudoku_geom_t *G)
         printf("[");
         for (int lu = 0; lu < 18; lu++) {
             printf("%s%d", lu ? "," : "", G->frame_sum[lu]);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"outside\": ");
+    if (G->outside) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->outside_set[lu]);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"rossini\": ");
+    if (G->rossini) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->rossini_dir[lu]);
         }
         printf("]");
     } else {

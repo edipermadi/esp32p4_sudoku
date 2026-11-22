@@ -46,7 +46,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "renban": "Renban", "german-whispers": "German", "skyscraper": "Skyscraper", "little-killer": "Little",
          "palindrome": "Palindrome", "region-sum-lines": "Region", "x-sums": "X-Sums", "zipper-lines": "Zipper",
          "frame": "Frame", "between-lines": "Between", "entropic-lines": "Entropic", "modular-lines": "Modular",
-         "center-dot": "Center"}
+         "center-dot": "Center", "outside-sudoku": "Outside", "rossini": "Rossini",
+         "diagonal-non-consecutive": "Diagonal"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -139,6 +140,18 @@ def rule_words(d, vals, c, v, r):
     if rule == "gt":
         smaller = (r["mark"] == 1) == r["cell_first"]       # LESS: the left / top one is the smaller
         return "the sign says it's %s than the %d in %s" % ("smaller" if smaller else "bigger", w, at)
+    if rule == "range" and (d.get("outside") or d.get("rossini")):
+        r_, c_ = c // 9, c % 9
+        for lu, at in ((r_, c_), (9 + c_, r_)):
+            name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+            if d.get("outside") and at >= 3 and d["outside"][lu] >> v & 1:
+                return "the clue of %s puts its %d among the first three cells, so not here" % (name, v)
+            if d.get("rossini") and at < 3 and d["rossini"][lu]:
+                up = d["rossini"][lu] == 1
+                side = "the left" if lu < 9 else "the top"
+                k = at if up else 2 - at
+                return ("the first three digits of %s %s from %s, so its %s cell is %d to %d" % (
+                    name, "rise" if up else "fall", side, ("first", "second", "third")[at], k + 1, k + 7))
     if rule == "range":
         if d.get("sky"):                                    # Skyscraper: the clue keeps it below a height
             if r["lo"] == r["hi"]:
@@ -350,6 +363,29 @@ def rule_words(d, vals, c, v, r):
                     "need %d, %s" % (name, clue, a_n(v), need, why))
         return ("the first three digits of %s add up to its clue %d: with %s there, its other two cells would need %d "
                 "between them, which two different digits not there yet can't make" % (name, clue, a_n(v), need))
+    if rule == "outside":
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        need = [x for x in range(1, 10) if d["outside"][lu] >> x & 1]
+        line = [lu * 9 + k for k in range(3)] if lu < 9 else [k * 9 + lu - 9 for k in range(3)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        miss = [n for n in need if n not in x]
+        empty = x.count(0)
+        return "%s's clue puts %s among its first three cells: with %s here, there'd be no room left for %s" % (
+            cap(name), listing(map(str, need)), a_n(v), listing(map(str, miss)))
+    if rule == "rossini":
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        side = "the left" if lu < 9 else "the top"
+        dr = d["rossini"][lu]
+        what = ("rise from %s" % side if dr == 1 else "fall from %s" % side if dr == 2
+                else "neither rise nor fall (%s has no arrow)" % name)
+        return "the first three digits of %s %s, and %s here can't keep that" % (name, what, a_n(v))
+    if rule == "diagnc":
+        if r.get("with", -1) >= 0:
+            return "it touches the %d in %s at a corner, and %d is 1 away from it" % (w, at, v)
+        return "a cell touching it at a corner would have to be 1 away from %s" % a_n(v)
     if rule == "xsum":
         lu = r["line"]
         name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
@@ -444,7 +480,8 @@ def step_text(d, vals, s):
 # ------------------------------------------------------------------ the pictures
 
 def make_drawer(d, fonts):
-    n, band = d["n"], BAND if d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame") else 0
+    n, band = d["n"], BAND if (d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame")
+                              or d.get("outside") or d.get("rossini")) else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -643,6 +680,36 @@ def make_drawer(d, fonts):
                 x, y = xy(i)
                 if clues[9 + i]:
                     g.text((x + CELL / 2, PAD + band / 2), str(clues[9 + i]), font=small, fill=SUM_FG, anchor="mm")
+        if d.get("outside"):                                # Outside Sudoku: the digits of each clue
+            for i in range(18):
+                txt = "".join(str(x) for x in range(1, 10) if d["outside"][i] >> x & 1)
+                if not txt:
+                    continue
+                if i < 9:
+                    x, y = xy(i * 9)
+                    pos = (PAD + band / 2, y + CELL / 2)
+                else:
+                    x, y = xy(i - 9)
+                    pos = (x + CELL / 2, PAD + band / 2)
+                g.text(pos, txt, font=tiny if len(txt) > 2 else small, fill=SUM_FG, anchor="mm")
+        if d.get("rossini"):                                # Rossini: an arrow toward the bigger digits
+            for i in range(18):
+                dr = d["rossini"][i]
+                if not dr:
+                    continue
+                if i < 9:
+                    x, y = xy(i * 9)
+                    cx, cy = PAD + band / 2, y + CELL / 2
+                    ux, uy = (1, 0) if dr == 1 else (-1, 0)
+                else:
+                    x, y = xy(i - 9)
+                    cx, cy = x + CELL / 2, PAD + band / 2
+                    ux, uy = (0, 1) if dr == 1 else (0, -1)
+                h = 8
+                g.line([(cx - ux * h, cy - uy * h), (cx + ux * h, cy + uy * h)], fill=SUM_FG, width=3)
+                tip = (cx + ux * h, cy + uy * h)
+                for sgn in (-1, 1):
+                    g.line([tip, (tip[0] - ux * 5 + sgn * uy * 5, tip[1] - uy * 5 + sgn * ux * 5)], fill=SUM_FG, width=3)
         if d["sandwich"]:                                   # the sums: left of the rows, above the columns
             for i in range(9):
                 x, y = xy(i * 9)

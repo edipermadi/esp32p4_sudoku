@@ -159,6 +159,10 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_xsum_text(p->marks, out);           /* (its clues go in marks too) */
     case VAR_FRAME:
         return sudoku_geom_frame_text(p->marks, out);          /* (and Frame's) */
+    case VAR_OUTSIDE:
+        return sudoku_geom_outside_text(p->marks, out);        /* (and Outside Sudoku's) */
+    case VAR_ROSSINI:
+        return sudoku_geom_rossini_text(p->marks, out);        /* (and Rossini's arrows) */
     case VAR_LK:
         return sudoku_geom_lk_text(p->cages, out);             /* (its sums where cages go) */
     default: {

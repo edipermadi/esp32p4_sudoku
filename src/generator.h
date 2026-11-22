@@ -94,6 +94,14 @@
  *                line hold one digit of each of 1 4 7, 2 5 8 and 3 6 9
  *   VAR_CENTERDOT Center Dot: Classic rules, and the nine box centres also hold
  *                1-9 once each
+ *   VAR_OUTSIDE  Outside Sudoku: Classic rules, and a clue left of some rows and
+ *                above some columns lists 1-3 digits that are among the first three
+ *                cells from there
+ *   VAR_ROSSINI  Rossini: Classic rules, and an arrow left of a row or above a
+ *                column says its first three digits rise in the arrow's direction;
+ *                no arrow: they neither rise nor fall
+ *   VAR_DIAGNC   Diagonal Non-Consecutive: Classic rules, and two cells that touch
+ *                at a corner never hold digits 1 apart
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -185,6 +193,9 @@ typedef enum {
     VAR_ENTROPIC,                       /**< Entropic Lines */
     VAR_MODULAR,                        /**< Modular Lines */
     VAR_CENTERDOT,                      /**< Center Dot */
+    VAR_OUTSIDE,                        /**< Outside Sudoku */
+    VAR_ROSSINI,                        /**< Rossini */
+    VAR_DIAGNC,                         /**< Diagonal Non-Consecutive */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -196,7 +207,7 @@ typedef enum {
  *         "Disjoint Groups", "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow",
  *         "Renban", "German Whispers", "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
  *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
- *         "Center Dot"
+ *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive"
  */
 const char *variant_name(int variant);
 
@@ -319,6 +330,11 @@ typedef struct {
     uint8_t xsum[18];                   /**< per row (0..8, from the left) and column (9..17, from the top), the sum of the first X digits, 0 = no clue */
     bool frame;                         /**< Frame: the clues are rules */
     uint8_t frame_sum[18];              /**< per row (0..8, from the left) and column (9..17, from the top), the sum of the first 3 digits, 0 = no clue */
+    bool outside;                       /**< Outside Sudoku: the clues are rules */
+    uint16_t outside_set[18];           /**< per row and column (as frame_sum), the digits among its first 3 (bit d = d), 0 = no clue */
+    bool rossini;                       /**< Rossini: the arrows are rules (every row and column has one, or none: neither) */
+    uint8_t rossini_dir[18];            /**< per row and column (as frame_sum), its first 3 digits: ROSSINI_* */
+    bool diag_nc;                       /**< Diagonal Non-Consecutive: cells touching at a corner aren't 1 apart */
     /* Little Killer: diagonals, each from its first cell (on the top row or the left column) in
      * its direction (LK_*), with the sum of its cells; a cell is on two at most (lk_of: the
      * down-right one, then the other way) */
@@ -465,6 +481,45 @@ bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out);
  * @return false: buf too small
  */
 bool sudoku_sky_text(const sudoku_geom_t *g, char *buf, int len);
+/** @brief Rossini: a row's or column's first three digits, seen from its clue (rossini_dir). */
+enum {
+    ROSSINI_NONE = 0,                   /**< no arrow: they neither rise nor fall */
+    ROSSINI_UP,                         /**< they rise away from the clue (the arrow points into the grid) */
+    ROSSINI_DOWN                        /**< they fall away from the clue (the arrow points out) */
+};
+/**
+ * @brief An Outside Sudoku board from its clues as text: 18 entries, comma-separated: 0 (no clue) or
+ * 1-3 different digits 1-9 (e.g. "37"), the rows from the left top to bottom, then the columns from
+ * the top left to right (kept in marks); sudoku_outside_text() writes it.
+ * @param text  the clues
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_outside_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief An Outside Sudoku board's clues as text.
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
+bool sudoku_outside_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief A Rossini board from its arrows as text: 18 numbers 0..2 (ROSSINI_*), the rows from the left,
+ * then the columns from the top, comma-separated (kept in marks); sudoku_rossini_text() writes it.
+ * @param text  the arrows
+ * @param out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_rossini_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Rossini board's arrows as text.
+ * @param g  the board
+ * @param buf  gets it
+ * @param len  its size
+ * @return false: buf too small
+ */
+bool sudoku_rossini_text(const sudoku_geom_t *g, char *buf, int len);
 /**
  * @brief An X-Sums board from its clues as text: 18 numbers 0..45 (0: no clue), the rows from the
  * left top to bottom, then the columns from the top left to right, comma-separated (kept in
@@ -774,7 +829,12 @@ enum {
     FIT_XSUM_ROW,                       /**< X-Sums: the row's clue */
     FIT_XSUM_COL,                       /**< X-Sums: the column's clue */
     FIT_FRAME_ROW,                      /**< Frame: the row's clue */
-    FIT_FRAME_COL                       /**< Frame: the column's clue */
+    FIT_FRAME_COL,                      /**< Frame: the column's clue */
+    FIT_OUTSIDE_ROW,                    /**< Outside Sudoku: the row's clue */
+    FIT_OUTSIDE_COL,                    /**< Outside Sudoku: the column's clue */
+    FIT_ROSSINI_ROW,                    /**< Rossini: the row's arrow (or none) */
+    FIT_ROSSINI_COL,                    /**< Rossini: the column's arrow (or none) */
+    FIT_DIAGNC                          /**< Diagonal Non-Consecutive: a cell touching it at a corner */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -828,7 +888,10 @@ typedef enum {
     TECH_SKY,                /**< Skyscraper: a clue */
     TECH_LK,                 /**< Little Killer: a diagonal */
     TECH_XSUM,               /**< X-Sums: a clue */
-    TECH_FRAME               /**< Frame: a clue */
+    TECH_FRAME,              /**< Frame: a clue */
+    TECH_OUTSIDE,            /**< Outside Sudoku: a clue */
+    TECH_ROSSINI,            /**< Rossini: an arrow (or none) */
+    TECH_DIAGNC              /**< Diagonal Non-Consecutive: the cells touching at a corner */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {
@@ -838,7 +901,8 @@ typedef struct {
      *  thermo: the thermometer; sandwich: the row or column; edge (Kropki, XV,
      *  Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
      *  the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
-     *  sky, xsum, frame: the row or column (0..17), cell1 the cell; lk: the diagonal, cell1;
+     *  sky, xsum, frame, outside, rossini: the row or column (0..17), cell1 the cell; lk: the
+     *  diagonal, cell1; diagnc: the cell its corners narrowed;
      *  X-Wing, Swordfish: the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
     int unit;
     int unit2;               /**< the second unit (see unit) */

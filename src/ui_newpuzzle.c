@@ -93,11 +93,14 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {21, 403, 1070, 1206},  /* Region Sum Lines */
     {72, 835, 3012, 2360},  /* X-Sums */
     {12, 594, 1209, 1125},  /* Zipper Lines (2026-11-22) */
-    {14, 97, 534, 208},     /* Frame */
+    {17, 116, 672, 268},    /* Frame (re-measured 2026-11-22, with Outside Sudoku and Rossini sharing its code) */
     {24, 620, 3610, 1873},  /* Between Lines */
     {17, 357, 907, 1056},   /* Entropic Lines (2026-11-22) */
     {14, 250, 877, 1219},   /* Modular Lines */
     {9, 79, 333, 242},      /* Center Dot */
+    {37, 117, 1406, 1360},  /* Outside Sudoku (2026-11-22) */
+    {41, 292, 1780, 643},   /* Rossini */
+    {274, 512, 798, 839},   /* Diagonal Non-Consecutive */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -156,6 +159,12 @@ static void gen_task(void *arg)
     }
     if (gen_var_req == VAR_FRAME) {
         sudoku_frame_text(gen_board, gen_marks, 82);
+    }
+    if (gen_var_req == VAR_OUTSIDE) {
+        sudoku_outside_text(gen_board, gen_marks, 82);
+    }
+    if (gen_var_req == VAR_ROSSINI) {
+        sudoku_rossini_text(gen_board, gen_marks, 82);
     }
     if (gen_var_req == VAR_LK) {
         sudoku_lk_text(gen_board, gen_cages, STATS_CAGES_LEN);    /* (where cages go) */
@@ -444,12 +453,15 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
  * between cells; lines; clues (cages, and sums or counts outside the grid) */
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_MINI, VAR_KIDS, VAR_DISJOINT, VAR_ASTERISK, VAR_CENTERDOT, GEN_CAT_END},
-    {VAR_KNIGHT, VAR_KING, VAR_NONCONSEC, VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, GEN_CAT_END},
+    {
+        VAR_KNIGHT, VAR_KING, VAR_NONCONSEC, VAR_DIAGNC, VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
+        GEN_CAT_END
+    },
     {
         VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM, VAR_ZIPPER, VAR_BETWEEN,
         VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
     },
-    {VAR_KILLER, VAR_SANDWICH, VAR_SKY, VAR_LK, VAR_XSUM, VAR_FRAME, GEN_CAT_END},
+    {VAR_KILLER, VAR_SANDWICH, VAR_SKY, VAR_LK, VAR_XSUM, VAR_FRAME, VAR_OUTSIDE, VAR_ROSSINI, GEN_CAT_END},
 };
 /** @brief each variant's button text (shorter than variant_name() where four across need it) */
 static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
@@ -461,7 +473,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_RENBAN] = "Renban", [VAR_WHISPER] = "Whispers", [VAR_SKY] = "Skyscraper", [VAR_LK] = "Little Killer",
     [VAR_PALINDROME] = "Palindrome", [VAR_REGIONSUM] = "Region Sum", [VAR_XSUM] = "X-Sums", [VAR_ZIPPER] = "Zipper",
     [VAR_FRAME] = "Frame", [VAR_BETWEEN] = "Between", [VAR_ENTROPIC] = "Entropic", [VAR_MODULAR] = "Modular",
-    [VAR_CENTERDOT] = "Center Dot",
+    [VAR_CENTERDOT] = "Center Dot", [VAR_OUTSIDE] = "Outside", [VAR_ROSSINI] = "Rossini", [VAR_DIAGNC] = "Diagonal NC",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -503,6 +515,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_ENTROPIC] = "9x9 with orange lines: any three cells in a row on one hold a low, a middle and a high digit.",
     [VAR_MODULAR] = "9x9 with teal lines: any three cells in a row on one hold one each of 147, 258 and 369.",
     [VAR_CENTERDOT] = "9x9, and the nine tinted box centres also hold 1-9 once each.",
+    [VAR_OUTSIDE] = "9x9: a clue by a row or column lists digits that are among its first three cells.",
+    [VAR_ROSSINI] = "9x9: an arrow by a row or column: its first three digits rise that way; no arrow: they don't.",
+    [VAR_DIAGNC] = "9x9: two cells that touch at a corner never hold digits 1 apart.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /**< the level buttons (Kids 4x4: Hard and Expert off) */
 

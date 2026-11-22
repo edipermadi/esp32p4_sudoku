@@ -228,6 +228,47 @@ int compute_conflicts(void)
             }
         }
     }
+    for (int lu = 0; (g_geo->outside || g_geo->rossini) && lu < 18; lu++) {   /* Outside, Rossini: the first three */
+        int cells[3], x[3], empty = 0;
+        for (int j = 0; j < 3; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+            x[j] = g_b.val[cells[j]];
+            empty += !x[j];
+        }
+        bool bad = false;
+        if (g_geo->outside) {                       /* more of the clue's digits missing than empty cells left */
+            uint16_t have = (uint16_t)((x[0] ? 1u << x[0] : 0) | (x[1] ? 1u << x[1] : 0) | (x[2] ? 1u << x[2] : 0));
+            bad = __builtin_popcount(g_geo->outside_set[lu] & ~have) > empty;
+        } else {                                    /* two digits out of the arrow's order, or (full) a run with none */
+            int dir = g_geo->rossini_dir[lu];
+            for (int a = 0; a < 3; a++) {
+                for (int b = a + 1; b < 3; b++) {
+                    if (x[a] && x[b] && ((dir == ROSSINI_UP && x[a] >= x[b]) || (dir == ROSSINI_DOWN && x[a] <= x[b]))) {
+                        bad = true;
+                    }
+                }
+            }
+            if (dir == ROSSINI_NONE && !empty) {
+                bad = (x[0] < x[1] && x[1] < x[2]) || (x[0] > x[1] && x[1] > x[2]);
+            }
+        }
+        for (int j = 0; bad && j < 3; j++) {
+            if (x[j]) {
+                g_conflict[cells[j]] = true;
+            }
+        }
+    }
+    for (int c = 0; g_geo->diag_nc && c < 72; c++) {   /* Diagonal Non-Consecutive: corners 1 apart */
+        for (int k = 0; k < 2; k++) {
+            int o = k ? c + 8 : c + 10;
+            if ((k ? c % 9 == 0 : c % 9 == 8) || !g_b.val[c] || !g_b.val[o]) {
+                continue;
+            }
+            if (abs(g_b.val[c] - g_b.val[o]) == 1) {
+                g_conflict[c] = g_conflict[o] = true;
+            }
+        }
+    }
     for (int lu = 0; g_geo->frame && lu < 18; lu++) {   /* Frame: the first three over the clue, or (full) not it */
         int c = g_geo->frame_sum[lu], cells[9], sum = 0, empty = 0;
         if (!c) {

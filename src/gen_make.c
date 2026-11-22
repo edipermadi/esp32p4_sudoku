@@ -823,9 +823,10 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
     const bool grp = variant == VAR_ENTROPIC || variant == VAR_MODULAR;
+    const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum ||
-                     pal || rsum || frame || zip || betw || grp;
+                     pal || rsum || frame || zip || betw || grp || outs || ross;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -965,6 +966,40 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)(full[cells[0]] + full[cells[1]] + full[cells[2]]) : 0;
             }
             gen_geom_frame(clues, jig);
+        } else if (outs) {                          /* a grid, then 1-3 of each line's first three digits */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint16_t sets[18];
+            int keep = level >= GEN_HARD ? 70 : 85;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                int cells[9];
+                line_cells(lu, cells);
+                sets[lu] = 0;
+                if ((int)(rnd(&rng) % 100) >= keep) {
+                    continue;
+                }
+                uint8_t three[3] = {full[cells[0]], full[cells[1]], full[cells[2]]};
+                for (int i = 2; i > 0; i--) {       /* shuffled, then the first 1-3 of them */
+                    int j = (int)(rnd(&rng) % (uint32_t)(i + 1));
+                    uint8_t t = three[i];
+                    three[i] = three[j];
+                    three[j] = t;
+                }
+                int n = 1 + (int)(rnd(&rng) % 3);
+                for (int k = 0; k < n; k++) {
+                    sets[lu] |= (uint16_t)(1u << three[k]);
+                }
+            }
+            gen_geom_outside(sets, jig);
+        } else if (ross) {                          /* a grid, then every line's arrow (or none) */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t dirs[18];
+            for (int lu = 0; lu < 18; lu++) {
+                int cells[9];
+                line_cells(lu, cells);
+                int a = full[cells[0]], b = full[cells[1]], c = full[cells[2]];
+                dirs[lu] = a < b && b < c ? ROSSINI_UP : a > b && b > c ? ROSSINI_DOWN : ROSSINI_NONE;
+            }
+            gen_geom_rossini(dirs, jig);
         } else if (pal || rsum || zip || betw || grp) {   /* a grid, then lines that keep their rule on it */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             int want = level >= GEN_HARD ? 10 : 8;
@@ -1042,7 +1077,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 sums[lu] = (uint8_t)sum;
             }
             gen_geom_sandwich(sums, jig);
-        } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC) {
+        } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC || variant == VAR_DIAGNC) {
             /* not every fill works out quickly: try again */
             if (!gen_random_full_grid(G, full, &rng, 20000)) {
                 continue;

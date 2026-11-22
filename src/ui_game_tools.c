@@ -249,6 +249,13 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_BETWEEN] = {4, 1, 0, 0, "3658", NULL, NULL, NULL, NULL, NULL, PIC_BETWEEN, NULL, -1, 0, NULL, NULL, LINE_BETWEEN},
     [VAR_ENTROPIC] = {5, 1, 0, 0, "29418", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_ENTROPIC},
     [VAR_MODULAR] = {5, 1, 0, 0, "15372", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_MODULAR},
+    [VAR_OUTSIDE] = {
+        6, 1, 3, 1, "582934", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, 0, NULL, NULL, 0, 0, "25"
+    },
+    [VAR_ROSSINI] = {
+        6, 1, 3, 1, "247953", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, 0, NULL, NULL, 0, 0, LV_SYMBOL_RIGHT
+    },
+    [VAR_DIAGNC] = {3, 3, 0, 0, "248" "651" "937", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
     [VAR_CENTERDOT] = {
         9, 9, 3, 3, "........." ".3..7..1." "........." "........." ".6..2..9." "........."
         "........." ".8..4..5." ".........",
@@ -328,6 +335,12 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "2 5 8 and 3 6 9: 1 5 3, 5 3 7 and 3 7 2. So cells three apart on a line are in the same one of those groups.",
     [VAR_CENTERDOT] = "Classic rules, and the nine tinted cells in the centres of the boxes also hold 1 to 9, "
     "each once.",
+    [VAR_OUTSIDE] = "Classic rules, and a clue left of a row or above a column lists digits that are among the first "
+    "three cells from there, in any order: here 2 and 5 are among 5, 8, 2. The third can be anything else.",
+    [VAR_ROSSINI] = "Classic rules, and an arrow left of a row or above a column says its first three digits rise "
+    "toward where it points: 2, 4, 7. A row or column with no arrow: its first three neither rise nor fall.",
+    [VAR_DIAGNC] = "Classic rules, and two cells that touch at a corner never hold digits 1 apart: no 4 or 6 in a "
+    "corner of the 5. Side by side doesn't count: the 4 and 6 next to the 5 are fine.",
 };
 
 /**
@@ -512,9 +525,12 @@ static void rules_pic_draw_cb(lv_event_t *e)
         lv_draw_label(layer, &d, &a);
         draw_lk_arrow(layer, x0 - 12, y0 - 12, LK_DOWN_RIGHT, 9);
     }
-    if (p->left_clue >= 0) {                        /* Sandwich, Skyscraper, X-Sums, Frame: the clue left of the row */
-        char t[4];
-        snprintf(t, sizeof(t), "%d", p->left_clue);
+    if (p->left_clue >= 0 || p->left_text) {        /* Sandwich, Skyscraper, X-Sums, Frame, ...: the clue left of the row */
+        char t[8];
+        snprintf(t, sizeof(t), "%s", p->left_text ? p->left_text : "");
+        if (!p->left_text) {
+            snprintf(t, sizeof(t), "%d", p->left_clue);
+        }
         lv_draw_label_dsc_t d;
         lv_draw_label_dsc_init(&d);
         d.font = &lv_font_montserrat_22;
@@ -672,6 +688,12 @@ static bool share_text(char *buf, size_t n)
         break;
     case VAR_FRAME:
         key = sudoku_frame_text(G, extra, sizeof(extra)) ? "clues" : NULL;
+        break;
+    case VAR_OUTSIDE:
+        key = sudoku_outside_text(G, extra, sizeof(extra)) ? "clues" : NULL;
+        break;
+    case VAR_ROSSINI:
+        key = sudoku_rossini_text(G, extra, sizeof(extra)) ? "arrows" : NULL;
         break;
     case VAR_LK:
         key = sudoku_lk_text(G, extra, sizeof(extra)) ? "diagonals" : NULL;
@@ -833,6 +855,16 @@ static int pz_line(char *buf, size_t n)
         break;
     case VAR_FRAME:
         if (sudoku_frame_text(G, extra, sizeof(extra))) {
+            marks = extra;
+        }
+        break;
+    case VAR_OUTSIDE:
+        if (sudoku_outside_text(G, extra, sizeof(extra))) {
+            marks = extra;
+        }
+        break;
+    case VAR_ROSSINI:
+        if (sudoku_rossini_text(G, extra, sizeof(extra))) {
             marks = extra;
         }
         break;

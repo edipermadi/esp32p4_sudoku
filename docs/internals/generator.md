@@ -31,7 +31,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 
 **Extra peers**: `xpeers` are cells that must differ without sharing a unit: a knight's move (Anti-Knight) or a diagonal touch (Anti-King).
 
-**`allow[c]`**: a bitmask of the digits a cell may hold at all (bit *d* = digit *d*). Even-Odd narrows it to even or odd. Skyscraper clues, X-Sums clues (the first cell: only the X that can make the clue), Frame clues (the first three: the digits three different ones can make it with) and Greater-Than sign chains narrow it near the clue. The rest of the code starts from it instead of from "1–9".
+**`allow[c]`**: a bitmask of the digits a cell may hold at all (bit *d* = digit *d*). Even-Odd narrows it to even or odd. Skyscraper clues, X-Sums clues (the first cell: only the X that can make the clue), Frame clues (the first three: the digits three different ones can make it with), Outside Sudoku clues (their digits out of the rest of the line), Rossini arrows (a rising first cell at most 7, and so on) and Greater-Than sign chains narrow it near the clue. The rest of the code starts from it instead of from "1–9".
 
 **Variant clues**, each in its own fields:
 
@@ -47,6 +47,9 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 | `lk_*` | Little Killer diagonals |
 | `xsums`, `xsum` | X-Sums: 18 clues, 0 = none |
 | `frame`, `frame_sum` | Frame: 18 clues, 0 = none |
+| `outside`, `outside_set` | Outside Sudoku: 18 digit sets, 0 = none |
+| `rossini`, `rossini_dir` | Rossini: 18 arrows (`ROSSINI_*`, none included) |
+| `diag_nc` | Diagonal Non-Consecutive: no digits 1 apart at a corner |
 
 `sudoku_geom_init()` builds the fixed boards once at start-up (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Disjoint, Asterisk, Center Dot ...), and `sudoku_geom(variant)` returns them. Variants whose board comes **with** its puzzle (Jigsaw's regions, Killer's cages, every variant with clues) are built per puzzle, from text with `sudoku_geom_*_text()`, and turned back into text with `sudoku_*_text()`. That text is exactly what the database's `regions`, `cages`, `marks` and `thermos` columns hold (see [Database design](database.md)).
 
@@ -86,7 +89,8 @@ The exact search says *whether* a puzzle has one solution but not *how hard* it 
    | `gen_quad_logic` | Quadruple | circles |
    | `gen_sky_logic` | Skyscraper | every order of a nearly full line's missing digits |
    | `gen_lk_logic` | Little Killer | the range a diagonal's other cells allow |
-   | `gen_frame_logic` | Frame | the three digits each clue can be made of |
+   | `gen_first3_logic` | Frame, Outside Sudoku, Rossini | the digits each of a line's first three cells can hold with the other two, by its clue (`gen_first3_allow()`) |
+   | `gen_diagnc_logic` | Diagonal Non-Consecutive | a digit 1 away from all a corner cell can hold |
    | `gen_xsum_logic` | X-Sums | each first digit a clue allows, against the range the next X − 1 cells can make |
 
 3. **Locked candidates** (pointing and claiming) and **naked and hidden pairs**: needing any of these makes the puzzle tier 2.
@@ -118,7 +122,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
 
 ### 1. A full grid, and the variant's clues
 
-- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Disjoint, Asterisk, Center Dot): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and Non-Consecutive sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
+- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Diagonal Non-Consecutive, Disjoint, Asterisk, Center Dot): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and the two Non-Consecutives sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
 - **Jigsaw**: `jigsaw_map()` reshapes the 3×3 boxes by swapping cells across region borders while every region stays in one piece. A new shape is made every 4 attempts; one that won't fill quickly is dropped.
 - **Variants with clues**: a random **Classic** grid first, then clues that are true of it, so the solution is known to fit:
 
@@ -140,6 +144,8 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
   | X-Sums | each line's sum of its first X digits, kept for about 75 % of the lines (Hard/Expert 60 %) |
   | Zipper Lines | `zipper_paths()`: 8 lines (Hard/Expert 10) grown from the middle out, a pair at a time, each pair adding up to the middle digit (or the middle pair's sum) |
   | Frame | each line's sum of its first three digits, kept for about 75 % of the lines (Hard/Expert 60 %) |
+  | Outside Sudoku | 1 to 3 of each line's first three digits, for about 85 % of the lines (Hard/Expert 70 %) |
+  | Rossini | every line's arrow: rising, falling, or none |
   | Between Lines | `between_paths()`: 8 walks (Hard/Expert 10) from a circle through digits on one side of it, cut at the longest length whose last cell lies beyond all the ones between |
 
   | Entropic, Modular Lines | `group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |

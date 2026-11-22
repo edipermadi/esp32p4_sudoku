@@ -158,7 +158,8 @@ bool is_gen_sky_line_ok(const uint8_t x[9], int c);
  */
 uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand);
 /**
- * @brief The digits the cell at a place of a Frame row or column may hold, by its clue.
+ * @brief The digits the cell at a place of a row or column may hold, by its clue about the first three
+ *        cells (Frame: their sum; Outside Sudoku: digits among them; Rossini: rising, falling or neither).
  * @param G          the board
  * @param lu         the row (0..8) or column (9..17), with a clue
  * @param at         the cell's place along it, from the clue (0..2: else anything)
@@ -166,7 +167,7 @@ uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v
  * @param cand       the candidates of the empty ones, or NULL (then any digit not on the line yet)
  * @return a candidate mask
  */
-uint16_t gen_frame_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand);
+uint16_t gen_first3_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand);
 /**
  * @brief Counts a puzzle's solutions, up to a limit, within a node budget.
  * @param G          the board
@@ -267,11 +268,30 @@ bool gen_sky_logic(logic_t *L);
  */
 bool gen_xsum_logic(logic_t *L);
 /**
- * @brief A technique: Frame: what the clues leave, candidates taken out.
+ * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
+ *        candidates taken out.
  * @param L          the state
  * @return true if it changed anything
  */
-bool gen_frame_logic(logic_t *L);
+bool gen_first3_logic(logic_t *L);
+/**
+ * @brief A technique: Diagonal Non-Consecutive: a digit 1 away from all a corner neighbour can hold,
+ *        taken out.
+ * @param L          the state
+ * @return true if it changed anything
+ */
+bool gen_diagnc_logic(logic_t *L);
+/**
+ * @brief Does the board have a clue about the first three cells of this row or column (Frame, Outside
+ *        Sudoku, Rossini: every line)?
+ * @param G          the board
+ * @param lu         the row (0..8) or column (9..17)
+ * @return true if so
+ */
+static inline bool is_gen_first3_clued(const sudoku_geom_t *G, int lu)
+{
+    return G->rossini || (G->frame && G->frame_sum[lu]) || (G->outside && G->outside_set[lu]);
+}
 /**
  * @brief A technique: Little Killer: what the diagonals' sums leave, candidates taken out.
  * @param L          the state
@@ -383,6 +403,22 @@ bool gen_geom_lk(int n, const bool *top, const uint8_t *idx, const uint8_t *dir,
  * @return false if a clue can't be made by three different digits
  */
 bool gen_geom_frame(const uint8_t clues[18], sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Outside Sudoku, a classic board with clues beside the rows
+ *        and columns.
+ * @param sets       the rows' clues, then the columns' (digit masks; 0: none)
+ * @param out        gets the board
+ * @return false if a clue has more than 3 digits
+ */
+bool gen_geom_outside(const uint16_t sets[18], sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Rossini, a classic board with an arrow (or none) by every
+ *        row and column.
+ * @param dirs       the rows', then the columns' (ROSSINI_*)
+ * @param out        gets the board
+ * @return false if one isn't ROSSINI_*
+ */
+bool gen_geom_rossini(const uint8_t dirs[18], sudoku_geom_t *out);
 /**
  * @brief Builds a board from its decorations: X-Sums, a classic board with clues beside the rows and
  *        columns.

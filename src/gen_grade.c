@@ -445,12 +445,13 @@ bool gen_xsum_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
-bool gen_frame_logic(logic_t *L)
+bool gen_first3_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
+    const int tech = G->frame ? TECH_FRAME : G->outside ? TECH_OUTSIDE : TECH_ROSSINI;
     for (int lu = 0; lu < 18; lu++) {
         int cells[9];
-        if (!G->frame_sum[lu]) {
+        if (!is_gen_first3_clued(G, lu)) {
             continue;
         }
         line_cells(lu, cells);
@@ -459,12 +460,43 @@ bool gen_frame_logic(logic_t *L)
             if (L->v[cell]) {
                 continue;
             }
-            uint16_t keep = (uint16_t)(L->cand[cell] & gen_frame_allow(G, lu, k, L->v, L->cand));
+            uint16_t keep = (uint16_t)(L->cand[cell] & gen_first3_allow(G, lu, k, L->v, L->cand));
             if (keep != L->cand[cell]) {
                 eliminate(L, cell, (uint16_t)(L->cand[cell] & ~keep));
-                trace(TECH_FRAME, lu, -1, keep, 0, cell, -1);
+                trace(tech, lu, -1, keep, 0, cell, -1);
                 return true;
             }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_diagnc_logic(logic_t *L)
+{
+    for (int i = 0; i < 81; i++) {
+        if (L->v[i]) {
+            continue;
+        }
+        uint16_t keep = L->cand[i];
+        for (int k = 0; k < 4; k++) {               /* d is out when a corner cell can only be d - 1 or d + 1 */
+            int r = i / 9 + (k < 2 ? -1 : 1), c = i % 9 + (k % 2 ? 1 : -1);
+            if (r < 0 || r > 8 || c < 0 || c > 8) {
+                continue;
+            }
+            int o = r * 9 + c;
+            uint16_t m = L->v[o] ? (uint16_t)(1u << L->v[o]) : L->cand[o];
+            for (int d = 1; d <= 9 && m; d++) {
+                uint16_t near = (uint16_t)(((1u << (d + 1)) | (1u << (d - 1))) & 0x3FE);
+                if (!(m & ~near)) {
+                    keep &= (uint16_t)~(1u << d);
+                }
+            }
+        }
+        if (keep != L->cand[i]) {
+            eliminate(L, i, (uint16_t)(L->cand[i] & ~keep));
+            trace(TECH_DIAGNC, i, -1, keep, 0, i, -1);
+            return true;
         }
     }
     return false;
@@ -981,8 +1013,11 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->xsums && gen_xsum_logic(&L)) {
             continue;    /* X-Sums: the clues */
         }
-        if (G->frame && gen_frame_logic(&L)) {
-            continue;    /* Frame: the clues */
+        if ((G->frame || G->outside || G->rossini) && gen_first3_logic(&L)) {
+            continue;    /* Frame, Outside Sudoku, Rossini: the clues */
+        }
+        if (G->diag_nc && gen_diagnc_logic(&L)) {
+            continue;    /* Diagonal Non-Consecutive: the corners */
         }
         if (gen_locked_candidates(&L) || gen_pairs(&L)) {
             tier = 2;
@@ -1002,6 +1037,9 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_NONCONSEC) {
         return 24;
     }
+    if (G->diag_nc) {
+        return 30;
+    }
     if (G->edge_kind == EDGE_KROPKI) {
         return 14;    /* every dot is there, and every missing one says something */
     }
@@ -1017,7 +1055,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->nthermos && G->line_kind != LINE_THERMO) {
         return 28;
     }
-    if (G->skyscraper || G->nlk || G->xsums || G->frame) {
+    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini) {
         return 28;
     }
     if (G->consec_on) {
