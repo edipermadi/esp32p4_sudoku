@@ -44,8 +44,18 @@ Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
     mv FROM TO              rename or move (TO must not exist)
     rm PATH                 delete a file or an empty folder
     mkdir PATH              make a folder
+    import LOCAL [REMOTE]   a puzzle file from this computer (.sdm, .sdx, .txt, .opensudoku) into
+                            Puzzles > Saved in one go: put to the card (puzzles/<its name> by
+                            default; the collection is named after the file), then imported as
+                            Settings > Data > Import does, each puzzle checked and graded
 sudoku.db is open while the board runs: get works, put/mv/rm on it don't
 (use Settings > Data > USB drive). Paths with spaces: quote them.
+
+Collections on the Puzzles screen's Saved tab:
+    colls                   list them: imported or saved, how many puzzles, the name
+    colldel KIND NAME       delete one (KIND: imported or saved; quote a name with spaces), as
+                            the screen's Delete does: its puzzles stay on the board, with their
+                            solves, History and Gameplays; an imported file can be imported again
 
 SQL on sudoku.db, on the board (its database task runs it; 20 s at most a statement):
     python3 tools/devctl.py --sql "SELECT * FROM players"      one or more statements, then exit
@@ -582,6 +592,53 @@ def run(board, words):
         board.ser.write((" ".join([cmd] + [enc(w) for w in words[1:need]]) + "\n").encode())
         board.wait_for("OK " + cmd, 20, fail="ERR")
         print("ok:", " ".join(words[:need]))
+    elif cmd == "import":
+        if len(words) < 2:
+            sys.exit("import LOCAL [REMOTE] (REMOTE defaults to puzzles/<LOCAL's name>)")
+        local = words[1]
+        if not os.path.isfile(local):
+            sys.exit("import: no file %s" % local)
+        remote = words[2] if len(words) > 2 else "puzzles/" + os.path.basename(local)
+        board.put(local, remote)
+        board.ser.write(("import %s\n" % enc(remote)).encode())
+        end = time.time() + 310                     # (the board waits up to 5 minutes for the import)
+        while time.time() < end:
+            line = board.readline(end - time.time())
+            if line is None:
+                break
+            if line.startswith("IMPORT "):
+                print(line[7:])
+            elif line.startswith("OK import"):
+                return
+            elif line.startswith("ERR"):
+                sys.exit(line)
+        sys.exit("import: no answer")
+    elif cmd == "colls":
+        board.ser.write(b"colls\n")
+        rows = []
+        end = time.time() + 20
+        while time.time() < end:
+            line = board.readline(10)
+            if line is None:
+                break
+            if line.startswith("COLL "):
+                _, kind, count, name = line.split(" ", 3)
+                rows.append((kind, int(count), dec(name)))
+            elif line.startswith("OK colls"):
+                for kind, count, name in rows:
+                    print("%-9s %4d  %s" % (kind, count, name))
+                if not rows:
+                    print("(no saved or imported collections)")
+                return
+            elif line.startswith("ERR"):
+                sys.exit(line)
+        sys.exit("colls: no answer")
+    elif cmd == "colldel":
+        if len(words) < 3 or words[1] not in ("saved", "imported"):
+            sys.exit("colldel saved|imported NAME (quote a name with spaces)")
+        board.ser.write(("colldel %s %s\n" % (words[1], enc(" ".join(words[2:])))).encode())
+        board.wait_for("OK colldel", 30, fail="ERR")
+        print("deleted the %s collection %s" % (words[1], " ".join(words[2:])))
     elif cmd == "heap":
         board.ser.write((" ".join(words) + "\n").encode())
         end = time.time() + 10

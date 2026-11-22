@@ -63,7 +63,18 @@ extern "C" {
  *                                "ACK <bytes>" after every 12 (send the next 12 then); written
  *                                to <path>.part, renamed to <path> once the CRC matches
  *   mv <from> <to>, rm <path> (a file or an empty folder), mkdir <path>
+ *   import <path>             imports a puzzle file on the card (.sdm, .sdx, .txt, .opensudoku) as
+ *                             Settings > Data > Import does, and waits (up to 5 min) -> "IMPORT
+ *                             <what happened>", "OK import <imported> <left out>"; or "ERR import: ..."
+ *                             (imported already, no puzzle with one solution, no sudoku.db)
  * sudoku.db is open: it can be read, not replaced, renamed or deleted.
+ *
+ * Collections on the Puzzles screen's Saved tab (names with %XX for a space, as paths):
+ *   colls                     -> "COLL imported <puzzles> <name>" / "COLL saved <puzzles> <name>" lines,
+ *                                then "OK colls <n>"
+ *   colldel saved|imported <name>   deletes it as the screen's Delete does: its puzzles stay on
+ *                                the board (solves, History, Gameplays); an imported file can be
+ *                                imported again -> "OK colldel" or "ERR colldel: <why>"
  *
  * Every command answers "OK <command>" (or "ERR <why>") once done.
  *

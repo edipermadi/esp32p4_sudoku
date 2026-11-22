@@ -15,6 +15,7 @@
 #include "bsp/bsp_board.h"
 #include "stats_db.h"
 #include "ui_sudoku.h"
+#include "esp_timer.h"
 #include <lvgl.h>                      /* (LV_SYMBOL_*: the toast's icons) */
 #include <miniz.h>
 
@@ -28,6 +29,7 @@
 #define UP_WINDOW    12                             /**< data lines between ACKs (the RX buffer holds them) */
 #define UP_TIMEOUT   5000                           /**< ms without a data line: the upload is abandoned */
 #define UP_BUF       (16 * 1024)                    /**< written to the card in pieces this big */
+#define IMPORT_TIMEOUT 300000                       /**< import: the most it waits for sudoku.db, ms */
 
 /**
  * @brief A hex digit's value.
@@ -362,6 +364,42 @@ static void card_put(const char *path, long size, uint32_t crc, long zsize)
     sudoku_ui_progress_done(note, 3000);
 }
 
+/**
+ * @brief import: a puzzle file on the card imported as Settings > Data > Import (or Files' Import) does,
+ *        waited for (grading 100 puzzles takes a while): "IMPORT \<what happened\>", then "OK import
+ *        \<imported\> \<left out\>"; or "ERR import: ...". The board shows its notice and its screens
+ *        take the new collection as for an import from the screen (the UI runs meanwhile).
+ * @param full  the file (full path)
+ */
+static void card_import(const char *full)
+{
+    struct stat st;
+    if (stat(full, &st) != 0 || S_ISDIR(st.st_mode)) {
+        serial_printf("ERR import: %s: %s\n", full, stat(full, &st) != 0 ? strerror(errno) : "a folder");
+        return;
+    }
+    if (!is_stats_db_ready()) {
+        serial_println("ERR import: no sudoku.db");
+        return;
+    }
+    stats_import_result_t before, r;
+    stats_db_import_last(&before);
+    stats_db_import_file(full);
+    const int64_t t0 = esp_timer_get_time();
+    do {
+        devctl_pump(50);                            /* (the UI runs: its notice, the collection list) */
+        stats_db_import_last(&r);
+    } while (r.seq == before.seq && esp_timer_get_time() - t0 < (int64_t)IMPORT_TIMEOUT * 1000);
+    if (r.seq == before.seq) {
+        serial_println("ERR import: no answer from sudoku.db");
+    } else if (r.got > 0) {
+        serial_printf("IMPORT %s\n", r.msg);
+        serial_printf("OK import %d %d\n", r.got, r.bad);
+    } else {
+        serial_printf("ERR import: %s\n", r.msg);
+    }
+}
+
 /* (documented in devctl_internal.h) */
 bool devctl_files_cmd(char *line)
 {
@@ -373,8 +411,9 @@ bool devctl_files_cmd(char *line)
         return false;
     }
     bool is_ls = !strcmp(cmd, "ls"), is_get = !strcmp(cmd, "get"), is_put = !strcmp(cmd, "put"),
-         is_mv = !strcmp(cmd, "mv"), is_rm = !strcmp(cmd, "rm"), is_mkdir = !strcmp(cmd, "mkdir");
-    if (!(is_ls || is_get || is_put || is_mv || is_rm || is_mkdir)) {
+         is_mv = !strcmp(cmd, "mv"), is_rm = !strcmp(cmd, "rm"), is_mkdir = !strcmp(cmd, "mkdir"),
+         is_import = !strcmp(cmd, "import");
+    if (!(is_ls || is_get || is_put || is_mv || is_rm || is_mkdir || is_import)) {
         return false;
     }
 
@@ -402,6 +441,10 @@ bool devctl_files_cmd(char *line)
         } else {
             serial_println("OK get");
         }
+        return true;
+    }
+    if (is_import) {
+        card_import(p1);
         return true;
     }
     if (is_rm || is_mkdir) {

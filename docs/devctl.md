@@ -44,6 +44,20 @@ python3 tools/devctl.py --port /dev/ttyACM1 "mv 'old name.txt' new.txt; rm new.t
 
   `BOARD` is 81 characters, row by row, numbered as for `fill`: `1`–`9` a given, `a`–`i` a digit entered (`a` = 1 ... `i` = 9), `.` empty, `#` a cell not on the board (Mini 6×6 uses 36 of the 81, Kids 4×4 16). `STATE` adds `practice=1` (Learn) or `attack=1` (Time attack) for those games. With no game on screen: `ERR state: no game on screen`.
 
+## Collections
+
+```
+python3 tools/devctl.py --port /dev/ttyACM1 "import mine.sdm"                   # -> Puzzles > Saved > mine
+python3 tools/devctl.py --port /dev/ttyACM1 "import variants.sdx 'puzzles/Hard ones.sdx'"
+python3 tools/devctl.py --port /dev/ttyACM1 colls
+python3 tools/devctl.py --port /dev/ttyACM1 "colldel imported variant-examples"
+python3 tools/devctl.py --port /dev/ttyACM1 "colldel saved 'My favourites'"
+```
+
+- `import LOCAL [REMOTE]` brings a puzzle file from the computer into **Puzzles → Saved** in one go: it puts the file on the card (`puzzles/` and its own name, unless REMOTE says where), then imports it exactly as **Settings → Data → Import puzzles** (or Files' Import) does: `.sdm` / `.txt`, `.sdx` (any variant) or `.opensudoku`, each puzzle checked for one solution and graded, the collection named after the file (more than 100 puzzles: "name 2", "name 3" ...). It waits for the import (grading takes a while: up to 5 minutes) and prints what happened, as the board's notice says it. The file stays on the card, like a file imported from the screen; a file imported already is refused (`colldel` it first, or give it another name).
+- `colls` lists the collections on the Puzzles screen's **Saved** tab, as it lists them: the ones imported from the card (`imported`), then the ones made on the board with Save (`saved`), each with its number of puzzles.
+- `colldel KIND NAME` deletes one, exactly as **Delete** on that screen does: its puzzles stay on the board, with their solves, History and Gameplays, so nothing played is lost; an imported collection's file can be imported again (Settings > Data > Import puzzles). The Puzzles screen and the rest update at once. It refuses while the card is busy (an export, a backup, Files ...).
+
 ## SQL on sudoku.db
 
 ```

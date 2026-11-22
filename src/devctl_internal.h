@@ -8,11 +8,12 @@
  * | devctl.c           | reading command lines, the answer (devctl_reply()), the dispatch; ping, baud, wait, screen, pz, heap |
  * | devctl_touch.c     | tap, long, swipe, press, move, release |
  * | devctl_screen.c    | shot, bench, screenoff |
- * | devctl_files.c     | ls, get, put, mv, rm, mkdir |
+ * | devctl_files.c     | ls, get, put, mv, rm, mkdir, import |
  * | devctl_game.c      | state, fill |
  * | devctl_clock.c     | clock |
  * | devctl_genbench.c  | genbench |
  * | devctl_sql.c       | sql |
+ * | devctl_colls.c     | colls, colldel |
  * | devctl_stream.c    | the data to and from the host: numbered base64 lines with a CRC, compression, base64 in |
  */
 #pragma once
@@ -138,7 +139,7 @@ void devctl_bench(int n, const int *a);
 /** @brief screenoff: the screen off as its timeout does (devctl_screen.c). */
 void devctl_screenoff(void);
 /**
- * @brief ls / get / put / mv / rm / mkdir (serial only).
+ * @brief ls / get / put / mv / rm / mkdir / import (serial only).
  * @param line  the command line
  * @return true if it was one of them (and has been answered)
  */
@@ -180,6 +181,17 @@ void devctl_sql(const char *line);
  * and the time zone are left out (they say where the board is).
  */
 void devctl_clock(void);
+/**
+ * @brief colls: the saved and imported collections (Puzzles > Saved), a "COLL \<imported|saved\> \<puzzles\>
+ *        \<name\>" line each (the name with %XX for spaces), then "OK colls \<n\>".
+ */
+void devctl_colls(void);
+/**
+ * @brief colldel \<saved|imported\> \<name\>: deletes that collection as the Puzzles screen's Delete does
+ *        (sudoku_ui_coll_delete(): its puzzles stay on the board).
+ * @param line  the command line
+ */
+void devctl_colldel(const char *line);
 /** @} */
 
 /** @} */

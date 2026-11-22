@@ -165,6 +165,19 @@ board: OK put 5000
 
 Failures answer `ERR <cmd>: <path>: <reason>` with the system's reason, for example `No such file or directory`.
 
+#### `import <path>`
+
+Imports a puzzle file already on the card (`put` it first) as Settings > Data > Import puzzles does: `.sdm` / `.txt`, `.sdx` or `.opensudoku`, a collection named after the file, each puzzle checked and graded. The board waits for it (up to 5 minutes; the screen keeps running, and shows its usual notice), then answers `IMPORT <what happened>` and `OK import <imported> <left out>` (left out: no single solution). Failures: `ERR import: <path>: <reason>` (no such file), `ERR import: <what happened>` (imported already, no puzzle with one solution, no sudoku.db), `ERR import: no answer from sudoku.db`.
+
+### Collections (Puzzles > Saved)
+
+Serial only (not over sound). Names are coded like paths: `%XX` for a space, `%` or a control byte.
+
+| Command | Answer | Notes |
+|---|---|---|
+| `colls` | `COLL <kind> <puzzles> <name>` lines, then `OK colls <n>` | Every collection on the Saved tab, in its order: the imported ones (`kind` = `imported`), then the ones made on the board (`saved`). `ERR colls: no sudoku.db` without a card. |
+| `colldel <kind> <name>` | `OK colldel` | Deletes the collection of that kind and name as the screen's Delete does: its puzzles stay on the board (their solves, History and Gameplays too); an imported collection's file can be imported again. The screens are brought up to date; the Puzzles screen keeps the collection it showed, or goes to the Saved tab's first if that was the one deleted. `ERR colldel: no imported collection called "<name>"`, or the card's busy reason (as `genbench`). |
+
 ## A minimal client
 
 ```python

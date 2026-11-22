@@ -752,6 +752,20 @@ void stats_db_import_puzzles(void);
  * @param path  a full path
  */
 void stats_db_import_file(const char *path);
+/** @brief How the last stats_db_import_file() went (stats_db_import_last()). */
+typedef struct {
+    uint32_t seq;                        /**< counts the imports finished: a new one changes it */
+    int got;                             /**< puzzles imported; 0: none had one solution; -1: it couldn't be
+                                          *   (a collection of that name?); -2: that file is imported already */
+    int bad;                             /**< puzzles left out (not exactly one solution) */
+    char msg[128];                       /**< what happened, as the notice on the board says it */
+} stats_import_result_t;
+/**
+ * @brief The last stats_db_import_file()'s result; a caller that waits for one notes seq first and
+ *        waits for it to change (devctl "import").
+ * @param out  gets it
+ */
+void stats_db_import_last(stats_import_result_t *out);
 /**
  * @brief Whether an import changed the collections (once).
  * @return true: reload the list

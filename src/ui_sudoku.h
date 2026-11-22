@@ -126,6 +126,19 @@ bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82]);
 void sudoku_ui_screen_name(char *buf, size_t n);
 
 /**
+ * @brief Deletes a saved or imported collection, as the Puzzles screen's Delete does (devctl
+ *        "colldel"): its puzzles stay on the board, with their solves, History and Gameplays; an
+ *        imported one's file can be imported again. The screens are brought up to date; the Puzzles
+ *        screen keeps the collection it showed (by name), or the Saved tab's first if that one went.
+ * @param saved  true: a saved collection (made on the board); false: an imported one
+ * @param name   its name, as the Saved tab lists it
+ * @param msg    gets what happened ("variant-examples deleted", or why not)
+ * @param n      its size
+ * @return true if it was deleted
+ */
+bool sudoku_ui_coll_delete(bool saved, const char *name, char *msg, size_t n);
+
+/**
  * @brief A part of a puzzle sent by sound (devctl / Gibberlink "pz \<id\> \<i\>/\<n\> \<part\>",
  *        another board's Share > Send by sound). When the last part is in, the puzzle is checked
  *        (one solution), kept in Puzzles > Saved > "Received" and offered to play.

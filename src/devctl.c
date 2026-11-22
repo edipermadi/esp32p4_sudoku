@@ -125,6 +125,14 @@ static void run(char *line)
         devctl_sql(line);
         return;
     }
+    if (!strcmp(cmd, "colls")) {                   /* colls: the saved and imported collections (serial only) */
+        devctl_colls();
+        return;
+    }
+    if (!strcmp(cmd, "colldel")) {                 /* colldel saved|imported <name> (serial only) */
+        devctl_colldel(line);
+        return;
+    }
     if (!strcmp(cmd, "genbench")) {                /* genbench <variant|all> [level|all] [n] */
         devctl_genbench(line);
         return;

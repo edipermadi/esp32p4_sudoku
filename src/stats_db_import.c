@@ -399,11 +399,42 @@ void sdb_do_import(void)
 }
 
 static char s_import_path[300];                 /**< CMD_IMPORT_FILE: the file (stats_db_import_file()) */
+static stats_import_result_t s_import_last;     /**< the last file import's result (stats_db_import_last(); under sdb_lock()) */
+
+/**
+ * @brief A file import finished: its result kept for stats_db_import_last(), its message for the notice.
+ * @param got  puzzles imported (or 0, -1, -2: see stats_import_result_t)
+ * @param bad  puzzles left out
+ * @param msg  what happened
+ */
+static void import_finished(int got, int bad, const char *msg)
+{
+    xSemaphoreTake(sdb_lock(), portMAX_DELAY);
+    s_import_last.got = got;
+    s_import_last.bad = bad;
+    snprintf(s_import_last.msg, sizeof(s_import_last.msg), "%s", msg);
+    s_import_last.seq++;
+    xSemaphoreGive(sdb_lock());
+    sdb_post_message(msg);
+}
+
+/* (documented in stats_db.h) */
+void stats_db_import_last(stats_import_result_t *out)
+{
+    if (!sdb_lock()) {
+        memset(out, 0, sizeof(*out));
+        return;
+    }
+    xSemaphoreTake(sdb_lock(), portMAX_DELAY);
+    *out = s_import_last;
+    xSemaphoreGive(sdb_lock());
+}
 
 /* (documented in stats_db_internal.h) */
 void sdb_do_import_file(void)
 {
     if (!sdb_db()) {
+        import_finished(-1, 0, "Importing needs sudoku.db on the microSD card.");
         return;
     }
     static uint8_t (*cells)[81];
@@ -411,13 +442,14 @@ void sdb_do_import_file(void)
         cells = heap_caps_malloc(81 * IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM);
     }
     if (!cells) {
+        import_finished(-1, 0, "Couldn't import: no memory.");
         return;
     }
     const char *slash = strrchr(s_import_path, '/'), *fn = slash ? slash + 1 : s_import_path;
     char msg[128];
     if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {
         snprintf(msg, sizeof(msg), "%.80s is imported already: it's in Puzzles > Saved.", fn);
-        sdb_post_message(msg);
+        import_finished(-2, 0, msg);
         return;
     }
     int bad = 0, got = import_one(s_import_path, fn, cells, IMPORT_MAX_RUN, &bad);
@@ -431,7 +463,7 @@ void sdb_do_import_file(void)
     } else {
         snprintf(msg, sizeof(msg), "No puzzle with exactly one solution in %.70s.", fn);
     }
-    sdb_post_message(msg);
+    import_finished(got, bad, msg);
 }
 
 /* (documented in stats_db_internal.h) */
