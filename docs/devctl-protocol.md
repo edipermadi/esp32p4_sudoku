@@ -172,13 +172,13 @@ Imports a puzzle file already on the card (`put` it first) as Settings > Data > 
 
 ### Collections (Puzzles > Built-in, Saved, Imported)
 
-Serial only (not over sound). Names are coded like paths: `%XX` for a space, `%` or a control byte.
+Serial only (not over sound). A collection is named by its kind and id (`colls`); names in `colls` are coded like paths: `%XX` for a space, `%` or a control byte.
 
 | Command | Answer | Notes |
 |---|---|---|
-| `colls` | `COLL <kind> <puzzles> <name>` lines, then `OK colls <n>` | Every collection on the Saved and Imported tabs: the imported ones (`kind` = `imported`), then the ones made on the board (`saved`). `ERR colls: no sudoku.db` without a card. |
-| `colldel <kind> <name>` | `OK colldel` | Deletes the collection of that kind and name as the Puzzles screen's **⋮ → Delete collection** does: its puzzles stay on the board (their solves, History and Gameplays too); an imported collection's file can be imported again. The screens are brought up to date; the Puzzles screen keeps the collection it showed, or goes to the first one on its tab if that was the one deleted. `ERR colldel: no imported collection called "<name>"`, or the card's busy reason (as `genbench`). |
-| `open <kind> <name> <n>` | `OK open <puzzle>` | Opens puzzle `<n>` (from 1) of the collection on the game screen as a tap on the Puzzles screen does, e.g. `open builtin Gnome%201%20Easy 12` answers `OK open Gnome 1 Easy #12`. `<kind>`: `builtin`, `saved` or `imported`; the name in any case. `ERR open: no saved collection called "<name>"`, `ERR open: <name> has puzzles 1 to <n>`, `ERR open: a dialog or overlay is open ...` (close it first), `ERR open: a time attack is running`. Without a card, a game in progress makes a dialog ask first: `OK open <puzzle> (asking first)`. |
+| `colls` | `COLL <kind> <id> <puzzles> <name>` lines, then `OK colls <n>` | Every collection, in the tabs' order: `builtin` (ids 1–16, fixed), `saved`, `imported` (ids: their rows in `sudoku.db`, unique within the kind; a deleted one's id can be reused). `ERR colls: no sudoku.db` without a card. |
+| `open <kind> <id> <n>` | `OK open <puzzle>` | Opens puzzle `<n>` (from 1) of the collection on the game screen as a tap on the Puzzles screen does, e.g. `open builtin 5 12` answers `OK open Gnome 1 Easy #12`. `ERR open: no saved collection 3`, `ERR open: <name> has puzzles 1 to <n>`, `ERR open: a dialog or overlay is open ...` (close it first), `ERR open: a time attack is running`. Without a card, a game in progress makes a dialog ask first: `OK open <puzzle> (asking first)`. |
+| `colldel <kind> <id>` | `OK colldel <name> deleted` | Deletes a `saved` or `imported` collection as the Puzzles screen's **⋮ → Delete collection** does: its puzzles stay on the board (their solves, History and Gameplays too); an imported collection's file can be imported again. The screens are brought up to date; the Puzzles screen keeps the collection it showed, or goes to the first one on its tab if that was the one deleted. `ERR colldel: no imported collection 4`, or the card's busy reason (as `genbench`). |
 
 ## A minimal client
 

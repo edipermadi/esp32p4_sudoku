@@ -61,7 +61,7 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 How long **New puzzle** takes on the board, measured with devctl's `genbench` ([Remote control](devctl.md)): `python3 tools/devctl.py --port /dev/ttyACM1 "genbench all all 10"`. Ten puzzles of each variant and level, from fixed seeds (the same every run, so two builds compare puzzle for puzzle), each on the worker core like New puzzle, the CPU at 360 MHz. Measured 2026-11-21 on the Waveshare 4B board (pre-v3 ESP32-P4 silicon), firmware `0ce035d` (the generator as committed there); the whole run takes about 5 minutes.
 
-Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert. Palindrome, Region Sum Lines, X-Sums, Zipper Lines, Frame, Between Lines, Entropic Lines, Modular Lines, Center Dot, Outside Sudoku, Rossini and Diagonal Non-Consecutive were added on 2026-11-22, the same way, and so were Dutch Whispers, Parity Lines and Slow Thermo (later that day); Zipper, Between, Entropic and Modular Lines were re-measured once their lines stopped crossing and they dug logic-first (their puzzles changed; Between Hard went from 3.6 s to 0.3 s), and Frame after the solver's rule checks became one bitmask (see below).
+Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert. Palindrome, Region Sum Lines, X-Sums, Zipper Lines, Frame, Between Lines, Entropic Lines, Modular Lines, Center Dot, Outside Sudoku, Rossini and Diagonal Non-Consecutive were added on 2026-11-22, the same way, and so were Dutch Whispers, Parity Lines and Slow Thermo, then Fortress and Argyle (later that day); Zipper, Between, Entropic and Modular Lines were re-measured once their lines stopped crossing and they dug logic-first (their puzzles changed; Between Hard went from 3.6 s to 0.3 s), and Frame after the solver's rule checks became one bitmask (see below).
 
 | Variant | Easy | Medium | Hard | Expert |
 |---|---|---|---|---|
@@ -105,6 +105,8 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | Dutch Whispers | 16 / 29 (29.1) | 460 / 1263 (17.2) | 1277 / 1951 (15.5) | 1349 / 3228 (15) |
 | Parity Lines | 9 / 11 (30.1) | 187 / 384 (19.7) | 784 / 2131 (18.2) | 754 / 2497 (17.7) |
 | Slow Thermo | 11 / 23 (29.9) | 188 / 496 (21.8) | 696 / 1934 (17.6) | 535 / 1216 (17.7) |
+| Fortress | 13 / 38 (27.9) | 82 / 148 (19.4) | 212 / 433 (18) | 1005 / 1732 (17.8) |
+| Argyle | 673 / 1164 (34.9) | 472 / 753 (21.3) | 758 / 1110 (19) | 944 / 1184 (17.1) |
 
 Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), X-Sums Hard (up to 7.9 s), Between Lines Expert (up to 4.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
@@ -151,7 +153,11 @@ src/puzzles_select.c    the tab, the collection shown, Starred
 src/puzzles_solved.c    solved counts, the panel's numbers
 src/puzzles_starred.c   the starred puzzles
 src/puzzles_colls.c     delete or export a collection, take a puzzle out
-src/ui_home.c           Home: the week, Continue and unfinished games, the menu
+src/ui_home.c           Home: the week, the clock, the menu
+src/ui_continue.c       Home's Continue button: its line, its tap, a game resumed (ui_continue_part.h)
+src/ui_continue_games.c the Unfinished games dialog: each game, to resume or discard
+src/ui_continue_open.c  open_puzzle(): the game in progress, an unfinished one resumed, or a new start (without a card: the "Unfinished game" dialog first)
+src/continue_core.c     the unfinished games without LVGL: the list, the one played last, one loaded into RAM or discarded
 src/ui_stats.c          Statistics and the progress chart
 src/statistics_core.c   Statistics' data without LVGL: the row picked, the view (sudoku.db or RAM), totals, the chart's numbers
 src/ui_settings.c       the Settings screen around its tabs, the rows' look, the theme, settings reloaded, power off,

@@ -148,6 +148,8 @@ typedef enum {
     KIND_DUTCH,                          /**< Dutch Whispers */
     KIND_PARITY,                         /**< Parity Lines */
     KIND_SLOW,                           /**< Slow Thermo */
+    KIND_FORTRESS,                       /**< Fortress */
+    KIND_ARGYLE,                         /**< Argyle */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**
@@ -734,6 +736,7 @@ bool stats_db_take_board(stats_board_t *out);
 #define STATS_IMPORT_NAME 28             /**< a collection's name */
 /** @brief An imported collection. */
 typedef struct {
+    int id;                              /**< imported.id (devctl's collection id) */
     char name[STATS_IMPORT_NAME];        /**< its name */
     int first_gid;                       /**< generated.id of its first puzzle (puzzle id: + PUZZLE_GEN_BASE) */
     int count;                           /**< its puzzles */
@@ -985,7 +988,7 @@ typedef enum {
     REC_DAYS,                            /**< days */
     REC_MINUTES                          /**< minutes */
 } rec_unit_t;
-#define STATS_MAX_RECORDS 52             /**< records at most */
+#define STATS_MAX_RECORDS 54             /**< records at most */
 /** @brief A personal record. */
 typedef struct {
     const char *title;                   /**< static string */

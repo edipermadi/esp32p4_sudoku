@@ -110,11 +110,12 @@ static void why(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char 
         int o = G->xpeers[c][k];
         if (v[o] == d) {
             sprintf(b, "r%dc%d is %d (%s)", o / 9 + 1, o % 9 + 1, d,
-                    G->variant == VAR_KNIGHT ? "a knight's move away" : "touching, corner to corner");
+                    G->variant == VAR_KNIGHT ? "a knight's move away" : G->variant == VAR_ARGYLE ? "on an argyle line with it"
+                    : "touching, corner to corner");
             return;
         }
     }
-    if (G->parity[c] && !(G->allow[c] >> d & 1)) {
+    if ((G->parity[c] == PARITY_EVEN || G->parity[c] == PARITY_ODD) && !(G->allow[c] >> d & 1)) {
         sprintf(b, "the cell is %s", G->parity[c] == PARITY_EVEN ? "even" : "odd");
         return;
     }
@@ -141,11 +142,12 @@ static int blocker(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, ch
     for (int k = 0; k < G->nxpeers[c]; k++) {
         int o = G->xpeers[c][k];
         if (v[o] == d) {
-            strcpy(via, G->variant == VAR_KNIGHT ? "a knight's move" : "a touching cell");
+            strcpy(via, G->variant == VAR_KNIGHT ? "a knight's move" : G->variant == VAR_ARGYLE ? "an argyle line"
+                   : "a touching cell");
             return o;
         }
     }
-    if (G->parity[c] && !(G->allow[c] >> d & 1)) {
+    if ((G->parity[c] == PARITY_EVEN || G->parity[c] == PARITY_ODD) && !(G->allow[c] >> d & 1)) {
         strcpy(via, G->parity[c] == PARITY_EVEN ? "even" : "odd");
         return -1;
     }
@@ -436,6 +438,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_KROPKI:
     case VAR_XV:
     case VAR_GT:
+    case VAR_FORTRESS:
         sudoku_marks_text(g, marks, len);
         break;
     case VAR_SANDWICH:
@@ -507,7 +510,8 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
                 }
             }
             printf(", \"rule\": \"%s\", \"with\": %d, \"mark\": %d, \"cell_first\": %s",
-                   why == FIT_CONSEC ? "consec" : G->edge_kind == EDGE_KROPKI ? "kropki" : G->edge_kind == EDGE_XV ? "xv" : "gt",
+                   why == FIT_CONSEC ? "consec" : G->edge_kind == EDGE_KROPKI ? "kropki" : G->edge_kind == EDGE_XV ? "xv" :
+                   G->edge_kind == EDGE_FORT ? "fortress" : "gt",
                    o, m, first ? "false" : "true");
             return;
         }

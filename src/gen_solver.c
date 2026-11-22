@@ -9,16 +9,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-/* Kropki, XV, Greater-Than: [kind][mark][a] = the digits b may be when the left / top
+/* Kropki, XV, Greater-Than, Fortress: [kind][mark][a] = the digits b may be when the left / top
  * cell is a (s_edge_fwd), and the digits a may be when the right / bottom one is b
  * (s_edge_bwd) */
-static uint16_t s_edge_fwd[4][3][10];       /**< [kind][mark][a]: the digits the right / bottom cell may be */
-static uint16_t s_edge_bwd[4][3][10];       /**< [kind][mark][b]: the digits the left / top cell may be */
+static uint16_t s_edge_fwd[EDGE_KINDS][3][10];   /**< [kind][mark][a]: the digits the right / bottom cell may be */
+static uint16_t s_edge_bwd[EDGE_KINDS][3][10];   /**< [kind][mark][b]: the digits the left / top cell may be */
 
 /* (documented in gen_internal.h) */
 void gen_edge_tables(void)
 {
-    for (int k = 0; k < 4; k++) {
+    for (int k = 0; k < EDGE_KINDS; k++) {
         for (int m = 0; m < 3; m++) {
             for (int a = 1; a <= 9; a++) {
                 uint16_t f = 0, b = 0;
@@ -47,7 +47,7 @@ uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const u
                        nb[2] >= 0 ? EDGE_DOWN(G->edge[i - 9]) : 0, EDGE_DOWN(G->edge[i])
                       };
     for (int j = 0; j < 4; j++) {
-        if (nb[j] < 0 || (k == EDGE_GT && !mk[j])) {
+        if (nb[j] < 0 || ((k == EDGE_GT || k == EDGE_FORT) && !mk[j])) {
             continue;
         }
         bool before = j == 0 || j == 2;             /* the neighbour is left of / above i */

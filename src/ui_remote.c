@@ -124,7 +124,7 @@ static bool is_overlay_open(void)
 }
 
 /* (documented in ui_sudoku.h) */
-bool sudoku_ui_open_puzzle(int tab, const char *name, int number, char *msg, size_t n)
+bool sudoku_ui_open_puzzle(int tab, int id, int number, char *msg, size_t n)
 {
     if (is_overlay_open()) {
         snprintf(msg, n, "a dialog or overlay is open (the lock screen?): close it first");
@@ -134,25 +134,20 @@ bool sudoku_ui_open_puzzle(int tab, const char *name, int number, char *msg, siz
         snprintf(msg, n, "a time attack is running");
         return false;
     }
-    int c = -1;
-    for (int k = 0; k < coll_total() && c < 0; k++) {
-        if (coll_tab(k) == tab && !strcasecmp(coll_name(k), name)) {
-            c = k;
-        }
-    }
+    const int c = coll_find_id(tab, id);
     static const char *const TAB[COLL_TABS] = {"built-in", "saved", "imported"};
     if (c < 0) {
-        snprintf(msg, n, "no %s collection called \"%s\"", tab >= 0 && tab < COLL_TABS ? TAB[tab] : "?", name);
+        snprintf(msg, n, "no %s collection %d", tab >= 0 && tab < COLL_TABS ? TAB[tab] : "?", id);
         return false;
     }
     if (number < 1 || number > coll_size(c)) {
         snprintf(msg, n, "%s has puzzles 1 to %d", coll_name(c), coll_size(c));
         return false;
     }
-    const uint16_t id = coll_puzzle(c, number - 1);
+    const uint16_t puzzle = coll_puzzle(c, number - 1);
     game_set_from_coll(c);                          /* (as a tap on the Puzzles screen: List goes back there) */
-    open_puzzle(id);
-    puzzle_name(id, msg, n);
+    open_puzzle(puzzle);
+    puzzle_name(puzzle, msg, n);
     if (lv_screen_active() != screen_game()) {      /* (no card: a dialog asks about the game in progress) */
         size_t len = strlen(msg);
         snprintf(msg + len, n - len, " (asking first)");

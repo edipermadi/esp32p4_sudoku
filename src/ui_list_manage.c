@@ -8,11 +8,12 @@
 #include "ui_list_part.h"
 #include "puzzles_core.h"
 
-static char s_del_name[STATS_IMPORT_NAME];      /**< the Delete dialog's collection: its name ... */
-static bool s_del_saved;                        /**< ... and whether it's a saved one (else imported) */
+static char s_del_name[STATS_IMPORT_NAME];      /**< the Delete dialog's collection: its name (for the notice) ... */
+static int s_del_tab;                           /**< ... its tab (COLL_TAB_SAVED or COLL_TAB_IMPORTED) ... */
+static int s_del_id;                            /**< ... and its id (coll_id()) */
 
 /**
- * @brief The Delete dialog's Delete: the collection it was opened for deleted (by name: the one shown
+ * @brief The Delete dialog's Delete: the collection it was opened for deleted (by id: the one shown
  *        may have changed meanwhile, e.g. devctl's colldel or an import finishing), its tab back
  *        at its first if that was the one shown.
  * @param[in] e  the event (user data: the dialog)
@@ -21,7 +22,7 @@ static void list_del_confirm_cb(lv_event_t *e)
 {
     lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
     char msg[96], notice[112];
-    bool ok = sudoku_ui_coll_delete(s_del_saved, s_del_name, msg, sizeof(msg));
+    bool ok = sudoku_ui_coll_delete(s_del_tab, s_del_id, msg, sizeof(msg));
     if (ok) {
         snprintf(notice, sizeof(notice), "%s.", msg);
     } else if (!strncmp(msg, "no ", 3)) {           /* (gone meanwhile: devctl's colldel) */
@@ -53,7 +54,8 @@ void list_del_cb(lv_event_t *e)
     bool imported = coll_saved_index(lc) < 0;
     int n = coll_size(lc);
     snprintf(s_del_name, sizeof(s_del_name), "%s", coll_name(lc));   /* (what the dialog is about) */
-    s_del_saved = !imported;
+    s_del_tab = imported ? COLL_TAB_IMPORTED : COLL_TAB_SAVED;
+    s_del_id = coll_id(lc);
     char title[64], text[256];
     snprintf(title, sizeof(title), "Delete %s?", coll_name(lc));
     char what[48];
@@ -73,20 +75,15 @@ void list_del_cb(lv_event_t *e)
 }
 
 /* (documented in ui_sudoku.h) */
-bool sudoku_ui_coll_delete(bool saved, const char *name, char *msg, size_t n)
+bool sudoku_ui_coll_delete(int tab, int id, char *msg, size_t n)
 {
     if (!is_stats_db_ready()) {
         snprintf(msg, n, "no sudoku.db");
         return false;
     }
-    int c = -1;
-    for (int k = PUZZLE_COLLECTION_COUNT; k < coll_total() && c < 0; k++) {
-        if ((coll_saved_index(k) >= 0) == saved && !strcmp(coll_name(k), name)) {
-            c = k;
-        }
-    }
+    const int c = tab == COLL_TAB_SAVED || tab == COLL_TAB_IMPORTED ? coll_find_id(tab, id) : -1;
     if (c < 0) {
-        snprintf(msg, n, "no %s collection called \"%s\"", saved ? "saved" : "imported", name);
+        snprintf(msg, n, "no %s collection %d", tab == COLL_TAB_SAVED ? "saved" : "imported", id);
         return false;
     }
     /* the collection shown: kept, by name (its number moves when one before it goes) */

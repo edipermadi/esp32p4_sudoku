@@ -1046,6 +1046,9 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->edge_kind == EDGE_XV) {
         return 22;
     }
+    if (G->edge_kind == EDGE_FORT) {
+        return 26;
+    }
     if (G->edge_kind == EDGE_GT) {
         return 16;
     }
@@ -1064,7 +1067,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_EVENODD) {
         return 30;
     }
-    if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT) {
+    if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT || G->variant == VAR_ARGYLE) {
         return 32;
     }
     if (G->variant == VAR_ASTERISK || G->variant == VAR_CENTERDOT) {

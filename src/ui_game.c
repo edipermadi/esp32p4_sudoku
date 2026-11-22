@@ -576,6 +576,8 @@ lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given)
     lv_color_t bg = given ? C_CELL_GIVEN : C_CELL;
     if (geo->parity[i] == PARITY_EVEN) {
         bg = lv_color_mix(C_GRID_THIN, bg, 150);    /* Even-Odd: even cells shaded */
+    } else if (geo->parity[i] == PARITY_FORT) {
+        bg = lv_color_mix(C_GRID_THIN, bg, 190);    /* Fortress: grey cells, a little darker */
     }
     return is_sudoku_geom_tinted(geo, i) ? lv_color_mix(C_ORANGE, bg, 40) : bg;
 }

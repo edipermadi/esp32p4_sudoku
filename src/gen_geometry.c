@@ -21,7 +21,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Region Sum Lines", "X-Sums", "Zipper Lines", "Frame", "Between Lines",
                                                      "Entropic Lines", "Modular Lines", "Center Dot", "Outside Sudoku",
                                                      "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
-                                                     "Parity Lines", "Slow Thermo"
+                                                     "Parity Lines", "Slow Thermo", "Fortress", "Argyle"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -39,10 +39,23 @@ bool is_sudoku_edge_ok(int kind, int mark, int a, int b)
     case EDGE_XV:
         return mark == MARK_V ? a + b == 5 : mark == MARK_X ? a + b == 10 : a + b != 5 && a + b != 10;
     case EDGE_GT:
+    case EDGE_FORT:                                 /* (Fortress: a grey cell's sides, as signs) */
         return mark == MARK_LESS ? a < b : mark == MARK_MORE ? a > b : true;
     default:
         return true;
     }
+}
+
+/* (documented in generator.h) */
+int sudoku_argyle_line(int k, uint8_t cells[9])
+{
+    static const int8_t START[ARGYLE_LINES][2] = {{0, 1}, {0, 4}, {1, 0}, {4, 0}, {0, 7}, {0, 4}, {1, 8}, {4, 8}};
+    const int dc = k < 4 ? 1 : -1;                  /* down to the right, then down to the left */
+    int n = 0;
+    for (int r = START[k][0], c = START[k][1]; r < 9 && c >= 0 && c < 9; r++, c += dc) {
+        cells[n++] = (uint8_t)(r * 9 + c);
+    }
+    return n;
 }
 
 /* (documented in generator.h) */
@@ -231,6 +244,23 @@ void sudoku_geom_init(void)
             }
         }
     }
+    g[VAR_ARGYLE] = g[VAR_CLASSIC];                 /* Argyle: the cells on a line see each other */
+    g[VAR_ARGYLE].variant = VAR_ARGYLE;
+    for (int k = 0; k < ARGYLE_LINES; k++) {
+        uint8_t line[9];
+        const int n = sudoku_argyle_line(k, line);
+        sudoku_geom_t *a = &g[VAR_ARGYLE];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                const int c = line[i], o = line[j];
+                if (i != j && !is_sudoku_geom_peer(a, c, o)) {   /* (a cell on two lines: a peer once) */
+                    a->xpeers[c][a->nxpeers[c]++] = (uint8_t)o;
+                    a->peer_bits[c][o >> 5] |= 1u << (o & 31);
+                    a->peers[c][a->npeers[c]++] = (uint8_t)o;
+                }
+            }
+        }
+    }
     g[VAR_NONCONSEC] = g[VAR_CLASSIC];              /* Consecutive with no bars: no neighbours 1 apart */
     g[VAR_NONCONSEC].variant = VAR_NONCONSEC;
     g[VAR_NONCONSEC].consec_on = true;
@@ -251,7 +281,8 @@ void sudoku_geom_init(void)
     g[VAR_KILLER].variant = VAR_KILLER;
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
-                                  VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW
+                                  VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
+                                  VAR_FORTRESS
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -272,7 +303,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
             variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN || variant == VAR_ENTROPIC ||
             variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI || variant == VAR_DUTCH ||
-            variant == VAR_PARITY || variant == VAR_SLOW) {
+            variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -282,13 +313,38 @@ const sudoku_geom_t *sudoku_geom(int variant)
 bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
 {
     const int ek = variant == VAR_KROPKI ? EDGE_KROPKI : variant == VAR_XV ? EDGE_XV : variant == VAR_GT ? EDGE_GT : 0;
-    if (!text || strlen(text) != 81 || (variant != VAR_EVENODD && variant != VAR_CONSEC && !ek)) {
+    if (!text || strlen(text) != 81 || (variant != VAR_EVENODD && variant != VAR_CONSEC && variant != VAR_FORTRESS &&
+                                        !ek)) {
         return false;
     }
     sudoku_geom_init();
     *out = s_geom[VAR_CLASSIC];
     out->variant = (uint8_t)variant;
     out->edge_kind = (uint8_t)ek;
+    if (variant == VAR_FORTRESS) {                  /* the grey cells, then each grey-white side as a sign */
+        out->edge_kind = EDGE_FORT;
+        for (int c = 0; c < 81; c++) {
+            if (text[c] != 'f' && text[c] != '.') {
+                return false;
+            }
+            out->parity[c] = text[c] == 'f' ? PARITY_FORT : PARITY_NONE;
+        }
+        for (int c = 0; c < 81; c++) {
+            int m[2] = {0, 0};
+            for (int k = 0; k < 2; k++) {
+                const int o = k ? c + 9 : c + 1;
+                if ((!k && c % 9 == 8) || o > 80 || !out->parity[c] == !out->parity[o]) {
+                    continue;                       /* (two grey or two white: no sign) */
+                }
+                m[k] = out->parity[c] ? MARK_MORE : MARK_LESS;
+                /* a grey cell beats a white one: never 1; a white one next to a grey one: never 9 */
+                out->allow[out->parity[c] ? c : o] &= (uint16_t)~(1u << 1);
+                out->allow[out->parity[c] ? o : c] &= (uint16_t)~(1u << 9);
+            }
+            out->edge[c] = (uint8_t)(m[0] | m[1] << 2);
+        }
+        return true;
+    }
     for (int c = 0; c < 81; c++) {
         char ch = text[c];
         if (ek) {                                   /* the mark to the right + 3 x the one below */
@@ -1071,7 +1127,9 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len)
         return false;
     }
     for (int c = 0; c < 81; c++) {
-        if (g->edge_kind) {
+        if (g->edge_kind == EDGE_FORT) {
+            buf[c] = g->parity[c] == PARITY_FORT ? 'f' : '.';
+        } else if (g->edge_kind) {
             buf[c] = (char)('0' + EDGE_RIGHT(g->edge[c]) + 3 * EDGE_DOWN(g->edge[c]));
         } else if (g->variant == VAR_CONSEC) {
             buf[c] = (char)('0' + (g->consec[c] & 3));

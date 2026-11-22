@@ -394,7 +394,8 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_QUAD && buf && sudoku_geom_quad_text(cages, buf)) {
         return buf;    /* (its circles are in cages) */
     }
-    if ((v == VAR_EVENODD || v == VAR_CONSEC || v == VAR_KROPKI || v == VAR_XV || v == VAR_GT) && buf &&
+    if ((v == VAR_EVENODD || v == VAR_CONSEC || v == VAR_KROPKI || v == VAR_XV || v == VAR_GT || v == VAR_FORTRESS) &&
+            buf &&
             sudoku_geom_marks(v, marks, buf)) {
         return buf;
     }
@@ -475,6 +476,29 @@ const char *coll_name(int c)
     }
     return s_saved[coll_saved_index(c)].name;
 }
+/* (documented in collections.h) */
+int coll_id(int c)
+{
+    if (c < PUZZLE_COLLECTION_COUNT) {
+        return c + 1;
+    }
+    if (coll_saved_index(c) < 0) {
+        return s_imports[c - PUZZLE_COLLECTION_COUNT].id;
+    }
+    return s_saved[coll_saved_index(c)].id;
+}
+
+/* (documented in collections.h) */
+int coll_find_id(int tab, int id)
+{
+    for (int c = 0; c < coll_total(); c++) {
+        if (coll_tab(c) == tab && coll_id(c) == id) {
+            return c;
+        }
+    }
+    return -1;
+}
+
 /* (documented in collections.h) */
 int64_t coll_created(int c)
 {

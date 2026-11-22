@@ -14,7 +14,7 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "X-Sums", "Zipper Lines", "Frame", "Between Lines",
                                                          "Entropic Lines", "Modular Lines", "Center Dot", "Outside Sudoku",
                                                          "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
-                                                         "Parity Lines", "Slow Thermo"
+                                                         "Parity Lines", "Slow Thermo", "Fortress", "Argyle"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -26,7 +26,7 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Region Sum", "X-Sums", "Zipper", "Frame", "Between",
                                                           "Entropic", "Modular", "Center Dot", "Outside", "Rossini",
                                                           "Diagonal Non-Consecutive", "Dutch Whispers", "Parity",
-                                                          "Slow Thermo"
+                                                          "Slow Thermo", "Fortress", "Argyle"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -120,6 +120,10 @@ int stats_kind_of(int variant, bool daily)
         return KIND_PARITY;
     case VAR_SLOW:
         return KIND_SLOW;
+    case VAR_FORTRESS:
+        return KIND_FORTRESS;
+    case VAR_ARGYLE:
+        return KIND_ARGYLE;
     default:
         return KIND_NEW;
     }

@@ -54,15 +54,14 @@ Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
 sudoku.db is open while the board runs: get works, put/mv/rm on it don't
 (use Settings > Data > USB drive). Paths with spaces: quote them.
 
-Collections on the Puzzles screen's Saved and Imported tabs:
-    colls                   list them: imported or saved, how many puzzles, the name
-    colldel KIND NAME       delete one (KIND: imported or saved; quote a name with spaces), as
-                            the Puzzles screen's Delete collection does: its puzzles stay on
-                            the board, with their solves, History and Gameplays; an imported
-                            file can be imported again
-    open KIND NAME N        open puzzle N of a collection on the game screen, as a tap on the
-                            Puzzles screen does (KIND: builtin, saved or imported; quote a name
-                            with spaces; any case): open builtin "Gnome 1 Easy" 12
+Collections on the Puzzles screen's tabs, each named by its kind (builtin, saved or imported)
+and its id, as colls lists them:
+    colls                   list them: the kind, the id, how many puzzles, the name
+    open KIND ID N          open puzzle N of a collection on the game screen, as a tap on the
+                            Puzzles screen does: open builtin 5 12 (Gnome 1 Easy #12)
+    colldel KIND ID         delete a saved or imported one, as the Puzzles screen's Delete
+                            collection does: its puzzles stay on the board, with their solves,
+                            History and Gameplays; an imported file can be imported again
 
 SQL on sudoku.db, on the board (its database task runs it; 20 s at most a statement):
     python3 tools/devctl.py --sql "SELECT * FROM players"      one or more statements, then exit
@@ -629,27 +628,34 @@ def run(board, words):
             if line is None:
                 break
             if line.startswith("COLL "):
-                _, kind, count, name = line.split(" ", 3)
-                rows.append((kind, int(count), dec(name)))
+                _, kind, cid, count, name = line.split(" ", 4)
+                rows.append((kind, int(cid), int(count), dec(name)))
             elif line.startswith("OK colls"):
-                for kind, count, name in rows:
-                    print("%-9s %4d  %s" % (kind, count, name))
-                if not rows:
-                    print("(no saved or imported collections)")
+                print("kind       id  puzzles  name")
+                for kind, cid, count, name in rows:
+                    print("%-9s %3d  %7d  %s" % (kind, cid, count, name))
                 return
             elif line.startswith("ERR"):
                 sys.exit(line)
         sys.exit("colls: no answer")
     elif cmd == "colldel":
-        if len(words) < 3 or words[1] not in ("saved", "imported"):
-            sys.exit("colldel saved|imported NAME (quote a name with spaces)")
-        board.ser.write(("colldel %s %s\n" % (words[1], enc(" ".join(words[2:])))).encode())
-        board.wait_for("OK colldel", 30, fail="ERR")
-        print("deleted the %s collection %s" % (words[1], " ".join(words[2:])))
+        if len(words) != 3 or words[1] not in ("saved", "imported") or not words[2].isdigit():
+            sys.exit("colldel saved|imported ID (the ids: colls)")
+        limit = time.time() + 30                    # (sudoku.db busy just after start-up or synctime: try again)
+        while True:
+            board.ser.write(("colldel %s %s\n" % (words[1], words[2])).encode())
+            line = board.wait_for("colldel", 30)
+            if line.startswith("OK"):
+                break
+            if "busy" not in line or time.time() > limit:
+                sys.exit(line)
+            time.sleep(1)
+        print(line.split(" ", 2)[2] if len(line.split(" ", 2)) > 2 else "deleted")
     elif cmd == "open":
-        if len(words) < 4 or words[1] not in ("builtin", "saved", "imported") or not words[-1].isdigit():
-            sys.exit("open builtin|saved|imported NAME N (quote a name with spaces)")
-        board.ser.write(("open %s %s %s\n" % (words[1], enc(" ".join(words[2:-1])), words[-1])).encode())
+        if len(words) != 4 or words[1] not in ("builtin", "saved", "imported") or not words[2].isdigit() or \
+                not words[3].isdigit():
+            sys.exit("open builtin|saved|imported ID N (the ids: colls)")
+        board.ser.write(("open %s %s %s\n" % (words[1], words[2], words[3])).encode())
         line = board.wait_for("OK open", 30, fail="ERR")
         print("opened %s" % line.split(" ", 2)[2])
     elif cmd == "heap":

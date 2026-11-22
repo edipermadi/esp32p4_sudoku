@@ -80,6 +80,27 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             }
         }
     }
+    for (int k = 0; g->variant == VAR_ARGYLE && k < ARGYLE_LINES; k++) {   /* Argyle: no repeat on a line */
+        uint8_t line[9];
+        unsigned seen = 0;
+        for (int i = 0, n = sudoku_argyle_line(k, line); i < n; i++) {
+            if (seen >> sol[line[i]] & 1) {
+                return false;
+            }
+            seen |= 1u << sol[line[i]];
+        }
+    }
+    for (int c = 0; g->variant == VAR_FORTRESS && c < 81; c++) {   /* Fortress: grey beats a white neighbour */
+        for (int k = 0; k < 2; k++) {
+            int o = k ? c + 9 : c + 1;
+            if ((!k && c % 9 == 8) || o > 80 || !g->parity[c] == !g->parity[o]) {
+                continue;
+            }
+            if ((g->parity[c] ? sol[c] < sol[o] : sol[c] > sol[o])) {
+                return false;
+            }
+        }
+    }
     for (int c = 0; g->consec_on && c < 81; c++) {  /* Consecutive, Non-Consecutive: bar = 1 apart */
         if (c % 9 < 8 && (abs(sol[c] - sol[c + 1]) == 1) != ((g->consec[c] & CONSEC_RIGHT) != 0)) {
             return false;
@@ -311,6 +332,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_KROPKI:
     case VAR_XV:
     case VAR_GT:
+    case VAR_FORTRESS:
         sudoku_marks_text(g, marks, len);
         break;
     case VAR_SANDWICH:
@@ -460,6 +482,25 @@ static void test_geometry(void)
     v[10] = 4;
     CHECK(is_sudoku_fits(&b, v, 20, 6) && !is_sudoku_fits(&b, v, 20, 7) && is_sudoku_fits(&b, v, 30, 5) &&
           !is_sudoku_fits(&b, v, 30, 3));
+    /* Argyle: its lines (8, 5, 8, 5 cells each way); r1c2 and r8c9 share a line (and no row, column or box) */
+    uint8_t al[9];
+    CHECK(sudoku_argyle_line(0, al) == 8 && al[0] == 1 && al[7] == 71 && sudoku_argyle_line(1, al) == 5 &&
+          al[4] == 44 && sudoku_argyle_line(4, al) == 8 && al[0] == 7 && al[7] == 63 && sudoku_argyle_line(7, al) == 5);
+    memset(v, 0, 81);
+    v[1] = 6;
+    CHECK(!is_sudoku_fits(sudoku_geom(VAR_ARGYLE), v, 71, 6) && is_sudoku_fits(sudoku_geom(VAR_CLASSIC), v, 71, 6));
+    /* Fortress: r1c1 grey, r1c2 white: r1c1 beats it, never a 1; r1c2 never a 9; two greys: no sign */
+    char fm[82];
+    memset(fm, '.', 81);
+    fm[81] = 0;
+    fm[0] = fm[9] = 'f';
+    CHECK(sudoku_geom_marks(VAR_FORTRESS, fm, &b) && b.edge_kind == EDGE_FORT && EDGE_RIGHT(b.edge[0]) == MARK_MORE &&
+          EDGE_DOWN(b.edge[0]) == MARK_NONE && !(b.allow[0] >> 1 & 1) && !(b.allow[1] >> 9 & 1));
+    memset(v, 0, 81);
+    v[1] = 6;
+    CHECK(is_sudoku_fits(&b, v, 0, 7) && !is_sudoku_fits(&b, v, 0, 5) && is_sudoku_fits(&b, v, 9, 5));
+    char fm2[82];
+    CHECK(sudoku_marks_text(&b, fm2, sizeof(fm2)) && !strcmp(fm, fm2));
     /* Dutch Whispers: r1c1 a 5 leaves r1c2 1 or 9 (German: nothing); a 3 leaves 7, 8, 9 */
     CHECK(sudoku_geom_lines_text(VAR_DUTCH, "0,1,2", &b) && b.line_kind == LINE_DUTCH && (b.allow[1] >> 5 & 1));
     memset(v, 0, 81);

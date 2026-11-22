@@ -73,13 +73,14 @@ extern "C" {
  * sudoku.db is open: it can be read, not replaced, renamed or deleted.
  *
  * Collections on the Puzzles screen's Saved and Imported tabs (names with %XX for a space, as paths):
- *   colls                     -> "COLL imported <puzzles> <name>" / "COLL saved <puzzles> <name>" lines,
- *                                then "OK colls <n>"
- *   colldel saved|imported <name>   deletes it as the Puzzles screen's Delete collection does: its
+ *   colls                     -> "COLL <builtin|saved|imported> <id> <puzzles> <name>" lines (the
+ *                                tabs' order), then "OK colls <n>"
+ *   open builtin|saved|imported <id> <number>   opens that puzzle on the game screen, as a tap on
+ *                                the Puzzles screen does -> "OK open Easy #5" or "ERR open: <why>"
+ *   colldel saved|imported <id>   deletes it as the Puzzles screen's Delete collection does: its
  *                                puzzles stay on the board (solves, History, Gameplays); an imported
- *                                file can be imported again -> "OK colldel" or "ERR colldel: <why>"
- *   open builtin|saved|imported <collection> <number>   opens that puzzle on the game screen, as a tap
- *                                on the Puzzles screen does -> "OK open Easy #5" or "ERR open: <why>"
+ *                                file can be imported again -> "OK colldel <name> deleted" or
+ *                                "ERR colldel: <why>"
  *
  * Every command answers "OK <command>" (or "ERR <why>") once done.
  *

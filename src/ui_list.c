@@ -5,6 +5,7 @@
  *        and refreshing it. Its parts: ui_list_part.h; the data: puzzles_core.h.
  */
 #include "ui_internal.h"
+#include "continue_core.h"
 #include "ui_list_part.h"
 #include "puzzles_core.h"
 
@@ -29,24 +30,6 @@ static char      l_labels[MAX_PER_COLL][4];                    /**< the grid's n
 static const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];   /**< the grid's map */
 
 /**
- * @brief Whether a puzzle is one of the current player's unfinished games.
- * @param[in] id  the puzzle
- * @return true: in progress
- */
-bool is_game_in_progress(uint16_t id)
-{
-    if (store_saved_game()->id == id) {
-        return true;
-    }
-    for (int i = 0; i < ui_ngames(); i++) {
-        if (ui_games()[i].puzzle == id) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/**
  * @brief The grid's look: solved puzzles green, the ones in progress orange (white numbers); the
  *        places past the collection's end not drawn.
  * @param[in] e  the draw task event
@@ -69,7 +52,7 @@ static void list_btnm_draw_cb(lv_event_t *e)
     }
     uint16_t id = coll_puzzle(lc, (int)base->id1);
     bool solved = lc < PUZZLE_COLLECTION_COUNT ? store_best_time(id) != 0 : is_puzzles_solved((int)base->id1);
-    bool active = is_game_in_progress(id);
+    bool active = is_continue_in_progress(id);
     if (!solved && !active) {
         return;
     }
@@ -89,7 +72,7 @@ static void list_btnm_draw_cb(lv_event_t *e)
 /** @brief Draws the screen for what's shown: the tabs, the collection column's counts, the panel, the grid or rows (or Starred). */
 void refresh_list(void)
 {
-    games_refresh();
+    continue_refresh();
     bool none = !puzzles_settle();                  /* the Saved or Imported tab, with nothing in it */
     const int l_tab = puzzles_tab(), l_coll = puzzles_coll();
     const bool l_starred = is_puzzles_starred();

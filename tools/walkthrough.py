@@ -48,12 +48,14 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "frame": "Frame", "between-lines": "Between", "entropic-lines": "Entropic", "modular-lines": "Modular",
          "center-dot": "Center", "outside-sudoku": "Outside", "rossini": "Rossini",
          "diagonal-non-consecutive": "Diagonal", "dutch-whispers": "Dutch", "parity-lines": "Parity",
-         "slow-thermo": "Slow"}
+         "slow-thermo": "Slow", "fortress": "Fortress", "argyle": "Argyle"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
 CELL_BG, GIVEN_BG, GIVEN_FG = (255, 255, 255), (238, 241, 246), (27, 31, 36)
 TINT_BG, EVEN_BG = (255, 228, 205), (218, 222, 230)       # X / Hyper / Asterisk cells; Even-Odd's even ones
+FORT_BG, ARGYLE = (204, 209, 218), (149, 183, 240)         # Fortress' grey cells; Argyle's lines (the board's, on white)
+ARGYLE_STARTS = [((0, 1), 1), ((0, 4), 1), ((1, 0), 1), ((4, 0), 1), ((0, 7), -1), ((0, 4), -1), ((1, 8), -1), ((4, 8), -1)]
 PLACED_FG = (43, 111, 224)                                  # digits from earlier steps
 UNIT_BG = (255, 244, 190)                                   # the unit the step looks at
 NEW_BG, NEW_FG = (205, 242, 212), (22, 120, 50)             # the step's digit
@@ -139,6 +141,10 @@ def rule_words(d, vals, c, v, r):
             return "an X joins it to the %d in %s: it's %d" % (w, at, 10 - w)
         bad = [x for x in (5 - w, 10 - w) if 1 <= x <= 9 and x != w]
         return "there's no mark between it and the %d in %s: it isn't %s" % (w, at, listing(map(str, bad), "or"))
+    if rule == "fortress":                                  # Fortress: a grey cell beats its white neighbours
+        if d["parity"][c] == 3:
+            return "it's grey, so it's bigger than the white %d in %s next to it" % (w, at)
+        return "it's white, so it's smaller than the grey %d in %s next to it" % (w, at)
     if rule == "gt":
         smaller = (r["mark"] == 1) == r["cell_first"]       # LESS: the left / top one is the smaller
         return "the sign says it's %s than the %d in %s" % ("smaller" if smaller else "bigger", w, at)
@@ -176,6 +182,10 @@ def rule_words(d, vals, c, v, r):
             if r["lo"] == r["hi"]:
                 return "it's the first cell after a clue, and that clue can only start with %s" % a_n(r["lo"])
             return "it's the first cell after a clue, and that clue can only start with %d to %d" % (r["lo"], r["hi"])
+        if d.get("edge_kind") == 4:                         # Fortress: a grey cell is never 1, a white one by it never 9
+            if d["parity"][c] == 3:
+                return "it's grey, bigger than a white cell next to it, so it isn't 1"
+            return "it's next to a grey cell, which is bigger, so it isn't 9"
         if d.get("line_kind") == 3 and v == 5:              # German Whispers: no 5 on a line
             return "it's on a green line, and nothing is 5 or more away from a 5"
         if d["thermos"]:
@@ -458,6 +468,8 @@ def step_text(d, vals, s):
             where = listing(rc(x) for x in cells)
             if via == "a knight's move":
                 out.append("%s: the %d in %s is a knight's move away." % (where, v, rc(by)))
+            elif via == "an argyle line":
+                out.append("%s: the %d in %s is on the same argyle line." % (where, v, rc(by)))
             elif via == "a touching cell":
                 out.append("%s: %s the %d in %s at a corner." % (where, "touches" if len(cells) == 1 else "touch",
                                                                     v, rc(by)))
@@ -474,6 +486,8 @@ def step_text(d, vals, s):
             rules.setdefault(rule_words(d, vals, c, r["digit"], r), []).append(r["digit"])
         elif r["via"] == "a knight's move":
             extra.append("Not %d: the %d in %s is a knight's move away." % (r["digit"], r["digit"], rc(r["by"])))
+        elif r["via"] == "an argyle line":
+            extra.append("Not %d: the %d in %s is on the same argyle line." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] == "a touching cell":
             extra.append("Not %d: the %d in %s touches it at a corner." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] in ("even", "odd"):
@@ -534,6 +548,8 @@ def make_drawer(d, fonts):
                 bg = TINT_BG
             if d["parity"][c] == 1:
                 bg = EVEN_BG
+            if d["parity"][c] == 3:                         # Fortress: a grey cell
+                bg = FORT_BG
             if c in area:
                 bg = UNIT_BG
             if step and c == step["cell"]:
@@ -596,6 +612,16 @@ def make_drawer(d, fonts):
                     g.ellipse([px - r0, py - r0, px + r0, py + r0], outline=ARROW, width=3)
             else:                                           # German Whispers: a narrow green line
                 g.line(pts, fill=WHISPER, width=int(CELL * 0.12), joint="curve")
+        if d["variant"] == "Argyle":                        # its eight diagonal lines, corner to corner
+            for (r0, c0), dc in ARGYLE_STARTS:
+                k = 0
+                while r0 + k < 9 and 0 <= c0 + dc * k < 9:
+                    k += 1
+                (x1, y1), (x2, y2) = xy(r0 * 9 + c0), xy((r0 + k - 1) * 9 + c0 + dc * (k - 1))
+                if dc > 0:
+                    g.line([x1, y1, x2 + CELL, y2 + CELL], fill=ARGYLE, width=3)
+                else:
+                    g.line([x1 + CELL, y1, x2, y2 + CELL], fill=ARGYLE, width=3)
         for c in cells:                                     # thick lines between regions, and the frame
             x, y = xy(c)
             col, row = c % 9, c // 9
@@ -645,7 +671,7 @@ def make_drawer(d, fonts):
                     w, h = (8, 24) if side == RIGHT else (24, 8)
                     g.rounded_rectangle([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], 3, fill=ORANGE)
                 m = (d["edge"][c] & 3) if side == RIGHT else (d["edge"][c] >> 2 & 3)
-                if not m or not d["edge_kind"]:
+                if not m or not d["edge_kind"] or d["edge_kind"] == 4:   # (Fortress: the grey cells, no marks)
                     continue
                 if d["edge_kind"] == 1:                     # Kropki: white or black dots
                     rr = 7

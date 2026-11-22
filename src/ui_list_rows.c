@@ -5,6 +5,7 @@
  *        variant, level, solved; a saved one's can be taken out), and the row look Starred uses too.
  */
 #include "ui_internal.h"
+#include "continue_core.h"
 #include "ui_list_part.h"
 #include "puzzles_core.h"
 
@@ -132,7 +133,7 @@ void list_fill_rows(int lc)
         char sub[96];
         int v = VAR_CLASSIC, lv = 0;
         gen_lookup(id, NULL, &v, &lv);
-        bool solved = is_puzzles_solved(i), active = is_game_in_progress(id);
+        bool solved = is_puzzles_solved(i), active = is_continue_in_progress(id);
         snprintf(sub, sizeof(sub), "%s %s   -   %s", v >= 0 && v < VAR_COUNT ? variant_name(v) : "",
                  lv >= 0 && lv < GEN_LEVELS ? gen_level_name(lv) : "",
                  solved ? "Solved" : active ? "In progress" : "Not solved yet");

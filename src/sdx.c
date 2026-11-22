@@ -139,6 +139,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_KROPKI:
     case VAR_XV:
     case VAR_GT:
+    case VAR_FORTRESS:
         return strlen(p->marks) == 81 && sudoku_geom_marks(p->variant, p->marks, out);
     case VAR_THERMO:
     case VAR_ARROW:

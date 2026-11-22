@@ -5,6 +5,7 @@
  *        of the collection's puzzles (the ⋮ menu's Starred puzzles / All puzzles toggles it).
  */
 #include "ui_internal.h"
+#include "continue_core.h"
 #include "ui_list_part.h"
 #include "puzzles_core.h"
 
@@ -60,9 +61,9 @@ int list_fill_starred(void)
             fmt_time(t, sizeof(t), b);
             snprintf(sub, sizeof(sub), "Solved   -   best %s", t);
         } else {
-            snprintf(sub, sizeof(sub), is_game_in_progress(id) ? "In progress" : "Not solved yet");
+            snprintf(sub, sizeof(sub), is_continue_in_progress(id) ? "In progress" : "Not solved yet");
         }
-        list_add_row(i, id, sub, b ? C_GREEN : is_game_in_progress(id) ? C_ORANGE : C_MUTED, star_row_cb,
+        list_add_row(i, id, sub, b ? C_GREEN : is_continue_in_progress(id) ? C_ORANGE : C_MUTED, star_row_cb,
                      SYMBOL_STAR, C_ORANGE, star_row_off_cb);
     }
     return n;

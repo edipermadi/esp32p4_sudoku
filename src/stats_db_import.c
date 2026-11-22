@@ -481,7 +481,7 @@ void sdb_do_list_imports(void)
 {
     s_gen.nimports = 0;
     sqlite3_stmt *st;
-    if (sdb_db() && sqlite3_prepare_v2(sdb_db(), "SELECT name, first_id, count, created_at FROM imported ORDER BY id", -1, &st,
+    if (sdb_db() && sqlite3_prepare_v2(sdb_db(), "SELECT name, first_id, count, created_at, id FROM imported ORDER BY id", -1, &st,
                                        NULL) == SQLITE_OK) {
         while (s_gen.nimports < STATS_MAX_IMPORTS && sqlite3_step(st) == SQLITE_ROW) {
             stats_import_t *r = &s_gen.imports[s_gen.nimports++];
@@ -490,6 +490,7 @@ void sdb_do_list_imports(void)
             r->first_gid = sqlite3_column_int(st, 1);
             r->count = sqlite3_column_int(st, 2);
             r->created_at = sqlite3_column_int64(st, 3);   /* (NULL: 0) */
+            r->id = sqlite3_column_int(st, 4);
         }
         sqlite3_finalize(st);
     }

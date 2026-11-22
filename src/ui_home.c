@@ -1,6 +1,6 @@
 /**
  * @file ui_home.c
- * @brief Home: the week, Continue and unfinished games, the menu.
+ * @brief Home: the week, the clock, the menu (Continue's button: ui_continue.c).
  */
 #include "ui_internal.h"
 
@@ -14,15 +14,6 @@ static void settings_cb(lv_event_t *e);
 static void stats_cb(lv_event_t *e);
 static void plays_cb(lv_event_t *e);
 static void profile_cb(lv_event_t *e);
-static bool resume_game(uint16_t id);
-static void ug_close(void);
-static void ug_close_cb(lv_event_t *e);
-static void ug_resume_cb(lv_event_t *e);
-static void ug_discard_cb(lv_event_t *e);
-static void ug_open(void);
-static void continue_cb(lv_event_t *e);
-static void discard_confirm_cb(lv_event_t *e);
-static void resume_other_cb(lv_event_t *e);
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub);
 
 static lv_obj_t *h_menu;                  /**< the pages, side by side: swipe between them */
@@ -39,10 +30,6 @@ static lv_obj_t *h_daily;                 /**< Daily puzzle */
 static lv_obj_t *h_player_title;          /**< the Players button's title */
 static lv_obj_t *h_player_avatar;         /**< its avatar (else the icon) */
 static bool      st_wifi_reveal;            /**< name shown; hidden again each time Settings opens */
-static uint16_t  l_pending_id;            /**< the puzzle to open once another game in progress is dealt with */
-/** @brief the current player's unfinished games in sudoku.db (most recent first), refreshed with the list and home */
-static stats_game_row_t s_games[STATS_MAX_GAMES];
-static int s_ngames;                      /**< how many */
 
 /* ------------------------------------------------------------- the week (Home) */
 /** @brief The "puzzles solved" line also says how this week is going; a tap compares it
@@ -202,34 +189,7 @@ void refresh_home(void)
     lv_label_set_text_fmt(h_player, "Playing as %s", store_player_name());
     home_player_update();
 
-    const saved_game_t *s = store_saved_game();
-    games_refresh();
-    /* the game played last: the one in RAM if there is one, else sudoku.db's newest */
-    uint16_t last = s->id != STORE_NO_GAME ? s->id : (s_ngames ? s_games[0].puzzle : STORE_NO_GAME);
-    uint32_t ms = s->id != STORE_NO_GAME ? s->elapsed_ms : (s_ngames ? s_games[0].elapsed_ms : 0);
-    int others = 0;
-    for (int i = 0; i < s_ngames; i++) {
-        others += s_games[i].puzzle != last;
-    }
-    /* Continue stays in its place: greyed out (like Daily puzzle without the clock) when
-     * there is nothing to continue, so the menu doesn't shift around */
-    bool any = last != STORE_NO_GAME;
-    lv_obj_set_state(h_continue, LV_STATE_DISABLED, !any);
-    lv_obj_set_style_bg_color(h_continue, any ? C_LIST_ACTIVE : C_CARD, 0);
-    lv_obj_set_style_text_color(lv_obj_get_child(h_continue, 0), any ? lv_color_white() : C_TEXT, 0);
-    lv_obj_set_style_text_color(h_continue_sub, any ? lv_color_white() : C_MUTED, 0);
-    if (any) {
-        char name[40], t[16];
-        puzzle_name(last, name, sizeof(name));
-        fmt_time(t, sizeof(t), ms / 1000);
-        if (others) {
-            lv_label_set_text_fmt(h_continue_sub, "%s  -  %s   (+%d more)", name, t, others);
-        } else {
-            lv_label_set_text_fmt(h_continue_sub, "%s  -  %s", name, t);
-        }
-    } else {
-        lv_label_set_text(h_continue_sub, "No game in progress");
-    }
+    continue_line_update(h_continue, h_continue_sub);   /* (the unfinished games read again) */
     daily_btn_update();
     if (is_stats_db_ready()) {
         stats_db_query_achievements();    /* the Trophies line (trophy_poll) */
@@ -364,203 +324,6 @@ void clock_cb(lv_timer_t *t)
         strcpy(last_date, d);
         lv_label_set_text(h_date, d);
     }
-}
-
-/**
- * @brief Resumes one of the current player's unfinished games (from RAM, or loaded
- * from sudoku.db with its move log). False if it isn't there any more.
- * @param[in] id  the puzzle
- * @return false if it isn't there any more
- */
-static bool resume_game(uint16_t id)
-{
-    if (store_saved_game()->id != id) {
-        saved_game_t g;
-        if (!is_stats_db_ready() || !stats_db_load_game(id, &g)) {
-            return false;
-        }
-        store_set_game(&g);                              /* the one being played now */
-        store_load_game_moves();
-    }
-    start_game(id, true);
-    return true;
-}
-
-/* ---- the Unfinished games dialog (Continue with more than one) */
-static lv_obj_t *ug_box;                /**< the Unfinished games dialog */
-
-/**
- * @brief Closes it.
- */
-static void ug_close(void)
-{
-    if (ug_box) {
-        lv_msgbox_close_async(ug_box);
-    }
-    ug_box = NULL;
-}
-
-/**
- * @brief Its Close.
- * @param[in] e  the event
- */
-static void ug_close_cb(lv_event_t *e)
-{
-    ug_close();
-}
-
-/**
- * @brief An unfinished game tapped: resumed.
- * @param[in] e  the event (user data: the puzzle)
- */
-static void ug_resume_cb(lv_event_t *e)
-{
-    uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
-    ug_close();
-    if (!resume_game(id)) {
-        sudoku_ui_notice("That game isn't in sudoku.db any more.", 3000);
-    }
-}
-
-/**
- * @brief An unfinished game's Discard.
- * @param[in] e  the event (user data: the puzzle)
- */
-static void ug_discard_cb(lv_event_t *e)
-{
-    uint16_t id = (uint16_t)(uintptr_t)lv_event_get_user_data(e);
-    if (store_saved_game()->id == id) {
-        store_clear_game();
-    } else {
-        stats_db_clear_game(id);
-    }
-    if (game_id() == id && !is_game_solved()) {
-        game_set_id(STORE_NO_GAME);    /* the game screen held it */
-    }
-    char name[40], msg[80];
-    puzzle_name(id, name, sizeof(name));
-    snprintf(msg, sizeof(msg), "Discarded %s.", name);
-    sudoku_ui_notice(msg, 2500);
-    ug_close();
-    refresh_home();
-    if (s_ngames > 1) {
-        ug_open();    /* the rest */
-    }
-}
-
-/**
- * @brief Opens the Unfinished games dialog: each game, to resume or discard.
- */
-static void ug_open(void)
-{
-    ug_close();
-    lv_obj_t *m = make_msgbox("Unfinished games", NULL);
-    ug_box = m;
-    lv_obj_set_width(m, 640);
-    lv_obj_t *content = lv_msgbox_get_content(m);
-    for (int i = 0; i < s_ngames; i++) {
-        const stats_game_row_t *r = &s_games[i];
-        lv_obj_t *row = make_btn(content, 0, 0, 0, 76, NULL, NULL, ug_resume_cb, (void *)(uintptr_t)r->puzzle);
-        lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_style_bg_color(row, C_CARD2, 0);
-        lv_obj_set_style_margin_bottom(row, 8, 0);
-        char name[40], t[16], when[24] = "", line[96];
-        puzzle_name(r->puzzle, name, sizeof(name));
-        fmt_time(t, sizeof(t), r->elapsed_ms / 1000);
-        if (r->saved_at) {
-            time_t tt = (time_t)r->saved_at;
-            struct tm tm;
-            localtime_r(&tt, &tm);
-            strftime(when, sizeof(when), "   -   %a %d %b, %H:%M", &tm);
-        }
-        int var = VAR_CLASSIC;
-        int cells = puzzle_is_generated(r->puzzle) && gen_lookup(r->puzzle, NULL, &var, NULL)
-                    ? (var == VAR_MINI ? 36 : var == VAR_KIDS ? 16 : 81) : 81;
-        snprintf(line, sizeof(line), "%s   -   %d / %d filled%s", t, r->filled, cells, when);
-        lv_obj_t *n = make_label(row, &lv_font_montserrat_18, C_TEXT);
-        lv_label_set_text(n, name);
-        lv_obj_align(n, LV_ALIGN_LEFT_MID, 14, -13);
-        lv_obj_t *sub = make_label(row, &lv_font_montserrat_14, C_MUTED);
-        lv_label_set_text(sub, line);
-        lv_obj_align(sub, LV_ALIGN_LEFT_MID, 14, 14);
-        lv_obj_t *del = make_btn(row, 0, 0, 56, 56, LV_SYMBOL_TRASH, &lv_font_montserrat_20, ug_discard_cb,
-                                 (void *)(uintptr_t)r->puzzle);
-        lv_obj_set_style_bg_color(del, C_CARD, 0);
-        lv_obj_set_style_text_color(lv_obj_get_child(del, 0), C_RED, 0);
-        lv_obj_align(del, LV_ALIGN_RIGHT_MID, -10, 0);
-    }
-    msgbox_button(m, "Close", ug_close_cb, false);
-}
-
-/**
- * @brief Continue: the game in progress, or the dialog when there are more.
- * @param[in] e  the event
- */
-static void continue_cb(lv_event_t *e)
-{
-    games_refresh();
-    if (s_ngames > 1) {                                  /* pick one */
-        ug_open();
-        return;
-    }
-    uint16_t id = store_saved_game()->id != STORE_NO_GAME ? store_saved_game()->id
-                  : (s_ngames ? s_games[0].puzzle : STORE_NO_GAME);
-    if (id != STORE_NO_GAME && !resume_game(id)) {
-        sudoku_ui_notice("That game isn't in sudoku.db any more.", 3000);
-    }
-}
-
-/**
- * @brief Another game in progress: discard it and start the new one.
- * @param[in] e  the event (user data: the dialog)
- */
-static void discard_confirm_cb(lv_event_t *e)
-{
-    store_clear_game();
-    start_game(l_pending_id, false);
-    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-}
-
-/**
- * @brief Another game in progress: resume that one instead.
- * @param[in] e  the event (user data: the dialog)
- */
-static void resume_other_cb(lv_event_t *e)
-{
-    start_game(store_saved_game()->id, true);
-    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
-}
-
-/* (documented in ui_internal.h) */
-void open_puzzle(uint16_t id)
-{
-    const saved_game_t *s = store_saved_game();
-    if (s->id == STORE_NO_GAME || s->id == id) {
-        if (s->id != id && is_stats_db_ready() && resume_game(id)) {
-            return;    /* an unfinished game in sudoku.db */
-        }
-        start_game(id, s->id == id);
-        return;
-    }
-    if (is_stats_db_ready()) {
-        /* sudoku.db keeps several unfinished games: the current one is saved,
-         * this one is resumed if it was started before, else begun */
-        if (!resume_game(id)) {
-            start_game(id, false);
-        }
-        return;
-    }
-    /* without a card there's one slot: resume or discard the game in it */
-    char cur[40], next[40], t[16], text[200];
-    puzzle_name(s->id, cur, sizeof(cur));
-    puzzle_name(id, next, sizeof(next));
-    fmt_time(t, sizeof(t), s->elapsed_ms / 1000);
-    snprintf(text, sizeof(text), "%s is in progress (%s).\nStarting %s will discard it.", cur, t, next);
-    l_pending_id = id;
-    lv_obj_t *m = make_msgbox("Unfinished game", text);
-    msgbox_button(m, "Cancel", mbox_close_cb, false);
-    msgbox_button(m, "Resume", resume_other_cb, false);
-    msgbox_button(m, "Discard", discard_confirm_cb, true);
 }
 
 /**
@@ -726,13 +489,6 @@ static void daily_btn_update(void)
 }
 
 
-/* (documented in ui_internal.h) */
-void games_refresh(void)
-{
-    int n = is_stats_db_ready() ? stats_db_list_games(s_games) : -1;
-    s_ngames = n < 0 ? 0 : n;
-}
-
 /**
  * @brief Home > Statistics.
  * @param[in] e  the event
@@ -787,5 +543,3 @@ void files_open_cb(lv_event_t *e)
 lv_obj_t *home_menu(void) { return h_menu; }
 lv_obj_t *const *home_page(void) { return h_page; }
 lv_obj_t *home_dots_obj(void) { return h_dots; }
-const stats_game_row_t *ui_games(void) { return s_games; }
-int ui_ngames(void) { return s_ngames; }

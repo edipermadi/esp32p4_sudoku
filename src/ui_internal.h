@@ -848,16 +848,6 @@ lv_obj_t *home_menu(void);
  * @return HOME_PAGES_MAX objects
  */
 lv_obj_t *const *home_page(void);
-/**
- * @brief The unfinished games (Continue).
- * @return them
- */
-const stats_game_row_t *ui_games(void);
-/**
- * @brief How many.
- * @return how many
- */
-int ui_ngames(void);
 /* ui_list.c */
 lv_obj_t *const *home_items(void);
 void home_set_items_at(int i, lv_obj_t *v);
@@ -923,6 +913,16 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
  * @param[in] cs  the cell size, px
  */
 void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, int cs);
+/**
+ * @brief Argyle: one of its lines, from the first cell's outer top corner to the last cell's opposite corner (the
+ *        board, and the rules card's picture).
+ * @param[in] layer  where
+ * @param[in] first  the line's top cell
+ * @param[in] last  its bottom cell
+ * @param[in] down_right  it runs down to the right (else down to the left)
+ * @param[in] width  px
+ */
+void draw_argyle_line(lv_layer_t *layer, const lv_area_t *first, const lv_area_t *last, bool down_right, int width);
 /**
  * @brief Little Killer: a small arrow along direction dir (LK_*) from (x, y), about len long
  * @param[in] layer  where
@@ -1392,9 +1392,19 @@ void daily_sub_text(char *buf, size_t n);
  * @param[in] e  the event
  */
 void daily_cb(lv_event_t *e);
-/** @brief the unfinished games, from sudoku.db (without it: just the one in RAM) */
-void games_refresh(void);
-bool is_game_in_progress(uint16_t id);
+/**
+ * @brief Home's Continue button and its line: the game played last (and how many more), or greyed out with
+ *        "No game in progress"; the unfinished games are read again first (ui_continue.c).
+ * @param[in] btn  the button
+ * @param[in] sub  its line
+ */
+void continue_line_update(lv_obj_t *btn, lv_obj_t *sub);
+/**
+ * @brief Home > Continue: the game played last resumed, or the Unfinished games dialog when there are more
+ *        (ui_continue.c).
+ * @param[in] e  the event
+ */
+void continue_cb(lv_event_t *e);
 void list_fill_rows(int lc);
 void refresh_list(void);
 void list_reveal_coll(lv_anim_enable_t anim);
@@ -1461,7 +1471,8 @@ void render_players(void);
 void build_profile(void);
 void apply_theme(bool dark);
 /**
- * @brief Opens a puzzle: the game in progress, an unfinished one from sudoku.db, or a new start (asking first if another is in progress).
+ * @brief Opens a puzzle: the game in progress, an unfinished one from sudoku.db, or a new start (asking first if
+ *        another is in progress and there's no card) (ui_continue_open.c).
  * @param[in] id  the puzzle
  */
 void open_puzzle(uint16_t id);

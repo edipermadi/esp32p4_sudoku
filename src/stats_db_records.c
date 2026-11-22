@@ -65,6 +65,8 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Dutch Whispers", OF_VARIANT(37)},
     {"Fastest Parity Lines", OF_VARIANT(38)},
     {"Fastest Slow Thermo", OF_VARIANT(39)},
+    {"Fastest Fortress", OF_VARIANT(40)},
+    {"Fastest Argyle", OF_VARIANT(41)},
 };
 
 /* (documented in stats_db_internal.h) */

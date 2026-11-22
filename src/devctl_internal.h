@@ -190,20 +190,20 @@ void devctl_clock(void);
  */
 void devctl_settime(const char *line);
 /**
- * @brief colls: the saved and imported collections (Puzzles > Saved, Imported), a "COLL \<imported|saved\> \<puzzles\>
- *        \<name\>" line each (the name with %XX for spaces), then "OK colls \<n\>".
+ * @brief colls: every collection (Puzzles > Built-in, Saved, Imported), a "COLL \<builtin|saved|imported\> \<id\>
+ *        \<puzzles\> \<name\>" line each (the name with %XX for spaces; the id: coll_id()), then "OK colls \<n\>".
  */
 void devctl_colls(void);
 /**
- * @brief colldel \<saved|imported\> \<name\>: deletes that collection as the Puzzles screen's Delete collection does
+ * @brief colldel \<saved|imported\> \<id\>: deletes that collection as the Puzzles screen's Delete collection does
  *        (sudoku_ui_coll_delete(): its puzzles stay on the board).
  * @param[in] line  the command line
  */
 void devctl_colldel(const char *line);
 /**
- * @brief open \<builtin|saved|imported\> \<collection\> \<number\>: opens that puzzle on the game screen, as a tap on
- *        the Puzzles screen does (sudoku_ui_open_puzzle()); the name with %XX for spaces, any case. Answers "OK open
- *        \<the puzzle's name\>" or "ERR open: \<why\>". Serial only.
+ * @brief open \<builtin|saved|imported\> \<id\> \<number\>: opens that puzzle on the game screen, as a tap on the
+ *        Puzzles screen does (sudoku_ui_open_puzzle()). Answers "OK open \<the puzzle's name\>" or "ERR open: \<why\>".
+ *        Serial only.
  * @param[in] line  the command line
  */
 void devctl_open(const char *line);

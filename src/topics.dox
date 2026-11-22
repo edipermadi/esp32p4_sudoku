@@ -52,6 +52,12 @@
  */
 
 /**
+ * @defgroup topic_continue Continue
+ * @brief Getting back to an unfinished game: Home's Continue, the Unfinished games dialog and opening a
+ *        puzzle while another is in progress (@ref ui_continue), and the games themselves (@ref continue_core).
+ */
+
+/**
  * @defgroup topic_lock Lock screen
  * @brief The lock screen: its screens (@ref ui_lock) and its PIN (@ref lock_core).
  */

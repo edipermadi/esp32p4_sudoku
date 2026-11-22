@@ -260,6 +260,8 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_DUTCH] = {4, 1, 0, 0, "2738", NULL, NULL, NULL, NULL, NULL, PIC_WHISPER, NULL, -1, 0, NULL, NULL, LINE_DUTCH},
     [VAR_PARITY] = {5, 1, 0, 0, "38167", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_PARITY},
     [VAR_SLOW] = {4, 2, 2, 2, "24.." "..47", NULL, NULL, NULL, NULL, NULL, PIC_SLOW, NULL, -1, 0, NULL, NULL, LINE_SLOW},
+    [VAR_FORTRESS] = {3, 3, 0, 0, ".4." "685" ".2.", NULL, NULL, "..." ".f." "...", NULL, NULL, NULL, NULL, -1},
+    [VAR_ARGYLE] = {9, 9, 3, 3, "....3...." ".....7..." "......1.." ".......9." "........4" "........." "........." "........." ".........", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
     [VAR_CENTERDOT] = {
         9, 9, 3, 3, "........." ".3..7..1." "........." "........." ".6..2..9." "........."
         "........." ".8..4..5." ".........",
@@ -349,6 +351,11 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "3 are just far enough apart). A 5 can be on a line, between a 1 and a 9.",
     [VAR_PARITY] = "Classic rules, and along each red line, neighbours are one odd and one even digit: 3, 8, 1, 6, 7. "
     "So the digits on a line alternate odd, even, odd, ...",
+    [VAR_FORTRESS] = "Classic rules, and every grey cell holds a bigger digit than each white cell side by side with it: "
+    "the grey 8 beats 4, 6, 5 and 2. Two grey cells side by side can be either way round, and corner to corner "
+    "doesn't count.",
+    [VAR_ARGYLE] = "Classic rules, and no digit repeats along any of the eight diagonal lines of the argyle pattern: "
+    "3 7 1 9 4 on a short one here. The lines have 5 or 8 cells, so they don't hold every digit.",
     [VAR_SLOW] = "Classic rules, and along each thermometer the digits rise from the round bulb or stay the same: "
     "2, 4, 4, 7. A digit can only stay the same where the two cells share no row, column or box, as across the "
     "corner between two boxes here.",
@@ -381,6 +388,8 @@ static void rules_pic_draw_cb(lv_event_t *e)
         }
         if (p->parity && p->parity[i] == 'e') {
             bg = lv_color_mix(C_GRID_THIN, bg, 150);
+        } else if (p->parity && p->parity[i] == 'f') {   /* (Fortress: a grey cell, as on the board) */
+            bg = lv_color_mix(C_GRID_THIN, bg, 190);
         }
         r.bg_color = bg;
         r.border_color = C_GRID_THIN;
@@ -414,6 +423,17 @@ static void rules_pic_draw_cb(lv_event_t *e)
     r.border_width = 3;
     lv_area_t fr = {.x1 = x0 - 1, .y1 = y0 - 1, .x2 = x0 + w + 1, .y2 = y0 + h + 1};
     lv_draw_rect(layer, &r, &fr);
+    for (int k = 0; p == &RULES_PIC[VAR_ARGYLE] && k < ARGYLE_LINES; k++) {   /* Argyle: its lines */
+        uint8_t line[9];
+        const int n = sudoku_argyle_line(k, line);
+        const lv_area_t a = {.x1 = x0 + line[0] % 9 * cs, .y1 = y0 + line[0] / 9 * cs, .x2 = x0 + (line[0] % 9 + 1) * cs,
+                             .y2 = y0 + (line[0] / 9 + 1) * cs
+                            };
+        const lv_area_t b = {.x1 = x0 + line[n - 1] % 9 * cs, .y1 = y0 + line[n - 1] / 9 * cs,
+                             .x2 = x0 + (line[n - 1] % 9 + 1) * cs, .y2 = y0 + (line[n - 1] / 9 + 1) * cs
+                            };
+        draw_argyle_line(layer, &a, &b, k < ARGYLE_LINES / 2, 2);
+    }
     if (p->thermo) {                                /* a thermometer (or an arrow, a Renban, Whispers, ... line) */
         lv_point_t pts[9];
         int n = 0;
@@ -672,6 +692,7 @@ static bool share_text(char *buf, size_t n)
     case VAR_KROPKI:
     case VAR_XV:
     case VAR_GT:
+    case VAR_FORTRESS:
         key = sudoku_marks_text(G, extra, sizeof(extra)) ? "marks" : NULL;
         break;
     case VAR_THERMO:
@@ -848,6 +869,7 @@ static int pz_line(char *buf, size_t n)
     case VAR_KROPKI:
     case VAR_XV:
     case VAR_GT:
+    case VAR_FORTRESS:
         if (sudoku_marks_text(G, extra, sizeof(extra))) {
             marks = extra;
         }

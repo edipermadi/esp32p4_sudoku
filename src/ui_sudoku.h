@@ -130,13 +130,13 @@ void sudoku_ui_screen_name(char *buf, size_t n);
  *        "colldel"): its puzzles stay on the board, with their solves, History and Gameplays; an
  *        imported one's file can be imported again. The screens are brought up to date; the Puzzles
  *        screen keeps the collection it showed (by name), or its tab's first if that one went.
- * @param[in] saved  true: a saved collection (made on the board); false: an imported one
- * @param[in] name   its name, as the Saved or Imported tab lists it
+ * @param[in] tab    its tab: 1 saved (made on the board), 2 imported (COLL_TAB_*, collections.h)
+ * @param[in] id     its id (coll_id(): its row in sudoku.db)
  * @param[out] msg    gets what happened ("variant-examples deleted", or why not)
  * @param[in] n      its size
  * @return true if it was deleted
  */
-bool sudoku_ui_coll_delete(bool saved, const char *name, char *msg, size_t n);
+bool sudoku_ui_coll_delete(int tab, int id, char *msg, size_t n);
 
 /**
  * @brief Opens a puzzle of a collection on the game screen, as tapping it on the Puzzles screen does (devctl
@@ -144,13 +144,13 @@ bool sudoku_ui_coll_delete(bool saved, const char *name, char *msg, size_t n);
  *        that collection. Refused while a dialog or overlay is open (the lock screen among them) or a time attack
  *        runs. Without a card, a game in progress makes a dialog ask first, as on the screen.
  * @param[in] tab     the collection's tab: 0 built-in, 1 saved, 2 imported (COLL_TAB_*, collections.h)
- * @param[in] name    its name, as the tab lists it (any case)
+ * @param[in] id      its id (coll_id(): built-in 1-16, else its row in sudoku.db; devctl "colls" lists them)
  * @param[in] number  the puzzle's number in it, from 1
  * @param[out] msg    gets the puzzle's name ("Easy #5", with " (asking first)" when a dialog asks), or why not
  * @param[in] n       its size
  * @return true if it was opened (or a dialog asks first)
  */
-bool sudoku_ui_open_puzzle(int tab, const char *name, int number, char *msg, size_t n);
+bool sudoku_ui_open_puzzle(int tab, int id, int number, char *msg, size_t n);
 
 /**
  * @brief A part of a puzzle sent by sound (devctl / Gibberlink "pz \<id\> \<i\>/\<n\> \<part\>",

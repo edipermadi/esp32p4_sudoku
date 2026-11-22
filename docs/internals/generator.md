@@ -29,7 +29,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 
 `active[]` says which ones the variant uses. `cu[c]` lists a cell's units (up to 5), `peers[c]` the cells that share one with it, and `peer_bits` the same as a bitset.
 
-**Extra peers**: `xpeers` are cells that must differ without sharing a unit: a knight's move (Anti-Knight) or a diagonal touch (Anti-King).
+**Extra peers**: `xpeers` are cells that must differ without sharing a unit: a knight's move (Anti-Knight), a diagonal touch (Anti-King) or a place on the same line (Argyle's eight diagonal lines, `sudoku_argyle_line()`: up to 12 per cell; lines of 5 and 8 cells aren't units, which need every digit).
 
 **`allow[c]`**: a bitmask of the digits a cell may hold at all (bit *d* = digit *d*). Even-Odd narrows it to even or odd. Skyscraper clues, X-Sums clues (the first cell: only the X that can make the clue), Frame clues (the first three: the digits three different ones can make it with), Outside Sudoku clues (their digits out of the rest of the line), Rossini arrows (a rising first cell at most 7, and so on) and Greater-Than sign chains narrow it near the clue. The rest of the code starts from it instead of from "1–9".
 
@@ -39,7 +39,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 |---|---|
 | `cage_*` | Killer cages (their cells are also peers) |
 | `consec` | Consecutive bars; with `consec_on` and no bars: Non-Consecutive |
-| `edge_kind`, `edge` | Kropki dots, XV marks, Greater-Than signs, on each cell's right and lower edge |
+| `edge_kind`, `edge` | Kropki dots, XV marks, Greater-Than signs, on each cell's right and lower edge; Fortress' grey-white sides as signs (`EDGE_FORT`, not drawn: `parity` says which cells are grey, `PARITY_FORT`) |
 | `quad_*` | Quadruple circles |
 | `thermo_*`, `line_kind` | Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper, Between, Entropic, Modular Lines, Dutch Whispers, Parity Lines and Slow Thermo: one set of "paths of cells", with `line_kind` saying how to read them |
 | `sandwich_sum` | Sandwich: 18 sums |
@@ -51,7 +51,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 | `rossini`, `rossini_dir` | Rossini: 18 arrows (`ROSSINI_*`, none included) |
 | `diag_nc` | Diagonal Non-Consecutive: no digits 1 apart at a corner |
 
-`sudoku_geom_init()` builds the fixed boards once at start-up (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Disjoint, Asterisk, Center Dot ...), and `sudoku_geom(variant)` returns them. Variants whose board comes **with** its puzzle (Jigsaw's regions, Killer's cages, every variant with clues) are built per puzzle, from text with `sudoku_geom_*_text()`, and turned back into text with `sudoku_*_text()`. That text is exactly what the database's `regions`, `cages`, `marks` and `thermos` columns hold (see [Database design](database.md)).
+`sudoku_geom_init()` builds the fixed boards once at start-up (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Disjoint, Asterisk, Center Dot, Argyle ...), and `sudoku_geom(variant)` returns them. Variants whose board comes **with** its puzzle (Jigsaw's regions, Killer's cages, every variant with clues) are built per puzzle, from text with `sudoku_geom_*_text()`, and turned back into text with `sudoku_*_text()`. That text is exactly what the database's `regions`, `cages`, `marks` and `thermos` columns hold (see [Database design](database.md)).
 
 ## Solving and counting: `grid_t` and `search()`
 
@@ -122,7 +122,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
 
 ### 1. A full grid, and the variant's clues
 
-- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Diagonal Non-Consecutive, Disjoint, Asterisk, Center Dot): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and the two Non-Consecutives sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
+- **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Diagonal Non-Consecutive, Disjoint, Asterisk, Center Dot, Argyle): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and the two Non-Consecutives sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
 - **Jigsaw**: `jigsaw_map()` reshapes the 3×3 boxes by swapping cells across region borders while every region stays in one piece. A new shape is made every 4 attempts; one that won't fill quickly is dropped.
 - **Variants with clues**: a random **Classic** grid first, then clues that are true of it, so the solution is known to fit:
 
@@ -136,6 +136,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
   | Quadruple | 14 circles (Hard/Expert 18) at random corners, each with 2–4 of its four digits |
   | Thermo | `thermo_paths()`: 7 thermometers (Hard/Expert 10) along rising digits |
   | Slow Thermo | `thermo_paths()` too: 7 thermometers (Hard/Expert 10) of 3 to 7 cells along digits that rise or stay the same (where a step can stay the same, it does half the time) |
+  | Fortress | 18 to 24 grey cells, picked in a random order: a cell turns grey when its digit is bigger than every white neighbour's (turning a cell grey only drops signs, so the ones before stay kept) |
   | Arrow, Renban, Whispers | `rule_paths()`: 8 lines (Hard/Expert 10) grown cell by cell (sideways or diagonally) through cells that keep the rule: a shaft that sums to its circle, a run of consecutive digits, neighbours 5 apart |
   | Sandwich | all 18 sums |
   | Skyscraper | each line's count, kept for about 75 % of the lines (Hard/Expert 60 %) |

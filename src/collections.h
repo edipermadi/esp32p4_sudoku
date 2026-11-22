@@ -54,6 +54,20 @@ int coll_tab(int c);
  */
 const char *coll_name(int c);
 /**
+ * @brief A collection's id, as devctl names it: a built-in one's place on the Built-in tab (1-16), a saved or
+ *        imported one's row in sudoku.db (saved_collections.id, imported.id: kept until it's deleted).
+ * @param[in] c  the collection
+ * @return the id (unique within its tab)
+ */
+int coll_id(int c);
+/**
+ * @brief The collection on a tab with an id (coll_id()).
+ * @param[in] tab  COLL_TAB_*
+ * @param[in] id  its id
+ * @return the collection, or -1 for none
+ */
+int coll_find_id(int tab, int id);
+/**
  * @brief When a collection was saved (made on the board) or imported.
  * @param[in] c  the collection
  * @return Unix time UTC; 0 for a built-in one, or one from before collections were dated

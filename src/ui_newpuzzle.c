@@ -104,6 +104,8 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {16, 460, 1277, 1349},  /* Dutch Whispers (2026-11-22) */
     {9, 187, 784, 754},     /* Parity Lines */
     {11, 188, 696, 535},    /* Slow Thermo */
+    {13, 82, 212, 1005},    /* Fortress (2026-11-22) */
+    {673, 472, 758, 944},   /* Argyle */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -455,10 +457,13 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
 /** @brief each tab's variants, in button order: the grids and their extra regions; marks and rules
  * between cells; lines; clues (cages, and sums or counts outside the grid) */
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
-    {VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_MINI, VAR_KIDS, VAR_DISJOINT, VAR_ASTERISK, VAR_CENTERDOT, GEN_CAT_END},
+    {
+        VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_MINI, VAR_KIDS, VAR_DISJOINT, VAR_ASTERISK, VAR_CENTERDOT,
+        VAR_ARGYLE, GEN_CAT_END
+    },
     {
         VAR_KNIGHT, VAR_KING, VAR_NONCONSEC, VAR_DIAGNC, VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
-        GEN_CAT_END
+        VAR_FORTRESS, GEN_CAT_END
     },
     {
         VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM, VAR_ZIPPER, VAR_BETWEEN,
@@ -477,7 +482,8 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_PALINDROME] = "Palindrome", [VAR_REGIONSUM] = "Region Sum", [VAR_XSUM] = "X-Sums", [VAR_ZIPPER] = "Zipper",
     [VAR_FRAME] = "Frame", [VAR_BETWEEN] = "Between", [VAR_ENTROPIC] = "Entropic", [VAR_MODULAR] = "Modular",
     [VAR_CENTERDOT] = "Center Dot", [VAR_OUTSIDE] = "Outside", [VAR_ROSSINI] = "Rossini", [VAR_DIAGNC] = "Diagonal NC",
-    [VAR_DUTCH] = "Dutch", [VAR_PARITY] = "Parity", [VAR_SLOW] = "Slow Thermo",
+    [VAR_DUTCH] = "Dutch", [VAR_PARITY] = "Parity", [VAR_SLOW] = "Slow Thermo", [VAR_FORTRESS] = "Fortress",
+    [VAR_ARGYLE] = "Argyle",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -525,6 +531,8 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_DUTCH] = "9x9 with amber lines (Dutch Whispers): neighbours along a line differ by 4 or more.",
     [VAR_PARITY] = "9x9 with red lines: neighbours along a line are one odd and one even digit.",
     [VAR_SLOW] = "9x9 with thermometers: the digits rise from the bulb, or stay the same where they may.",
+    [VAR_FORTRESS] = "9x9: each grey cell holds a bigger digit than every white cell side by side with it.",
+    [VAR_ARGYLE] = "9x9, and no digit repeats along any of the eight diagonal lines of the argyle pattern.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /**< the level buttons (Kids 4x4: Hard and Expert off) */
 

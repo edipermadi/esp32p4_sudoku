@@ -1,13 +1,16 @@
 /**
  * @file devctl_colls.c
  * @ingroup devctl
- * @brief colls, colldel: the saved and imported collections (Puzzles > Saved, Imported) listed, and one deleted.
+ * @brief colls, open, colldel: the collections (Puzzles > Built-in, Saved, Imported) listed with their ids, a
+ *        puzzle of one opened, a saved or imported one deleted.
  */
 #include "devctl_internal.h"
 #include <stdio.h>
 #include <string.h>
 #include "esp_heap_caps.h"
 #include "stats_db.h"
+#include "puzzles.h"
+#include "collections.h"
 #include "ui_sudoku.h"
 
 /**
@@ -26,16 +29,6 @@ static void print_coded(const char *s)
     }
 }
 
-/**
- * @brief A hex digit's value.
- * @param[in] c  the character
- * @return 0..15, or -1 if it isn't one
- */
-static int unhex(char c)
-{
-    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
-}
-
 /* (documented in devctl_internal.h) */
 void devctl_colls(void)
 {
@@ -50,14 +43,19 @@ void devctl_colls(void)
         return;
     }
     int ni = stats_db_list_imports(imp), ns = stats_db_list_saved(sav), n = 0;
-    for (int i = 0; i < ni; i++, n++) {             /* imported, then saved */
-        serial_printf("COLL imported %d ", imp[i].count);
-        print_coded(imp[i].name);
+    for (int c = 0; c < PUZZLE_COLLECTION_COUNT; c++, n++) {   /* the tabs' order: built-in, saved, imported */
+        serial_printf("COLL builtin %d %d ", c + 1, puzzle_collection(c)->count);
+        print_coded(puzzle_collection(c)->name);
         serial_write_byte('\n');
     }
     for (int i = 0; i < ns; i++, n++) {
-        serial_printf("COLL saved %d ", sav[i].count);
+        serial_printf("COLL saved %d %d ", sav[i].id, sav[i].count);
         print_coded(sav[i].name);
+        serial_write_byte('\n');
+    }
+    for (int i = 0; i < ni; i++, n++) {
+        serial_printf("COLL imported %d %d ", imp[i].id, imp[i].count);
+        print_coded(imp[i].name);
         serial_write_byte('\n');
     }
     heap_caps_free(sav);
@@ -65,43 +63,33 @@ void devctl_colls(void)
 }
 
 /**
- * @brief A collection's name as sent: %XX for a space, % or a control byte (as paths are)
- * @param[in] word  the name as sent
- * @param[out] name  gets it
- * @param[in] size  its size
+ * @brief A collection's tab from its kind as devctl names it
+ * @param[in] kind  "builtin", "saved" or "imported"
+ * @return COLL_TAB_*, or -1
  */
-static void decode_name(const char *word, char *name, size_t size)
+static int kind_tab(const char *kind)
 {
-    size_t k = 0;
-    for (const char *p = word; *p && k + 1 < size; p++) {
-        char c = *p;
-        if (c == '%' && unhex(p[1]) >= 0 && unhex(p[2]) >= 0) {
-            c = (char)(unhex(p[1]) << 4 | unhex(p[2]));
-            p += 2;
+    static const char *const KIND[COLL_TABS] = {"builtin", "saved", "imported"};   /* (COLL_TAB_*'s order) */
+    for (int t = 0; t < COLL_TABS; t++) {
+        if (!strcmp(kind, KIND[t])) {
+            return t;
         }
-        name[k++] = c;
     }
-    name[k] = 0;
+    return -1;
 }
 
 /* (documented in devctl_internal.h) */
 void devctl_open(const char *line)
 {
-    static const char *const KIND[] = {"builtin", "saved", "imported"};   /* (COLL_TAB_*'s order) */
-    char kind[16] = "", word[3 * STATS_IMPORT_NAME + 1] = "", name[STATS_IMPORT_NAME];
-    int number = 0, tab = -1;
-    if (sscanf(line, "%*s %15s %84s %d", kind, word, &number) == 3) {
-        for (int t = 0; t < 3; t++) {
-            tab = strcmp(kind, KIND[t]) ? tab : t;
-        }
-    }
+    char kind[16] = "";
+    int id = 0, number = 0;
+    const int tab = sscanf(line, "%*s %15s %d %d", kind, &id, &number) == 3 ? kind_tab(kind) : -1;
     if (tab < 0) {
-        devctl_reply("ERR open: open builtin|saved|imported <collection> <number> (%%XX for a space)\n");
+        devctl_reply("ERR open: open builtin|saved|imported <collection id> <number> (ids: colls)\n");
         return;
     }
-    decode_name(word, name, sizeof(name));
     char msg[96];
-    if (sudoku_ui_open_puzzle(tab, name, number, msg, sizeof(msg))) {
+    if (sudoku_ui_open_puzzle(tab, id, number, msg, sizeof(msg))) {
         devctl_reply("OK open %s\n", msg);
     } else {
         devctl_reply("ERR open: %s\n", msg);
@@ -111,20 +99,21 @@ void devctl_open(const char *line)
 /* (documented in devctl_internal.h) */
 void devctl_colldel(const char *line)
 {
-    char kind[16] = "", word[3 * STATS_IMPORT_NAME + 1] = "", name[STATS_IMPORT_NAME];
-    if (sscanf(line, "%*s %15s %84s", kind, word) != 2 || (strcmp(kind, "saved") && strcmp(kind, "imported"))) {
-        devctl_reply("ERR colldel: colldel saved|imported <name> (%%XX for a space)\n");
+    char kind[16] = "";
+    int id = 0;
+    const int tab = sscanf(line, "%*s %15s %d", kind, &id) == 2 ? kind_tab(kind) : -1;
+    if (tab != COLL_TAB_SAVED && tab != COLL_TAB_IMPORTED) {
+        devctl_reply("ERR colldel: colldel saved|imported <collection id> (ids: colls)\n");
         return;
     }
-    decode_name(word, name, sizeof(name));
     const char *busy = sudoku_ui_io_busy();
     if (busy) {
         devctl_reply("ERR colldel: %s\n", busy);
         return;
     }
     char msg[96];
-    if (sudoku_ui_coll_delete(!strcmp(kind, "saved"), name, msg, sizeof(msg))) {
-        devctl_reply("OK colldel\n");
+    if (sudoku_ui_coll_delete(tab, id, msg, sizeof(msg))) {
+        devctl_reply("OK colldel %s\n", msg);
     } else {
         devctl_reply("ERR colldel: %s\n", msg);
     }

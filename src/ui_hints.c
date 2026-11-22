@@ -82,6 +82,9 @@ static const char *units_word(void)
     if (game_geo()->variant == VAR_KNIGHT) {
         return "row, column, box or a knight's move away";
     }
+    if (game_geo()->variant == VAR_ARGYLE) {
+        return "row, column, box or argyle line";
+    }
     if (game_geo()->variant == VAR_KING) {
         return "row, column, box or a touching cell";
     }
@@ -365,8 +368,9 @@ void hint_render(void)
             }
             int ek = game_geo()->edge_kind;
             snprintf(tech, sizeof(tech), "%s around row %d, column %d%s leave it only %s. ",
-                     ek == EDGE_KROPKI ? "The dots" : ek == EDGE_XV ? "The X and V marks" : "The signs",
-                     c / 9 + 1, c % 9 + 1, ek == EDGE_GT ? "" : " (and where there are none)", digs);
+                     ek == EDGE_KROPKI ? "The dots" : ek == EDGE_XV ? "The X and V marks" :
+                     ek == EDGE_FORT ? "The grey cells (bigger than their white neighbours)" : "The signs",
+                     c / 9 + 1, c % 9 + 1, ek == EDGE_GT || ek == EDGE_FORT ? "" : " (and where there are none)", digs);
         }
     } else if (t->kind == TECH_CAGE) {              /* Killer: the cage's cells */
         int k = t->unit;
@@ -1070,8 +1074,16 @@ void board_regions_draw_cb(lv_event_t *e)
     if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) {
         board_marks_draw(grid, geo, lv_event_get_layer(e));
     }
-    if (geo && geo->edge_kind) {
+    if (geo && geo->edge_kind && geo->edge_kind != EDGE_FORT) {   /* (Fortress: the grey cells say it all) */
         board_edges_draw(grid, geo, lv_event_get_layer(e));
+    }
+    for (int k = 0; geo && geo->variant == VAR_ARGYLE && k < ARGYLE_LINES; k++) {
+        uint8_t line[9];
+        const int n = sudoku_argyle_line(k, line);
+        lv_area_t a, b;
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + line[0]), &a);
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + line[n - 1]), &b);
+        draw_argyle_line(lv_event_get_layer(e), &a, &b, k < ARGYLE_LINES / 2, 3);
     }
     if (geo && geo->nquads) {
         board_quads_draw(grid, geo, lv_event_get_layer(e));
@@ -1098,6 +1110,22 @@ void board_regions_draw_cb(lv_event_t *e)
             lv_draw_rect(layer, &d, &r);
         }
     }
+}
+
+/* (documented in ui_internal.h) */
+void draw_argyle_line(lv_layer_t *layer, const lv_area_t *first, const lv_area_t *last, bool down_right, int width)
+{
+    lv_draw_line_dsc_t l;
+    lv_draw_line_dsc_init(&l);
+    l.color = C_ACCENT;
+    l.opa = LV_OPA_50;
+    l.width = width;
+    l.round_start = l.round_end = 1;
+    l.p1.x = down_right ? first->x1 : first->x2;    /* from the first cell's outer corner to the last one's */
+    l.p1.y = first->y1;
+    l.p2.x = down_right ? last->x2 : last->x1;
+    l.p2.y = last->y2;
+    lv_draw_line(layer, &l);
 }
 
 /* (documented in ui_internal.h) */
@@ -1287,7 +1315,8 @@ void game_layout(void)
             game_var() != VAR_REGIONSUM && game_var() != VAR_XSUM && game_var() != VAR_ZIPPER &&
             game_var() != VAR_FRAME && game_var() != VAR_BETWEEN && game_var() != VAR_OUTSIDE &&
             game_var() != VAR_ROSSINI && game_var() != VAR_ENTROPIC && game_var() != VAR_MODULAR &&
-            game_var() != VAR_DUTCH && game_var() != VAR_PARITY && game_var() != VAR_SLOW) {
+            game_var() != VAR_DUTCH && game_var() != VAR_PARITY && game_var() != VAR_SLOW &&
+            game_var() != VAR_FORTRESS) {
         lv_obj_invalidate(game_grid());
         return;
     }

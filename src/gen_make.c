@@ -920,7 +920,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool grp = variant == VAR_ENTROPIC || variant == VAR_MODULAR;
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
-    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum ||
+    const bool fort = variant == VAR_FORTRESS;
+    const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
                      pal || rsum || frame || zip || betw || grp || outs || ross;
     if (sandwich) {
         gen_bread_tables();
@@ -1004,6 +1005,37 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             }
             text[81] = 0;
             sudoku_geom_marks(variant, text, jig);
+        } else if (fort) {                          /* a grid, then grey cells, each bigger than its white neighbours */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            char text[82];
+            uint8_t order[81];
+            memset(text, '.', 81);
+            text[81] = 0;
+            for (int c = 0; c < 81; c++) {
+                order[c] = (uint8_t)c;
+            }
+            for (int c = 80; c > 0; c--) {          /* the cells in a random order */
+                int j = (int)(rnd(&rng) % (uint32_t)(c + 1));
+                uint8_t x = order[c];
+                order[c] = order[j];
+                order[j] = x;
+            }
+            /* (turning a white cell grey only drops the signs its grey neighbours had with it: the
+             * others stay kept) */
+            const int want = 18 + (int)(rnd(&rng) % 7);
+            for (int k = 0, got = 0; k < 81 && got < want; k++) {
+                const int c = order[k];
+                bool ok = true;
+                const int nb[4] = {c % 9 ? c - 1 : -1, c % 9 < 8 ? c + 1 : -1, c > 8 ? c - 9 : -1, c < 72 ? c + 9 : -1};
+                for (int j = 0; j < 4; j++) {
+                    ok &= nb[j] < 0 || text[nb[j]] == 'f' || full[nb[j]] < full[c];
+                }
+                if (ok) {
+                    text[c] = 'f';
+                    got++;
+                }
+            }
+            sudoku_geom_marks(VAR_FORTRESS, text, jig);
         } else if (quad) {                          /* a grid, then circles at random corners */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             uint8_t at[QUADS_MAX], n[QUADS_MAX], dig[QUADS_MAX][4];
@@ -1172,7 +1204,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 sums[lu] = (uint8_t)sum;
             }
             gen_geom_sandwich(sums, jig);
-        } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC || variant == VAR_DIAGNC) {
+        } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC || variant == VAR_DIAGNC ||
+                   variant == VAR_ARGYLE) {
             /* not every fill works out quickly: try again */
             if (!gen_random_full_grid(G, full, &rng, 20000)) {
                 continue;

@@ -109,6 +109,10 @@
  *   VAR_SLOW     Slow Thermo: Classic rules, and along each thermometer the digits
  *                rise or stay the same from its bulb (the same only where two
  *                neighbours on it don't share a row, column or box)
+ *   VAR_FORTRESS Fortress: Classic rules, and every grey cell holds a bigger digit
+ *                than each white cell side by side with it; every puzzle has its own
+ *   VAR_ARGYLE   Argyle: Classic rules, and no digit repeats along any of eight
+ *                diagonal lines in an argyle pattern (sudoku_argyle_line())
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -206,6 +210,8 @@ typedef enum {
     VAR_DUTCH,                          /**< Dutch Whispers */
     VAR_PARITY,                         /**< Parity Lines */
     VAR_SLOW,                           /**< Slow Thermo */
+    VAR_FORTRESS,                       /**< Fortress */
+    VAR_ARGYLE,                         /**< Argyle */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -218,7 +224,7 @@ typedef enum {
  *         "Renban", "German Whispers", "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
  *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
  *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
- *         "Parity Lines", "Slow Thermo"
+ *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle"
  */
 const char *variant_name(int variant);
 
@@ -270,7 +276,9 @@ enum {
     EDGE_NONE = 0,                      /**< none */
     EDGE_KROPKI,                        /**< Kropki's dots */
     EDGE_XV,                            /**< XV's letters */
-    EDGE_GT                             /**< Greater-Than's signs */
+    EDGE_GT,                            /**< Greater-Than's signs */
+    EDGE_FORT,                          /**< Fortress: the grey cells' (MARK_LESS / MARK_MORE, drawn as the shading) */
+    EDGE_KINDS                          /**< how many (with EDGE_NONE) */
 };
 /** @brief Kropki's marks. */
 enum {
@@ -324,7 +332,7 @@ typedef struct {
     bool consec_on;                     /**< Consecutive: the bars are rules */
     uint8_t consec[81];                 /**< Consecutive: bars, bit CONSEC_RIGHT = to the cell on the right, CONSEC_DOWN = below */
     uint8_t nxpeers[81];                /**< peers that share no unit (Anti-Knight: the knight's moves; Anti-King: the touching cells): how many */
-    uint8_t xpeers[81][8];              /**< which */
+    uint8_t xpeers[81][12];             /**< which (Argyle: up to 12) */
     /* Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper, Between Lines: lines,
      * each a path of cells (side by side or diagonal), of the kind line_kind: a thermometer from its
      * bulb (digits rise along it), an arrow from its circle (the rest, its shaft, adds up to it), a
@@ -376,7 +384,8 @@ typedef struct {
 enum {
     PARITY_NONE = 0,                    /**< no mark */
     PARITY_EVEN,                        /**< even */
-    PARITY_ODD                          /**< odd */
+    PARITY_ODD,                         /**< odd */
+    PARITY_FORT                         /**< Fortress: a grey cell (no digits ruled out by itself: see EDGE_FORT) */
 };
 #define CONSEC_RIGHT 1                  /**< Consecutive: a bar to the right */
 #define CONSEC_DOWN  2                  /**< Consecutive: a bar below */
@@ -415,12 +424,13 @@ bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out);
  */
 bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
 /**
- * @brief Even-Odd / Consecutive / Kropki / XV / Greater-Than boards from their marks
+ * @brief Even-Odd / Consecutive / Kropki / XV / Greater-Than / Fortress boards from their marks
  * as text, 81 characters row by row: Even-Odd '.', 'e' (even) or 'o' (odd);
  * Consecutive '0'-'3' (bit 1 = a bar to the right, bit 2 = a bar below);
  * Kropki, XV, Greater-Than '0'-'8': the mark to the right + 3 x the mark below
- * (MARK_*). sudoku_marks_text() writes it (buf: at least 82).
- * @param[in] variant  VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV or VAR_GT
+ * (MARK_*); Fortress '.' or 'f' (a grey cell: bigger than each white cell side by side with it,
+ * kept as EDGE_FORT marks). sudoku_marks_text() writes it (buf: at least 82).
+ * @param[in] variant  VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT or VAR_FORTRESS
  * @param[in] text  the marks
  * @param[out] out  gets the board
  * @return false if the text isn't one
@@ -719,6 +729,16 @@ static inline bool is_sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
         return false;
     }
 }
+
+#define ARGYLE_LINES 8                  /**< Argyle's diagonal lines */
+/**
+ * @brief Argyle: one of its eight lines, the diagonals from r1c2, r1c5, r2c1 and r5c1 down to the right, and their
+ *        mirror images down to the left (from r1c8, r1c5, r2c9, r5c9): 8, 5, 8, 5 cells each way
+ * @param[in] k  0..ARGYLE_LINES-1
+ * @param[out] cells  gets its cells, from the top
+ * @return how many
+ */
+int sudoku_argyle_line(int k, uint8_t cells[9]);
 
 /**
  * @brief a box's centre on a Center Dot board (rows and columns 2, 5 and 8, counted from 1)
