@@ -92,11 +92,11 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {11, 284, 905, 756},    /* Palindrome (2026-11-22) */
     {21, 403, 1070, 1206},  /* Region Sum Lines */
     {72, 835, 3012, 2360},  /* X-Sums */
-    {12, 594, 1209, 1125},  /* Zipper Lines (2026-11-22) */
-    {17, 116, 672, 268},    /* Frame (re-measured 2026-11-22, with Outside Sudoku and Rossini sharing its code) */
-    {24, 620, 3610, 1873},  /* Between Lines */
-    {17, 357, 907, 1056},   /* Entropic Lines (2026-11-22) */
-    {14, 250, 877, 1219},   /* Modular Lines */
+    {12, 86, 186, 946},     /* Zipper Lines (2026-11-22; lines that don't cross, logic-first digging) */
+    {15, 112, 641, 262},    /* Frame (re-measured 2026-11-22) */
+    {19, 88, 293, 1672},    /* Between Lines (the same) */
+    {15, 85, 223, 829},     /* Entropic Lines (the same) */
+    {13, 81, 192, 905},     /* Modular Lines */
     {9, 79, 333, 242},      /* Center Dot */
     {37, 117, 1406, 1360},  /* Outside Sudoku (2026-11-22) */
     {41, 292, 1780, 643},   /* Rossini */

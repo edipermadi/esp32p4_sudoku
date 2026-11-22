@@ -432,6 +432,22 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
                 lens[t] < 3) {
             return false;                           /* (two circles and something between them) */
         }
+        if (out->line_kind == LINE_BETWEEN) {       /* the most cells between the circles in one row, column or box */
+            int need = 1;
+            for (int i = 1; i < lens[t] - 1; i++) {
+                int same[3] = {0, 0, 0};
+                for (int j = 1; j < lens[t] - 1; j++) {
+                    int a = cells[t][i], b = cells[t][j];
+                    same[0] += a / 9 == b / 9;
+                    same[1] += a % 9 == b % 9;
+                    same[2] += out->region[a] == out->region[b];
+                }
+                for (int k = 0; k < 3; k++) {
+                    need = same[k] > need ? same[k] : need;
+                }
+            }
+            out->between_need[t] = (uint8_t)need;
+        }
         if (out->line_kind == LINE_ZIPPER && lens[t] % 2) {   /* odd: the middle is a pair's sum, 2 at least */
             out->allow[cells[t][lens[t] / 2]] &= (uint16_t)~(1u << 1);
         }

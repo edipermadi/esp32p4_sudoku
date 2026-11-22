@@ -150,7 +150,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
 
   | Entropic, Modular Lines | `group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |
 
-  The newest line kinds (Zipper, Between, Entropic, Modular) never let a line cross itself diagonally (`is_line_crossing()`); the older ones may (changing them would change their puzzles for a seed).
+  The newest line kinds (Zipper, Between, Entropic, Modular) never let a line cross itself or another diagonally (`is_line_crossing()`, and the 2x2 blocks earlier lines cross: `is_block_crossed()`); the older ones may (changing them would change their puzzles for a seed). The same four dig logic-first below Expert, like Kropki, XV, Greater-Than and Quadruple: a removal the grader's logic solves within the level is unique without a count. Between Lines also knows that its cells between the circles which share a row, column or box must differ (`between_need`: the circles at least that far apart), and its uniqueness counts give up after 1500 nodes (the others: 6000).
 
   These boards go in `jig`, a geometry allocated once in PSRAM. The one that wins is copied out to the caller with the givens.
 

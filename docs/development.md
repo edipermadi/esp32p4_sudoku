@@ -61,7 +61,7 @@ The parts of the firmware that are plain C run on a PC too: `make -C tests` buil
 
 How long **New puzzle** takes on the board, measured with devctl's `genbench` ([Remote control](devctl.md)): `python3 tools/devctl.py --port /dev/ttyACM1 "genbench all all 10"`. Ten puzzles of each variant and level, from fixed seeds (the same every run, so two builds compare puzzle for puzzle), each on the worker core like New puzzle, the CPU at 360 MHz. Measured 2026-11-21 on the Waveshare 4B board (pre-v3 ESP32-P4 silicon), firmware `0ce035d` (the generator as committed there); the whole run takes about 5 minutes.
 
-Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert. Palindrome, Region Sum Lines, X-Sums, Zipper Lines, Frame, Between Lines, Entropic Lines, Modular Lines, Center Dot, Outside Sudoku, Rossini and Diagonal Non-Consecutive were added on 2026-11-22, the same way (Frame re-measured once Outside Sudoku and Rossini shared its checker: its puzzles are the same, about a quarter slower on the board, the same speed on a PC).
+Each cell: average / slowest time in ms (average givens in brackets). Every one of the 780 puzzles came out at the level asked for. Arrow, Renban, German Whispers, Skyscraper and Little Killer were added later (2026-11-21, the same way). Kids 4x4 has no Hard or Expert. Palindrome, Region Sum Lines, X-Sums, Zipper Lines, Frame, Between Lines, Entropic Lines, Modular Lines, Center Dot, Outside Sudoku, Rossini and Diagonal Non-Consecutive were added on 2026-11-22, the same way Zipper, Between, Entropic and Modular Lines were re-measured once their lines stopped crossing and they dug logic-first (their puzzles changed; Between Hard went from 3.6 s to 0.3 s), and Frame after the solver's rule checks became one bitmask (see below).
 
 | Variant | Easy | Medium | Hard | Expert |
 |---|---|---|---|---|
@@ -93,17 +93,17 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | Palindrome | 11 / 20 (29.3) | 284 / 449 (15.2) | 905 / 2445 (13) | 756 / 1250 (12.2) |
 | Region Sum Lines | 21 / 47 (29.7) | 403 / 810 (20.1) | 1070 / 1731 (18) | 1206 / 1780 (15.4) |
 | X-Sums | 72 / 122 (29.7) | 835 / 1605 (11.3) | 3012 / 7914 (14.7) | 2360 / 4324 (11.6) |
-| Zipper Lines | 12 / 23 (29.7) | 594 / 1153 (15.3) | 1209 / 3120 (12.7) | 1125 / 2798 (12.7) |
-| Frame | 17 / 31 (30) | 116 / 237 (15.1) | 672 / 1970 (17.3) | 268 / 776 (13.3) |
-| Between Lines | 24 / 42 (29.8) | 620 / 2843 (22.3) | 3610 / 8961 (19.6) | 1873 / 3791 (19.8) |
-| Entropic Lines | 17 / 36 (30.4) | 357 / 941 (18.3) | 907 / 1733 (15.6) | 1056 / 1754 (15.2) |
-| Modular Lines | 14 / 24 (29.5) | 250 / 578 (18.2) | 877 / 1487 (16) | 1219 / 2612 (14.3) |
+| Zipper Lines | 12 / 21 (29.2) | 86 / 97 (15.5) | 186 / 490 (12.6) | 946 / 1088 (12.9) |
+| Frame | 15 / 27 (30) | 112 / 230 (15.1) | 641 / 1895 (17.3) | 262 / 790 (13.3) |
+| Between Lines | 19 / 30 (29.8) | 88 / 112 (21.2) | 293 / 532 (19.7) | 1672 / 4862 (20.6) |
+| Entropic Lines | 15 / 27 (30) | 85 / 129 (18.6) | 223 / 411 (15.4) | 829 / 1731 (15.9) |
+| Modular Lines | 13 / 21 (29.7) | 81 / 141 (18.4) | 192 / 387 (16.1) | 905 / 2322 (14.5) |
 | Center Dot | 9 / 20 (35.7) | 79 / 179 (26.8) | 333 / 556 (26) | 242 / 595 (24.6) |
 | Outside Sudoku | 37 / 68 (30.1) | 117 / 185 (16.4) | 1406 / 3822 (18.2) | 1360 / 4978 (17.7) |
 | Rossini | 41 / 96 (30.2) | 292 / 717 (21.9) | 1780 / 4290 (21.4) | 643 / 2608 (20.7) |
 | Diagonal Non-Consecutive | 274 / 595 (32.2) | 512 / 823 (16.8) | 798 / 1675 (16.1) | 839 / 1044 (14) |
 
-Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), Between Lines Hard (up to 9 s), X-Sums Hard (up to 7.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
+Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), X-Sums Hard (up to 7.9 s), Between Lines Expert (up to 4.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
 ## The UI files
 

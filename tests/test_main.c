@@ -499,6 +499,26 @@ static void test_builtin(void)
     CHECK(puzzle_collection_of(0) == 0 && puzzle_collection_of(PUZZLE_COUNT - 1) >= 0);
 }
 
+/* lines that cross: two diagonal steps (of one line or two) through the same 2x2 block, making an X */
+static bool is_lines_crossing(const sudoku_geom_t *g)
+{
+    uint8_t blocks[81] = {0};
+    for (int t = 0; t < g->nthermos; t++) {
+        for (int i = 0; i + 1 < g->thermo_n[t]; i++) {
+            int a = g->thermo_cell[t][i], b = g->thermo_cell[t][i + 1];
+            if (a / 9 == b / 9 || a % 9 == b % 9) {
+                continue;
+            }
+            int k = (a / 9 < b / 9 ? a / 9 : b / 9) * 9 + (a % 9 < b % 9 ? a % 9 : b % 9);
+            if (blocks[k]) {
+                return true;
+            }
+            blocks[k] = 1;
+        }
+    }
+    return false;
+}
+
 /* every variant: a puzzle at Easy and Medium (and Hard where it's quick), one solution, its
  * level what the grader says, givens on the board; Kids 4x4 never above Medium */
 static void test_generate(void)
@@ -516,6 +536,9 @@ static void test_generate(void)
                 continue;
             }
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
+            if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR) {
+                CHECKF(!is_lines_crossing(&board), "%s %s: two lines cross", variant_name(v), gen_level_name(lv));
+            }
             CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));
             CHECKF(sudoku_count_solutions(&board, g, 2) == 1, "%s %s: one solution", variant_name(v),
                    gen_level_name(lv));

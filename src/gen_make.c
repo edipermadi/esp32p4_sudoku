@@ -56,7 +56,8 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
     }
     /* Jigsaw and Killer: a uniqueness check that takes too long keeps the
      * clue (near the minimum, the plain search can take thousands of times longer) */
-    const uint32_t node_limit = G->variant == VAR_CLASSIC ? 0 : G->variant == VAR_JIGSAW ? 4000 : 6000;
+    const uint32_t node_limit = G->variant == VAR_CLASSIC ? 0 : G->variant == VAR_JIGSAW ? 4000
+                                : G->variant == VAR_BETWEEN ? 1500 : 6000;   /* (Between: its counts are slow, cut them short) */
     for (int k = 0; k < no && clues > stop; k++) {
         sudoku_gen_yield();
         int a = order[k], b = (n - 1 - a / 9) * 9 + (n - 1 - a % 9);
@@ -66,7 +67,11 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
          * solution, no count needed: Greater-Than's counting is slow. Only for these, so
          * the other variants' puzzles for a seed, the daily ones among them, stay the same.) */
         bool ok;
-        if (G->edge_kind || G->nquads) {            /* (Expert too: count only what the logic can't solve) */
+        /* (and the newest line kinds, below Expert: there the logic never solves the last steps, so
+         * it would only add to the count) */
+        const bool newest_lines = G->nthermos && (G->line_kind == LINE_ZIPPER || G->line_kind == LINE_BETWEEN ||
+                                  G->line_kind == LINE_ENTROPIC || G->line_kind == LINE_MODULAR);
+        if (G->edge_kind || G->nquads || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
             int tier = gen_technique_tier(G, out);
             ok = tier <= max_tier && (tier < 3 || gen_count_bounded(G, out, 2, node_limit) == 1);
         } else {
@@ -583,9 +588,61 @@ static bool is_line_crossing(const uint8_t *path, int n, int a, int b)
 }
 
 /**
+ * @brief Would a diagonal step from a to b cross another line? Lines kept so far mark the 2x2 blocks
+ * they cross diagonally (mark_line_blocks()); a diagonal step through a marked block would make an X.
+ * @param blocks  per cell, 1: the 2x2 block with that cell at its top left has a line across it
+ * @param a  the step's cell on the line
+ * @param b  the cell it goes to
+ * @return true if it crosses
+ */
+static bool is_block_crossed(const uint8_t blocks[81], int a, int b)
+{
+    if (a / 9 == b / 9 || a % 9 == b % 9) {
+        return false;
+    }
+    int r = a / 9 < b / 9 ? a / 9 : b / 9, c = a % 9 < b % 9 ? a % 9 : b % 9;
+    return blocks[r * 9 + c] != 0;
+}
+
+/**
+ * @brief Do two diagonal steps, a to b and c to d, cross each other (the two diagonals of one 2x2 block)?
+ * @param a  the first step's cell
+ * @param b  where it goes
+ * @param c  the second step's cell
+ * @param d  where it goes
+ * @return true if so
+ */
+static bool is_steps_crossing(int a, int b, int c, int d)
+{
+    if (a / 9 == b / 9 || a % 9 == b % 9 || c / 9 == d / 9 || c % 9 == d % 9) {
+        return false;
+    }
+    int k1 = (a / 9 < b / 9 ? a / 9 : b / 9) * 9 + (a % 9 < b % 9 ? a % 9 : b % 9);
+    int k2 = (c / 9 < d / 9 ? c / 9 : d / 9) * 9 + (c % 9 < d % 9 ? c % 9 : d % 9);
+    return k1 == k2;
+}
+
+/**
+ * @brief A line kept: the 2x2 blocks it crosses diagonally marked, for is_block_crossed().
+ * @param blocks  the marks
+ * @param path  the line's cells, in order
+ * @param n  how many
+ */
+static void mark_line_blocks(uint8_t blocks[81], const uint8_t *path, int n)
+{
+    for (int k = 0; k + 1 < n; k++) {
+        int a = path[k], b = path[k + 1];
+        if (a / 9 != b / 9 && a % 9 != b % 9) {
+            int r = a / 9 < b / 9 ? a / 9 : b / 9, c = a % 9 < b % 9 ? a % 9 : b % 9;
+            blocks[r * 9 + c] = 1;
+        }
+    }
+}
+
+/**
  * @brief Zipper Lines: up to want lines (3-7 cells) over the full grid, grown from the middle out, a
  * cell at each end at a time, each pair adding up to the line's total (odd: its middle digit; even:
- * the middle pair's sum); a line never crosses itself
+ * the middle pair's sum); a line never crosses itself or another
  * @param full  the solution
  * @param rng  the random state
  * @param want  lines wanted
@@ -594,7 +651,7 @@ static bool is_line_crossing(const uint8_t *path, int n, int a, int b)
  */
 static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
-    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
     int n = 0;
     for (int tries = 0; tries < 2000 && n < want; tries++) {
         int c = (int)(rnd(rng) % 81), target = 4 + (int)(rnd(rng) % 4), nb[8];
@@ -605,11 +662,16 @@ static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
         int len = 0, total;
         path[len++] = (uint8_t)c;
         if (target % 2 == 0) {                      /* even: a middle pair, its sum the total */
-            int k = line_neighbours(c, used, path, len, nb);
-            if (!k) {
+            int k = line_neighbours(c, used, path, len, nb), m = 0;
+            for (int j = 0; j < k; j++) {           /* (not across another line) */
+                if (!is_block_crossed(blocks, c, nb[j])) {
+                    nb[m++] = nb[j];
+                }
+            }
+            if (!m) {
                 continue;
             }
-            int o = nb[rnd(rng) % (uint32_t)k];
+            int o = nb[rnd(rng) % (uint32_t)m];
             path[len++] = (uint8_t)o;
             total = full[c] + full[o];
         } else {
@@ -625,7 +687,9 @@ static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
             for (int i = 0; i < ka; i++) {
                 for (int j = 0; j < kb; j++) {
                     if (na[i] != nbb[j] && full[na[i]] + full[nbb[j]] == total &&
-                            !is_line_crossing(path, len, a, na[i]) && !is_line_crossing(path, len, b, nbb[j])) {
+                            !is_line_crossing(path, len, a, na[i]) && !is_line_crossing(path, len, b, nbb[j]) &&
+                            !is_block_crossed(blocks, a, na[i]) && !is_block_crossed(blocks, b, nbb[j]) &&
+                            !is_steps_crossing(a, na[i], b, nbb[j])) {
                         pa[np] = na[i];
                         pb[np++] = nbb[j];
                     }
@@ -647,6 +711,7 @@ static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
             cells[n][j] = path[j];
             used[path[j]] = 1;
         }
+        mark_line_blocks(blocks, path, len);
         lens[n++] = (uint8_t)len;
     }
     return n >= 3 && gen_geom_lines(VAR_ZIPPER, cells, lens, n, out);
@@ -656,6 +721,7 @@ static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
  * @brief Between Lines: up to want lines over the full grid, from a circle, a random walk of up to 7
  * cells whose digits all lie on one side of it (above it, or below), kept at the longest length
  * whose last cell (the other circle) lies beyond all the cells between; a line never crosses itself
+ * or another
  * @param full  the solution
  * @param rng  the random state
  * @param want  lines wanted
@@ -664,7 +730,7 @@ static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
  */
 static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
-    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
     int n = 0;
     for (int tries = 0; tries < 2000 && n < want; tries++) {
         int c = (int)(rnd(rng) % 81), target = 3 + (int)(rnd(rng) % 5), len = 0, best = 0, nb[8];
@@ -679,7 +745,7 @@ static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
             int cur = cells[n][len - 1], k = line_neighbours(cur, used, cells[n], len, nb), m = 0;
             for (int j = 0; j < k; j++) {
                 int x = full[nb[j]];
-                if ((up ? x > full[c] : x < full[c]) && !is_line_crossing(cells[n], len, cur, nb[j])) {
+                if ((up ? x > full[c] : x < full[c]) && !is_line_crossing(cells[n], len, cur, nb[j]) && !is_block_crossed(blocks, cur, nb[j])) {
                     nb[m++] = nb[j];
                 }
             }
@@ -701,6 +767,7 @@ static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
         for (int j = 0; j < best; j++) {
             used[cells[n][j]] = 1;
         }
+        mark_line_blocks(blocks, cells[n], best);
         lens[n++] = (uint8_t)best;
     }
     return n >= 3 && gen_geom_lines(VAR_BETWEEN, cells, lens, n, out);
@@ -709,7 +776,7 @@ static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
 /**
  * @brief Entropic, Modular Lines: up to want lines over the full grid, random walks of 3 to 8 cells
  * through cells whose digit keeps the rule: each of the first three in a group of its own, every one
- * after in the group of the cell three back; a line never crosses itself
+ * after in the group of the cell three back; a line never crosses itself or another
  * @param variant  VAR_ENTROPIC or VAR_MODULAR
  * @param full  the solution
  * @param rng  the random state
@@ -720,7 +787,7 @@ static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
 static bool group_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
     const int kind = variant == VAR_ENTROPIC ? LINE_ENTROPIC : LINE_MODULAR;
-    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
     int n = 0;
     for (int tries = 0; tries < 2000 && n < want; tries++) {
         int c = (int)(rnd(rng) % 81), target = 3 + (int)(rnd(rng) % 6), len = 0, nb[8];
@@ -736,7 +803,7 @@ static bool group_paths(int variant, const uint8_t full[81], uint32_t *rng, int 
                 for (int i = 0; len < 3 && i < len; i++) {
                     ok &= g != sudoku_line_group(kind, full[cells[n][i]]);
                 }
-                if (ok && !is_line_crossing(cells[n], len, cur, nb[j])) {
+                if (ok && !is_line_crossing(cells[n], len, cur, nb[j]) && !is_block_crossed(blocks, cur, nb[j])) {
                     nb[m++] = nb[j];
                 }
             }
@@ -751,6 +818,7 @@ static bool group_paths(int variant, const uint8_t full[81], uint32_t *rng, int 
         for (int j = 0; j < len; j++) {
             used[cells[n][j]] = 1;
         }
+        mark_line_blocks(blocks, cells[n], len);
         lens[n++] = (uint8_t)len;
     }
     return n >= 3 && gen_geom_lines(variant, cells, lens, n, out);

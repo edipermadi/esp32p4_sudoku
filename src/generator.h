@@ -322,6 +322,8 @@ typedef struct {
     uint8_t thermo_cell[THERMOS_MAX][9];/**< each line's cells, from its bulb (or circle) */
     uint8_t thermo_of[81];              /**< each cell's line, THERMO_NONE = on none (a cell is on one at most) */
     uint8_t thermo_pos[81];             /**< place along it, 0 = the bulb */
+    uint8_t between_need[THERMOS_MAX];  /**< Between Lines: the most of a line's cells between its circles that share a row,
+                                         *   column or box (different digits: the circles at least this + 1 apart) */
     bool sandwich;                      /**< Sandwich: the sums are rules */
     uint8_t sandwich_sum[18];           /**< per row (0..8) and column (9..17), the sum between its 1 and 9 */
     bool skyscraper;                    /**< Skyscraper: the clues are rules */

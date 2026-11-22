@@ -76,6 +76,57 @@ uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const u
                      (((1u << ((b) > 9 ? 10 : (b) + 1)) - 1) & ~((1u << ((a) < 1 ? 1 : (a))) - 1))))
 /** @} */
 
+/**
+ * @brief Entropic, Modular Lines: the digits the cell at a place of a line may hold (gen_line_allow()'s
+ * case, kept apart: inside it, the bigger function made every other line kind slower, Between
+ * Lines by 15-20 %)
+ * @param G     the board
+ * @param t     the line
+ * @param p     the place on it
+ * @param v     the digits (0: empty)
+ * @param cand  the candidates of the empty ones, or NULL
+ * @return a candidate mask
+ */
+static __attribute__((noinline)) uint16_t group_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v,
+        const uint16_t *cand)
+{
+    const int n = G->thermo_n[t];
+    const uint8_t *cell = G->thermo_cell[t];
+    /* places 3 apart share a group, and places 0, 1, 2 (mod 3) take three different ones:
+     * per place mod 3, the groups every cell there can still be in (bit g = group g) */
+    uint8_t can[3] = {7, 7, 7};
+    uint16_t of[3] = {0, 0, 0};                 /* each group's digits */
+    for (int d = 1; d <= 9; d++) {
+        of[sudoku_line_group(G->line_kind, d)] |= (uint16_t)(1u << d);
+    }
+    for (int k = 0; k < n; k++) {
+        if (k == p) {
+            continue;
+        }
+        uint16_t m = LMASK(cell[k]);
+        uint8_t gm = 0;
+        for (int g = 0; g < 3; g++) {
+            gm |= (m & of[g]) ? (uint8_t)(1u << g) : 0;
+        }
+        can[k % 3] &= gm;
+    }
+    const int own = p % 3, o1 = (own + 1) % 3, o2 = (own + 2) % 3;
+    uint16_t ok = 0;
+    for (int g = 0; g < 3; g++) {               /* a group for this place that leaves the others two */
+        if (!(can[own] >> g & 1)) {
+            continue;
+        }
+        for (int a = 0; a < 3; a++) {
+            for (int b = 0; b < 3; b++) {
+                if (a != g && b != g && a != b && (can[o1] >> a & 1) && (can[o2] >> b & 1)) {
+                    ok |= of[g];
+                }
+            }
+        }
+    }
+    return ok;
+}
+
 /* (documented in gen_internal.h) */
 uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, const uint16_t *cand)
 {
@@ -252,8 +303,8 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         for (int a = 1; a <= 9; a++) {              /* a pair of circles that leaves every cell between a digit */
             for (int b = 1; b <= 9; b++) {
                 int lo = a < b ? a : b, hi = a < b ? b : a;
-                if (!(ma >> a & 1) || !(mb >> b & 1) || hi - lo < 2) {
-                    continue;
+                if (!(ma >> a & 1) || !(mb >> b & 1) || hi - lo - 1 < G->between_need[t]) {
+                    continue;                       /* (room for the cells between that must differ) */
                 }
                 uint16_t inner = RANGE(lo + 1, hi - 1);
                 bool fits = true;
@@ -269,42 +320,9 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         break;
     }
     case LINE_ENTROPIC:
-    case LINE_MODULAR: {                            /* any three in a row: one digit of each group */
-        /* so places 3 apart share a group, and places 0, 1, 2 (mod 3) take three different ones:
-         * per place mod 3, the groups every cell there can still be in (bit g = group g) */
-        uint8_t can[3] = {7, 7, 7};
-        uint16_t of[3] = {0, 0, 0};                 /* each group's digits */
-        for (int d = 1; d <= 9; d++) {
-            of[sudoku_line_group(G->line_kind, d)] |= (uint16_t)(1u << d);
-        }
-        for (int k = 0; k < n; k++) {
-            if (k == p) {
-                continue;
-            }
-            uint16_t m = LMASK(cell[k]);
-            uint8_t gm = 0;
-            for (int g = 0; g < 3; g++) {
-                gm |= (m & of[g]) ? (uint8_t)(1u << g) : 0;
-            }
-            can[k % 3] &= gm;
-        }
-        const int own = p % 3, o1 = (own + 1) % 3, o2 = (own + 2) % 3;
-        uint16_t ok = 0;
-        for (int g = 0; g < 3; g++) {               /* a group for this place that leaves the others two */
-            if (!(can[own] >> g & 1)) {
-                continue;
-            }
-            for (int a = 0; a < 3; a++) {
-                for (int b = 0; b < 3; b++) {
-                    if (a != g && b != g && a != b && (can[o1] >> a & 1) && (can[o2] >> b & 1)) {
-                        ok |= of[g];
-                    }
-                }
-            }
-        }
-        free &= ok;
+    case LINE_MODULAR:                              /* any three in a row: one digit of each group */
+        free &= group_line_allow(G, t, p, v, cand);
         break;
-    }
     case LINE_ARROW: {                              /* the circle (place 0) is the shaft's sum */
         int smin = 0, smax = 0;                     /* the shaft's sum, the place asked about left out */
         for (int k = 1; k < n; k++) {
@@ -402,7 +420,26 @@ typedef struct {
     uint16_t cage_used[CAGES_MAX];      /**< Killer: each cage's digits */
     int8_t cage_left[CAGES_MAX];        /**< what's left of its sum */
     int8_t cage_empty[CAGES_MAX];       /**< its empty cells */
+    uint32_t rules;                     /**< the board's rules beyond its units, R_* (grid_load()): one word to
+                                         *   test in grid_free(), not a dozen flags spread over the board (in
+                                         *   PSRAM on the board: each a cache miss) */
 } grid_t;
+
+/** @name The rules a board has beyond its units (grid_t.rules)
+ *  @{ */
+#define R_XPEER   (1u << 0)             /**< Anti-Knight, Anti-King: cells that see each other outside the units */
+#define R_CONSEC  (1u << 1)             /**< Consecutive, Non-Consecutive */
+#define R_EDGE    (1u << 2)             /**< Kropki, XV, Greater-Than */
+#define R_QUAD    (1u << 3)             /**< Quadruple */
+#define R_SKY     (1u << 4)             /**< Skyscraper */
+#define R_XSUM    (1u << 5)             /**< X-Sums */
+#define R_FIRST3  (1u << 6)             /**< Frame, Outside Sudoku, Rossini */
+#define R_DIAGNC  (1u << 7)             /**< Diagonal Non-Consecutive */
+#define R_LK      (1u << 8)             /**< Little Killer */
+#define R_SANDWICH (1u << 9)            /**< Sandwich */
+#define R_LINE    (1u << 10)            /**< the lines */
+#define R_CAGE    (1u << 11)            /**< Killer */
+/** @} */
 
 /**
  * @brief Puts a digit in a cell: its units and cage take it.
@@ -671,14 +708,18 @@ static uint16_t grid_free(const grid_t *g, int i)
     if (s_why && !s_why->code && !(free >> s_why->d & 1)) {
         s_why->code = (used >> s_why->d & 1) ? FIT_UNIT : FIT_ALLOW;
     }
-    for (int k = 0; k < G->nxpeers[i]; k++) {       /* Anti-Knight */
+    const uint32_t rules = g->rules;
+    if (!rules) {
+        return free;                                /* (Classic, X-Sudoku, Hyper, Jigsaw, ...: the units are all) */
+    }
+    for (int k = 0; (rules & R_XPEER) && k < G->nxpeers[i]; k++) {   /* Anti-Knight, Anti-King */
         int v = g->v[G->xpeers[i][k]];
         if (v) {
             free &= (uint16_t)~(1u << v);
         }
     }
     WHY(FIT_XPEER);
-    if (G->consec_on && free) {                     /* Consecutive: a bar = differ by 1, none = don't */
+    if ((rules & R_CONSEC) && free) {               /* Consecutive: a bar = differ by 1, none = don't */
         const int nb[4] = {i % 9 > 0 ? i - 1 : -1, i % 9 < 8 ? i + 1 : -1, i > 8 ? i - 9 : -1, i < 72 ? i + 9 : -1};
         const bool bar[4] = {nb[0] >= 0 && (G->consec[i - 1] & CONSEC_RIGHT), (G->consec[i] & CONSEC_RIGHT) != 0,
                              nb[2] >= 0 && (G->consec[i - 9] & CONSEC_DOWN), (G->consec[i] & CONSEC_DOWN) != 0
@@ -693,11 +734,11 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_CONSEC);
-    if (G->edge_kind && free) {
+    if ((rules & R_EDGE) && free) {
         free &= gen_edge_allow(G, i, g->v, NULL);    /* Kropki, XV, Greater-Than */
     }
     WHY(FIT_EDGE);
-    for (int s = 0; s < 4 && free && G->nquads && G->quad_of[i][s] != QUAD_NONE; s++) {
+    for (int s = 0; s < 4 && free && (rules & R_QUAD) && G->quad_of[i][s] != QUAD_NONE; s++) {
         int empty, miss = sudoku_quad_missing(G, G->quad_of[i][s], g->v, &empty);   /* (i is one of the empty) */
         if (miss > empty) {
             free = 0;    /* Quadruple: not enough room left for its digits */
@@ -722,7 +763,7 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_QUAD);
-    for (int line = 0; G->skyscraper && free && line < 2; line++) {   /* Skyscraper: its row's, its column's clue */
+    for (int line = 0; (rules & R_SKY) && free && line < 2; line++) {   /* Skyscraper: its row's, its column's clue */
         int lu = line ? 9 + i % 9 : i / 9, c = G->sky[lu], cells[9];
         if (!c) {
             continue;
@@ -744,14 +785,14 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
         WHY(line ? FIT_SKY_COL : FIT_SKY_ROW);
     }
-    for (int line = 0; G->xsums && free && line < 2; line++) {   /* X-Sums: its row's, its column's clue */
+    for (int line = 0; (rules & R_XSUM) && free && line < 2; line++) {   /* X-Sums: its row's, its column's clue */
         int lu = line ? 9 + i % 9 : i / 9;
         if (G->xsum[lu]) {
             free &= gen_xsum_allow(G, lu, line ? i / 9 : i % 9, g->v, NULL);
         }
         WHY(line ? FIT_XSUM_COL : FIT_XSUM_ROW);
     }
-    for (int line = 0; (G->frame || G->outside || G->rossini) && free && line < 2; line++) {
+    for (int line = 0; (rules & R_FIRST3) && free && line < 2; line++) {
         int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;   /* its row's, its column's clue */
         if (at < 3 && is_gen_first3_clued(G, lu)) {
             free &= gen_first3_allow(G, lu, at, g->v, NULL);
@@ -759,7 +800,7 @@ static uint16_t grid_free(const grid_t *g, int i)
         WHY(G->frame ? (line ? FIT_FRAME_COL : FIT_FRAME_ROW) : G->outside ? (line ? FIT_OUTSIDE_COL : FIT_OUTSIDE_ROW)
             : (line ? FIT_ROSSINI_COL : FIT_ROSSINI_ROW));
     }
-    for (int k = 0; G->diag_nc && free && k < 4; k++) {   /* Diagonal Non-Consecutive: the corner cells */
+    for (int k = 0; (rules & R_DIAGNC) && free && k < 4; k++) {   /* Diagonal Non-Consecutive: the corner cells */
         int r = i / 9 + (k < 2 ? -1 : 1), c = i % 9 + (k % 2 ? 1 : -1);
         int w = r >= 0 && r < 9 && c >= 0 && c < 9 ? g->v[r * 9 + c] : 0;
         if (w) {
@@ -767,7 +808,7 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_DIAGNC);
-    for (int slot = 0; G->nlk && free && slot < 2; slot++) {   /* Little Killer: what its diagonal's sum leaves */
+    for (int slot = 0; (rules & R_LK) && free && slot < 2; slot++) {   /* Little Killer: what its diagonal's sum leaves */
         int k = G->lk_of[i][slot];
         if (k == LK_NONE) {
             continue;
@@ -792,7 +833,7 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_LK);
-    if (G->sandwich && free) {                      /* Sandwich: a digit that can't keep a line's sum goes */
+    if ((rules & R_SANDWICH) && free) {             /* Sandwich: a digit that can't keep a line's sum goes */
         for (int line = 0; line < 2 && free; line++) {
             int lu = line ? 9 + i % 9 : i / 9, ki = line ? i / 9 : i % 9, vals[9], p1 = -1, p9 = -1;
             for (int k = 0; k < 9; k++) {
@@ -859,12 +900,12 @@ static uint16_t grid_free(const grid_t *g, int i)
             WHY(line ? FIT_SANDWICH_COL : FIT_SANDWICH_ROW);
         }
     }
-    int t = G->thermo_of[i];
+    int t = (rules & R_LINE) ? G->thermo_of[i] : THERMO_NONE;
     if (t != THERMO_NONE && free) {
         free &= gen_line_allow(G, t, G->thermo_pos[i], g->v, NULL);    /* the lines */
     }
     WHY(FIT_THERMO);
-    int c = G->cage_of[i];
+    int c = (rules & R_CAGE) ? G->cage_of[i] : CAGE_NONE;
     if (c != CAGE_NONE && free) {                    /* Killer: what the cage's sum still allows */
         free &= (uint16_t)~g->cage_used[c];
         int left = g->cage_left[c], others = g->cage_empty[c] - 1;
@@ -909,6 +950,15 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
             g->units[i][j] = (int8_t)us[j];
         }
     }
+    bool xpeer = false;
+    for (int k = 0; k < G->ncells && !xpeer; k++) {
+        xpeer = G->nxpeers[G->cells[k]] != 0;
+    }
+    g->rules = (xpeer ? R_XPEER : 0) | (G->consec_on ? R_CONSEC : 0) | (G->edge_kind ? R_EDGE : 0) |
+               (G->nquads ? R_QUAD : 0) | (G->skyscraper ? R_SKY : 0) | (G->xsums ? R_XSUM : 0) |
+               (G->frame || G->outside || G->rossini ? R_FIRST3 : 0) | (G->diag_nc ? R_DIAGNC : 0) |
+               (G->nlk ? R_LK : 0) | (G->sandwich ? R_SANDWICH : 0) | (G->nthermos ? R_LINE : 0) |
+               (G->ncages ? R_CAGE : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

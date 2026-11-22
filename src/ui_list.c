@@ -416,11 +416,7 @@ void build_list(void)
                       "too.");
     lv_obj_set_pos(l_empty, PANE_X + 12, L_GRID_Y + 20);
     lv_obj_set_hidden(l_empty, true);
-
-    /* attribution */
-    lv_obj_t *src = make_label(screen_list(), &lv_font_montserrat_12, C_MUTED);
-    lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
-    lv_obj_align(src, LV_ALIGN_BOTTOM_RIGHT, -14, -2);
+    /* (the puzzles' source, opensudoku.gitlab.io, is credited on Home) */
 }
 
 /* ---- accessors: the other UI files reach this file's state through these */
