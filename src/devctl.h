@@ -33,6 +33,9 @@ extern "C" {
  *   clock                     -> "OK clock wifi=<state> time=set YYYY-MM-DD HH:MM:SS" (local) or
  *                             "OK clock wifi=<state> time=unset"; state: off, starting, idle,
  *                             connecting, connected, failed, no-radio
+ *   settime <Unix ms> [<IANA zone>]   set the clock (and the time zone, as Settings > Network does; one
+ *                             it offers, or nothing changes) -> "OK settime YYYY-MM-DD HH:MM:SS"
+ *                             (local); serial only (devctl.py synctime sends the computer's)
  *   state                     the game on screen: "STATE name=\"...\" variant=... size=9 solved=0
  *                             paused=0 filled=36/81 time=12 mistakes=0 hints=0", "BOARD <81 chars>"
  *                             (row by row: 1-9 given, a-i entered, . empty, # off the board);
@@ -72,9 +75,9 @@ extern "C" {
  * Collections on the Puzzles screen's Saved and Imported tabs (names with %XX for a space, as paths):
  *   colls                     -> "COLL imported <puzzles> <name>" / "COLL saved <puzzles> <name>" lines,
  *                                then "OK colls <n>"
- *   colldel saved|imported <name>   deletes it as the screen's Delete does: its puzzles stay on
- *                                the board (solves, History, Gameplays); an imported file can be
- *                                imported again -> "OK colldel" or "ERR colldel: <why>"
+ *   colldel saved|imported <name>   deletes it as the Puzzles screen's Delete collection does: its
+ *                                puzzles stay on the board (solves, History, Gameplays); an imported
+ *                                file can be imported again -> "OK colldel" or "ERR colldel: <why>"
  *
  * Every command answers "OK <command>" (or "ERR <why>") once done.
  *

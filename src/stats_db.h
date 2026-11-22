@@ -734,6 +734,7 @@ typedef struct {
     char name[STATS_IMPORT_NAME];        /**< its name */
     int first_gid;                       /**< generated.id of its first puzzle (puzzle id: + PUZZLE_GEN_BASE) */
     int count;                           /**< its puzzles */
+    int64_t created_at;                  /**< when it was imported, Unix time UTC; 0 = not known (older ones) */
 } stats_import_t;
 /**
  * @brief Imports the files in puzzles/ on the card.
@@ -834,6 +835,7 @@ typedef struct {
     int id;                              /**< saved_collections.id */
     char name[STATS_IMPORT_NAME];        /**< its name */
     int count;                           /**< its puzzles */
+    int64_t created_at;                  /**< when it was made, Unix time UTC; 0 = not known (older ones) */
     uint16_t puzzles[STATS_SAVED_MAX];   /**< in their order (number 1, 2, ...) */
 } stats_saved_t;
 /**

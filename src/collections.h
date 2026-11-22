@@ -54,6 +54,12 @@ int coll_tab(int c);
  */
 const char *coll_name(int c);
 /**
+ * @brief When a collection was saved (made on the board) or imported.
+ * @param[in] c  the collection
+ * @return Unix time UTC; 0 for a built-in one, or one from before collections were dated
+ */
+int64_t coll_created(int c);
+/**
  * @brief A built-in or imported collection's first puzzle id (its puzzles are a run).
  * @param[in] c  the collection
  * @return the id

@@ -6,7 +6,7 @@
 |---------------------------------|--------------------------------------------------|
 | Open the puzzle list            | **Puzzles** on the home screen                   |
 | Resume an unfinished game       | **Continue** on the home screen (a list when there are several), or tap the puzzle |
-| Pick a collection               | Tap it in the row at the top (swipe for more)    |
+| Pick a collection               | Tap it in the column on the left; the icons above it switch between Built-in, Saved and Imported |
 | Start or resume a puzzle        | Tap its number                                   |
 | Select a cell                   | Tap it                                           |
 | Enter a digit                   | Tap 1–9 on the right. Tap the same digit again to clear it |
@@ -45,7 +45,9 @@
 | Undo a delete on the card       | **Files → Recycle bin**, then the restore button |
 | Play without notes             | **Settings → Game → No-notes challenge**, then a new puzzle |
 | Share today's daily result       | Solve the daily puzzle, then the QR button in the Solved dialog |
-| Add puzzle files                | Copy them to `puzzles/` on the card, then **Settings → Data → Import puzzles** |
+| Add puzzle files                | Copy them to `puzzles/` on the card, then **Settings → Data → Import puzzles** (needs the clock, over Wi-Fi) |
+| Keep a puzzle in your own collection | **⋮ → Save to collection** in the game (puzzles made on the board; needs the clock) |
+| Export or delete a collection   | **Puzzles → ⋮ → Export collection** (saved ones) or **Delete collection** |
 | Export to a spreadsheet         | **Settings → Export to CSV**, then **USB drive** |
 | Switch or add players          | **Players** on the home screen; ⋮ to add, rename or delete |
 | Pick an avatar                 | **Players → ⋮ → Avatar**                         |

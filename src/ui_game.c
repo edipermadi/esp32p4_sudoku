@@ -83,7 +83,8 @@ static bool     g_attack;         /**< this game is part of a run */
 static bool     g_starred;        /**< the puzzle is bookmarked (Star in the ⋮ menu) */
 static bool     g_can_star;       /**< ... and can be (not Learn's, nor one kept only in RAM) */
 static lv_obj_t *g_title_star;    /**< a small star after the title while it is starred */
-static lv_obj_t *g_save_btn;      /**< put it in a saved collection (generated and typed-in puzzles) */
+static bool     g_can_save;       /**< the ⋮ menu's Save applies: a puzzle made on the board (generated, typed in) */
+static bool     g_is_saved;       /**< ... and it's in a saved collection already */
 static lv_obj_t *h_card;          /**< the hint's card */
 static lv_obj_t *h_text;          /**< its text */
 static lv_obj_t *h_act;           /**< its button (More, Place it, OK) */
@@ -685,8 +686,8 @@ void update_header(void)
     for (int k = 0; can_save && k < ui_nsaved(); k++) {
         saved |= coll_find(PUZZLE_COLLECTION_COUNT + ui_nimports() + k, g_id) >= 0;
     }
-    lv_obj_set_hidden(g_save_btn, !can_save);
-    lv_obj_set_style_text_color(lv_obj_get_child(g_save_btn, 0), saved ? C_ACCENT : C_MUTED, 0);
+    g_can_save = can_save;                          /* (the ⋮ menu's Save) */
+    g_is_saved = saved;
     uint32_t b = store_best_time(g_id);
     if (g_attack) {
         snprintf(buf, sizeof(buf), LV_SYMBOL_CHARGE "  %d solved in this run", attack_solved());
@@ -1747,9 +1748,7 @@ void build_game(void)
     g_hint_cnt = make_label(fb, &lv_font_montserrat_12, C_ORANGE);     /* hints used */
     lv_obj_align(g_hint_cnt, LV_ALIGN_TOP_RIGHT, -5, 2);
     lv_obj_set_hidden(g_hint_cnt, true);
-    tx += 96 + ig;
-    g_save_btn = make_btn(screen_game(), tx, TOOL_Y, ib, 48, LV_SYMBOL_SAVE,
-                          &lv_font_montserrat_22, save_cb, NULL);   /* into a collection (Puzzles > Saved) */
+    /* (Save, into a collection: the ⋮ menu) */
     lv_obj_t *tb = make_btn(screen_game(), SCR_W - 8 - 176, TOOL_Y, 176, 48, NULL, NULL, pause_cb, NULL);
     lv_obj_set_style_bg_opa(tb, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_opa(tb, LV_OPA_COVER, LV_STATE_PRESSED);
@@ -2205,8 +2204,8 @@ static void win_share_cb(lv_event_t *e)
 }
 
 /**
- * @brief the ⋮ menu of the second row: the variant's rules, Share (a QR code), Star (Puzzles > Starred), Auto notes,
- * Restart
+ * @brief the ⋮ menu of the second row: the variant's rules, Share (a QR code), Star (Puzzles > Starred), Save
+ * (into a collection: Puzzles > Saved), Auto notes, Restart
  * @param[in] e  the event
  */
 static void game_menu_cb(lv_event_t *e)
@@ -2215,6 +2214,8 @@ static void game_menu_cb(lv_event_t *e)
         {SYMBOL_BULB, "Rules", rules_cb, false, false},
         {SYMBOL_QR, "Share", share_cb, g_id == STORE_NO_GAME, false},
         {SYMBOL_STAR, g_starred ? "Unstar" : "Star", star_cb, !g_can_star, false},
+        /* made on the board only (built-in and imported puzzles have their collection) */
+        {LV_SYMBOL_SAVE, g_is_saved ? "Saved: collections" : "Save to collection", save_cb, !g_can_save, false},
         {
             LV_SYMBOL_LIST, "Auto notes", auto_notes_cb,        /* all the marks at once (Undo takes them back) */
             g_solved || (g_flags & GAME_FLAG_NO_NOTES) != 0, false

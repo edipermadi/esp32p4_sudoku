@@ -9,8 +9,10 @@
 #include "ui_palette.h"
 #include "stats_db.h"
 #include "generator.h"
+#include "timezones.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 LV_FONT_DECLARE(font_digits_44)      /* the game's board digits */
 
@@ -280,10 +282,11 @@ void file_preview_open(int i)
     lv_obj_set_pos(s_pv_pos, (720 - PV_BOARD) / 2 + 56 + 8, 84 + PV_BOARD + 12 + 13);
 
     /* what Import does (or why it can't) */
-    bool db = is_stats_db_ready();
+    bool db = is_stats_db_ready(), clock = CLOCK_VALID(time(NULL));   /* (each collection is dated) */
     lv_obj_t *note = file_ui_label(s_pv, &lv_font_montserrat_14, C_MUTED,
                                    !db ? "Importing needs sudoku.db: insert the card before switching on."
                                    : !found ? "Nothing here to import."
+                                   : !clock ? "Importing needs the clock: connect to Wi-Fi first (Settings > Network)."
                                    : "Import adds them to Puzzles > Imported as a collection named after the file (each checked for exactly "
                                    "one solution; more than 100 make several).");
     lv_obj_set_width(note, 720 - 32);
@@ -303,7 +306,7 @@ void file_preview_open(int i)
     lv_obj_t *im = file_ui_pill_btn(row, LV_SYMBOL_DOWNLOAD "  Import", C_ACCENT, lv_color_white(), on_pv_import);
     lv_obj_set_width(im, 300);
     lv_obj_set_style_opa(im, LV_OPA_40, LV_STATE_DISABLED);
-    lv_obj_set_state(im, LV_STATE_DISABLED, !db || !found);
+    lv_obj_set_state(im, LV_STATE_DISABLED, !db || !found || !clock);
 
     s_pv_shown = false;
     if (found) {

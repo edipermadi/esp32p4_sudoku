@@ -475,6 +475,17 @@ const char *coll_name(int c)
     return s_saved[coll_saved_index(c)].name;
 }
 /* (documented in collections.h) */
+int64_t coll_created(int c)
+{
+    if (c < PUZZLE_COLLECTION_COUNT) {
+        return 0;
+    }
+    if (coll_saved_index(c) < 0) {
+        return s_imports[c - PUZZLE_COLLECTION_COUNT].created_at;
+    }
+    return s_saved[coll_saved_index(c)].created_at;
+}
+/* (documented in collections.h) */
 uint16_t coll_first(int c)
 {
     if (c < PUZZLE_COLLECTION_COUNT) {

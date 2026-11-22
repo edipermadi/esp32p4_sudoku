@@ -10,7 +10,7 @@
  * | devctl_screen.c    | shot, bench, screenoff |
  * | devctl_files.c     | ls, get, put, mv, rm, mkdir, import |
  * | devctl_game.c      | state, fill |
- * | devctl_clock.c     | clock |
+ * | devctl_clock.c     | clock, settime |
  * | devctl_genbench.c  | genbench |
  * | devctl_sql.c       | sql |
  * | devctl_colls.c     | colls, colldel |
@@ -182,12 +182,20 @@ void devctl_sql(const char *line);
  */
 void devctl_clock(void);
 /**
+ * @brief settime \<Unix time, ms\> [\<IANA zone\>]: sets the clock (as NTP would), and the time zone when one
+ *        is given, as Settings > Network's picker does (saved and applied). The zone must be one Settings offers
+ *        (timezones.h), or nothing changes. Answers "OK settime YYYY-MM-DD HH:MM:SS" (local time) or
+ *        "ERR settime: \<why\>". Serial only (devctl.py synctime sends the computer's time and zone).
+ * @param[in] line  the command line
+ */
+void devctl_settime(const char *line);
+/**
  * @brief colls: the saved and imported collections (Puzzles > Saved, Imported), a "COLL \<imported|saved\> \<puzzles\>
  *        \<name\>" line each (the name with %XX for spaces), then "OK colls \<n\>".
  */
 void devctl_colls(void);
 /**
- * @brief colldel \<saved|imported\> \<name\>: deletes that collection as the Puzzles screen's Delete does
+ * @brief colldel \<saved|imported\> \<name\>: deletes that collection as the Puzzles screen's Delete collection does
  *        (sudoku_ui_coll_delete(): its puzzles stay on the board).
  * @param[in] line  the command line
  */

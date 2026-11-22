@@ -111,6 +111,10 @@ static void run(char *line)
         devctl_clock();
         return;
     }
+    if (!strcmp(cmd, "settime")) {                 /* settime <Unix ms> [zone]: the computer's (serial only) */
+        devctl_settime(line);
+        return;
+    }
     if (!strcmp(cmd, "state")) {                   /* the game on screen, as text */
         devctl_state();
         return;

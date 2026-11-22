@@ -9,7 +9,7 @@ void sdb_do_saved_list(void)
 {
     s_gen.nsaved = 0;
     sqlite3_stmt *st;
-    if (sdb_db() && sqlite3_prepare_v2(sdb_db(), "SELECT id, name FROM saved_collections ORDER BY id", -1, &st, NULL) ==
+    if (sdb_db() && sqlite3_prepare_v2(sdb_db(), "SELECT id, name, created_at FROM saved_collections ORDER BY id", -1, &st, NULL) ==
             SQLITE_OK) {
         while (s_gen.nsaved < STATS_MAX_SAVED && sqlite3_step(st) == SQLITE_ROW) {
             stats_saved_t *c = &s_gen.saved[s_gen.nsaved++];
@@ -17,6 +17,7 @@ void sdb_do_saved_list(void)
             const char *n = (const char *)sqlite3_column_text(st, 1);
             snprintf(c->name, sizeof(c->name), "%s", n ? n : "");
             c->count = 0;
+            c->created_at = sqlite3_column_int64(st, 2);   /* (NULL: 0) */
         }
         sqlite3_finalize(st);
     }
@@ -76,6 +77,8 @@ void sdb_do_saved_add(void)
     }
     if (!sdb_db()) {
         snprintf(s_gen.why, sizeof(s_gen.why), "There's no sudoku.db on a microSD card.");
+    } else if (!CLOCK_VALID(time(NULL))) {             /* (every collection gets its date) */
+        snprintf(s_gen.why, sizeof(s_gen.why), "%s", SDB_NO_CLOCK);
     } else if (cid < 0 && query_int_arg("SELECT COUNT(*) FROM saved_collections", -1, 0) >= STATS_MAX_SAVED) {
         snprintf(s_gen.why, sizeof(s_gen.why), "There are %d collections already: that's the most.", STATS_MAX_SAVED);
     } else if (cid >= 0 && query_int_arg("SELECT COUNT(*) FROM saved_puzzles WHERE collection_id = ?1", cid, 0) >=
@@ -89,11 +92,7 @@ void sdb_do_saved_add(void)
                                     NULL) == SQLITE_OK;
             if (ok) {
                 sqlite3_bind_text(st, 1, s_gen.name, -1, SQLITE_TRANSIENT);
-                if (now > 1700000000) {
-                    sqlite3_bind_int64(st, 2, now);
-                } else {
-                    sqlite3_bind_null(st, 2);
-                }
+                sqlite3_bind_int64(st, 2, now);         /* (the clock is set: checked above) */
                 ok = sdb_step_done(st, "new collection");
                 sqlite3_finalize(st);
                 cid = (int)sqlite3_last_insert_rowid(sdb_db());

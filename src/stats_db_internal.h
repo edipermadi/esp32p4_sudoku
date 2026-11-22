@@ -54,6 +54,10 @@
 #include "store.h"
 #include "generator.h"
 #include "sdx.h"
+#include "timezones.h"
+
+/** @brief Why saving or importing is refused while the clock isn't set (each collection is dated). */
+#define SDB_NO_CLOCK "The clock isn't set yet: collections are dated, so connect to Wi-Fi first (Settings > Network)."
 
 /**
  * @addtogroup stats_db

@@ -100,8 +100,8 @@ void refresh_list(void)
     lv_label_set_text(l_empty, l_tab == COLL_TAB_IMPORTED
                       ? "Nothing imported yet.\n\nPut puzzle files (sdm, sdx or OpenSudoku) in the puzzles folder "
                       "on the card, then Settings > Data > Import puzzles, or import one from Files."   /* (no '.' to break at) */
-                      : "Nothing saved yet.\n\nOpen a puzzle made with New puzzle or Enter and tap "
-                      LV_SYMBOL_SAVE " next to the star to put it in a collection of your own.");
+                      : "Nothing saved yet.\n\nOpen a puzzle made with New puzzle or Enter, then Save to "
+                      "collection in its menu to put it in a collection of your own.");
     lv_obj_set_hidden(l_empty, !none);
     lv_obj_set_hidden(l_btnm, none);
     lv_obj_set_hidden(l_name, none);
@@ -152,8 +152,17 @@ void refresh_list(void)
         fmt_time(a, sizeof(a), sum / n);
         lv_label_set_text_fmt(l_stats, "%u / %u solved   -   fastest %s   -   average %s",
                               (unsigned)n, (unsigned)lsize, b, a);
-    } else {
-        lv_label_set_text_fmt(l_stats, "%u / %u solved", (unsigned)n, (unsigned)lsize);
+    } else {                                        /* (saved, imported: when, as they have no best times) */
+        char when[48] = "";
+        time_t t = (time_t)coll_created(lc);
+        if (t > 0) {
+            struct tm tm;
+            char d[24];
+            localtime_r(&t, &tm);
+            strftime(d, sizeof(d), "%d %b %Y, %H:%M", &tm);
+            snprintf(when, sizeof(when), "   -   %s %s", coll_tab(lc) == COLL_TAB_SAVED ? "saved" : "imported", d);
+        }
+        lv_label_set_text_fmt(l_stats, "%u / %u solved%s", (unsigned)n, (unsigned)lsize, when);
     }
 
     /* puzzle numbers 1..count, 10 per row; always all 100 places (the ones past count

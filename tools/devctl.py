@@ -34,6 +34,9 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     clock                   Wi-Fi's state and whether the time is set: "wifi=connected time=set
                             2026-11-21 17:43:05" (local time) or "wifi=connecting time=unset"
     waitclock [S]           (scripts) wait until the time is set (default 60 s), else stop
+    synctime                set the board's clock to this computer's, and its time zone to this
+                            computer's (as Settings > Network does) when Settings offers it;
+                            no Wi-Fi needed. NTP takes over once Wi-Fi connects
     ping
 
 Files on the microSD card (paths from the card's root, e.g. puzzles/a.sdm):
@@ -54,8 +57,9 @@ sudoku.db is open while the board runs: get works, put/mv/rm on it don't
 Collections on the Puzzles screen's Saved and Imported tabs:
     colls                   list them: imported or saved, how many puzzles, the name
     colldel KIND NAME       delete one (KIND: imported or saved; quote a name with spaces), as
-                            the screen's Delete does: its puzzles stay on the board, with their
-                            solves, History and Gameplays; an imported file can be imported again
+                            the Puzzles screen's Delete collection does: its puzzles stay on
+                            the board, with their solves, History and Gameplays; an imported
+                            file can be imported again
 
 SQL on sudoku.db, on the board (its database task runs it; 20 s at most a statement):
     python3 tools/devctl.py --sql "SELECT * FROM players"      one or more statements, then exit
@@ -698,6 +702,8 @@ def run(board, words):
             if time.time() > limit:
                 sys.exit("the clock isn't set (%s): stopping" % info)
             time.sleep(1)
+    elif cmd == "synctime":
+        sync_time(board)
     elif cmd == "state":
         board.ser.write(b"state\n")
         end = time.time() + 10
@@ -722,6 +728,51 @@ def run(board, words):
         board.command(" ".join(words), timeout=timeout)
     else:
         sys.exit("unknown command: %s" % " ".join(words))
+
+
+def host_zone():
+    """this computer's time zone as an IANA name ("Asia/Jakarta"), or None when it can't be told"""
+    tz = os.environ.get("TZ", "").lstrip(":")
+    if tz and "/" in tz and not tz.startswith("/"):
+        return tz
+    for path in ([tz] if tz.startswith("/") else []) + ["/etc/localtime"]:   # Linux, macOS: a zoneinfo link
+        real = os.path.realpath(path)
+        if "zoneinfo/" in real:
+            name = real.split("zoneinfo/", 1)[1]
+            for prefix in ("posix/", "right/"):
+                name = name[len(prefix):] if name.startswith(prefix) else name
+            return name
+    try:
+        with open("/etc/timezone") as f:            # older Debian
+            name = f.read().strip()
+            if name:
+                return name
+    except OSError:
+        pass
+    try:
+        import tzlocal                              # Windows (pip install tzlocal)
+        return str(tzlocal.get_localzone())
+    except Exception:
+        return None
+
+
+def sync_time(board):
+    """synctime: the board's clock (and time zone, if Settings offers it) set to this computer's"""
+    zone = host_zone()
+    for z in ([zone] if zone else []) + [None]:
+        board.ser.write(("settime %d%s\n" % (int(time.time() * 1000), " " + z if z else "")).encode())
+        line = board.wait_for("settime", 10)
+        if line.startswith("OK settime"):
+            when = line.split(" ", 2)[2]
+            if z:
+                print("board clock set to %s (%s, as this computer)" % (when, z))
+            else:
+                print("board clock set to %s; its time zone is unchanged (%s): pick it in Settings > Network"
+                      % (when, "this computer's, %s, isn't one Settings offers" % zone if zone
+                         else "couldn't tell this computer's"))
+            return
+        if z is None or "time zone" not in line:
+            sys.exit(line)
 
 
 def main():

@@ -313,6 +313,10 @@ static void import_cb(lv_event_t *e)
         sudoku_ui_notice("Importing needs sudoku.db on a microSD card.", 3000);
         return;
     }
+    if (!CLOCK_VALID(time(NULL))) {                 /* (each collection is dated: the import refuses) */
+        sudoku_ui_notice("Importing needs the clock: connect to Wi-Fi first (Settings > Network).", 3500);
+        return;
+    }
     sudoku_ui_notice("Importing (each puzzle is checked for a single solution)...", 3000);
     stats_db_import_puzzles();                      /* the result comes back as a message */
 }

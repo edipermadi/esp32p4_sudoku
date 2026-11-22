@@ -1029,7 +1029,9 @@ static void pz_check_poll(lv_timer_t *t)
     }
     snprintf(text, sizeof(text), "%s #%d, %s %s, came by sound%s.", PZ_SOURCE, number, variant_name(p->variant),
              gen_level_name(level),
-             kept ? ": it's in Puzzles > Saved > Received" : gid > 0 ? "" : " (kept until power-off: no card)");
+             kept ? ": it's in Puzzles > Saved > Received"
+             : gid > 0 ? (CLOCK_VALID(time(NULL)) ? "" : " (not kept in Received: the clock isn't set)")
+             : " (kept until power-off: no card)");
     pz_play_id = id;
     lv_obj_t *m = make_msgbox(LV_SYMBOL_AUDIO "  Puzzle received", text);
     msgbox_button(m, "Later", mbox_close_cb, false);
@@ -1310,6 +1312,10 @@ void save_cb(lv_event_t *e)
     }
     if (!is_stats_db_ready()) {
         sudoku_ui_notice("Collections are kept in sudoku.db on a microSD card: there's none.", 3000);
+        return;
+    }
+    if (!CLOCK_VALID(time(NULL))) {                 /* (each collection is dated: stats_db_saved_add() refuses) */
+        sudoku_ui_notice("Saving needs the clock: connect to Wi-Fi first (Settings > Network).", 3500);
         return;
     }
     imports_reload();                               /* (current: another player may have changed them) */

@@ -103,12 +103,7 @@ static bool import_collection(const char *name, const char *file, int first, int
     sqlite3_bind_text(st, 2, file, -1, SQLITE_STATIC);
     sqlite3_bind_int(st, 3, first);
     sqlite3_bind_int(st, 4, count);
-    time_t now = time(NULL);
-    if (now > 1700000000) {
-        sqlite3_bind_int64(st, 5, now);
-    } else {
-        sqlite3_bind_null(st, 5);
-    }
+    sqlite3_bind_int64(st, 5, time(NULL));         /* (the clock is set: sdb_do_import*() check) */
     bool ok = sdb_step_done(st, "import collection");     /* (a name taken already: the file is skipped) */
     sqlite3_finalize(st);
     return ok;
@@ -356,6 +351,10 @@ void sdb_do_import(void)
     if (!cells) {
         return;
     }
+    if (!CLOCK_VALID(time(NULL))) {                 /* (every collection gets its date) */
+        sdb_post_message(SDB_NO_CLOCK);
+        return;
+    }
     DIR *dir = opendir(IMPORT_DIR);
     if (!dir) {
         mkdir(IMPORT_DIR, 0775);                    /* there for next time */
@@ -444,6 +443,10 @@ void sdb_do_import_file(const char *path, uint32_t ticket)
         import_finished(ticket, -1, 0, "Importing needs sudoku.db on the microSD card.");
         return;
     }
+    if (!CLOCK_VALID(time(NULL))) {                 /* (every collection gets its date) */
+        import_finished(ticket, -1, 0, SDB_NO_CLOCK);
+        return;
+    }
     static uint8_t (*cells)[81];
     if (!cells) {
         cells = heap_caps_malloc(81 * IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM);
@@ -478,7 +481,7 @@ void sdb_do_list_imports(void)
 {
     s_gen.nimports = 0;
     sqlite3_stmt *st;
-    if (sdb_db() && sqlite3_prepare_v2(sdb_db(), "SELECT name, first_id, count FROM imported ORDER BY id", -1, &st,
+    if (sdb_db() && sqlite3_prepare_v2(sdb_db(), "SELECT name, first_id, count, created_at FROM imported ORDER BY id", -1, &st,
                                        NULL) == SQLITE_OK) {
         while (s_gen.nimports < STATS_MAX_IMPORTS && sqlite3_step(st) == SQLITE_ROW) {
             stats_import_t *r = &s_gen.imports[s_gen.nimports++];
@@ -486,6 +489,7 @@ void sdb_do_list_imports(void)
             snprintf(r->name, sizeof(r->name), "%s", n ? n : "");
             r->first_gid = sqlite3_column_int(st, 1);
             r->count = sqlite3_column_int(st, 2);
+            r->created_at = sqlite3_column_int64(st, 3);   /* (NULL: 0) */
         }
         sqlite3_finalize(st);
     }

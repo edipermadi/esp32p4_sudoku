@@ -126,7 +126,7 @@ bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82]);
 void sudoku_ui_screen_name(char *buf, size_t n);
 
 /**
- * @brief Deletes a saved or imported collection, as the Puzzles screen's Delete does (devctl
+ * @brief Deletes a saved or imported collection, as the Puzzles screen's Delete collection does (devctl
  *        "colldel"): its puzzles stay on the board, with their solves, History and Gameplays; an
  *        imported one's file can be imported again. The screens are brought up to date; the Puzzles
  *        screen keeps the collection it showed (by name), or its tab's first if that one went.
