@@ -24,9 +24,9 @@ static char s_job_msg[96];              /**< how the last purge went, if some co
 /* ------------------------------------------------------------- the Recycle bin's names */
 /**
  * @brief A path as one name in the Recycle bin: "replays/a.mp4" -> "replays%2Fa.mp4".
- * @param rel  the path, relative to the card's root
- * @param out  gets the name
- * @param n    its size
+ * @param[in] rel  the path, relative to the card's root
+ * @param[out] out  gets the name
+ * @param[in] n    its size
  * @return false if it doesn't fit a FAT name
  */
 static bool trash_encode(const char *rel, char *out, size_t n)
@@ -77,7 +77,7 @@ void files_trash_decode(const char *name, char *out, size_t n)
 /* ------------------------------------------------------------- deleting for good */
 /**
  * @brief Deletes a path, and everything in it if it is a folder (the purge task).
- * @param path  the path
+ * @param[in] path  the path
  * @return 0, or -1 on failure
  */
 static int rm_rf(const char *path)
@@ -111,7 +111,7 @@ static int rm_rf(const char *path)
 
 /**
  * @brief The purge task: deletes s_job_path, or every item in the bin, then ends.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void job_task(void *arg)
 {

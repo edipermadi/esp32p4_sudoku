@@ -28,9 +28,9 @@ extern "C" {
 /**
  * @brief Reads a puzzle file and sorts out its lines: the puzzles, what kinds, how many lines
  *        aren't one. OpenSudoku's XML: each data="..." (or '...') is a Classic one.
- * @param path     the file
- * @param summary  gets "42 puzzles: 30 Classic, 12 Killer" (+ the lines left out, or why not)
- * @param n        its size
+ * @param[in] path     the file
+ * @param[out] summary  gets "42 puzzles: 30 Classic, 12 Killer" (+ the lines left out, or why not)
+ * @param[in] n        its size
  * @return how many puzzles (files_pv_count())
  */
 int files_pv_load(const char *path, char *summary, size_t n);
@@ -43,10 +43,10 @@ void files_pv_free(void);
 int files_pv_count(void);
 /**
  * @brief Parses one of them into its board (files_pv_geom()).
- * @param at   0 .. files_pv_count() - 1
- * @param var  gets its sudoku_variant_t
- * @param lv   gets its level (-1: none given)
- * @param g    gets its givens (81 cells)
+ * @param[in] at   0 .. files_pv_count() - 1
+ * @param[out] var  gets its sudoku_variant_t
+ * @param[out] lv   gets its level (-1: none given)
+ * @param[out] g    gets its givens (81 cells)
  * @return false if it can't be drawn
  */
 bool files_pv_parse(int at, int *var, int *lv, uint8_t g[81]);

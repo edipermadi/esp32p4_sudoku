@@ -22,19 +22,19 @@ extern "C" {
 /**
  * @brief avatar_store.c: the pixels are in the flash's "avatars" partition. avatar_image() is a
  * blank (transparent) image until avatars_init() finds them there.
- * @param i  the avatar, 0..AVATAR_COUNT-1 (a player's avatar k is i = k - 1)
+ * @param[in] i  the avatar, 0..AVATAR_COUNT-1 (a player's avatar k is i = k - 1)
  * @return its image
  */
 const lv_image_dsc_t *avatar_image(int i);
 /**
  * @brief A group's name (emoji-test.txt's groups).
- * @param g  the group, 0..AVATAR_GROUPS-1
+ * @param[in] g  the group, 0..AVATAR_GROUPS-1
  * @return its name
  */
 const char *avatar_group_name(int g);
 /**
  * @brief A group's first avatar.
- * @param g  the group, 0..AVATAR_GROUPS-1
+ * @param[in] g  the group, 0..AVATAR_GROUPS-1
  * @return its first avatar, from 0
  */
 int avatar_group_first(int g);

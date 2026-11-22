@@ -35,7 +35,7 @@ extern "C" {
 
 /**
  * @brief
- * @param on  on
+ * @param[in] on  on
  */
 /** @brief Turns listening on or off (starts the worker on first use). */
 void gibberlink_set_enabled(bool on);
@@ -50,7 +50,7 @@ void gibberlink_poll(void);
 
 /**
  * @brief
- * @param text  the message
+ * @param[in] text  the message
  * @return true if queued
  */
 /** @brief Sends text (up to 140 bytes, a Gibberlink id first: "SU$pz ...") as sound,

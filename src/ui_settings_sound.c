@@ -16,7 +16,7 @@ static lv_obj_t *st_vol_lbl;                        /**< the Volume value */
 
 /**
  * @brief Sound effects on or off: applied and saved (switched on: the tap is heard).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void sound_sw_cb(lv_event_t *e)
 {
@@ -30,7 +30,7 @@ static void sound_sw_cb(lv_event_t *e)
 
 /**
  * @brief Volume: applied while the slider moves, saved (and a tick played) when let go.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void vol_sl_cb(lv_event_t *e)
 {
@@ -45,7 +45,7 @@ static void vol_sl_cb(lv_event_t *e)
 
 /**
  * @brief Gibberlink (remote control by sound): saved, and the microphones start or stop listening.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void gibberlink_sw_cb(lv_event_t *e)
 {

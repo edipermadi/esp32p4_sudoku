@@ -18,8 +18,8 @@ extern "C" {
 
 /**
  * @brief
- * @param scr  the screen
- * @param back_cb  the back button
+ * @param[in] scr  the screen
+ * @param[in] back_cb  the back button
  */
 /** @brief Builds the page into scr (an empty screen). back_cb runs on the back button.
  * Can be called again after a theme change: the previous page's dialog and
@@ -28,7 +28,7 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb);
 
 /**
  * @brief
- * @param shown  loaded (true) or left
+ * @param[in] shown  loaded (true) or left
  */
 /** @brief Call when the page is loaded (true) or left (false). */
 void wifi_ui_set_shown(bool shown);

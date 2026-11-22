@@ -28,8 +28,8 @@ typedef struct {
 } sysmon_heap_t;
 /**
  * @brief A heap's size and free space.
- * @param caps      which heap: MALLOC_CAP_INTERNAL, MALLOC_CAP_SPIRAM, ...
- * @param with_min  also the low-water mark and the largest free block. Not for PSRAM: its low-water
+ * @param[in] caps      which heap: MALLOC_CAP_INTERNAL, MALLOC_CAP_SPIRAM, ...
+ * @param[in] with_min  also the low-water mark and the largest free block. Not for PSRAM: its low-water
  *                  mark reads 0 from boot on (the core registers it that way), and its largest block
  *                  walks the whole 28 MB heap with interrupts off (4 ms: the screen blinks).
  * @param[out] out  the numbers

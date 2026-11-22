@@ -16,8 +16,8 @@ static char ps_entry[5];                  /**< PIN setup: the digits typed */
 
 /**
  * @brief A key into a 4-digit entry: a digit added, or '<' takes the last one away.
- * @param buf  the entry
- * @param k    the key
+ * @param[in,out] buf  the entry
+ * @param[in] k    the key
  * @return the entry's length
  */
 static int entry_key(char *buf, char k)

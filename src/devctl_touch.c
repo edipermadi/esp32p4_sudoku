@@ -11,9 +11,9 @@
 
 /**
  * @brief The simulated touch: down (or up) at a point, kept on the screen.
- * @param pressed  down
- * @param x  pixels from the left
- * @param y  pixels from the top
+ * @param[in] pressed  down
+ * @param[in] x  pixels from the left
+ * @param[in] y  pixels from the top
  */
 static void touch(bool pressed, int x, int y)
 {
@@ -34,8 +34,8 @@ static void touch(bool pressed, int x, int y)
 
 /**
  * @brief Lets go at a point, lets the UI react, then gives the panel back its touches.
- * @param x  pixels from the left
- * @param y  pixels from the top
+ * @param[in] x  pixels from the left
+ * @param[in] y  pixels from the top
  */
 static void touch_done(int x, int y)
 {
@@ -46,11 +46,11 @@ static void touch_done(int x, int y)
 
 /**
  * @brief A drag from one point to another, in steps of about 20 ms.
- * @param x1  from, left
- * @param y1  from, top
- * @param x2  to, left
- * @param y2  to, top
- * @param ms  how long it takes
+ * @param[in] x1  from, left
+ * @param[in] y1  from, top
+ * @param[in] x2  to, left
+ * @param[in] y2  to, top
+ * @param[in] ms  how long it takes
  */
 static void swipe(int x1, int y1, int x2, int y2, uint32_t ms)
 {

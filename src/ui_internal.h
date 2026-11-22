@@ -298,7 +298,7 @@ typedef struct {
 /* ------------------------------------------------------------- splash screen (ui_splash.c) */
 /**
  * @brief The start-up splash screen (extras/splashscreen.png) decoded and put on parent, full screen.
- * @param parent  the screen shown at start-up
+ * @param[in] parent  the screen shown at start-up
  * @return the image, or NULL if it couldn't be decoded (no memory, a decoder error)
  */
 lv_obj_t *splash_show(lv_obj_t *parent);
@@ -312,13 +312,13 @@ lv_obj_t *splash_show(lv_obj_t *parent);
 /**
  * @brief The loading bar at pct (0..100), drawn at once (start-up, before LVGL's loop runs); nothing
  * without the splash screen.
- * @param pct  how far start-up has got
+ * @param[in] pct  how far start-up has got
  */
 void splash_progress(int pct);
 /**
  * @brief apply_theme(): its step-th screen built (1, 2, ...): the loading bar moves on by that screen's
  * share; nothing without the splash screen (a theme change later).
- * @param step  the screens built so far
+ * @param[in] step  the screens built so far
  */
 void splash_built(int step);
 /**
@@ -437,7 +437,7 @@ enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
 const gen_cache_t *ui_gen_cache(void);
 /**
  * @brief Sets the cache's buffer (made on first use).
- * @param v  it
+ * @param[in] v  it
  */
 void ui_set_gen_cache(gen_cache_t *v);
 /**
@@ -452,7 +452,7 @@ const palette_t *ui_palette_dark(void);
 bool is_game_attack(void);
 /**
  * @brief Sets it.
- * @param v  part of a run
+ * @param[in] v  part of a run
  */
 void game_set_attack(bool v);
 /**
@@ -492,7 +492,7 @@ lv_obj_t *const *game_clues(void);
 uint32_t game_elapsed_ms(void);
 /**
  * @brief Sets it.
- * @param v  ms
+ * @param[in] v  ms
  */
 void game_set_elapsed_ms(uint32_t v);
 /**
@@ -507,7 +507,7 @@ lv_obj_t *game_fill_btn(void);
 uint32_t game_flags(void);
 /**
  * @brief Sets them.
- * @param v  GAME_FLAG_*
+ * @param[in] v  GAME_FLAG_*
  */
 void game_set_flags(uint32_t v);
 /**
@@ -517,7 +517,7 @@ void game_set_flags(uint32_t v);
 int game_from_coll(void);
 /**
  * @brief Sets it.
- * @param v  the collection, -1: none
+ * @param[in] v  the collection, -1: none
  */
 void game_set_from_coll(int v);
 /**
@@ -527,7 +527,7 @@ void game_set_from_coll(int v);
 const sudoku_geom_t *game_geo(void);
 /**
  * @brief Sets it.
- * @param v  the board
+ * @param[in] v  the board
  */
 void game_set_geo(const sudoku_geom_t *v);
 /**
@@ -537,7 +537,7 @@ void game_set_geo(const sudoku_geom_t *v);
 const sudoku_geom_t *game_geo_buf(void);
 /**
  * @brief Sets it.
- * @param v  the buffer
+ * @param[in] v  the buffer
  */
 void game_set_geo_buf(sudoku_geom_t *v);
 /**
@@ -567,7 +567,7 @@ uint16_t game_hints(void);
 uint16_t game_id(void);
 /**
  * @brief Sets it.
- * @param v  the id
+ * @param[in] v  the id
  */
 void game_set_id(uint16_t v);
 /**
@@ -577,7 +577,7 @@ void game_set_id(uint16_t v);
 uint32_t game_last_tick(void);
 /**
  * @brief Sets it.
- * @param v  lv_tick_get()
+ * @param[in] v  lv_tick_get()
  */
 void game_set_last_tick(uint32_t v);
 /**
@@ -587,7 +587,7 @@ void game_set_last_tick(uint32_t v);
 int game_layout_var(void);
 /**
  * @brief Sets it.
- * @param v  the variant
+ * @param[in] v  the variant
  */
 void game_set_layout_var(int v);
 /**
@@ -602,7 +602,7 @@ uint16_t game_mistakes(void);
 int game_nmoves(void);
 /**
  * @brief Sets it.
- * @param v  how many
+ * @param[in] v  how many
  */
 void game_set_nmoves(int v);
 /**
@@ -617,7 +617,7 @@ lv_obj_t *game_notes_btn(void);
 bool is_game_notes_mode(void);
 /**
  * @brief Sets it.
- * @param v  pencil marks
+ * @param[in] v  pencil marks
  */
 void game_set_notes_mode(bool v);
 /**
@@ -642,7 +642,7 @@ bool is_game_paused(void);
 int game_practice(void);
 /**
  * @brief Sets it.
- * @param v  LEARN_*, -1: a real game
+ * @param[in] v  LEARN_*, -1: a real game
  */
 void game_set_practice(int v);
 /**
@@ -652,7 +652,7 @@ void game_set_practice(int v);
 const board_t *game_redo(void);
 /**
  * @brief Sets their buffer.
- * @param v  it
+ * @param[in] v  it
  */
 void game_set_redo(board_t *v);
 /**
@@ -662,7 +662,7 @@ void game_set_redo(board_t *v);
 int game_sel(void);
 /**
  * @brief Selects a cell.
- * @param v  the cell, -1: none
+ * @param[in] v  the cell, -1: none
  */
 void game_set_sel(int v);
 /**
@@ -672,7 +672,7 @@ void game_set_sel(int v);
 bool is_game_solved(void);
 /**
  * @brief Sets it.
- * @param v  solved
+ * @param[in] v  solved
  */
 void game_set_solved(bool v);
 /**
@@ -682,7 +682,7 @@ void game_set_solved(bool v);
 bool is_game_starred(void);
 /**
  * @brief Sets it.
- * @param v  starred
+ * @param[in] v  starred
  */
 void game_set_starred(bool v);
 /**
@@ -692,7 +692,7 @@ void game_set_starred(bool v);
 int64_t game_start_stamp(void);
 /**
  * @brief Sets it.
- * @param v  Unix time
+ * @param[in] v  Unix time
  */
 void game_set_start_stamp(int64_t v);
 /**
@@ -702,7 +702,7 @@ void game_set_start_stamp(int64_t v);
 uint32_t game_started_tick(void);
 /**
  * @brief Sets it.
- * @param v  lv_tick_get()
+ * @param[in] v  lv_tick_get()
  */
 void game_set_started_tick(uint32_t v);
 /**
@@ -717,7 +717,7 @@ lv_obj_t *game_timer_btn(void);
 const board_t *game_undo(void);
 /**
  * @brief Sets their buffer.
- * @param v  it
+ * @param[in] v  it
  */
 void game_set_undo(board_t *v);
 /**
@@ -732,7 +732,7 @@ lv_obj_t *game_undo_btn(void);
 int game_undo_head(void);
 /**
  * @brief Sets it.
- * @param v  its place
+ * @param[in] v  its place
  */
 void game_set_undo_head(int v);
 /**
@@ -742,7 +742,7 @@ void game_set_undo_head(int v);
 int game_undo_len(void);
 /**
  * @brief Sets it.
- * @param v  how many
+ * @param[in] v  how many
  */
 void game_set_undo_len(int v);
 /**
@@ -767,7 +767,7 @@ lv_obj_t *hint_card(void);
 const sudoku_step_t *hint_info(void);
 /**
  * @brief Sets it.
- * @param v  the step
+ * @param[in] v  the step
  */
 void hint_set_info(const sudoku_step_t *v);
 /**
@@ -777,7 +777,7 @@ void hint_set_info(const sudoku_step_t *v);
 int hint_step(void);
 /**
  * @brief Sets it.
- * @param v  0, 1 or 2
+ * @param[in] v  0, 1 or 2
  */
 void hint_set_step(int v);
 /**
@@ -797,7 +797,7 @@ const char *const *ui_digits(void);
 int attack_mistakes(void);
 /**
  * @brief Sets them.
- * @param v  how many
+ * @param[in] v  how many
  */
 void attack_set_mistakes(int v);
 /**
@@ -807,7 +807,7 @@ void attack_set_mistakes(int v);
 int attack_solved(void);
 /**
  * @brief Sets them.
- * @param v  how many
+ * @param[in] v  how many
  */
 void attack_set_solved(int v);
 /**
@@ -817,12 +817,12 @@ void attack_set_solved(int v);
 uint32_t attack_used_ms(void);
 /**
  * @brief Sets it.
- * @param v  ms
+ * @param[in] v  ms
  */
 void attack_set_used_ms(uint32_t v);
 /**
  * @brief The saved collections (Puzzles > Saved): sets how many there are.
- * @param v  how many
+ * @param[in] v  how many
  */
 void ui_set_nsaved(int v);
 /**
@@ -874,21 +874,21 @@ bool is_files_busy(void);
 const char *settings_card_busy(void);
 /**
  * @brief Kropki / XV / Greater-Than marks and Quadruple circles (board and rules card)
- * @param layer  where
- * @param kind  EDGE_*
- * @param m  MARK_*
- * @param down  the mark below the cell (else to its right)
- * @param cx  its centre, px
- * @param cy  its centre, px
+ * @param[in] layer  where
+ * @param[in] kind  EDGE_*
+ * @param[in] m  MARK_*
+ * @param[in] down  the mark below the cell (else to its right)
+ * @param[in] cx  its centre, px
+ * @param[in] cy  its centre, px
  */
 void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy);
 /**
  * @brief Quadruple: a circle centred on (cx, cy) with its 1-4 digits, two to a line
- * @param layer  where
- * @param cx  px
- * @param cy  px
- * @param dig  the digits
- * @param n  how many
+ * @param[in] layer  where
+ * @param[in] cx  px
+ * @param[in] cy  px
+ * @param[in] dig  the digits
+ * @param[in] n  how many
  */
 void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n);
 /**
@@ -896,20 +896,20 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
  * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey
  * ring (the circle) and a thin shaft from its edge with an arrowhead at the end; LINE_RENBAN a
  * wide purple band; LINE_WHISPER a narrow green line. Also the rules card's picture.
- * @param layer  where
- * @param kind  LINE_*
- * @param pts  the cells' centres
- * @param n  how many
- * @param cs  the cell size, px
+ * @param[in] layer  where
+ * @param[in] kind  LINE_*
+ * @param[in] pts  the cells' centres
+ * @param[in] n  how many
+ * @param[in] cs  the cell size, px
  */
 void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, int cs);
 /**
  * @brief Little Killer: a small arrow along direction dir (LK_*) from (x, y), about len long
- * @param layer  where
- * @param x  px
- * @param y  px
- * @param dir  LK_*
- * @param len  px
+ * @param[in] layer  where
+ * @param[in] x  px
+ * @param[in] y  px
+ * @param[in] dir  LK_*
+ * @param[in] len  px
  */
 void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len);
 /** @brief the labels for the clues outside the grid: Sandwich and Skyscraper use 18 (rows, then columns),
@@ -967,61 +967,61 @@ lv_obj_t *screen_trophy(void);
 int effective_brightness(void);
 /**
  * @brief Mixes two colours.
- * @param a  0xRRGGBB
- * @param b  0xRRGGBB
- * @param pct  % of a
+ * @param[in] a  0xRRGGBB
+ * @param[in] b  0xRRGGBB
+ * @param[in] pct  % of a
  * @return the mix
  */
 uint32_t mix_hex(uint32_t a, uint32_t b, int pct);
 /**
  * @brief the dark or light scheme, with the accent and the cell highlights made from it
- * @param dark  the dark scheme
- * @param accent  ACCENT_*
+ * @param[in] dark  the dark scheme
+ * @param[in] accent  ACCENT_*
  */
 void palette_build(bool dark, int accent);
 /**
  * @brief the players' colours (by their names on leaderboards)
- * @param k  the colour's index
+ * @param[in] k  the colour's index
  * @return it
  */
 lv_color_t player_color(int k);
 /**
  * @brief a small round dot in a player's colour
- * @param parent  where
- * @param color  the colour's index
- * @param size  px
+ * @param[in] parent  where
+ * @param[in] color  the colour's index
+ * @param[in] size  px
  * @return it
  */
 lv_obj_t *player_dot(lv_obj_t *parent, int color, int size);
 /**
  * @brief a player in that list, by id (non-zero) or else by name (names are unique, ignoring case);
  * NULL: not there (yet)
- * @param id  the player, 0: by name
- * @param name  the name
+ * @param[in] id  the player, 0: by name
+ * @param[in] name  the name
  * @return the player, or NULL
  */
 const stats_player_t *player_find(int32_t id, const char *name);
 /**
  * @brief A player's avatar shrunk to size px or, without one, a dot (dot px) of their colour, centred
  * in a size x size box that takes no taps. color < 0: the colour from the player list.
- * @param parent  where
- * @param pl  the player
- * @param color  the colour's index, < 0: the player's
- * @param size  px
- * @param dot  the dot's size, px
+ * @param[in] parent  where
+ * @param[in] pl  the player
+ * @param[in] color  the colour's index, < 0: the player's
+ * @param[in] size  px
+ * @param[in] dot  the dot's size, px
  * @return the box
  */
 lv_obj_t *player_badge(lv_obj_t *parent, const stats_player_t *pl, int color, int size, int dot);
 /**
  * @brief A time as "mm:ss", or "h:mm:ss" from an hour.
- * @param buf  gets it
- * @param n  its size
- * @param s  seconds
+ * @param[out] buf  gets it
+ * @param[in] n  its size
+ * @param[in] s  seconds
  */
 void fmt_time(char *buf, size_t n, uint32_t s);
 /**
  * @brief "st", "nd", "rd" or "th" after n
- * @param n  the number
+ * @param[in] n  the number
  * @return the suffix
  */
 const char *ordinal(int n);
@@ -1032,61 +1032,61 @@ const char *ordinal(int n);
 uint16_t gen_ram_take(void);
 /**
  * @brief Caches a generated puzzle.
- * @param id  the puzzle
- * @param variant  sudoku_variant_t
- * @param level  gen_level_t
- * @param givens  the puzzle
- * @param regions  Jigsaw's regions, or NULL
- * @param cages  Killer's cages, or NULL
- * @param marks  the marks, or NULL
- * @param thermos  the lines, or NULL
- * @param day  a daily puzzle's date, or NULL
+ * @param[in] id  the puzzle
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] level  gen_level_t
+ * @param[in] givens  the puzzle
+ * @param[in] regions  Jigsaw's regions, or NULL
+ * @param[in] cages  Killer's cages, or NULL
+ * @param[in] marks  the marks, or NULL
+ * @param[in] thermos  the lines, or NULL
+ * @param[in] day  a daily puzzle's date, or NULL
  */
 void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages, const char *marks, const char *thermos, const char *day);
 /**
  * @brief Notes where a cached puzzle came from (a puzzle typed in).
- * @param id  the puzzle
- * @param source  its collection
- * @param number  its number there
+ * @param[in] id  the puzzle
+ * @param[in] source  its collection
+ * @param[in] number  its number there
  */
 void gen_cache_source(uint16_t id, const char *source, int number);
 /**
  * @brief A generated puzzle, and its date if it is a daily one.
- * @param id  the puzzle
- * @param givens  gets it, or NULL
- * @param variant  gets it, or NULL
- * @param level  gets it, or NULL
- * @param day  gets its date ("" if not a daily one)
+ * @param[in] id  the puzzle
+ * @param[out] givens  gets it, or NULL
+ * @param[out] variant  gets it, or NULL
+ * @param[out] level  gets it, or NULL
+ * @param[out] day  gets its date ("" if not a daily one)
  * @return false: not found
  */
 bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12]);
 /**
  * @brief The board of any puzzle: a fixed variant's geometry, or for a Jigsaw
  * puzzle its regions built into buf. *variant (may be NULL) is set too.
- * @param id  the puzzle
- * @param buf  room for a Jigsaw board
- * @param variant  gets the variant, or NULL
+ * @param[in] id  the puzzle
+ * @param[out] buf  room for a Jigsaw board
+ * @param[out] variant  gets the variant, or NULL
  * @return its board
  */
 const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant);
 /**
  * @brief the givens of any puzzle, built-in or generated
- * @param id  the puzzle
- * @param cells  gets the givens
+ * @param[in] id  the puzzle
+ * @param[out] cells  gets the givens
  * @return false: not found
  */
 bool puzzle_get(uint16_t id, uint8_t cells[81]);
 /**
  * @brief A button with a centred label.
- * @param parent  where
- * @param x  px
- * @param y  px
- * @param w  px
- * @param h  px
- * @param text  its text
- * @param font  its font
- * @param cb  a tap
- * @param user  the tap's user data
+ * @param[in] parent  where
+ * @param[in] x  px
+ * @param[in] y  px
+ * @param[in] w  px
+ * @param[in] h  px
+ * @param[in] text  its text
+ * @param[in] font  its font
+ * @param[in] cb  a tap
+ * @param[in] user  the tap's user data
  * @return it
  */
 lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *text, const lv_font_t *font, lv_event_cb_t cb, void *user);
@@ -1097,17 +1097,17 @@ lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *tex
 lv_obj_t *make_screen(void);
 /**
  * @brief A label.
- * @param parent  where
- * @param font  its font
- * @param color  its colour
+ * @param[in] parent  where
+ * @param[in] font  its font
+ * @param[in] color  its colour
  * @return it
  */
 lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color);
 /**
  * @brief an icon button of a title row (a toggle, or a menu's): accent with a white icon while on
- * @param b  the button
- * @param on  on
- * @param off_c  its icon's colour while off
+ * @param[in] b  the button
+ * @param[in] on  on
+ * @param[in] off_c  its icon's colour while off
  */
 void icon_btn_set(lv_obj_t *b, bool on, lv_color_t off_c);
 /**
@@ -1116,25 +1116,25 @@ void icon_btn_set(lv_obj_t *b, bool on, lv_color_t off_c);
 void ctx_menu_close(void);
 /**
  * @brief the menu's card, w wide, under btn (any open menu closes first); its content is the caller's
- * @param btn  the menu's button
- * @param w  px
+ * @param[in] btn  the menu's button
+ * @param[in] w  px
  * @return the card
  */
 lv_obj_t *ctx_card_open(lv_obj_t *btn, int w);
 /**
  * @brief opens btn's menu (or closes it, when it is open)
- * @param btn  the menu's button
- * @param items  the items
- * @param n  how many
+ * @param[in] btn  the menu's button
+ * @param[in] items  the items
+ * @param[in] n  how many
  */
 void ctx_menu_toggle(lv_obj_t *btn, const ctx_item_t *items, int n);
 /**
  * @brief Text that wraps to its parent's width, left-aligned (dialogs). Font: NULL
  * = the parent's (inherited, like a label's).
- * @param parent  where
- * @param font  the font, or NULL
- * @param color  its colour
- * @param text  the text
+ * @param[in] parent  where
+ * @param[in] font  the font, or NULL
+ * @param[in] color  its colour
+ * @param[in] text  the text
  * @return it
  */
 lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, const char *text);
@@ -1145,9 +1145,9 @@ lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t col
 int compute_conflicts(void);
 /**
  * @brief the cell's colour with nothing selected: X-Sudoku tints its two diagonals
- * @param geo  the board
- * @param i  the cell
- * @param given  it holds a given
+ * @param[in] geo  the board
+ * @param[in] i  the cell
+ * @param[in] given  it holds a given
  * @return the colour
  */
 lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given);
@@ -1180,14 +1180,14 @@ void update_header(void);
 void refresh_board(void);
 /**
  * @brief A digit from the pad into the selected cell (or as a pencil mark).
- * @param d  the digit, 0: erase
+ * @param[in] d  the digit, 0: erase
  */
 void enter_digit(int d);
 /** @brief the no-notes challenge: Notes and Auto off (dimmed) for this game */
 void challenge_ui(void);
 /**
  * @brief Pauses or resumes the game (a solved one doesn't pause).
- * @param p  paused
+ * @param[in] p  paused
  */
 void set_paused(bool p);
 /**
@@ -1205,8 +1205,8 @@ void hint_drop(void);
 void hint_render(void);
 /**
  * @brief A cell's digit, set directly (Learn: the lesson's position).
- * @param i  the cell
- * @param v  the digit, 0 = empty
+ * @param[in] i  the cell
+ * @param[in] v  the digit, 0 = empty
  */
 void game_put_value(int i, uint8_t v);
 /**
@@ -1215,64 +1215,64 @@ void game_put_value(int i, uint8_t v);
 void reset_game(void);
 /**
  * @brief Closes the message box the button is in.
- * @param e  the event
+ * @param[in] e  the event
  */
 void mbox_close_cb(lv_event_t *e);
 /**
  * @brief A message box: a title, the text, buttons (msgbox_button()).
- * @param title  the title
- * @param text  the text
+ * @param[in] title  the title
+ * @param[in] text  the text
  * @return it
  */
 lv_obj_t *make_msgbox(const char *title, const char *text);
 /**
  * @brief A button in a message box.
- * @param m  the message box
- * @param text  its text
- * @param cb  a tap
- * @param primary  in the accent colour
+ * @param[in] m  the message box
+ * @param[in] text  its text
+ * @param[in] cb  a tap
+ * @param[in] primary  in the accent colour
  */
 void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary);
 /**
  * @brief Restart (the game's menu): asks first once there's progress.
- * @param e  the event
+ * @param[in] e  the event
  */
 void restart_cb(lv_event_t *e);
 /**
  * @brief Back from the game screen.
- * @param e  the event
+ * @param[in] e  the event
  */
 void back_cb(lv_event_t *e);
 /**
  * @brief The game's clock, each second; the time attack's end.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 void tick_cb(lv_timer_t *t);
 /**
  * @brief The board's drawing: lines, cages, marks, clues.
- * @param e  the draw event
+ * @param[in] e  the draw event
  */
 void board_regions_draw_cb(lv_event_t *e);
 /**
  * @brief Lays out a board in the GRID_SIZE square at (x0, GRID_Y).
- * @param geo  the board
- * @param grid  the grid object
- * @param boxes  its boxes
- * @param cells  its cells
- * @param clues  the clues' labels
- * @param x0  px
+ * @param[in] geo  the board
+ * @param[in] grid  the grid object
+ * @param[in] boxes  its boxes
+ * @param[in] cells  its cells
+ * @param[in] clues  the clues' labels
+ * @param[in] x0  px
  */
 void board_layout(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells, lv_obj_t *const *clues, int x0);
 /**
  * @brief the same in a square of size at (x0, y0) (board_layout: GRID_Y, GRID_SIZE)
- * @param geo  the board
- * @param grid  the grid object
- * @param boxes  its boxes
- * @param cells  its cells
- * @param clues  the clues' labels
- * @param x0  px
- * @param y0  px
- * @param size  px
+ * @param[in] geo  the board
+ * @param[in] grid  the grid object
+ * @param[in] boxes  its boxes
+ * @param[in] cells  its cells
+ * @param[in] clues  the clues' labels
+ * @param[in] x0  px
+ * @param[in] y0  px
+ * @param[in] size  px
  */
 void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *boxes, lv_obj_t *const *cells,
                      lv_obj_t *const *clues, int x0, int y0, int size);
@@ -1280,8 +1280,8 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
 void game_layout(void);
 /**
  * @brief Opens a puzzle on the game screen.
- * @param id  the puzzle
- * @param resume  the saved game (else from the start)
+ * @param[in] id  the puzzle
+ * @param[in] resume  the saved game (else from the start)
  */
 void start_game(uint16_t id, bool resume);
 /**
@@ -1294,36 +1294,36 @@ void tour_maybe(void);
 void atk_open_next(void);
 /**
  * @brief Home > Time attack: the rules, the leaderboard, Start
- * @param e  the event
+ * @param[in] e  the event
  */
 void attack_cb(lv_event_t *e);
 /** @brief the 10 minutes are up: the run's result, recorded, and the leaderboard */
 void atk_finish(void);
 /**
  * @brief The ? button: the rules card.
- * @param e  the event
+ * @param[in] e  the event
  */
 void rules_cb(lv_event_t *e);
 /** @brief the first time a variant is played: its rules */
 void rules_first_time(void);
 /**
  * @brief a QR code of text in a dialog, the note under it, then the text itself
- * @param title  the title
- * @param text  the text
- * @param note  the note
+ * @param[in] title  the title
+ * @param[in] text  the text
+ * @param[in] note  the note
  * @return the dialog
  */
 lv_obj_t *qr_dialog(const char *title, const char *text, const char *note);
 /**
  * @brief Share: the puzzle as a QR code, or sent by sound.
- * @param e  the event
+ * @param[in] e  the event
  */
 void share_cb(lv_event_t *e);
 /** @brief after a change: the collections again, a new or gone one in Puzzles' row */
 void sv_changed(void);
 /**
  * @brief Save: the puzzle into a saved collection.
- * @param e  the event
+ * @param[in] e  the event
  */
 void save_cb(lv_event_t *e);
 /**
@@ -1335,41 +1335,41 @@ void insights_cb(lv_event_t *e);
 void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player);
 /**
  * @brief the game just solved (from the Solved dialog)
- * @param e  the event
+ * @param[in] e  the event
  */
 void win_replay_cb(lv_event_t *e);
 void history_replay_poll(void);
 /**
  * @brief Makes a new puzzle in the background, then opens it.
- * @param variant  sudoku_variant_t
- * @param level  gen_level_t
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] level  gen_level_t
  */
 void gen_start(int variant, int level);
 /**
  * @brief Today's daily puzzle.
- * @param day  gets the date
- * @param level  gets its level
- * @param wday  unused
+ * @param[out] day  gets the date
+ * @param[out] level  gets its level
+ * @param[in] wday  unused
  * @return false while the clock isn't set
  */
 bool daily_today(char day[12], int *level, int *wday);
 /**
  * @brief "Hard", "X-Sudoku Medium": a daily puzzle's level, with its variant unless Classic
- * @param variant  sudoku_variant_t
- * @param level  gen_level_t
- * @param buf  gets it
- * @param n  its size
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] level  gen_level_t
+ * @param[out] buf  gets it
+ * @param[in] n  its size
  */
 void daily_kind_text(int variant, int level, char *buf, size_t n);
 /**
  * @brief the Daily puzzle line on the home screen
- * @param buf  gets it
- * @param n  its size
+ * @param[out] buf  gets it
+ * @param[in] n  its size
  */
 void daily_sub_text(char *buf, size_t n);
 /**
  * @brief Home > Daily puzzle: today's, made or resumed.
- * @param e  the event
+ * @param[in] e  the event
  */
 void daily_cb(lv_event_t *e);
 /** @brief the unfinished games, from sudoku.db (without it: just the one in RAM) */
@@ -1394,7 +1394,7 @@ void refresh_home(void);
 void show_home(void);
 /**
  * @brief Back to Home.
- * @param e  the event
+ * @param[in] e  the event
  */
 void home_cb(lv_event_t *e);
 /** @brief The Wi-Fi row's text: the state, or once connected the network's name,
@@ -1403,17 +1403,17 @@ void home_cb(lv_event_t *e);
 void st_wifi_update(void);
 /**
  * @brief The Wi-Fi line's eye: shows or hides the network's name.
- * @param e  the event
+ * @param[in] e  the event
  */
 void st_wifi_eye_cb(lv_event_t *e);
 /**
  * @brief Back from the Wi-Fi page.
- * @param e  the event
+ * @param[in] e  the event
  */
 void wifi_back_cb(lv_event_t *e);
 /**
  * @brief home clock and the Settings Wi-Fi line; runs every second
- * @param t  the timer
+ * @param[in] t  the timer
  */
 void clock_cb(lv_timer_t *t);
 void stats_player_dd_update(void);
@@ -1442,14 +1442,14 @@ void build_profile(void);
 void apply_theme(bool dark);
 /**
  * @brief Opens a puzzle: the game in progress, an unfinished one from sudoku.db, or a new start (asking first if another is in progress).
- * @param id  the puzzle
+ * @param[in] id  the puzzle
  */
 void open_puzzle(uint16_t id);
 lv_obj_t *make_coll_column(lv_obj_t *parent);
 lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name_lbl, lv_obj_t **cnt_lbl, lv_event_cb_t cb, int user);
 /**
  * @brief Puzzles' ⋮ menu: New puzzle, Enter puzzle, Learn, Starred.
- * @param e  the event
+ * @param[in] e  the event
  */
 void new_menu_cb(lv_event_t *e);
 void list_fill_colls(void);
@@ -1464,12 +1464,12 @@ void night_check(lv_timer_t *t);
 void big_digits_dd_cb(lv_event_t *e);
 /**
  * @brief Opens the system monitor.
- * @param e  the event
+ * @param[in] e  the event
  */
 void sysmon_open_cb(lv_event_t *e);
 /**
  * @brief Opens Files.
- * @param e  the event
+ * @param[in] e  the event
  */
 void files_open_cb(lv_event_t *e);
 void build_settings(void);
@@ -1477,9 +1477,9 @@ void build_wifi(void);
 void build_sysmon(void);
 void build_files(void);
 void notice_del_cb(lv_timer_t *t);
-/** @brief Shows the lock screen (under the screen saver's cover; ui_lock.c). @param force the lock button on Home: even with the lock Off, as Swipe */
+/** @brief Shows the lock screen (under the screen saver's cover; ui_lock.c). @param[in] force the lock button on Home: even with the lock Off, as Swipe */
 void ui_lock_show(bool force);
-/** @brief The screen saver's check, each second (ui_saver.c). @param t the timer */
+/** @brief The screen saver's check, each second (ui_saver.c). @param[in] t the timer */
 void saver_cb(lv_timer_t *t);
 void lock_dd_cb(lv_event_t *e);
 void pin_change_cb(lv_event_t *e);

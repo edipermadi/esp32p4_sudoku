@@ -48,7 +48,7 @@ static volatile uint32_t s_done;        /**< bytes written by the install so far
 
 /**
  * @brief The header matches this firmware's avatar set.
- * @param h  the header
+ * @param[in] h  the header
  * @return true if so
  */
 static bool is_header_ok(const av_header_t *h)
@@ -135,7 +135,7 @@ bool is_avatars_ready(void) { return s_pixels != NULL; }
 /**
  * @brief The install (a task on core 0): avatars.bin from the card into the partition, the header last, then
  * mapped and checked.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void install_task(void *arg)
 {

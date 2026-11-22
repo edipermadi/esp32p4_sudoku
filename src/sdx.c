@@ -10,9 +10,9 @@
 
 /**
  * @brief A name (any case) or its number.
- * @param s  the text
- * @param name  a name by number
- * @param n  the names
+ * @param[in] s  the text
+ * @param[in] name  a name by number
+ * @param[in] n  the names
  * @return the number; -1: neither
  */
 /** @brief a name (any case) or its number; -1: neither */

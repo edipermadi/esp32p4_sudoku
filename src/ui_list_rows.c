@@ -44,7 +44,7 @@ void list_rows_note(const char *text)
 
 /**
  * @brief A row of the collection: its puzzle, to play.
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void list_row_cb(lv_event_t *e)
 {
@@ -60,7 +60,7 @@ static void list_row_cb(lv_event_t *e)
 /**
  * @brief A saved collection's row's trash: the puzzle taken out (Save on the game screen puts it
  *        back).
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void list_row_del_cb(lv_event_t *e)
 {
@@ -121,7 +121,7 @@ void list_add_row(int i, uint16_t id, const char *sub, lv_color_t sub_c, lv_even
 /**
  * @brief Fills the rows with a collection's puzzles: variant, level, solved / in progress / not yet;
  *        a saved collection's with a trash button.
- * @param lc  the collection (after puzzles_solved_count() on it)
+ * @param[in] lc  the collection (after puzzles_solved_count() on it)
  */
 void list_fill_rows(int lc)
 {

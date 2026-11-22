@@ -40,36 +40,36 @@ enum {
 lv_obj_t *file_ui_screen(void);
 /**
  * @brief A label.
- * @param parent  its parent
- * @param font    its font
- * @param color   its colour
- * @param txt     its text
+ * @param[in] parent  its parent
+ * @param[in] font    its font
+ * @param[in] color   its colour
+ * @param[in] txt     its text
  * @return it
  */
 lv_obj_t *file_ui_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, const char *txt);
 /**
  * @brief A row without a look of its own: full width, as tall as what's in it, items centred.
- * @param parent  its parent
+ * @param[in] parent  its parent
  * @return it
  */
 lv_obj_t *file_ui_row(lv_obj_t *parent);
 /**
  * @brief A small square button with an icon (a row's Rename, Delete, Restore; Up, Refresh).
- * @param parent  its parent
- * @param sym     the icon (and any text)
- * @param color   its colour
- * @param cb      runs on a tap
- * @param user    the tap's user data
+ * @param[in] parent  its parent
+ * @param[in] sym     the icon (and any text)
+ * @param[in] color   its colour
+ * @param[in] cb      runs on a tap
+ * @param[in] user    the tap's user data
  * @return it
  */
 lv_obj_t *file_ui_icon_btn(lv_obj_t *parent, const char *sym, lv_color_t color, lv_event_cb_t cb, void *user);
 /**
  * @brief A rounded button with text (a dialog's Cancel / OK; the preview's Close / Import).
- * @param parent  its parent
- * @param txt     its text
- * @param bg      its colour
- * @param fg      the text's colour
- * @param cb      runs on a tap
+ * @param[in] parent  its parent
+ * @param[in] txt     its text
+ * @param[in] bg      its colour
+ * @param[in] fg      the text's colour
+ * @param[in] cb      runs on a tap
  * @return it
  */
 lv_obj_t *file_ui_pill_btn(lv_obj_t *parent, const char *txt, lv_color_t bg, lv_color_t fg, lv_event_cb_t cb);
@@ -79,7 +79,7 @@ lv_obj_t *file_ui_pill_btn(lv_obj_t *parent, const char *txt, lv_color_t bg, lv_
  *  @{ */
 /**
  * @brief Builds the top bar's Refresh, Empty and Up, the path, the count and the list.
- * @param scr  the page
+ * @param[in] scr  the page
  */
 void file_list_build(lv_obj_t *scr);
 /** @brief Reads the folder shown again (the worker: files_folder.c), with "Reading..." meanwhile. */
@@ -88,7 +88,7 @@ void file_list_rescan(void);
 void file_list_show(void);
 /**
  * @brief Puts a word in the count's place ("Deleting...", "Name taken").
- * @param text  the text
+ * @param[in] text  the text
  */
 void file_list_count_text(const char *text);
 /** @} */
@@ -101,8 +101,8 @@ void file_dialog_build(void);
 void file_dialog_destroy(void);
 /**
  * @brief Opens the dialog for an entry.
- * @param idx   the entry (-1 for DLG_EMPTY)
- * @param mode  DLG_RENAME, DLG_TRASH, DLG_PURGE or DLG_EMPTY
+ * @param[in] idx   the entry (-1 for DLG_EMPTY)
+ * @param[in] mode  DLG_RENAME, DLG_TRASH, DLG_PURGE or DLG_EMPTY
  */
 void file_dialog_open(int idx, int mode);
 /** @brief Hides the dialog (its name field emptied). */
@@ -114,7 +114,7 @@ void file_dialog_close(void);
 /**
  * @brief Opens a puzzle file's preview: its name, what's in it, the board with \< \>, what Import
  *        does, Close and Import.
- * @param i  the entry
+ * @param[in] i  the entry
  */
 void file_preview_open(int i);
 /** @brief Closes the preview and frees the file read. */

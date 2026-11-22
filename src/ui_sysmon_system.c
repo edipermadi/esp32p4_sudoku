@@ -85,7 +85,7 @@ static void show_overview(void)
 
 /**
  * @brief How a Wi-Fi signal level reads (the usual rule of thumb).
- * @param dbm  the signal, dBm
+ * @param[in] dbm  the signal, dBm
  * @return "excellent", "good", "fair" or "weak"
  */
 static const char *rssi_word(int dbm)

@@ -121,23 +121,23 @@ uint32_t bsp_sdcard_sector_size(void)  { return s_ready ? (uint32_t)s_card.csd.s
 
 /**
  * @brief FatFs diskio: init.
- * @param pdrv  the drive
+ * @param[in] pdrv  the drive
  * @return 0, or STA_NOINIT without a card
  */
 static DSTATUS dio_init(BYTE pdrv)   { return s_ready ? 0 : STA_NOINIT; }
 /**
  * @brief FatFs diskio: status.
- * @param pdrv  the drive
+ * @param[in] pdrv  the drive
  * @return 0, or STA_NOINIT without a card
  */
 static DSTATUS dio_status(BYTE pdrv) { return s_ready ? 0 : STA_NOINIT; }
 
 /**
  * @brief FatFs diskio: read sectors.
- * @param pdrv  the drive
- * @param buf  gets them
- * @param sector  the first
- * @param count  how many
+ * @param[in] pdrv  the drive
+ * @param[out] buf  gets them
+ * @param[in] sector  the first
+ * @param[in] count  how many
  * @return RES_OK or RES_ERROR
  */
 static DRESULT dio_read(BYTE pdrv, BYTE *buf, DWORD sector, UINT count)
@@ -147,10 +147,10 @@ static DRESULT dio_read(BYTE pdrv, BYTE *buf, DWORD sector, UINT count)
 
 /**
  * @brief FatFs diskio: write sectors.
- * @param pdrv  the drive
- * @param buf  the sectors
- * @param sector  the first
- * @param count  how many
+ * @param[in] pdrv  the drive
+ * @param[in] buf  the sectors
+ * @param[in] sector  the first
+ * @param[in] count  how many
  * @return RES_OK or RES_ERROR
  */
 static DRESULT dio_write(BYTE pdrv, const BYTE *buf, DWORD sector, UINT count)
@@ -160,9 +160,9 @@ static DRESULT dio_write(BYTE pdrv, const BYTE *buf, DWORD sector, UINT count)
 
 /**
  * @brief FatFs diskio: sync, the card's size, its sector size.
- * @param pdrv  the drive
- * @param cmd  what
- * @param buf  gets the answer
+ * @param[in] pdrv  the drive
+ * @param[in] cmd  what
+ * @param[out] buf  gets the answer
  * @return RES_OK, RES_PARERR or RES_ERROR
  */
 static DRESULT dio_ioctl(BYTE pdrv, BYTE cmd, void *buf)

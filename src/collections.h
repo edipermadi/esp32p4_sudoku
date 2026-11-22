@@ -30,51 +30,51 @@ extern "C" {
 int coll_total(void);
 /**
  * @brief Which saved collection a collection is.
- * @param c  the collection
+ * @param[in] c  the collection
  * @return its index in ui_saved() (\>= 0), or \< 0 for a built-in or imported one
  */
 int coll_saved_index(int c);
 /**
  * @brief The Puzzles tab a collection is on.
- * @param c  the collection
+ * @param[in] c  the collection
  * @return 0 Built-in, 1 Saved (imported and saved)
  */
 int coll_tab(int c);
 /**
  * @brief A collection's name.
- * @param c  the collection
+ * @param[in] c  the collection
  * @return it
  */
 const char *coll_name(int c);
 /**
  * @brief A built-in or imported collection's first puzzle id (its puzzles are a run).
- * @param c  the collection
+ * @param[in] c  the collection
  * @return the id
  */
 uint16_t coll_first(int c);
 /**
  * @brief A collection's puzzles.
- * @param c  the collection
+ * @param[in] c  the collection
  * @return how many
  */
 int coll_size(int c);
 /**
  * @brief A puzzle of a collection.
- * @param c  the collection
- * @param i  0 .. coll_size() - 1
+ * @param[in] c  the collection
+ * @param[in] i  0 .. coll_size() - 1
  * @return its id
  */
 uint16_t coll_puzzle(int c, int i);
 /**
  * @brief Where a puzzle is in a collection.
- * @param c   the collection
- * @param id  the puzzle
+ * @param[in] c   the collection
+ * @param[in] id  the puzzle
  * @return its place, -1: not there
  */
 int coll_find(int c, uint16_t id);
 /**
  * @brief The collection of a puzzle (built-in or imported).
- * @param id  the puzzle
+ * @param[in] id  the puzzle
  * @return the collection, -1 for others
  */
 int coll_of(uint16_t id);
@@ -87,8 +87,8 @@ void imports_reload(void);
 int ui_nimports(void);
 /**
  * @brief The imported collection a puzzle is in, and its number there.
- * @param id      the puzzle
- * @param number  gets its number (may be NULL)
+ * @param[in] id      the puzzle
+ * @param[out] number  gets its number (may be NULL)
  * @return the imported collection, -1: none
  */
 int import_of(uint16_t id, int *number);
@@ -104,17 +104,17 @@ const stats_saved_t *ui_saved(void);
 int ui_nsaved(void);
 /**
  * @brief A puzzle's name: "Easy #12", "X-Sudoku Hard", "Collection #3" ...
- * @param id   the puzzle
- * @param buf  gets it
- * @param n    its size
+ * @param[in] id   the puzzle
+ * @param[out] buf  gets it
+ * @param[in] n    its size
  */
 void puzzle_name(uint16_t id, char *buf, size_t n);
 /**
  * @brief A puzzle made on the board: its givens, variant and level.
- * @param id       the puzzle
- * @param givens   gets the givens (81 cells; may be NULL)
- * @param variant  gets its sudoku_variant_t (may be NULL)
- * @param level    gets its gen_level_t (may be NULL)
+ * @param[in] id       the puzzle
+ * @param[out] givens   gets the givens (81 cells; may be NULL)
+ * @param[out] variant  gets its sudoku_variant_t (may be NULL)
+ * @param[out] level    gets its gen_level_t (may be NULL)
  * @return false if it isn't known
  */
 bool gen_lookup(uint16_t id, uint8_t *givens, int *variant, int *level);

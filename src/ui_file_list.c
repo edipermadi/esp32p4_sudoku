@@ -39,7 +39,7 @@ void file_list_rescan(void)
 
 /**
  * @brief Restore: a bin item back where it was (why not: in the count's place).
- * @param idx  the entry
+ * @param[in] idx  the entry
  */
 static void do_restore(int idx)
 {
@@ -64,7 +64,7 @@ static void do_restore(int idx)
 /* ------------------------------------------------------------- the list */
 /**
  * @brief A row's Rename (not while the folder is read again: the worker is rewriting the entries).
- * @param e  the event (user data: the entry)
+ * @param[in] e  the event (user data: the entry)
  */
 static void on_rename(lv_event_t *e)
 {
@@ -75,7 +75,7 @@ static void on_rename(lv_event_t *e)
 
 /**
  * @brief A row's Delete: into the Recycle bin, or in the bin for good (asks first).
- * @param e  the event (user data: the entry)
+ * @param[in] e  the event (user data: the entry)
  */
 static void on_delete(lv_event_t *e)
 {
@@ -86,7 +86,7 @@ static void on_delete(lv_event_t *e)
 
 /**
  * @brief A bin item's Restore.
- * @param e  the event (user data: the entry)
+ * @param[in] e  the event (user data: the entry)
  */
 static void on_restore(lv_event_t *e)
 {
@@ -97,7 +97,7 @@ static void on_restore(lv_event_t *e)
 
 /**
  * @brief Empty (in the bin): asks first.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_empty(lv_event_t *e)
 {
@@ -108,7 +108,7 @@ static void on_empty(lv_event_t *e)
 
 /**
  * @brief A picture or video: the viewer, with the folder's others for Prev / Next.
- * @param i  the entry
+ * @param[in] i  the entry
  */
 static void open_media(int i)
 {
@@ -131,7 +131,7 @@ static void open_media(int i)
 
 /**
  * @brief A tap on a row: a folder opens, a picture or video plays, a puzzle file is previewed.
- * @param e  the event (user data: the entry)
+ * @param[in] e  the event (user data: the entry)
  */
 static void on_row(lv_event_t *e)
 {
@@ -156,7 +156,7 @@ static void on_row(lv_event_t *e)
 
 /**
  * @brief Up: the folder above.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_up(lv_event_t *e)
 {
@@ -169,7 +169,7 @@ static void on_up(lv_event_t *e)
 
 /**
  * @brief Refresh: the folder read again.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_refresh(lv_event_t *e) { file_list_rescan(); }
 

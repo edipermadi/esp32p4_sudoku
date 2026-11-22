@@ -42,7 +42,7 @@ static char s_summary[48];              /**< wifi_ui_summary()'s text */
 
 /**
  * @brief A transparent full-width row.
- * @param parent  where
+ * @param[in] parent  where
  * @return it
  */
 static lv_obj_t *plain_row(lv_obj_t *parent)
@@ -57,7 +57,7 @@ static lv_obj_t *plain_row(lv_obj_t *parent)
 
 /**
  * @brief A card (rounded, the card colour, a column).
- * @param parent  where
+ * @param[in] parent  where
  * @return it
  */
 static lv_obj_t *card(lv_obj_t *parent)
@@ -78,10 +78,10 @@ static lv_obj_t *card(lv_obj_t *parent)
 
 /**
  * @brief A rounded text button.
- * @param parent  where
- * @param txt  its text
- * @param primary  in the accent colour
- * @param cb  a tap
+ * @param[in] parent  where
+ * @param[in] txt  its text
+ * @param[in] primary  in the accent colour
+ * @param[in] cb  a tap
  * @return it
  */
 static lv_obj_t *pill_btn(lv_obj_t *parent, const char *txt, bool primary, lv_event_cb_t cb)
@@ -103,9 +103,9 @@ static lv_obj_t *pill_btn(lv_obj_t *parent, const char *txt, bool primary, lv_ev
 
 /**
  * @brief A round icon button.
- * @param parent  where
- * @param sym  its icon
- * @param cb  a tap
+ * @param[in] parent  where
+ * @param[in] sym  its icon
+ * @param[in] cb  a tap
  * @return it
  */
 static lv_obj_t *round_btn(lv_obj_t *parent, const char *sym, lv_event_cb_t cb)
@@ -126,7 +126,7 @@ static lv_obj_t *round_btn(lv_obj_t *parent, const char *sym, lv_event_cb_t cb)
 
 /**
  * @brief A signal's colour: strong green, fair the text's, weak muted.
- * @param rssi  dBm
+ * @param[in] rssi  dBm
  * @return the colour
  */
 static lv_color_t signal_color(int rssi)
@@ -136,8 +136,8 @@ static lv_color_t signal_color(int rssi)
 
 /**
  * @brief Hides or shows an object.
- * @param o  it
- * @param hidden  hidden
+ * @param[in] o  it
+ * @param[in] hidden  hidden
  */
 static void set_hidden(lv_obj_t *o, bool hidden)
 {
@@ -171,18 +171,18 @@ static void dlg_join(void)
 
 /**
  * @brief The dialog's Cancel.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_dlg_cancel(lv_event_t *e) { dlg_close(); }
 /**
  * @brief The dialog's Join.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_dlg_join(lv_event_t *e)   { dlg_join(); }
 
 /**
  * @brief The keyboard: its Enter joins, its close cancels.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_kb(lv_event_t *e)
 {
@@ -196,7 +196,7 @@ static void on_kb(lv_event_t *e)
 
 /**
  * @brief Shows or hides the password.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_eye(lv_event_t *e)
 {
@@ -292,7 +292,7 @@ static void build_dialog(void)
 
 /**
  * @brief Opens the password dialog for a network.
- * @param ssid  the network
+ * @param[in] ssid  the network
  */
 static void dlg_open(const char *ssid)
 {
@@ -307,7 +307,7 @@ static void dlg_open(const char *ssid)
 
 /**
  * @brief The Wi-Fi switch.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_switch(lv_event_t *e)
 {
@@ -316,18 +316,18 @@ static void on_switch(lv_event_t *e)
 
 /**
  * @brief Scans again.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_refresh(lv_event_t *e) { wifi_mgr_scan(); }
 /**
  * @brief Forgets the saved network.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_forget(lv_event_t *e)  { wifi_mgr_forget(); }
 
 /**
  * @brief A network tapped: joins it (the saved one, an open one) or asks for its password.
- * @param e  the event (user data: its row)
+ * @param[in] e  the event (user data: its row)
  */
 static void on_ap(lv_event_t *e)
 {
@@ -350,7 +350,7 @@ static void on_ap(lv_event_t *e)
 
 /**
  * @brief Lists the networks found (or why none: off, scanning).
- * @param st  Wi-Fi now
+ * @param[in] st  Wi-Fi now
  */
 static void rebuild_list(const wifi_status_t *st)
 {
@@ -413,7 +413,7 @@ static void rebuild_list(const wifi_status_t *st)
 
 /**
  * @brief The status card: the network, the state, the IP or why it failed; the switch and Forget.
- * @param st  Wi-Fi now
+ * @param[in] st  Wi-Fi now
  */
 static void show_status(const wifi_status_t *st)
 {
@@ -474,7 +474,7 @@ static void show_status(const wifi_status_t *st)
 
 /**
  * @brief The page's poll: the status, and the list when a scan or the state changed.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void tick(lv_timer_t *t)
 {

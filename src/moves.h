@@ -42,9 +42,9 @@ typedef struct {
 
 /**
  * @brief Packs moves into sudoku.db's blob (MOVE_BLOB_BYTES each).
- * @param m  the moves
- * @param n  how many
- * @param out  gets n * MOVE_BLOB_BYTES bytes
+ * @param[in] m  the moves
+ * @param[in] n  how many
+ * @param[out] out  gets n * MOVE_BLOB_BYTES bytes
  * @return the bytes written
  */
 static inline size_t moves_pack(const game_move_t *m, int n, uint8_t *out)
@@ -62,10 +62,10 @@ static inline size_t moves_pack(const game_move_t *m, int n, uint8_t *out)
 
 /**
  * @brief Unpacks a blob into moves.
- * @param in  the blob
- * @param bytes  its size
- * @param out  gets the moves
- * @param max  out's room
+ * @param[in] in  the blob
+ * @param[in] bytes  its size
+ * @param[out] out  gets the moves
+ * @param[in] max  out's room
  * @return the number of moves read (bad cells/digits end the log there)
  */
 /** @brief Returns the number of moves read (bad cells/digits end the log there). */

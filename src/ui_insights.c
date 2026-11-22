@@ -17,7 +17,7 @@ static lv_timer_t *ins_timer;           /**< waits for sudoku.db's answer (100 m
 
 /**
  * @brief Close: the dialog, and the wait for sudoku.db if it's still on.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void ins_close_cb(lv_event_t *e)
 {
@@ -33,7 +33,7 @@ static void ins_close_cb(lv_event_t *e)
 
 /**
  * @brief A heading in the dialog.
- * @param text  its text
+ * @param[in] text  its text
  * @return the label
  */
 static lv_obj_t *ins_heading(const char *text)
@@ -47,7 +47,7 @@ static lv_obj_t *ins_heading(const char *text)
 /**
  * @brief Shows the insights: the share of wrong digits; a bar per digit put in the wrong place; the
  *        nine boxes, the busier the redder; the three commonest mix-ups ("A 3 where a 5 belongs").
- * @param in  sudoku.db's answer
+ * @param[in] in  sudoku.db's answer
  */
 static void ins_show(const stats_insights_t *in)
 {
@@ -145,7 +145,7 @@ static void ins_show(const stats_insights_t *in)
 
 /**
  * @brief Waits for sudoku.db's answer, then shows it (if the dialog is still open).
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void ins_poll_cb(lv_timer_t *t)
 {
@@ -163,7 +163,7 @@ static void ins_poll_cb(lv_timer_t *t)
 /**
  * @brief Statistics' Insights button: the dialog, "Reading your move logs..." until sudoku.db answers
  *        (without it: why not).
- * @param e  the event
+ * @param[in] e  the event
  */
 void insights_cb(lv_event_t *e)
 {

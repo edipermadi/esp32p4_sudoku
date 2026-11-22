@@ -61,7 +61,7 @@
 
 /**
  * @brief Every touch: a tick (not the waking tap).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void touch_sound_cb(lv_event_t *e)
 {

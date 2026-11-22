@@ -54,7 +54,7 @@ bool is_files_at_root(void);
 bool is_files_in_trash(void);
 /**
  * @brief Opens a folder in the folder shown.
- * @param name  its name
+ * @param[in] name  its name
  * @return false if the path would be too long (nothing changes)
  */
 bool files_enter(const char *name);
@@ -99,7 +99,7 @@ int files_count(void);
 bool is_files_more(void);
 /**
  * @brief An entry read.
- * @param i  0 .. files_count() - 1
+ * @param[in] i  0 .. files_count() - 1
  * @return it
  */
 const files_entry_t *files_entry(int i);

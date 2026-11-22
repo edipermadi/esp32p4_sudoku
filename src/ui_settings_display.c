@@ -44,7 +44,7 @@ static lv_obj_t *st_night_bright_lbl;               /**< the Night brightness va
 
 /**
  * @brief Dark mode: saved, and every screen rebuilt in it.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void theme_sw_cb(lv_event_t *e)
 {
@@ -55,7 +55,7 @@ static void theme_sw_cb(lv_event_t *e)
 
 /**
  * @brief Accent colour: saved, and every screen rebuilt in it.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void accent_dd_cb(lv_event_t *e)
 {
@@ -65,7 +65,7 @@ static void accent_dd_cb(lv_event_t *e)
 
 /**
  * @brief Colour-blind friendly colours: saved, and every screen rebuilt in them.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void cvd_sw_cb(lv_event_t *e)
 {
@@ -75,7 +75,7 @@ static void cvd_sw_cb(lv_event_t *e)
 
 /**
  * @brief Digit size: saved, and the game's board redrawn with it.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 void big_digits_dd_cb(lv_event_t *e)
 {
@@ -92,7 +92,7 @@ void big_digits_dd_cb(lv_event_t *e)
 
 /**
  * @brief Brightness: applied while the slider moves (at night, at most the night brightness), saved when let go.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void bright_sl_cb(lv_event_t *e)
 {
@@ -107,7 +107,7 @@ static void bright_sl_cb(lv_event_t *e)
 
 /**
  * @brief Screen off after: the timeout, saved.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void sleep_dd_cb(lv_event_t *e)
 {
@@ -121,7 +121,7 @@ static void sleep_dd_cb(lv_event_t *e)
 
 /**
  * @brief Screen-saver clock: saved (used by the next screen timeout).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void saver_clock_sw_cb(lv_event_t *e)
 {
@@ -133,7 +133,7 @@ static void saver_clock_sw_cb(lv_event_t *e)
  *
  * Runs every 20 s, and at once when its settings change. Waits while a dialog is open on the top layer
  * (a theme change rebuilds the screens under it), for 5 minutes at most.
- * @param t  the timer, or NULL when called directly (then it doesn't wait for dialogs)
+ * @param[in] t  the timer, or NULL when called directly (then it doesn't wait for dialogs)
  */
 void night_check(lv_timer_t *t)
 {
@@ -171,7 +171,7 @@ void night_check(lv_timer_t *t)
 
 /**
  * @brief Night mode on or off: saved, and checked at once.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void night_sw_cb(lv_event_t *e)
 {
@@ -181,7 +181,7 @@ static void night_sw_cb(lv_event_t *e)
 
 /**
  * @brief Night hours (from, to): saved, and checked at once.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void night_hours_cb(lv_event_t *e)
 {
@@ -192,7 +192,7 @@ static void night_hours_cb(lv_event_t *e)
 
 /**
  * @brief Night brightness: shown at once if it's night now, saved when let go.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void night_bright_cb(lv_event_t *e)
 {
@@ -282,7 +282,7 @@ const uint8_t *sleep_minutes(void) { return SLEEP_MIN; }
 bool is_ui_night(void) { return s_night; }
 /** @return the screen timeout in minutes (0 = never) */
 uint8_t ui_sleep_min(void) { return s_sleep_min; }
-/** @brief Sets the screen timeout in minutes (0 = never). @param v  the value */
+/** @brief Sets the screen timeout in minutes (0 = never). @param[in] v  the value */
 void ui_set_sleep_min(uint8_t v) { s_sleep_min = v; }
 /** @return the Lock screen dropdown */
 lv_obj_t *settings_lock_dd(void) { return st_lock_dd; }

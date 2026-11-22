@@ -29,14 +29,14 @@ extern "C" {
 /**
  * @brief Builds the page into an empty screen. Can be called again after a theme change (the
  *        caller deletes the old screen).
- * @param scr      the screen
- * @param back_cb  runs on the back button
+ * @param[in] scr      the screen
+ * @param[in] back_cb  runs on the back button
  */
 void file_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb);
 
 /**
  * @brief The page is loaded or left: the folder read afresh, or the dialogs and viewers closed.
- * @param shown  true: loaded
+ * @param[in] shown  true: loaded
  */
 void file_ui_set_shown(bool shown);
 

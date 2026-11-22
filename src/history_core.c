@@ -21,8 +21,8 @@ static int64_t hz_row_solve[STATS_MAX_DAY_ROWS];   /**< each row's solve to repl
 
 /**
  * @brief Asks sudoku.db for a month's games.
- * @param year   the year (0: the latest month that has any)
- * @param month  1..12
+ * @param[in] year   the year (0: the latest month that has any)
+ * @param[in] month  1..12
  */
 static void ask_month(int year, int month)
 {

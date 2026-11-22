@@ -50,9 +50,9 @@ static uint32_t lvgl_tick_cb(void)
 
 /**
  * @brief LVGL's flush: the strip into the frame buffer (rotated if the display is).
- * @param disp  the display
- * @param area  where
- * @param px_map  the pixels
+ * @param[in] disp  the display
+ * @param[in] area  where
+ * @param[in] px_map  the pixels
  */
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
@@ -75,9 +75,9 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
 
 /**
  * @brief The DPI's "colour transfer done": the flush is ready.
- * @param panel  the panel
- * @param edata  unused
- * @param ctx  the display
+ * @param[in] panel  the panel
+ * @param[in] edata  unused
+ * @param[in] ctx  the display
  * @return false (no task to wake)
  */
 static bool color_trans_done_cb(esp_lcd_panel_handle_t panel,
@@ -103,8 +103,8 @@ void bsp_touch_sim(bool on, bool pressed, uint16_t x, uint16_t y)
 
 /**
  * @brief LVGL's touch read: the panel, or the simulated touch.
- * @param indev  the input device
- * @param data  gets the point and state
+ * @param[in] indev  the input device
+ * @param[out] data  gets the point and state
  */
 static void lvgl_touch_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {

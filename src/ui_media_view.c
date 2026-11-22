@@ -120,8 +120,8 @@ bool media_view_is_open(void)
 
 /**
  * @brief The worker's message for the page (and the log).
- * @param fmt  printf format
- * @param ...  its arguments
+ * @param[in] fmt  printf format
+ * @param[in] ...  its arguments
  */
 static void set_msg(const char *fmt, ...)
 {
@@ -156,8 +156,8 @@ static uint16_t *back_buf(void)
 
 /**
  * @brief Hands the back buffer over to the page (flushed from the cache for the PPA's DMA).
- * @param w  the picture's width, px
- * @param h  its height
+ * @param[in] w  the picture's width, px
+ * @param[in] h  its height
  */
 static void publish(int w, int h)
 {
@@ -170,10 +170,10 @@ static void publish(int w, int h)
 
 /**
  * @brief The size to show a picture at: as it is, or scaled down to fit the screen.
- * @param w  its width, px
- * @param h  its height
- * @param dw  gets the width shown
- * @param dh  gets the height shown
+ * @param[in] w  its width, px
+ * @param[in] h  its height
+ * @param[out] dw  gets the width shown
+ * @param[out] dh  gets the height shown
  */
 static void fit(int w, int h, int *dw, int *dh)
 {
@@ -199,8 +199,8 @@ static uint16_t s_xmap[SCR];            /**< each output column's source column 
 
 /**
  * @brief Each output column's source column (centres), for scaling a row.
- * @param sw  the source's width
- * @param dw  the output's width
+ * @param[in] sw  the source's width
+ * @param[in] dw  the output's width
  */
 static void make_xmap(int sw, int dw)
 {
@@ -211,9 +211,9 @@ static void make_xmap(int sw, int dw)
 
 /**
  * @brief An output row's source row (centres).
- * @param y  the output row
- * @param sh  the source's height
- * @param dh  the output's height
+ * @param[in] y  the output row
+ * @param[in] sh  the source's height
+ * @param[in] dh  the output's height
  * @return the source row
  */
 static inline int src_row(int y, int sh, int dh)
@@ -223,7 +223,7 @@ static inline int src_row(int y, int sh, int dh)
 
 /**
  * @brief Shows a JPEG: read whole, decoded by the JPEG engine at full size, scaled down to fit.
- * @param path  the file
+ * @param[in] path  the file
  */
 static void do_jpeg(const char *path)
 {
@@ -341,7 +341,7 @@ static int32_t t_bu[256];                     /**< U's part of blue */
 
 /**
  * @brief Clamps to 0..255.
- * @param v  a level
+ * @param[in] v  a level
  * @return it, clamped
  */
 static inline int clamp8(int v)
@@ -383,16 +383,16 @@ static void yuv_tables(void)
 /**
  * @brief chg (1:1 only, else NULL): per pair of rows, the frame number it last changed in;
  * only pairs changed after frame `since` are converted (dst holds frame `since`)
- * @param yp  the Y plane (U and V follow)
- * @param W  the planes' width
- * @param H  their height
- * @param vw  the picture's width
- * @param vh  its height
- * @param dst  gets RGB565
- * @param dw  dst's width
- * @param dh  dst's height
- * @param chg  each pair of rows' last change, or NULL
- * @param since  the frame dst holds
+ * @param[in] yp  the Y plane (U and V follow)
+ * @param[in] W  the planes' width
+ * @param[in] H  their height
+ * @param[in] vw  the picture's width
+ * @param[in] vh  its height
+ * @param[out] dst  gets RGB565
+ * @param[in] dw  dst's width
+ * @param[in] dh  dst's height
+ * @param[in] chg  each pair of rows' last change, or NULL
+ * @param[in] since  the frame dst holds
  */
 static void i420_to_565(const uint8_t *yp, int W, int H, int vw, int vh, uint16_t *dst, int dw, int dh,
                         const uint32_t *chg, int32_t since)
@@ -437,10 +437,10 @@ static void i420_to_565(const uint8_t *yp, int W, int H, int vw, int vh, uint16_
 
 /**
  * @brief one access unit (Annex-B) through the decoder; *frame: a picture that came out
- * @param dec  the decoder
- * @param buf  the access unit
- * @param len  its bytes
- * @param frame  gets a picture, or NULL
+ * @param[in] dec  the decoder
+ * @param[in] buf  the access unit
+ * @param[in] len  its bytes
+ * @param[out] frame  gets a picture, or NULL
  * @return false: the decoder failed
  */
 static bool feed(esp_h264_dec_handle_t dec, uint8_t *buf, size_t len, uint8_t **frame)
@@ -506,7 +506,7 @@ static volatile bool s_cv_alive;              /**< the converter task runs */
 
 /**
  * @brief The converter task (core 1): I420 -> RGB565 into the back buffer (only the rows that changed, 1:1), then hands it over when it's due.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void converter(void *arg)
 {
@@ -583,7 +583,7 @@ static bool cv_wait_done(void)
 
 /**
  * @brief Plays a video: decodes on this core, converts on the other, paced by the frames' times; seeks from the key frame before.
- * @param path  the file
+ * @param[in] path  the file
  */
 static void do_video(const char *path)
 {
@@ -815,7 +815,7 @@ done:
 
 /**
  * @brief The worker task (core 0): the picture or the video, then it ends.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void worker(void *arg)
 {
@@ -830,9 +830,9 @@ static void worker(void *arg)
 
 /**
  * @brief A time as "m:ss".
- * @param buf  gets it
- * @param n  its size
- * @param ms  the time
+ * @param[out] buf  gets it
+ * @param[in] n  its size
+ * @param[in] ms  the time
  */
 static void fmt_ms(char *buf, size_t n, uint32_t ms)
 {
@@ -842,7 +842,7 @@ static void fmt_ms(char *buf, size_t n, uint32_t ms)
 
 /**
  * @brief Shows a message over the picture ("" hides it).
- * @param txt  the message
+ * @param[in] txt  the message
  */
 static void show_status(const char *txt)
 {
@@ -863,7 +863,7 @@ static void apply_bars(void)
 
 /**
  * @brief Starts the worker on a file.
- * @param idx  the file
+ * @param[in] idx  the file
  */
 static void start_job(int idx)
 {
@@ -895,7 +895,7 @@ static void start_job(int idx)
 
 /**
  * @brief Shows a file: at once, or once the running worker has stopped.
- * @param idx  the file
+ * @param[in] idx  the file
  */
 static void request(int idx)
 {
@@ -917,7 +917,7 @@ static void request(int idx)
 
 /**
  * @brief The next or previous file, round.
- * @param step  +1 or -1
+ * @param[in] step  +1 or -1
  */
 static void go(int step)
 {
@@ -929,7 +929,7 @@ static void go(int step)
 
 /**
  * @brief The page's poll: the next file once the worker stopped, a picture handed over, the worker's message, the video's slider and time.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void poll(lv_timer_t *t)
 {
@@ -979,23 +979,23 @@ static void poll(lv_timer_t *t)
 
 /**
  * @brief Close.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_close(lv_event_t *e) { media_view_close(); }
 /**
  * @brief Previous.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_prev(lv_event_t *e) { go(-1); }
 /**
  * @brief Next.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_next(lv_event_t *e) { go(1); }
 
 /**
  * @brief Play / Pause (at the end: from the start).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_play(lv_event_t *e)
 {
@@ -1010,7 +1010,7 @@ static void on_play(lv_event_t *e)
 
 /**
  * @brief The slider let go: seeks there.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_slider(lv_event_t *e)
 {
@@ -1025,7 +1025,7 @@ static lv_point_t s_down;
 
 /**
  * @brief The viewer pressed: a swipe goes to the next or previous file, a tap shows or hides the bars.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_root(lv_event_t *e)
 {
@@ -1054,9 +1054,9 @@ static void on_root(lv_event_t *e)
 
 /**
  * @brief A label.
- * @param parent  where
- * @param font  its font
- * @param txt  its text
+ * @param[in] parent  where
+ * @param[in] font  its font
+ * @param[in] txt  its text
  * @return it
  */
 static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, const char *txt)
@@ -1070,9 +1070,9 @@ static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, const char *txt)
 
 /**
  * @brief A bar across the screen (a row; a tap on it doesn't hide the bars).
- * @param parent  where
- * @param h  its height, px
- * @param align  where on the screen
+ * @param[in] parent  where
+ * @param[in] h  its height, px
+ * @param[in] align  where on the screen
  * @return it
  */
 static lv_obj_t *bar(lv_obj_t *parent, int h, lv_align_t align)
@@ -1095,11 +1095,11 @@ static lv_obj_t *bar(lv_obj_t *parent, int h, lv_align_t align)
 
 /**
  * @brief An icon button.
- * @param parent  where
- * @param w  px
- * @param h  px
- * @param sym  its icon
- * @param cb  a tap
+ * @param[in] parent  where
+ * @param[in] w  px
+ * @param[in] h  px
+ * @param[in] sym  its icon
+ * @param[in] cb  a tap
  * @return it
  */
 static lv_obj_t *btn(lv_obj_t *parent, int w, int h, const char *sym, lv_event_cb_t cb)

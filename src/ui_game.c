@@ -138,8 +138,8 @@ static lv_obj_t *g_fill_btn;             /**< Fill */
 
 /**
  * @brief Cells a and b share a unit of the puzzle being played (row, column, box, diagonal).
- * @param a  a cell
- * @param b  another
+ * @param[in] a  a cell
+ * @param[in] b  another
  * @return true if so
  */
 static bool is_peer(int a, int b)
@@ -503,7 +503,7 @@ int compute_conflicts(void)
  * @brief Is cell i's digit wrong by the Mistake check setting (Settings)? Off:
  * nothing; Rules: it breaks a rule (g_conflict); Solution: also a digit
  * that isn't the solution's. Shown red; placing one buzzes.
- * @param i  the cell
+ * @param[in] i  the cell
  * @return true if wrong
  */
 static bool is_digit_wrong(int i)
@@ -523,7 +523,7 @@ static bool is_digit_wrong(int i)
 
 /**
  * @brief Does the unit hold 1-n, each once?
- * @param u  the unit
+ * @param[in] u  the unit
  * @return true if so
  */
 static bool is_unit_complete(int u)
@@ -541,7 +541,7 @@ static bool is_unit_complete(int u)
 
 /**
  * @brief How many of cell i's units (row, column, box, diagonals) were just completed.
- * @param i  the cell
+ * @param[in] i  the cell
  * @return how many
  */
 static int units_completed_by(int i)
@@ -555,7 +555,7 @@ static int units_completed_by(int i)
 
 /**
  * @brief The colours a cell can be painted.
- * @param k  1..CELL_COLORS
+ * @param[in] k  1..CELL_COLORS
  * @return the colour
  */
 static lv_color_t cell_color(int k)
@@ -813,7 +813,7 @@ static int64_t  s_solve_started;         /**< when it was started, Unix time */
 
 /**
  * @brief Records the solve (SAVE_DELAY_MS after the Solved dialog is up), and asks how the others did.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void solve_commit_cb(lv_timer_t *t)
 {
@@ -872,8 +872,8 @@ static void (*cf_done)(void);           /**< runs when the confetti is over */
 
 /**
  * @brief A random number.
- * @param lo  from
- * @param hi  to
+ * @param[in] lo  from
+ * @param[in] hi  to
  * @return lo..hi
  */
 static float cf_rand(float lo, float hi)
@@ -883,7 +883,7 @@ static float cf_rand(float lo, float hi)
 
 /**
  * @brief Draws the confetti.
- * @param e  the draw event
+ * @param[in] e  the draw event
  */
 static void cf_draw_cb(lv_event_t *e)
 {
@@ -927,7 +927,7 @@ static void cf_stop(void)
 
 /**
  * @brief Moves the confetti a frame; at the end it stops and cf_done runs.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void cf_tick(lv_timer_t *t)
 {
@@ -960,7 +960,7 @@ static void cf_tick(lv_timer_t *t)
 
 /**
  * @brief starts the confetti; done runs when it's over (at once if it can't start)
- * @param done  runs when it's over
+ * @param[in] done  runs when it's over
  */
 static void confetti(void (*done)(void))
 {
@@ -1147,9 +1147,9 @@ static bool can_edit(void)
 
 /**
  * @brief one entry in the move log (a cell's digit changed)
- * @param cell  the cell
- * @param digit  its digit, 0 = cleared
- * @param kind  MOVE_*
+ * @param[in] cell  the cell
+ * @param[in] digit  its digit, 0 = cleared
+ * @param[in] kind  MOVE_*
  */
 static void record_move(int cell, int digit, move_kind_t kind)
 {
@@ -1212,7 +1212,7 @@ void enter_digit(int d)
 
 /**
  * @brief Fill: the selected cell gets its digit from the solution; counts as a hint
- * @param e  the event
+ * @param[in] e  the event
  */
 static void fill_cb(lv_event_t *e)
 {
@@ -1250,8 +1250,8 @@ static void fill_cb(lv_event_t *e)
 
 /**
  * @brief a digit placed in cell i: its notes go, and peers lose that note
- * @param i  the cell
- * @param d  the digit
+ * @param[in] i  the cell
+ * @param[in] d  the digit
  */
 static void place_digit(int i, int d)
 {
@@ -1266,8 +1266,8 @@ static void place_digit(int i, int d)
 
 /**
  * @brief chimes for a digit d placed in cell i without a conflict
- * @param i  the cell
- * @param d  the digit
+ * @param[in] i  the cell
+ * @param[in] d  the digit
  */
 static void placed_sounds(int i, int d)
 {
@@ -1293,7 +1293,7 @@ static void placed_sounds(int i, int d)
 
 /**
  * @brief A cell tapped: selects it (digit-first: places the locked digit).
- * @param e  the event (user data: the cell)
+ * @param[in] e  the event (user data: the cell)
  */
 static void cell_click_cb(lv_event_t *e)
 {
@@ -1326,7 +1326,7 @@ static void cm_close(void)
 
 /**
  * @brief A tap beside the cell menu closes it.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void cm_backdrop_cb(lv_event_t *e)
 {
@@ -1337,7 +1337,7 @@ static void cm_backdrop_cb(lv_event_t *e)
 
 /**
  * @brief A colour picked in the cell menu: the cell painted (undo takes it back).
- * @param e  the event (user data: the colour)
+ * @param[in] e  the event (user data: the colour)
  */
 static void cm_color_cb(lv_event_t *e)
 {
@@ -1355,9 +1355,9 @@ static void cm_color_cb(lv_event_t *e)
 /**
  * @brief the sets of different digits that make up a cage's sum and hold the digits
  * already in it, as text ("1+5+9   2+4+9 ..."); how many sets
- * @param k  the cage
- * @param buf  gets the text
- * @param n  its size
+ * @param[in] k  the cage
+ * @param[out] buf  gets the text
+ * @param[in] n  its size
  * @return how many sets
  */
 static int cage_sets_text(int k, char *buf, size_t n)
@@ -1402,7 +1402,7 @@ static int cage_sets_text(int k, char *buf, size_t n)
 
 /**
  * @brief A long press on a cell: its menu (paint it; on Killer, the cage's digit sets).
- * @param e  the event (user data: the cell)
+ * @param[in] e  the event (user data: the cell)
  */
 static void cell_long_cb(lv_event_t *e)
 {
@@ -1471,7 +1471,7 @@ static void cell_long_cb(lv_event_t *e)
 
 /**
  * @brief Draws a cell's pencil marks.
- * @param e  the draw event (user data: the cell)
+ * @param[in] e  the draw event (user data: the cell)
  */
 static void cell_draw_cb(lv_event_t *e)
 {
@@ -1519,7 +1519,7 @@ static void cell_draw_cb(lv_event_t *e)
 /**
  * @brief A short tap enters the digit in the selected cell; while a digit is
  * locked (digit-first) it moves the lock to that digit, or unlocks it.
- * @param e  the event (user data: the digit)
+ * @param[in] e  the event (user data: the digit)
  */
 static void pad_click_cb(lv_event_t *e)
 {
@@ -1534,7 +1534,7 @@ static void pad_click_cb(lv_event_t *e)
 
 /**
  * @brief A long press locks the digit: then each tap on a cell places it there.
- * @param e  the event (user data: the digit)
+ * @param[in] e  the event (user data: the digit)
  */
 static void pad_long_cb(lv_event_t *e)
 {
@@ -1549,7 +1549,7 @@ static void pad_long_cb(lv_event_t *e)
 /**
  * @brief Auto notes: every empty cell gets all the digits that still fit there as
  * pencil marks (replacing its notes). Undo takes it back.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void auto_notes_cb(lv_event_t *e)
 {
@@ -1584,7 +1584,7 @@ static void auto_notes_cb(lv_event_t *e)
 
 /**
  * @brief Erase: the selected cell's digit or pencil marks.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void erase_cb(lv_event_t *e)
 {
@@ -1605,7 +1605,7 @@ static void erase_cb(lv_event_t *e)
 
 /**
  * @brief Undo: the board as it was before the last edit.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void undo_cb(lv_event_t *e)
 {
@@ -1632,7 +1632,7 @@ static void undo_cb(lv_event_t *e)
 
 /**
  * @brief Redo: puts back what the last Undo took away (until the next edit).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void redo_cb(lv_event_t *e)
 {
@@ -1653,7 +1653,7 @@ static void redo_cb(lv_event_t *e)
 
 /**
  * @brief Notes: the pad writes pencil marks, or digits.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void notes_cb(lv_event_t *e)
 {
@@ -1928,7 +1928,7 @@ void build_game(void)
 
 /**
  * @brief The hint card's button: More (the reason), Place it, or OK.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void hint_act_cb(lv_event_t *e)
 {
@@ -1965,7 +1965,7 @@ static void hint_act_cb(lv_event_t *e)
 
 /**
  * @brief Closes the hint card.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void hint_close_cb(lv_event_t *e)
 {
@@ -1975,7 +1975,7 @@ static void hint_close_cb(lv_event_t *e)
 
 /**
  * @brief Hint: where to look; again: why, then the digit.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void hint_cb(lv_event_t *e)
 {
@@ -2010,7 +2010,7 @@ static void hint_cb(lv_event_t *e)
 
 /**
  * @brief The timer: pauses or resumes.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void pause_cb(lv_event_t *e)
 {
@@ -2050,7 +2050,7 @@ void reset_game(void)
 
 /**
  * @brief Solved dialog: Next (the next puzzle of the collection it came from).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void win_next_cb(lv_event_t *e)
 {
@@ -2087,7 +2087,7 @@ static void win_next_cb(lv_event_t *e)
 
 /**
  * @brief Solved dialog: back to the list.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void win_list_cb(lv_event_t *e)
 {
@@ -2096,7 +2096,7 @@ static void win_list_cb(lv_event_t *e)
 
 /**
  * @brief A tap beside the Solved dialog's card hides it, to look at the solved board.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void win_hide_cb(lv_event_t *e)
 {
@@ -2177,7 +2177,7 @@ void start_game(uint16_t id, bool resume)
 
 /**
  * @brief Solved dialog of a daily puzzle: the result as a QR code, for a phone (and a message to friends)
- * @param e  the event
+ * @param[in] e  the event
  */
 static void win_share_cb(lv_event_t *e)
 {
@@ -2207,7 +2207,7 @@ static void win_share_cb(lv_event_t *e)
 /**
  * @brief the ⋮ menu of the second row: the variant's rules, Share (a QR code), Star (Puzzles > Starred), Auto notes,
  * Restart
- * @param e  the event
+ * @param[in] e  the event
  */
 static void game_menu_cb(lv_event_t *e)
 {
@@ -2226,7 +2226,7 @@ static void game_menu_cb(lv_event_t *e)
 
 /**
  * @brief Star: bookmarks the puzzle (Puzzles > Starred), or unstars it.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void star_cb(lv_event_t *e)
 {

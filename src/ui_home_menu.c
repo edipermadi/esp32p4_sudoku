@@ -38,7 +38,7 @@ static void home_dots(void)
 
 /**
  * @brief The menu scrolled: the dots follow.
- * @param e  the event
+ * @param[in] e  the event
  */
 void home_scroll_cb(lv_event_t *e)
 {
@@ -98,15 +98,15 @@ void home_layout(void)
 /* ---- accessors: the other UI files reach this file's state through these */
 /** @brief The layout signature. @return it (-1: not laid out) */
 int home_menu_grid(void) { return h_menu_grid; }
-/** @brief Sets the layout signature (-1: lay out again). @param v the signature */
+/** @brief Sets the layout signature (-1: lay out again). @param[in] v the signature */
 void home_set_menu_grid(int v) { h_menu_grid = v; }
 /** @brief The menu buttons. @return them, in order */
 lv_obj_t *const *home_items(void) { return h_items; }
-/** @brief Sets a menu button. @param i its place @param v the button */
+/** @brief Sets a menu button. @param[in] i its place @param[in] v the button */
 void home_set_items_at(int i, lv_obj_t *v) { h_items[i] = v; }
 /** @brief The menu buttons. @return how many */
 int home_nitems(void) { return h_nitems; }
-/** @brief Sets how many menu buttons there are. @param v how many */
+/** @brief Sets how many menu buttons there are. @param[in] v how many */
 void home_set_nitems(int v) { h_nitems = v; }
 
 /** @} */

@@ -157,7 +157,7 @@ void sdb_do_gen_get(void)
 
 /**
  * @brief The day before a date, in place.
- * @param d  'YYYY-MM-DD'
+ * @param[in,out] d  'YYYY-MM-DD'
  */
 static void prev_day(char *d)
 {

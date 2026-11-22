@@ -40,12 +40,12 @@ extern "C" {
  *  @{ */
 /**
  * @brief The answer to a command: to the port, or (devctl_run_line()) into its buffer.
- * @param fmt  printf's format, then its arguments
+ * @param[in] fmt  printf's format, then its arguments
  */
 void devctl_reply(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 /**
  * @brief Lets LVGL run (timers, input, drawing) for a while.
- * @param ms  how long, in ms
+ * @param[in] ms  how long, in ms
  */
 void devctl_pump(uint32_t ms);
 /**
@@ -64,23 +64,23 @@ char *devctl_line_buf(void);
  *  @{ */
 /**
  * @brief CRC-32, as zlib.crc32.
- * @param crc  the CRC so far (0 to start)
- * @param p  the bytes
- * @param n  how many
+ * @param[in] crc  the CRC so far (0 to start)
+ * @param[in] p  the bytes
+ * @param[in] n  how many
  * @return the CRC with them
  */
 uint32_t devctl_crc32(uint32_t crc, const uint8_t *p, int n);
 /**
  * @brief Starts the data a command sends: its lines' letter, and whether it's compressed.
- * @param prefix  the lines' letter ('S' a screenshot, 'F' a file, 'Q' SQL's result)
- * @param z  compressed (zlib format) first
+ * @param[in] prefix  the lines' letter ('S' a screenshot, 'F' a file, 'Q' SQL's result)
+ * @param[in] z  compressed (zlib format) first
  * @return false if there's no memory for the compressor
  */
 bool devctl_z_begin(char prefix, bool z);
 /**
  * @brief Data to send (counted for the size and CRC as it is, then compressed if asked).
- * @param p  the bytes
- * @param n  how many
+ * @param[in] p  the bytes
+ * @param[in] n  how many
  */
 void devctl_z_write(const void *p, size_t n);
 /**
@@ -99,17 +99,17 @@ uint32_t devctl_z_bytes(void);
 uint32_t devctl_z_crc(void);
 /**
  * @brief base64 -> bytes.
- * @param s  the base64 text
+ * @param[in] s  the base64 text
  * @param[out] out  the bytes
- * @param max  out's size
+ * @param[in] max  out's size
  * @return how many bytes, or -1 if it isn't base64 (or too long)
  */
 int devctl_b64_decode(const char *s, uint8_t *out, int max);
 /**
  * @brief One line from the host, waiting a while for it.
  * @param[out] buf  the line, without its end
- * @param max  buf's size
- * @param ms  how long to wait
+ * @param[in] max  buf's size
+ * @param[in] ms  how long to wait
  * @return false on a timeout
  */
 bool devctl_read_line(char *buf, int max, uint32_t ms);
@@ -119,28 +119,28 @@ bool devctl_read_line(char *buf, int max, uint32_t ms);
  *  @{ */
 /**
  * @brief tap, long, swipe, press, move, release (devctl_touch.c).
- * @param cmd  the command's name
- * @param a    its numbers
- * @param n    how many there are
+ * @param[in] cmd  the command's name
+ * @param[in] a    its numbers
+ * @param[in] n    how many there are
  * @return false if it isn't one of them (or lacks its numbers)
  */
 bool devctl_touch_cmd(const char *cmd, const int *a, int n);
 /**
  * @brief shot [z]: the screen, run-length coded (then, with z, compressed).
- * @param z  compressed
+ * @param[in] z  compressed
  */
 void devctl_shot(bool z);
 /**
  * @brief bench [N]: N full-screen redraws of the screen shown (default 30), then their times (devctl_screen.c).
- * @param n  how many numbers came with it
- * @param a  the numbers (a[0]: N)
+ * @param[in] n  how many numbers came with it
+ * @param[in] a  the numbers (a[0]: N)
  */
 void devctl_bench(int n, const int *a);
 /** @brief screenoff: the screen off as its timeout does (devctl_screen.c). */
 void devctl_screenoff(void);
 /**
  * @brief ls / get / put / mv / rm / mkdir / import (serial only).
- * @param line  the command line
+ * @param[in] line  the command line
  * @return true if it was one of them (and has been answered)
  */
 bool devctl_files_cmd(char *line);
@@ -154,13 +154,13 @@ bool devctl_files_cmd(char *line);
 void devctl_state(void);
 /**
  * @brief fill \<cell\> \<digit\> ...: digits into the game on screen (any separators, e.g. (12,5),(13,7)).
- * @param line  the command line
+ * @param[in] line  the command line
  */
 void devctl_fill(const char *line);
 /**
  * @brief genbench \<variant|all\> [level|all] [n]: n puzzles (default 5) of each, the same seeds every
  *        time (so builds compare), with the CPU at full speed even while the screen is dark.
- * @param line  the command line
+ * @param[in] line  the command line
  */
 void devctl_genbench(const char *line);
 /**
@@ -170,7 +170,7 @@ void devctl_genbench(const char *line);
  * "SQL C\t\<column\>..." and "SQL R\t\<value\>..."; with z, those lines compressed instead, as "SQL BEGIN
  * z", lines "Q \<n\> \<base64\>", "SQL END \<bytes\> \<crc32\>". Then "OK sql \<rows\> \<changes\>[ truncated]" or
  * "ERR sql: \<why\>". The SQL comes coded: it may hold ';', newlines and any text.
- * @param line  the command line
+ * @param[in] line  the command line
  */
 void devctl_sql(const char *line);
 /**
@@ -189,7 +189,7 @@ void devctl_colls(void);
 /**
  * @brief colldel \<saved|imported\> \<name\>: deletes that collection as the Puzzles screen's Delete does
  *        (sudoku_ui_coll_delete(): its puzzles stay on the board).
- * @param line  the command line
+ * @param[in] line  the command line
  */
 void devctl_colldel(const char *line);
 /** @} */

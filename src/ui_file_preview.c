@@ -33,13 +33,13 @@ static bool s_pv_shown;                          /**< a puzzle could be drawn */
 
 /**
  * @brief Draws a line on the preview's board.
- * @param layer  where
- * @param x1     from x
- * @param y1     from y
- * @param x2     to x
- * @param y2     to y
- * @param w      its width
- * @param c      its colour
+ * @param[in] layer  where
+ * @param[in] x1     from x
+ * @param[in] y1     from y
+ * @param[in] x2     to x
+ * @param[in] y2     to y
+ * @param[in] w      its width
+ * @param[in] c      its colour
  */
 static void pv_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, int w, lv_color_t c)
 {
@@ -58,7 +58,7 @@ static void pv_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, int w, lv
  * @brief Draws the preview's board: cells (the X-Sudoku diagonals and Hyper windows tinted), the
  *        givens, thin lines between cells and thick ones between boxes (Jigsaw: regions); Killer:
  *        the cages, dashed in the accent colour, with their sums.
- * @param e  the draw event
+ * @param[in] e  the draw event
  */
 static void pv_draw_cb(lv_event_t *e)
 {
@@ -179,7 +179,7 @@ static void pv_draw_cb(lv_event_t *e)
 
 /**
  * @brief Shows one of the file's puzzles (wraps around), and "3 / 42  -  Killer Hard".
- * @param at  which
+ * @param[in] at  which
  */
 static void pv_show(int at)
 {
@@ -215,20 +215,20 @@ void file_preview_close(void)
 
 /**
  * @brief The preview's Close.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_pv_close(lv_event_t *e) { file_preview_close(); }
 
 /**
  * @brief The preview's \< \>: the puzzle before or after.
- * @param e  the event (user data: -1 or 1)
+ * @param[in] e  the event (user data: -1 or 1)
  */
 static void on_pv_step(lv_event_t *e) { pv_show(s_pv_at + (int)(intptr_t)lv_event_get_user_data(e)); }
 
 /**
  * @brief The preview's Import: the file imported (stats_db_import_file(); the result comes back
  *        as a notice), the preview closed.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_pv_import(lv_event_t *e)
 {

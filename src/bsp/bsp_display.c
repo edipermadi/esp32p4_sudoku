@@ -146,7 +146,7 @@ static void panel_hw_reset(void)
 
 /**
  * @brief Finds the panel: ST7703 by its DCS ID, else JD9365 by its page-1 ID registers.
- * @param io  the panel's DBI interface
+ * @param[in] io  the panel's DBI interface
  * @return the panel, or BSP_PANEL_UNKNOWN
  */
 static bsp_panel_kind_t panel_probe(esp_lcd_panel_io_handle_t io)
@@ -179,9 +179,9 @@ static bsp_panel_kind_t panel_probe(esp_lcd_panel_io_handle_t io)
 
 /**
  * @brief Sends an init sequence.
- * @param io  the panel's DBI interface
- * @param cmds  the commands
- * @param n  how many
+ * @param[in] io  the panel's DBI interface
+ * @param[in] cmds  the commands
+ * @param[in] n  how many
  * @return ESP_OK, or why not
  */
 static esp_err_t send_init_cmds(esp_lcd_panel_io_handle_t io, const lcd_init_cmd_t *cmds, size_t n)

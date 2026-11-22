@@ -70,7 +70,7 @@ static void nd_ok(void)
 
 /**
  * @brief The keyboard's Enter (OK) and close key (Cancel).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void nd_kb_cb(lv_event_t *e)
 {
@@ -84,7 +84,7 @@ static void nd_kb_cb(lv_event_t *e)
 
 /**
  * @brief Cancel or OK.
- * @param e  the event (user data: 1 OK, 0 Cancel)
+ * @param[in] e  the event (user data: 1 OK, 0 Cancel)
  */
 static void nd_btn_cb(lv_event_t *e)
 {
@@ -97,11 +97,11 @@ static void nd_btn_cb(lv_event_t *e)
 
 /**
  * @brief The name dialog: a title, a text box with a keyboard, Cancel and OK.
- * @param title    the title
- * @param current  the text to start with (NULL: none)
- * @param max_len  the longest name
- * @param ok_text  the OK button's text
- * @param done     gets the name (NULL: a player's, added or renamed: nd_open())
+ * @param[in] title    the title
+ * @param[in] current  the text to start with (NULL: none)
+ * @param[in] max_len  the longest name
+ * @param[in] ok_text  the OK button's text
+ * @param[out] done     gets the name (NULL: a player's, added or renamed: nd_open())
  */
 void nd_open_ex(const char *title, const char *current, int max_len, const char *ok_text,
                 void (*done)(const char *name))
@@ -179,8 +179,8 @@ void nd_open_ex(const char *title, const char *current, int max_len, const char 
 
 /**
  * @brief The name dialog for a player: New player, or Rename player.
- * @param rename_id  the player to rename (0: add one)
- * @param current    their name now (NULL: none)
+ * @param[in] rename_id  the player to rename (0: add one)
+ * @param[in] current    their name now (NULL: none)
  */
 static void nd_open(int32_t rename_id, const char *current)
 {
@@ -191,7 +191,7 @@ static void nd_open(int32_t rename_id, const char *current)
 
 /**
  * @brief A player's row: play as them.
- * @param e  the event (user data: players.id)
+ * @param[in] e  the event (user data: players.id)
  */
 static void player_row_cb(lv_event_t *e)
 {
@@ -200,7 +200,7 @@ static void player_row_cb(lv_event_t *e)
 
 /**
  * @brief The menu's Rename: who plays now.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void player_rename_cb(lv_event_t *e)
 {
@@ -211,7 +211,7 @@ static void player_rename_cb(lv_event_t *e)
 
 /**
  * @brief The Delete dialog's Delete.
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void player_delete_confirm_cb(lv_event_t *e)
 {
@@ -222,7 +222,7 @@ static void player_delete_confirm_cb(lv_event_t *e)
 /**
  * @brief The menu's Delete: who plays now (another takes over; to delete someone else, switch
  *        first), asked first.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void player_delete_cb(lv_event_t *e)
 {
@@ -247,7 +247,7 @@ static void player_delete_cb(lv_event_t *e)
 
 /**
  * @brief The menu's Add.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void player_add_cb(lv_event_t *e)
 {
@@ -263,7 +263,7 @@ static int av_cur;                        /**< the player's avatar, 0 = none */
 
 /**
  * @brief The picker's choice: who plays now gets it, the picker closes.
- * @param k  1..AVATAR_COUNT, 0 = none
+ * @param[in] k  1..AVATAR_COUNT, 0 = none
  */
 static void player_avatar_set(int k)
 {
@@ -276,7 +276,7 @@ static void player_avatar_set(int k)
 
 /**
  * @brief The picker's None.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void av_none_cb(lv_event_t *e)
 {
@@ -285,7 +285,7 @@ static void av_none_cb(lv_event_t *e)
 
 /**
  * @brief A tap on the picker's emoji: that one.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void av_grid_click_cb(lv_event_t *e)
 {
@@ -301,7 +301,7 @@ static void av_grid_click_cb(lv_event_t *e)
 
 /**
  * @brief Draws the picker's emoji (just the rows in view), the player's own outlined.
- * @param e  the draw event
+ * @param[in] e  the draw event
  */
 static void av_grid_draw_cb(lv_event_t *e)
 {
@@ -343,7 +343,7 @@ static void av_grid_draw_cb(lv_event_t *e)
 
 /**
  * @brief The group at the top of the view, checked in the row of groups.
- * @param e  the event (may be NULL)
+ * @param[in] e  the event (may be NULL)
  */
 static void av_scroll_cb(lv_event_t *e)
 {
@@ -355,7 +355,7 @@ static void av_scroll_cb(lv_event_t *e)
 
 /**
  * @brief A group's button: scrolls to it.
- * @param e  the event (user data: the group)
+ * @param[in] e  the event (user data: the group)
  */
 static void av_group_cb(lv_event_t *e)
 {
@@ -366,7 +366,7 @@ static void av_group_cb(lv_event_t *e)
 /**
  * @brief The menu's Avatar: the picker for who plays now (a title and None, a row of groups, the
  *        emoji scrolling), opened at theirs.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void player_avatar_cb(lv_event_t *e)
 {
@@ -446,7 +446,7 @@ static void player_avatar_cb(lv_event_t *e)
 /**
  * @brief The title row's menu: Add, Rename and Avatar (who plays now), Delete (who plays now: not
  *        the only one).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void player_menu_cb(lv_event_t *e)
 {
@@ -462,7 +462,7 @@ static void player_menu_cb(lv_event_t *e)
 
 /**
  * @brief A player's avatar or dot: their next colour.
- * @param e  the event (user data: players.id)
+ * @param[in] e  the event (user data: players.id)
  */
 static void player_color_cb(lv_event_t *e)
 {
@@ -472,8 +472,8 @@ static void player_color_cb(lv_event_t *e)
 
 /**
  * @brief The player list sudoku.db sent, shown.
- * @param list  the players
- * @param n     how many
+ * @param[in] list  the players
+ * @param[in] n     how many
  */
 void players_take(const stats_player_t *list, int n)
 {

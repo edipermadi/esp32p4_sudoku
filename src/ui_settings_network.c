@@ -22,7 +22,7 @@ static char st_tz_txt[48];                          /**< the closed dropdown sho
 
 /**
  * @brief The Wi-Fi row: opens the Wi-Fi screen.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void wifi_open_cb(lv_event_t *e)
 {
@@ -74,7 +74,7 @@ static void tz_show_selected(void)
 
 /**
  * @brief A time zone was picked: saved and applied at once.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void tz_dd_cb(lv_event_t *e)
 {
@@ -86,7 +86,7 @@ static void tz_dd_cb(lv_event_t *e)
 
 /**
  * @brief Closes an open dropdown list (the time zone's) as Settings goes away.
- * @param e  the screen's unload event
+ * @param[in] e  the screen's unload event
  */
 static void st_close_lists_cb(lv_event_t *e)
 {

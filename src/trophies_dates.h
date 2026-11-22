@@ -20,13 +20,13 @@ extern "C" {
 
 /**
  * @brief Moves a date by some days, in place.
- * @param day    'YYYY-MM-DD'
- * @param delta  days (negative: back)
+ * @param[in,out] day    'YYYY-MM-DD'
+ * @param[in] delta  days (negative: back)
  */
 void trophies_day_shift(char *day, int delta);
 /**
  * @brief The Monday of this week (local time).
- * @param day  gets it, 'YYYY-MM-DD'
+ * @param[out] day  gets it, 'YYYY-MM-DD'
  * @return false while the clock isn't set
  */
 bool trophies_this_monday(char day[12]);

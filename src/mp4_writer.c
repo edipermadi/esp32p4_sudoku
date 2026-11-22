@@ -41,8 +41,8 @@ struct mp4w {
 
 /**
  * @brief Stores a big-endian 32-bit number.
- * @param p  gets its bytes
- * @param v  it
+ * @param[out] p  gets its bytes
+ * @param[in] v  it
  */
 static void put32(uint8_t *p, uint32_t v)
 {
@@ -54,9 +54,9 @@ static void put32(uint8_t *p, uint32_t v)
 
 /**
  * @brief Writes to the file (nothing once a write has failed).
- * @param w  the writer
- * @param data  the bytes
- * @param n  how many
+ * @param[in] w  the writer
+ * @param[in] data  the bytes
+ * @param[in] n  how many
  */
 static void wr(mp4w_t *w, const void *data, size_t n)
 {
@@ -80,9 +80,9 @@ typedef struct {
 
 /**
  * @brief Adds bytes (nothing once out of room).
- * @param b  the buffer
- * @param d  the bytes
- * @param n  how many
+ * @param[in,out] b  the buffer
+ * @param[in] d  the bytes
+ * @param[in] n  how many
  */
 static void b_put(buf_t *b, const void *d, size_t n)
 {
@@ -95,33 +95,33 @@ static void b_put(buf_t *b, const void *d, size_t n)
 }
 /**
  * @brief Adds a byte.
- * @param b  the buffer
- * @param v  it
+ * @param[in,out] b  the buffer
+ * @param[in] v  it
  */
 static void b_u8(buf_t *b, uint8_t v) { b_put(b, &v, 1); }
 /**
  * @brief Adds a big-endian 16-bit number.
- * @param b  the buffer
- * @param v  it
+ * @param[in,out] b  the buffer
+ * @param[in] v  it
  */
 static void b_u16(buf_t *b, uint16_t v) { uint8_t t[2] = {v >> 8, v}; b_put(b, t, 2); }
 /**
  * @brief Adds a big-endian 32-bit number.
- * @param b  the buffer
- * @param v  it
+ * @param[in,out] b  the buffer
+ * @param[in] v  it
  */
 static void b_u32(buf_t *b, uint32_t v) { uint8_t t[4]; put32(t, v); b_put(b, t, 4); }
 /**
  * @brief Adds zeros.
- * @param b  the buffer
- * @param n  how many
+ * @param[in,out] b  the buffer
+ * @param[in] n  how many
  */
 static void b_zero(buf_t *b, size_t n) { while (n--) b_u8(b, 0); }
 
 /**
  * @brief Starts a box (b_end() puts its size in).
- * @param b  the buffer
- * @param type  its 4-letter type
+ * @param[in,out] b  the buffer
+ * @param[in] type  its 4-letter type
  * @return where its size goes
  */
 static size_t b_box(buf_t *b, const char *type)
@@ -133,10 +133,10 @@ static size_t b_box(buf_t *b, const char *type)
 }
 /**
  * @brief Starts a full box (with a version and flags).
- * @param b  the buffer
- * @param type  its 4-letter type
- * @param version  its version
- * @param flags  its flags
+ * @param[in,out] b  the buffer
+ * @param[in] type  its 4-letter type
+ * @param[in] version  its version
+ * @param[in] flags  its flags
  * @return where its size goes
  */
 static size_t b_fullbox(buf_t *b, const char *type, uint8_t version, uint32_t flags)
@@ -147,8 +147,8 @@ static size_t b_fullbox(buf_t *b, const char *type, uint8_t version, uint32_t fl
 }
 /**
  * @brief Ends a box: its size in.
- * @param b  the buffer
- * @param at  b_box()'s return
+ * @param[in,out] b  the buffer
+ * @param[in] at  b_box()'s return
  */
 static void b_end(buf_t *b, size_t at)
 {
@@ -159,7 +159,7 @@ static void b_end(buf_t *b, size_t at)
 
 /**
  * @brief Adds the identity transformation matrix (tkhd, mvhd).
- * @param b  the buffer
+ * @param[in,out] b  the buffer
  */
 static void b_matrix(buf_t *b)
 {
@@ -215,9 +215,9 @@ uint32_t mp4w_size(const mp4w_t *w)
 /**
  * @brief next NAL unit in an Annex-B buffer: returns its start (after the start
  * code) and length, or NULL at the end
- * @param p  where to look from
- * @param end  the buffer's end
- * @param len  gets its length
+ * @param[in] p  where to look from
+ * @param[in] end  the buffer's end
+ * @param[out] len  gets its length
  * @return its start, or NULL
  */
 static const uint8_t *next_nal(const uint8_t *p, const uint8_t *end, size_t *len)
@@ -291,7 +291,7 @@ bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key)
 
 /**
  * @brief Frees the writer (not the file).
- * @param w  it
+ * @param[in] w  it
  */
 static void free_writer(mp4w_t *w)
 {

@@ -67,7 +67,7 @@ static volatile esp_err_t s_sd_err;             /**< the last count's result */
 static volatile uint64_t s_sd_total;            /**< the volume's size */
 static volatile uint64_t s_sd_free;             /**< its free bytes */
 
-/** @brief Counts the card's free space (FatFs may scan the whole FAT: seconds), then ends. @param arg unused */
+/** @brief Counts the card's free space (FatFs may scan the whole FAT: seconds), then ends. @param[in] arg unused */
 static void sd_task(void *arg)
 {
     uint64_t total = 0, free_b = 0;

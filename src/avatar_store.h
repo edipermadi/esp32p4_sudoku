@@ -38,8 +38,8 @@ bool avatars_install(void);
 
 /**
  * @brief
- * @param done  gets the bytes written
- * @param total  gets the bytes to write
+ * @param[out] done  gets the bytes written
+ * @param[out] total  gets the bytes to write
  * @return 0, 1, 2 or 3
  */
 /** @brief The install: 0 none, 1 running (done of total bytes), 2 just finished (the avatars are there

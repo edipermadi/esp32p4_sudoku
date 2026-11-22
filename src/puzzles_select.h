@@ -25,7 +25,7 @@ extern "C" {
 int puzzles_tab(void);
 /**
  * @brief Shows a tab (puzzles_settle() then picks its collection).
- * @param t  0 Built-in, 1 Saved
+ * @param[in] t  0 Built-in, 1 Saved
  */
 void puzzles_set_tab(int t);
 /**
@@ -35,7 +35,7 @@ void puzzles_set_tab(int t);
 int puzzles_coll(void);
 /**
  * @brief Shows a collection.
- * @param c  the collection
+ * @param[in] c  the collection
  */
 void puzzles_set_coll(int c);
 /**
@@ -45,7 +45,7 @@ void puzzles_set_coll(int c);
 bool is_puzzles_starred(void);
 /**
  * @brief The right pane shows the starred puzzles, or the collection again.
- * @param on  true: Starred
+ * @param[in] on  true: Starred
  */
 void puzzles_set_starred(bool on);
 /**
@@ -58,7 +58,7 @@ bool puzzles_settle(void);
 void puzzles_forget_saved(void);
 /**
  * @brief Shows a collection and its tab (the one the puzzle just played is in).
- * @param c  the collection
+ * @param[in] c  the collection
  */
 void puzzles_follow(int c);
 

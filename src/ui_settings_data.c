@@ -65,7 +65,7 @@ static void fw_row_update(void)
 
 /**
  * @brief Follows the firmware write: restarts into it when done, or brings the screen back with the error.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void fw_poll_cb(lv_timer_t *t)
 {
@@ -86,7 +86,7 @@ static void fw_poll_cb(lv_timer_t *t)
 
 /**
  * @brief After the card has been on screen a moment: the screen dark, then the write starts.
- * @param t  the timer (its user data is update.bin's size)
+ * @param[in] t  the timer (its user data is update.bin's size)
  */
 static void fw_start_cb(lv_timer_t *t)
 {
@@ -102,7 +102,7 @@ static void fw_start_cb(lv_timer_t *t)
 
 /**
  * @brief Update, confirmed: the card that says the screen goes dark, then (fw_start_cb()) the write.
- * @param e  the event (its user data is the dialog)
+ * @param[in] e  the event (its user data is the dialog)
  */
 static void fw_go_cb(lv_event_t *e)
 {
@@ -122,7 +122,7 @@ static void fw_go_cb(lv_event_t *e)
 
 /**
  * @brief The Update button: asks first, with the running build and update.bin's.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void fw_update_cb(lv_event_t *e)
 {
@@ -150,8 +150,8 @@ static void fw_update_cb(lv_event_t *e)
 
 /**
  * @brief The microSD row's button: its text, and whether it can be tapped.
- * @param t        the text
- * @param enabled  false: greyed out
+ * @param[in] t        the text
+ * @param[in] enabled  false: greyed out
  */
 static void sd_btn_text(const char *t, bool enabled)
 {
@@ -164,7 +164,7 @@ static void sd_btn_text(const char *t, bool enabled)
 
 /**
  * @brief Format, confirmed: the card task starts, and a "Formatting..." box shows.
- * @param e  the event (its user data is the dialog)
+ * @param[in] e  the event (its user data is the dialog)
  */
 static void sd_format_confirm_cb(lv_event_t *e)
 {
@@ -178,7 +178,7 @@ static void sd_format_confirm_cb(lv_event_t *e)
 
 /**
  * @brief Format, cancelled.
- * @param e  the event (its user data is the dialog)
+ * @param[in] e  the event (its user data is the dialog)
  */
 static void sd_format_cancel_cb(lv_event_t *e)
 {
@@ -190,7 +190,7 @@ static void sd_format_cancel_cb(lv_event_t *e)
  * @brief The Format button: looks for a card if none was found at start-up, then asks.
  *
  * A card can only be looked for while Wi-Fi hasn't started (they share the SDMMC host).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void sd_format_cb(lv_event_t *e)
 {
@@ -244,7 +244,7 @@ void usb_btn_update(void)
 
 /**
  * @brief The USB drive panel's Done: takes the card back.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void usb_done_cb(lv_event_t *e)
 {
@@ -253,7 +253,7 @@ static void usb_done_cb(lv_event_t *e)
 
 /**
  * @brief Connect: lends the card to the computer and covers the screen with the USB drive panel.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void usb_connect_cb(lv_event_t *e)
 {
@@ -305,7 +305,7 @@ static void usb_connect_cb(lv_event_t *e)
 
 /**
  * @brief Import puzzles from puzzles/ on the card (the result comes as a message).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void import_cb(lv_event_t *e)
 {
@@ -319,7 +319,7 @@ static void import_cb(lv_event_t *e)
 
 /**
  * @brief Export to CSV in export/ on the card (the result comes as a message).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void export_cb(lv_event_t *e)
 {
@@ -333,7 +333,7 @@ static void export_cb(lv_event_t *e)
 
 /**
  * @brief Back up sudoku.db into backup/ on the card (the result comes as a message).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void backup_cb(lv_event_t *e)
 {
@@ -347,7 +347,7 @@ static void backup_cb(lv_event_t *e)
 
 /**
  * @brief Factory reset, confirmed: settings, Wi-Fi and sudoku.db reset, then Home.
- * @param e  the event (its user data is the dialog)
+ * @param[in] e  the event (its user data is the dialog)
  */
 static void factory_reset_confirm_cb(lv_event_t *e)
 {
@@ -363,7 +363,7 @@ static void factory_reset_confirm_cb(lv_event_t *e)
 
 /**
  * @brief The Reset button: asks first (it can't be undone).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void factory_reset_cb(lv_event_t *e)
 {

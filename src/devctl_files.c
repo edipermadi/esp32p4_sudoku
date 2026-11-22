@@ -33,7 +33,7 @@
 
 /**
  * @brief A hex digit's value.
- * @param c  the character
+ * @param[in] c  the character
  * @return 0..15, or -1 if it isn't one
  */
 static int unhex(char c)
@@ -43,9 +43,9 @@ static int unhex(char c)
 
 /**
  * @brief A "%20"-coded path from the card's root -> the full path (no ".", ".." or empty parts).
- * @param word  the coded path
+ * @param[in] word  the coded path
  * @param[out] out  the full path
- * @param n  out's size
+ * @param[in] n  out's size
  * @param[out] why  what's wrong, if false
  * @return false if it isn't a usable path
  */
@@ -89,7 +89,7 @@ static bool card_path(const char *word, char *out, size_t n, const char **why)
 
 /**
  * @brief The path is sudoku.db (or its journal), and it's open.
- * @param full  a full path
+ * @param[in] full  a full path
  * @return true if it mustn't be replaced, renamed or deleted
  */
 static bool is_db_busy(const char *full)
@@ -101,7 +101,7 @@ static bool is_db_busy(const char *full)
 
 /**
  * @brief Sends a file name with %XX for spaces, '%' and control bytes.
- * @param s  the name
+ * @param[in] s  the name
  */
 static void print_name(const char *s)
 {
@@ -117,7 +117,7 @@ static void print_name(const char *s)
 
 /**
  * @brief ls: a line "L \<d|f\> \<size\> \<name\>" per entry of a folder.
- * @param dir  the folder (full path)
+ * @param[in] dir  the folder (full path)
  * @return false if it can't be opened
  */
 static bool card_ls(const char *dir)
@@ -147,8 +147,8 @@ static bool card_ls(const char *dir)
 
 /**
  * @brief get \<path\> [z]: the file (with z, compressed).
- * @param path  the file (full path)
- * @param z  compressed
+ * @param[in] path  the file (full path)
+ * @param[in] z  compressed
  * @return false if it can't be opened (errno: why)
  */
 static bool card_get(const char *path, bool z)
@@ -185,9 +185,9 @@ typedef struct {
 
 /**
  * @brief A size as text: "512 B", "3.4 KB", "7.1 MB".
- * @param buf  gets it
- * @param n    its size
- * @param b    bytes
+ * @param[out] buf  gets it
+ * @param[in] n    its size
+ * @param[in] b    bytes
  */
 static void put_size_text(char *buf, size_t n, long b)
 {
@@ -203,10 +203,10 @@ static void put_size_text(char *buf, size_t n, long b)
 /**
  * @brief put: "READY", then lines "D \<base64\>" (an ACK after each UP_WINDOW of them) until all the bytes
  *        are in; written to \<path\>.part, which becomes \<path\> once the CRC matches.
- * @param path  the file (full path)
- * @param size  its size
- * @param crc  its CRC-32
- * @param zsize  -1, or the size of the file compressed (zlib format, inflated here)
+ * @param[in] path  the file (full path)
+ * @param[in] size  its size
+ * @param[in] crc  its CRC-32
+ * @param[in] zsize  -1, or the size of the file compressed (zlib format, inflated here)
  */
 static void card_put(const char *path, long size, uint32_t crc, long zsize)
 {
@@ -369,7 +369,7 @@ static void card_put(const char *path, long size, uint32_t crc, long zsize)
  *        waited for (grading 100 puzzles takes a while): "IMPORT \<what happened\>", then "OK import
  *        \<imported\> \<left out\>"; or "ERR import: ...". The board shows its notice and its screens
  *        take the new collection as for an import from the screen (the UI runs meanwhile).
- * @param full  the file (full path)
+ * @param[in] full  the file (full path)
  */
 static void card_import(const char *full)
 {

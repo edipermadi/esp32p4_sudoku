@@ -54,7 +54,7 @@ extern "C" bool verifyRollbackLater()
 
 /**
  * @brief
- * @param r  the reset reason
+ * @param[in] r  the reset reason
  * @return a sentence, or NULL for a normal power-on or reset
  */
 /** @brief Why the chip last restarted, if it was not a normal power-on/reset. */

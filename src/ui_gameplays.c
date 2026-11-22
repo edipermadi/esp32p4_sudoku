@@ -23,7 +23,7 @@ static lv_obj_t *pl_older;                /**< Older (the page after) */
 
 /**
  * @brief Replaces the list with a line of text (loading, nothing yet, why not).
- * @param text  the text
+ * @param[in] text  the text
  */
 static void plays_hint(const char *text)
 {
@@ -36,7 +36,7 @@ static void plays_hint(const char *text)
 
 /**
  * @brief A row: its replay.
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void plays_row_cb(lv_event_t *e)
 {
@@ -45,7 +45,7 @@ static void plays_row_cb(lv_event_t *e)
 
 /**
  * @brief A row's MP4: the solve exported as a video.
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void plays_export_cb(lv_event_t *e)
 {
@@ -65,7 +65,7 @@ static void plays_pager_update(void)
 /**
  * @brief Shows a page: the count, a card per solve (who, the puzzle, when, the time, mistakes,
  *        hints, no notes) with its replay and MP4 buttons.
- * @param p  the page
+ * @param[in] p  the page
  */
 static void render_plays(const stats_plays_t *p)
 {
@@ -130,7 +130,7 @@ static void render_plays(const stats_plays_t *p)
 
 /**
  * @brief Asks for a page (without sudoku.db: why not).
- * @param offset  its first row
+ * @param[in] offset  its first row
  */
 void plays_ask(int offset)
 {
@@ -143,7 +143,7 @@ void plays_ask(int offset)
 
 /**
  * @brief Newer / Older: the page before or after.
- * @param e  the event (user data: -1 newer, +1 older)
+ * @param[in] e  the event (user data: -1 newer, +1 older)
  */
 static void plays_page_cb(lv_event_t *e)
 {

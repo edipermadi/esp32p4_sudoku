@@ -43,7 +43,7 @@ bool sysmon_hist_sample(sysmon_sample_t *out);
 int sysmon_hist_count(void);
 /**
  * @brief A kept sample.
- * @param i         0 the oldest .. sysmon_hist_count() - 1 the newest
+ * @param[in] i         0 the oldest .. sysmon_hist_count() - 1 the newest
  * @param[out] out  the sample
  */
 void sysmon_hist_get(int i, sysmon_sample_t *out);

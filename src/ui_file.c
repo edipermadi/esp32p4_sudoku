@@ -75,7 +75,7 @@ lv_obj_t *file_ui_screen(void)
 
 /**
  * @brief The page's timer: a finished read is shown; after a purge, the bin is read again.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void poll(lv_timer_t *t)
 {

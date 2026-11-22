@@ -24,7 +24,7 @@ void sd_probe_card(void)
 
 /**
  * @brief The card task: one job (sd_job_t), then s_sd_state is its result.
- * @param arg  the job, cast to a pointer
+ * @param[in] arg  the job, cast to a pointer
  */
 static void sd_task(void *arg)
 {

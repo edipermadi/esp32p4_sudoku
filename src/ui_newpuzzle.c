@@ -129,7 +129,7 @@ void sudoku_gen_yield(void)
 
 /**
  * @brief The generator task (core 0): makes the puzzle, then sets gen_done.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void gen_task(void *arg)
 {
@@ -187,7 +187,7 @@ static void gen_task(void *arg)
 
 /**
  * @brief While a puzzle is made: the progress bar; once done, the puzzle kept (sudoku.db, or the RAM cache) and opened.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void gen_poll_cb(lv_timer_t *t)
 {
@@ -255,10 +255,10 @@ void gen_bench_end(void)
 
 /**
  * @brief Makes a new puzzle in the background (one at a time), with a progress dialog.
- * @param variant  sudoku_variant_t
- * @param level  gen_level_t
- * @param seed  the generator's seed, 0: random
- * @param day  a daily puzzle's date, or NULL
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] level  gen_level_t
+ * @param[in] seed  the generator's seed, 0: random
+ * @param[in] day  a daily puzzle's date, or NULL
  */
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
 {
@@ -330,9 +330,9 @@ static const uint8_t DAILY_VARIANT[7] = {VAR_CLASSIC, VAR_CLASSIC, VAR_MINI, VAR
 
 /**
  * @brief Today's date, level and variant.
- * @param day  gets the date
- * @param level  gets the level
- * @param variant  gets the variant
+ * @param[out] day  gets the date
+ * @param[out] level  gets the level
+ * @param[out] variant  gets the variant
  * @return false while the clock isn't set
  */
 static bool daily_today_v(char day[12], int *level, int *variant)
@@ -371,7 +371,7 @@ void daily_kind_text(int variant, int level, char *buf, size_t n)
 
 /**
  * @brief The daily puzzle's seed: FNV-1a of its date.
- * @param day  the date
+ * @param[in] day  the date
  * @return the seed
  */
 static uint32_t daily_seed(const char *day)          /* FNV-1a of the date */
@@ -544,7 +544,7 @@ static void gen_pick_close(void)
 
 /**
  * @brief A level picked: makes the puzzle.
- * @param e  the event (user data: the level)
+ * @param[in] e  the event (user data: the level)
  */
 static void gen_level_cb(lv_event_t *e)
 {
@@ -555,7 +555,7 @@ static void gen_level_cb(lv_event_t *e)
 
 /**
  * @brief A variant picked: the levels it has.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void gen_var_cb(lv_event_t *e)
 {
@@ -572,7 +572,7 @@ static void gen_var_cb(lv_event_t *e)
 
 /**
  * @brief Shows a tab's variants in the variant buttons, with its last pick checked (and chosen).
- * @param cat  the tab
+ * @param[in] cat  the tab
  */
 static void gen_cat_show(int cat)
 {
@@ -606,7 +606,7 @@ static void gen_cat_show(int cat)
 
 /**
  * @brief A tab tapped: its variants shown.
- * @param e  the event (the tabs' button matrix)
+ * @param[in] e  the event (the tabs' button matrix)
  */
 static void gen_cat_cb(lv_event_t *e)
 {
@@ -618,7 +618,7 @@ static void gen_cat_cb(lv_event_t *e)
 
 /**
  * @brief Cancel.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void gen_cancel_cb(lv_event_t *e)
 {
@@ -627,7 +627,7 @@ static void gen_cancel_cb(lv_event_t *e)
 
 /**
  * @brief A tap on the dimmed background (not on the dialog) closes it too.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void gen_backdrop_cb(lv_event_t *e)
 {
@@ -638,7 +638,7 @@ static void gen_backdrop_cb(lv_event_t *e)
 
 /**
  * @brief New puzzle: the dialog (a variant, then a level).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void new_puzzle_cb(lv_event_t *e)
 {
@@ -780,7 +780,7 @@ static const char *const LEARN_DESC[LEARN_COUNT] = {
 
 /**
  * @brief The variant lessons: a new puzzle of that variant (made on the spot, kept in RAM only).
- * @param target  LEARN_*
+ * @param[in] target  LEARN_*
  * @return its variant, or -1 (a technique lesson)
  */
 static int learn_variant(int target)
@@ -800,7 +800,7 @@ static int learn_variant(int target)
 
 /**
  * @brief The technique a variant lesson shows.
- * @param target  LEARN_*
+ * @param[in] target  LEARN_*
  * @return TECH_*
  */
 static int learn_variant_tech(int target)
@@ -821,7 +821,7 @@ static int learn_variant_tech(int target)
 /**
  * @brief the techniques that sudoku_step_with() finds a lesson position for (the newer, rarer ones:
  * the hint engine seldom reaches them first, so any position where they open a single will do)
- * @param target  LEARN_*
+ * @param[in] target  LEARN_*
  * @return TECH_*, or TECH_NONE
  */
 static int learn_tech(int target)
@@ -849,8 +849,8 @@ static sudoku_step_t learn_step;        /**< the step it shows */
 
 /**
  * @brief does this step need the technique (for a naked single: a cell with one candidate is enough)
- * @param target  LEARN_*
- * @param st  the step
+ * @param[in] target  LEARN_*
+ * @param[in] st  the step
  * @return true if so
  */
 static bool is_learn_match(int target, const sudoku_step_t *st)
@@ -875,9 +875,9 @@ static bool is_learn_match(int target, const sudoku_step_t *st)
 /**
  * @brief a naked single on the board: a cell only one digit fits (singles are found
  * as hidden ones first, so the hint engine seldom names this one itself)
- * @param vals  the board
- * @param sol  the solution
- * @param st  gets the step
+ * @param[in] vals  the board
+ * @param[in] sol  the solution
+ * @param[out] st  gets the step
  * @return true if there is one
  */
 static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudoku_step_t *st)
@@ -912,7 +912,7 @@ static char learn_marks[82];            /**< its marks */
 
 /**
  * @brief A variant lesson's position: new puzzles of the variant until a step needs the technique.
- * @param target  LEARN_*
+ * @param[in] target  LEARN_*
  * @return 1 found, 2 nothing found
  */
 static int learn_variant_find(int target)
@@ -959,7 +959,7 @@ static int learn_variant_find(int target)
 
 /**
  * @brief The lesson search (core 0): a position where the technique opens up a single; learn_state then says found or not.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void learn_task(void *arg)
 {
@@ -1012,7 +1012,7 @@ static void learn_task(void *arg)
 
 /**
  * @brief Waits for the lesson search: then opens the lesson, or says none was found.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void learn_poll_cb(lv_timer_t *t)
 {
@@ -1059,7 +1059,7 @@ static void learn_poll_cb(lv_timer_t *t)
 
 /**
  * @brief A lesson picked: the search starts.
- * @param e  the event (user data: LEARN_*)
+ * @param[in] e  the event (user data: LEARN_*)
  */
 static void learn_pick_cb(lv_event_t *e)
 {
@@ -1104,7 +1104,7 @@ static void learn_pick_cb(lv_event_t *e)
 
 /**
  * @brief Closes the Learn dialog.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void learn_close_cb(lv_event_t *e)
 {
@@ -1116,7 +1116,7 @@ static void learn_close_cb(lv_event_t *e)
 
 /**
  * @brief Learn: the dialog of techniques.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void learn_cb(lv_event_t *e)
 {
@@ -1200,7 +1200,7 @@ static void ed_refresh(void)
 
 /**
  * @brief A cell tapped: selected.
- * @param e  the event (user data: the cell)
+ * @param[in] e  the event (user data: the cell)
  */
 static void ed_cell_cb(lv_event_t *e)
 {
@@ -1210,7 +1210,7 @@ static void ed_cell_cb(lv_event_t *e)
 
 /**
  * @brief A digit tapped: into the selected cell (the same digit again clears it), then on to the next cell.
- * @param e  the event (user data: the digit)
+ * @param[in] e  the event (user data: the digit)
  */
 static void ed_digit_cb(lv_event_t *e)
 {
@@ -1239,7 +1239,7 @@ static void ed_close(void)
 
 /**
  * @brief Cancel.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void ed_cancel_cb(lv_event_t *e)
 {
@@ -1248,7 +1248,7 @@ static void ed_cancel_cb(lv_event_t *e)
 
 /**
  * @brief Erase: the selected cell.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void ed_erase_cb(lv_event_t *e)
 {
@@ -1260,7 +1260,7 @@ static void ed_erase_cb(lv_event_t *e)
 
 /**
  * @brief Clear: all of it.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void ed_clear_cb(lv_event_t *e)
 {
@@ -1279,7 +1279,7 @@ static TaskHandle_t ed_check_handle;                /**< its stack in PSRAM (int
 
 /**
  * @brief The check (its own task): counts the solutions (up to 2), grades a unique puzzle, then waits to be deleted.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void ed_check_task(void *arg)
 {
@@ -1293,7 +1293,7 @@ static void ed_check_task(void *arg)
 
 /**
  * @brief The check is done: the puzzle saved and opened, or why not.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void ed_check_done(lv_timer_t *t)
 {
@@ -1345,7 +1345,7 @@ static void ed_check_done(lv_timer_t *t)
 
 /**
  * @brief Check & play: the puzzle typed in is checked in the background.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void ed_play_cb(lv_event_t *e)
 {
@@ -1375,7 +1375,7 @@ static void ed_play_cb(lv_event_t *e)
 
 /**
  * @brief Puzzles > Enter puzzle: the screen to type one in.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void enter_cb(lv_event_t *e)
 {

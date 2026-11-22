@@ -21,11 +21,11 @@ static lv_chart_series_t *s_se_ram;                 /**< its line */
 
 /**
  * @brief One heap's row: free of total, its bar, and the line under it.
- * @param caps      which heap (MALLOC_CAP_INTERNAL, MALLOC_CAP_SPIRAM)
- * @param with_min  the low-water mark and the largest free block too (internal RAM only: see sysmon_heap())
- * @param bar       its bar
- * @param val       its value
- * @param sub       the line under the bar
+ * @param[in] caps      which heap (MALLOC_CAP_INTERNAL, MALLOC_CAP_SPIRAM)
+ * @param[in] with_min  the low-water mark and the largest free block too (internal RAM only: see sysmon_heap())
+ * @param[in] bar       its bar
+ * @param[in] val       its value
+ * @param[in] sub       the line under the bar
  */
 static void show_mem_one(uint32_t caps, bool with_min, lv_obj_t *bar, lv_obj_t *val, lv_obj_t *sub)
 {

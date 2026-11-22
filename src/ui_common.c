@@ -239,9 +239,9 @@ void gen_cache_source(uint16_t id, const char *source, int number)
 
 /**
  * @brief a typed-in puzzle's collection and number from the cache (not imported ones: import_of)
- * @param id  the puzzle
- * @param buf  gets "My puzzles #3"
- * @param n  its size
+ * @param[in] id  the puzzle
+ * @param[out] buf  gets "My puzzles #3"
+ * @param[in] n  its size
  * @return false: not a typed-in one
  */
 static bool gen_own_name(uint16_t id, char *buf, size_t n)
@@ -257,15 +257,15 @@ static bool gen_own_name(uint16_t id, char *buf, size_t n)
 
 /**
  * @brief givens, variant, level and daily date of a generated puzzle (any may be NULL); false if unknown
- * @param id  the puzzle
- * @param givens  gets them
- * @param regions  gets Jigsaw's regions
- * @param cages  gets Killer's cages
- * @param marks  gets the marks
- * @param thermos  gets the lines
- * @param variant  gets it
- * @param level  gets it
- * @param day  gets the daily date ("" if none)
+ * @param[in] id  the puzzle
+ * @param[out] givens  gets them
+ * @param[out] regions  gets Jigsaw's regions
+ * @param[out] cages  gets Killer's cages
+ * @param[out] marks  gets the marks
+ * @param[out] thermos  gets the lines
+ * @param[out] variant  gets it
+ * @param[out] level  gets it
+ * @param[out] day  gets the daily date ("" if none)
  * @return false if unknown
  */
 static bool gen_lookup_full(uint16_t id, uint8_t *givens, uint8_t *regions, char *cages, char *marks, char *thermos,
@@ -647,7 +647,7 @@ void ctx_menu_close(void)
 
 /**
  * @brief A tap beside the menu closes it.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void ctx_backdrop_cb(lv_event_t *e)
 {
@@ -658,7 +658,7 @@ static void ctx_backdrop_cb(lv_event_t *e)
 
 /**
  * @brief A menu item tapped: the menu closes and the item's action runs.
- * @param e  the event (user data: the item's action)
+ * @param[in] e  the event (user data: the item's action)
  */
 static void ctx_item_cb(lv_event_t *e)
 {

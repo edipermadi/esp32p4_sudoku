@@ -34,7 +34,7 @@ extern "C" {
 bool statistics_init(void);
 /**
  * @brief Picks a row of the list.
- * @param row  0 all levels, 1.. collection row-1, then the kinds (STATS_LEVEL_KIND())
+ * @param[in] row  0 all levels, 1.. collection row-1, then the kinds (STATS_LEVEL_KIND())
  */
 void statistics_select(int row);
 /**
@@ -50,7 +50,7 @@ int statistics_sel(void);
 bool statistics_ask(void);
 /**
  * @brief Takes sudoku.db's answer as the view shown.
- * @param v  the answer
+ * @param[in] v  the answer
  */
 void statistics_take(const stats_view_t *v);
 /**
@@ -65,16 +65,16 @@ const stats_view_t *statistics_view(void);
 bool is_statistics_from_db(void);
 /**
  * @brief A kind's four levels added up (fastest: the lowest).
- * @param v  the view
- * @param k  the kind (stats_kind_t)
- * @param t  gets the total
+ * @param[in] v  the view
+ * @param[in] k  the kind (stats_kind_t)
+ * @param[out] t  gets the total
  */
 void statistics_kind_total(const stats_view_t *v, int k, stats_level_t *t);
 /**
  * @brief The average of the fewest mistakes per puzzle, as text: "1.4", or "-" when nothing is known.
- * @param buf  gets it
- * @param n    its size
- * @param st   the level
+ * @param[out] buf  gets it
+ * @param[in] n    its size
+ * @param[in] st   the level
  */
 void statistics_avg_mistakes(char *buf, size_t n, const stats_level_t *st);
 
@@ -82,29 +82,29 @@ void statistics_avg_mistakes(char *buf, size_t n, const stats_level_t *st);
  *  @{ */
 /**
  * @brief A scale step that gives at most 5 lines up to a time.
- * @param max  the longest time, seconds
+ * @param[in] max  the longest time, seconds
  * @return the step, seconds
  */
 uint32_t statistics_chart_step(uint32_t max);
 /**
  * @brief The trailing average of up to AVG_WIN solves ending at one.
- * @param v  the view
- * @param i  the solve (0: oldest shown)
+ * @param[in] v  the view
+ * @param[in] i  the solve (0: oldest shown)
  * @return seconds
  */
 uint32_t statistics_chart_avg(const stats_view_t *v, int i);
 /**
  * @brief The fastest of the solves shown.
- * @param v  the view
+ * @param[in] v  the view
  * @return seconds
  */
 uint32_t statistics_fastest(const stats_view_t *v);
 /**
  * @brief The newest AVG_WIN solves against the first AVG_WIN shown.
- * @param v      the view
- * @param first  gets the first ones' average, seconds
- * @param last   gets the newest ones' average, seconds
- * @param pct    gets how much faster the newest are, % (negative: slower)
+ * @param[in] v      the view
+ * @param[out] first  gets the first ones' average, seconds
+ * @param[out] last   gets the newest ones' average, seconds
+ * @param[out] pct    gets how much faster the newest are, % (negative: slower)
  * @return false with fewer than 2 x AVG_WIN solves shown
  */
 bool statistics_trend(const stats_view_t *v, uint32_t *first, uint32_t *last, int *pct);

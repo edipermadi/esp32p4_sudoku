@@ -52,9 +52,9 @@ static volatile bool s_radio_started;       /**< ESP-Hosted transport has been s
 
 /**
  * @brief Reads the saved state from NVS.
- * @param on  gets Wi-Fi on
- * @param ssid  gets the saved network
- * @param pass  gets its password
+ * @param[out] on  gets Wi-Fi on
+ * @param[out] ssid  gets the saved network
+ * @param[out] pass  gets its password
  */
 static void nvs_load(bool *on, char *ssid, char *pass)
 {
@@ -81,9 +81,9 @@ static void nvs_load(bool *on, char *ssid, char *pass)
 
 /**
  * @brief Saves the state in NVS (NULL: that one unchanged).
- * @param on  Wi-Fi on
- * @param ssid  the saved network
- * @param pass  its password
+ * @param[in] on  Wi-Fi on
+ * @param[in] ssid  the saved network
+ * @param[in] pass  its password
  */
 static void nvs_store(const bool *on, const char *ssid, const char *pass)
 {
@@ -109,8 +109,8 @@ static void nvs_store(const bool *on, const char *ssid, const char *pass)
 
 /**
  * @brief Sets the state (under s_lock).
- * @param st  the state
- * @param reason  why it failed (WIFI_ST_FAILED)
+ * @param[in] st  the state
+ * @param[in] reason  why it failed (WIFI_ST_FAILED)
  */
 static void set_state(wifi_state_t st, const char *reason = nullptr)
 {
@@ -124,7 +124,7 @@ static void set_state(wifi_state_t st, const char *reason = nullptr)
 
 /**
  * @brief A disconnect reason in words.
- * @param r  the reason (wifi_err_reason_t)
+ * @param[in] r  the reason (wifi_err_reason_t)
  * @return the text
  */
 static const char *reason_text(uint8_t r)
@@ -148,8 +148,8 @@ static const char *reason_text(uint8_t r)
 
 /**
  * @brief The disconnect event: its reason kept for the worker.
- * @param ev  the event
- * @param info  its data
+ * @param[in] ev  the event
+ * @param[in] info  its data
  */
 static void on_disconnect(arduino_event_id_t ev, arduino_event_info_t info)
 {
@@ -214,8 +214,8 @@ static void radio_forget(void)
 
 /**
  * @brief Starts joining a network.
- * @param ssid  the network
- * @param pass  its password
+ * @param[in] ssid  the network
+ * @param[in] pass  its password
  */
 static void begin_connect(const char *ssid, const char *pass)
 {
@@ -236,7 +236,7 @@ static void begin_connect(const char *ssid, const char *pass)
 
 /**
  * @brief Takes a scan's results: strongest first, one per SSID.
- * @param n  the networks found
+ * @param[in] n  the networks found
  */
 static void collect_scan(int n)
 {
@@ -288,7 +288,7 @@ static void collect_scan(int n)
 
 /**
  * @brief Does a command.
- * @param c  the command
+ * @param[in] c  the command
  */
 static void handle(const cmd_t &c)
 {
@@ -440,7 +440,7 @@ static void poll(void)
 
 /**
  * @brief The worker: commands, and the connect's progress (timeout, the clock from NTP once connected).
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void worker(void *arg)
 {
@@ -463,9 +463,9 @@ static void worker(void *arg)
 
 /**
  * @brief Queues a command for the worker.
- * @param t  the command
- * @param ssid  CMD_CONNECT's network
- * @param pass  its password
+ * @param[in] t  the command
+ * @param[in] ssid  CMD_CONNECT's network
+ * @param[in] pass  its password
  */
 static void send(cmd_type t, const char *ssid = "", const char *pass = "")
 {

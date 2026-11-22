@@ -22,7 +22,7 @@ extern "C" {
 
 /**
  * @brief Asks sudoku.db for a page.
- * @param offset  its first row (\<0: 0)
+ * @param[in] offset  its first row (\<0: 0)
  * @return false without sudoku.db (the list then has no rows)
  */
 bool gameplays_ask(int offset);
@@ -49,8 +49,8 @@ bool is_gameplays_older(void);
 /**
  * @brief Opens a row's solve: its replay, or a video of it. Nothing while a video is being
  *        made, or for a row without a solve.
- * @param i         the row on the page shown
- * @param to_video  true: export it as an MP4 instead of showing it
+ * @param[in] i         the row on the page shown
+ * @param[in] to_video  true: export it as an MP4 instead of showing it
  */
 void gameplays_open(int i, bool to_video);
 

@@ -10,9 +10,9 @@
 
 /**
  * @brief a hidden single (boxes first: the easiest to spot), or -1
- * @param L  the techniques' state
- * @param digit  gets its digit
- * @param unit  gets its unit
+ * @param[in] L  the techniques' state
+ * @param[out] digit  gets its digit
+ * @param[out] unit  gets its unit
  * @return the cell, or -1
  */
 static int find_hidden_single(const logic_t *L, int *digit, int *unit)
@@ -50,8 +50,8 @@ static int find_hidden_single(const logic_t *L, int *digit, int *unit)
 
 /**
  * @brief A naked single: a cell with one candidate left.
- * @param L  the techniques' state
- * @param digit  gets its digit
+ * @param[in] L  the techniques' state
+ * @param[out] digit  gets its digit
  * @return the cell, or -1
  */
 static int find_naked_single(const logic_t *L, int *digit)

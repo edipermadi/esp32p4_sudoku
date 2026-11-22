@@ -89,7 +89,7 @@ static bool make_ggwave(void)
 
 /**
  * @brief Encodes text and starts it playing.
- * @param text  the message
+ * @param[in] text  the message
  */
 static void send_text(const char *text)
 {
@@ -129,7 +129,7 @@ static void send_text(const char *text)
 
 /**
  * @brief "AB$tap 1 2" -> "tap 1 2" (a Gibberlink sender id); false: our own, or empty
- * @param msg  the message, changed in place
+ * @param[in,out] msg  the message, changed in place
  * @return true if it is for us
  */
 static bool take_message(char *msg)
@@ -149,7 +149,7 @@ static bool take_message(char *msg)
 
 /**
  * @brief The worker (core 0): reads the microphones and decodes, sends what's queued; ends when it's off and nothing is left to send.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void worker(void *arg)
 {
@@ -372,8 +372,8 @@ bool is_gibberlink_enabled(void)
 
 /**
  * @brief CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF): the optional "*XXXX" check
- * @param p  the text
- * @param n  its length
+ * @param[in] p  the text
+ * @param[in] n  its length
  * @return the CRC
  */
 static uint16_t crc16(const char *p, size_t n)
@@ -390,8 +390,8 @@ static uint16_t crc16(const char *p, size_t n)
 
 /**
  * @brief "tap 1 2*ABCD": true if it ends in a check (removed); *ok: it matched
- * @param msg  the message, changed in place
- * @param ok  gets whether it matched
+ * @param[in,out] msg  the message, changed in place
+ * @param[out] ok  gets whether it matched
  * @return true if it had a check
  */
 static bool take_check(char *msg, bool *ok)

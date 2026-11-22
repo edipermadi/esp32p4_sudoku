@@ -19,14 +19,14 @@ extern "C" {
 /**
  * @brief Builds the page into a screen. Can be called again after a theme change (the caller deletes the
  *        old screen); the history kept and the tab open stay.
- * @param scr      an empty screen
- * @param back_cb  runs on the back button
+ * @param[in] scr      an empty screen
+ * @param[in] back_cb  runs on the back button
  */
 void sysmon_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb);
 
 /**
  * @brief The page is loaded (refreshed every second from now) or left (the refresh paused).
- * @param shown  true: loaded
+ * @param[in] shown  true: loaded
  */
 void sysmon_ui_set_shown(bool shown);
 

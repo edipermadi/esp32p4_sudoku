@@ -52,10 +52,10 @@ static lv_obj_t *x_player_av;                         /**< ... or the avatar lef
 
 /**
  * @brief A level's fastest and average time as text ("-" for both when nothing is solved).
- * @param fast  gets the fastest
- * @param avg   gets the average
- * @param n     their size
- * @param st    the level
+ * @param[out] fast  gets the fastest
+ * @param[out] avg   gets the average
+ * @param[in] n     their size
+ * @param[in] st    the level
  */
 static void fmt_stat_times(char *fast, char *avg, size_t n, const stats_level_t *st)
 {
@@ -71,8 +71,8 @@ static void fmt_stat_times(char *fast, char *avg, size_t n, const stats_level_t 
 /**
  * @brief The summary's two lines: solved of how many, without mistakes, solves; fastest, average,
  *        mistakes per puzzle.
- * @param st     the level (or all of them)
- * @param count  its puzzles
+ * @param[in] st     the level (or all of them)
+ * @param[in] count  its puzzles
  */
 static void stats_summary(const stats_level_t *st, uint16_t count)
 {
@@ -87,9 +87,9 @@ static void stats_summary(const stats_level_t *st, uint16_t count)
 
 /**
  * @brief The table's columns: their number, widths and headings.
- * @param n     how many
- * @param w     their widths
- * @param head  their headings
+ * @param[in] n     how many
+ * @param[in] w     their widths
+ * @param[in] head  their headings
  */
 static void table_columns(int n, const int32_t *w, const char *const *head)
 {
@@ -102,8 +102,8 @@ static void table_columns(int n, const int32_t *w, const char *const *head)
 
 /**
  * @brief A player's avatar (an image) or, without one, a dot of their colour; not tappable.
- * @param parent  where
- * @param pl      the player (NULL: the first colour's dot)
+ * @param[in] parent  where
+ * @param[in] pl      the player (NULL: the first colour's dot)
  * @return it
  */
 static lv_obj_t *player_avatar_obj(lv_obj_t *parent, const stats_player_t *pl)
@@ -172,7 +172,7 @@ void stats_player_dd_update(void)
  * @brief The open list's avatars (or dots), each left of its name. Drawn after the list (DRAW_POST,
  *        after the dropdown's own: the selected line's highlight is drawn then too, and would cover
  *        children).
- * @param e  the draw event
+ * @param[in] e  the draw event
  */
 static void stats_player_list_draw_cb(lv_event_t *e)
 {
@@ -208,7 +208,7 @@ static void stats_player_list_draw_cb(lv_event_t *e)
 
 /**
  * @brief A player picked: switch to them (the statistics reload when the switch is done).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void stats_player_dd_cb(lv_event_t *e)
 {
@@ -232,8 +232,8 @@ static void stats_select_rows(void)
 /**
  * @brief Shows a view: the list's counts, the dropdown, the title, the summary, and the table (a row
  *        per level for all levels or a kind; a row per solved puzzle for a collection) or the chart.
- * @param v        the view
- * @param from_db  it came from sudoku.db (else from RAM)
+ * @param[in] v        the view
+ * @param[in] from_db  it came from sudoku.db (else from RAM)
  */
 static void render_stats(const stats_view_t *v, bool from_db)
 {
@@ -336,13 +336,13 @@ static void render_stats(const stats_view_t *v, bool from_db)
 
 /**
  * @brief Text on the plot.
- * @param layer  where
- * @param text   the text (copied)
- * @param color  its colour
- * @param x1     its box's left
- * @param y1     its top
- * @param x2     its right
- * @param align  in the box
+ * @param[in] layer  where
+ * @param[in] text   the text (copied)
+ * @param[in] color  its colour
+ * @param[in] x1     its box's left
+ * @param[in] y1     its top
+ * @param[in] x2     its right
+ * @param[in] align  in the box
  */
 static void plot_text(lv_layer_t *layer, const char *text, lv_color_t color, int x1, int y1, int x2,
                       lv_text_align_t align)
@@ -360,14 +360,14 @@ static void plot_text(lv_layer_t *layer, const char *text, lv_color_t color, int
 
 /**
  * @brief A line on the plot, round-ended.
- * @param layer  where
- * @param x1     from x
- * @param y1     from y
- * @param x2     to x
- * @param y2     to y
- * @param color  its colour
- * @param width  its width
- * @param opa    its opacity
+ * @param[in] layer  where
+ * @param[in] x1     from x
+ * @param[in] y1     from y
+ * @param[in] x2     to x
+ * @param[in] y2     to y
+ * @param[in] color  its colour
+ * @param[in] width  its width
+ * @param[in] opa    its opacity
  */
 static void plot_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, lv_color_t color, int width, lv_opa_t opa)
 {
@@ -386,11 +386,11 @@ static void plot_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, lv_colo
 
 /**
  * @brief A dot on the plot.
- * @param layer  where
- * @param x      its centre
- * @param y      ...
- * @param r      its radius
- * @param color  its colour
+ * @param[in] layer  where
+ * @param[in] x      its centre
+ * @param[in] y      ...
+ * @param[in] r      its radius
+ * @param[in] color  its colour
  */
 static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color)
 {
@@ -406,7 +406,7 @@ static void plot_dot(lv_layer_t *layer, int x, int y, int r, lv_color_t color)
 /**
  * @brief Draws the progress chart: the time scale, a dot per solve joined by a faint line, the
  *        average of the last AVG_WIN on top, and the legend.
- * @param e  the draw event
+ * @param[in] e  the draw event
  */
 static void plot_draw_cb(lv_event_t *e)
 {
@@ -476,8 +476,8 @@ static void plot_draw_cb(lv_event_t *e)
 /**
  * @brief The chart (or table) shown, and the text under the chart: how many solves, the fastest, and
  *        the newest 5 against the first 5 (or why there's no chart).
- * @param v        the view
- * @param from_db  it came from sudoku.db
+ * @param[in] v        the view
+ * @param[in] from_db  it came from sudoku.db
  */
 static void chart_render(const stats_view_t *v, bool from_db)
 {
@@ -523,7 +523,7 @@ static void chart_render(const stats_view_t *v, bool from_db)
 
 /**
  * @brief Chart / Table: the other one.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void chart_btn_cb(lv_event_t *e)
 {
@@ -533,7 +533,7 @@ static void chart_btn_cb(lv_event_t *e)
 
 /**
  * @brief The (i) button: what the numbers mean, and where they come from.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void stats_info_cb(lv_event_t *e)
 {
@@ -566,7 +566,7 @@ void refresh_stats(void)
 
 /**
  * @brief A row of the list: its statistics.
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void stats_row_cb(lv_event_t *e)
 {
@@ -576,7 +576,7 @@ static void stats_row_cb(lv_event_t *e)
 
 /**
  * @brief The table's look: the header row in muted text on a darker band; numbers right-aligned.
- * @param e  the draw task event
+ * @param[in] e  the draw task event
  */
 static void stats_table_draw_cb(lv_event_t *e)
 {
@@ -717,7 +717,7 @@ void build_stats(void)
 
 /**
  * @brief sudoku.db's answer for the row picked, shown (Settings' card poll hands it over).
- * @param v  the view
+ * @param[in] v  the view
  */
 void stats_take_view(const stats_view_t *v)
 {

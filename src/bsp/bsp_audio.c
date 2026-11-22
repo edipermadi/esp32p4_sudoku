@@ -45,8 +45,8 @@ static uint32_t s_rate = 0;             /**< the sample rate, Hz */
 
 /**
  * @brief Writes a codec register.
- * @param reg  the register
- * @param val  its value
+ * @param[in] reg  the register
+ * @param[in] val  its value
  * @return ESP_OK, or why not
  */
 static esp_err_t es_wr(uint8_t reg, uint8_t val)
@@ -57,8 +57,8 @@ static esp_err_t es_wr(uint8_t reg, uint8_t val)
 
 /**
  * @brief Reads a codec register.
- * @param reg  the register
- * @param val  gets its value
+ * @param[in] reg  the register
+ * @param[out] val  gets its value
  * @return ESP_OK, or why not
  */
 static esp_err_t es_rd(uint8_t reg, uint8_t *val)
@@ -68,9 +68,9 @@ static esp_err_t es_rd(uint8_t reg, uint8_t *val)
 
 /**
  * @brief Read-modify-write a codec register: the bits in keep kept, those in set set.
- * @param reg  the register
- * @param keep  the bits kept
- * @param set  the bits set
+ * @param[in] reg  the register
+ * @param[in] keep  the bits kept
+ * @param[in] set  the bits set
  * @return ESP_OK, or why not
  */
 static esp_err_t es_rmw(uint8_t reg, uint8_t keep, uint8_t set)
@@ -82,7 +82,7 @@ static esp_err_t es_rmw(uint8_t reg, uint8_t keep, uint8_t set)
 
 /**
  * @brief A rate the codec's clocking supports.
- * @param r  the rate, Hz
+ * @param[in] r  the rate, Hz
  * @return true if so
  */
 static bool is_rate_supported(uint32_t r)
@@ -98,7 +98,7 @@ static bool is_rate_supported(uint32_t r)
 
 /**
  * @brief
- * @param rate  Hz
+ * @param[in] rate  Hz
  * @return ESP_OK, or why not
  */
 static esp_err_t es8311_set_clock(uint32_t rate)
@@ -116,7 +116,7 @@ static esp_err_t es8311_set_clock(uint32_t rate)
 
 /**
  * @brief Brings up the codec: DAC only, slave mode, at the rate.
- * @param sample_rate  Hz
+ * @param[in] sample_rate  Hz
  * @return ESP_OK, or why not
  */
 static esp_err_t es8311_init(uint32_t sample_rate)
@@ -332,8 +332,8 @@ void bsp_audio_release(void)
 
 /**
  * @brief Writes a mic ADC register.
- * @param reg  the register
- * @param val  its value
+ * @param[in] reg  the register
+ * @param[in] val  its value
  * @return ESP_OK, or why not
  */
 static esp_err_t ad_wr(uint8_t reg, uint8_t val)
@@ -344,8 +344,8 @@ static esp_err_t ad_wr(uint8_t reg, uint8_t val)
 
 /**
  * @brief Reads a mic ADC register.
- * @param reg  the register
- * @param val  gets its value
+ * @param[in] reg  the register
+ * @param[out] val  gets its value
  * @return ESP_OK, or why not
  */
 static esp_err_t ad_rd(uint8_t reg, uint8_t *val)
@@ -355,9 +355,9 @@ static esp_err_t ad_rd(uint8_t reg, uint8_t *val)
 
 /**
  * @brief Updates a mic ADC register: the bits in mask from val.
- * @param reg  the register
- * @param mask  the bits changed
- * @param val  their values
+ * @param[in] reg  the register
+ * @param[in] mask  the bits changed
+ * @param[in] val  their values
  * @return ESP_OK, or why not
  */
 static esp_err_t ad_upd(uint8_t reg, uint8_t mask, uint8_t val)

@@ -65,8 +65,8 @@ void files_up(void)
 /* ------------------------------------------------------------- reading the folder */
 /**
  * @brief qsort's order: folders first, then by name (any case).
- * @param a  an entry
- * @param b  another
+ * @param[in] a  an entry
+ * @param[in] b  another
  * @return \<0, 0, \>0
  */
 static int entry_cmp(const void *a, const void *b)
@@ -80,7 +80,7 @@ static int entry_cmp(const void *a, const void *b)
 
 /**
  * @brief The scan worker: reads s_scan_path into s_ent, sorted, then ends.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void scan_task(void *arg)
 {

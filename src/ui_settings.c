@@ -51,7 +51,7 @@ static bool fb_dark;                                /**< the screen is dark for 
 
 /**
  * @brief Keeps the screen timeout from firing while the flash is written.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void fb_keep_cb(lv_timer_t *t) { lv_display_trigger_activity(NULL); }
 
@@ -162,7 +162,7 @@ lv_obj_t *settings_dropdown(lv_obj_t *row, const char *options, uint32_t sel, in
  * Takes what the database task finished: statistics, the RAM copy of a player's results, players, imports,
  * messages, reloaded settings; and follows the Data tab's card work (settings_data_poll_usb(),
  * settings_data_poll_card()).
- * @param t  the timer
+ * @param[in] t  the timer
  */
 void sd_poll_cb(lv_timer_t *t)
 {
@@ -295,7 +295,7 @@ void apply_loaded_prefs(void)
 
 /**
  * @brief Turn off, confirmed: black, backlight off, then device_power_off() (never returns).
- * @param e  the event (its user data is the dialog)
+ * @param[in] e  the event (its user data is the dialog)
  */
 static void power_off_confirm_cb(lv_event_t *e)
 {
@@ -314,7 +314,7 @@ static void power_off_confirm_cb(lv_event_t *e)
 
 /**
  * @brief Home's power button: asks before turning the board off.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 void power_off_cb(lv_event_t *e)
 {
@@ -328,7 +328,7 @@ void power_off_cb(lv_event_t *e)
 
 /**
  * @brief Shows a tab of Settings and hides the others.
- * @param tab  ST_NETWORK .. ST_DATA
+ * @param[in] tab  ST_NETWORK .. ST_DATA
  */
 void st_select_tab(int tab)
 {
@@ -346,7 +346,7 @@ void st_select_tab(int tab)
 
 /**
  * @brief A tab button: shows its tab.
- * @param e  the event (its user data is the tab)
+ * @param[in] e  the event (its user data is the tab)
  */
 static void st_tab_cb(lv_event_t *e)
 {
@@ -355,7 +355,7 @@ static void st_tab_cb(lv_event_t *e)
 
 /**
  * @brief The system monitor's back button: Home.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void sysmon_back_cb(lv_event_t *e)
 {
@@ -365,7 +365,7 @@ static void sysmon_back_cb(lv_event_t *e)
 
 /**
  * @brief The file browser's back button: Home.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void files_back_cb(lv_event_t *e)
 {
@@ -506,7 +506,7 @@ lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_c
  * Builds the palette and LVGL theme, rebuilds every screen around the current state (none of which lives
  * in the widgets), shows the new copy of the screen that was open (Home at start-up) and deletes the old
  * screens later (this may be running in one of their events).
- * @param dark  the dark look (dark mode, or night mode now)
+ * @param[in] dark  the dark look (dark mode, or night mode now)
  */
 void apply_theme(bool dark)
 {
@@ -619,15 +619,15 @@ void apply_theme(bool dark)
 bool is_ui_dark(void) { return s_dark; }
 /** @return the Home screen */
 lv_obj_t *screen_home(void) { return scr_home; }
-/** @brief Sets the Home screen. @param v  the value */
+/** @brief Sets the Home screen. @param[in] v  the value */
 void screen_set_home(lv_obj_t *v) { scr_home = v; }
 /** @return the Puzzles screen */
 lv_obj_t *screen_list(void) { return scr_list; }
-/** @brief Sets the Puzzles screen. @param v  the value */
+/** @brief Sets the Puzzles screen. @param[in] v  the value */
 void screen_set_list(lv_obj_t *v) { scr_list = v; }
 /** @return the Statistics screen */
 lv_obj_t *screen_stats(void) { return scr_stats; }
-/** @brief Sets the Statistics screen. @param v  the value */
+/** @brief Sets the Statistics screen. @param[in] v  the value */
 void screen_set_stats(lv_obj_t *v) { scr_stats = v; }
 /** @return the Settings screen */
 lv_obj_t *screen_settings(void) { return scr_settings; }
@@ -635,15 +635,15 @@ lv_obj_t *screen_settings(void) { return scr_settings; }
 lv_obj_t *screen_wifi(void) { return scr_wifi; }
 /** @return the Players screen */
 lv_obj_t *screen_profile(void) { return scr_profile; }
-/** @brief Sets the Players screen. @param v  the value */
+/** @brief Sets the Players screen. @param[in] v  the value */
 void screen_set_profile(lv_obj_t *v) { scr_profile = v; }
 /** @return the History screen */
 lv_obj_t *screen_history(void) { return scr_history; }
-/** @brief Sets the History screen. @param v  the value */
+/** @brief Sets the History screen. @param[in] v  the value */
 void screen_set_history(lv_obj_t *v) { scr_history = v; }
 /** @return the game screen */
 lv_obj_t *screen_game(void) { return scr_game; }
-/** @brief Sets the game screen. @param v  the value */
+/** @brief Sets the game screen. @param[in] v  the value */
 void screen_set_game(lv_obj_t *v) { scr_game = v; }
 /** @return the system monitor screen */
 lv_obj_t *screen_sysmon(void) { return scr_sysmon; }

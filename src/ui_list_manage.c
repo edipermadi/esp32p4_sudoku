@@ -10,7 +10,7 @@
 
 /**
  * @brief The Delete dialog's Delete: the collection deleted, the Saved tab back at its first.
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void list_del_confirm_cb(lv_event_t *e)
 {

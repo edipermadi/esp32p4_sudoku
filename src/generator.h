@@ -152,7 +152,7 @@ typedef enum {
 
 /**
  * @brief A level's name.
- * @param level  0..GEN_LEVELS-1
+ * @param[in] level  0..GEN_LEVELS-1
  * @return "Easy", "Medium", "Hard", "Expert"
  */
 const char *gen_level_name(int level);
@@ -201,7 +201,7 @@ typedef enum {
 
 /**
  * @brief A variant's name.
- * @param variant  0..VAR_COUNT-1
+ * @param[in] variant  0..VAR_COUNT-1
  * @return "Classic", "X-Sudoku", "Mini 6x6", "Hyper", "Jigsaw", "Killer", "Anti-Knight", "Even-Odd",
  *         "Consecutive", "Thermo", "Sandwich", "Kids 4x4", "Anti-King", "Non-Consecutive",
  *         "Disjoint Groups", "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow",
@@ -371,15 +371,15 @@ enum {
 void sudoku_geom_init(void);
 /**
  * @brief The fixed variants; unknown ones, and VAR_JIGSAW (which needs its regions), give classic.
- * @param variant  sudoku_variant_t
+ * @param[in] variant  sudoku_variant_t
  * @return its board
  */
 const sudoku_geom_t *sudoku_geom(int variant);
 /**
  * @brief A Jigsaw board from its region map (81 cells, region 0..8 each, 9 cells
  * per region) into out; false if the map isn't one.
- * @param regions  the region of each cell
- * @param out  gets the board
+ * @param[in] regions  the region of each cell
+ * @param[out] out  gets the board
  * @return false if the map isn't one
  */
 bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
@@ -387,16 +387,16 @@ bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
  * @brief A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
  * (cells 0..80 row by row, each in one cage at most), into out; false if
  * the text isn't one. sudoku_cages_text() writes it (false: buf too small).
- * @param text  the cages
- * @param out  gets the board
+ * @param[in] text  the cages
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Killer board's cages as text (sudoku_geom_killer_text()'s form).
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
@@ -406,17 +406,17 @@ bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
  * Consecutive '0'-'3' (bit 1 = a bar to the right, bit 2 = a bar below);
  * Kropki, XV, Greater-Than '0'-'8': the mark to the right + 3 x the mark below
  * (MARK_*). sudoku_marks_text() writes it (buf: at least 82).
- * @param variant  VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV or VAR_GT
- * @param text  the marks
- * @param out  gets the board
+ * @param[in] variant  VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV or VAR_GT
+ * @param[in] text  the marks
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out);
 /**
  * @brief A board's marks as text (sudoku_geom_marks()'s form).
- * @param g  the board
- * @param buf  gets it (82 at least)
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it (82 at least)
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
@@ -424,8 +424,8 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
  * @brief A Thermo board from its thermometers as text: "cell,cell,...;cell,..."
  * (each from its bulb; cells 0..80, side by side or diagonal neighbours, on
  * one thermometer at most); sudoku_thermos_text() writes it.
- * @param text  the thermometers
- * @param out  gets the board
+ * @param[in] text  the thermometers
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
@@ -434,18 +434,18 @@ bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
  * Palindrome, Region Sum, Zipper, Between Lines: its circles at both ends, Entropic, Modular);
  * sudoku_thermos_text() writes them all. A Palindrome line's cells that mirror each other mustn't see
  * each other (they hold the same digit); a Between, Entropic or Modular line has 3 cells at least.
- * @param variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM,
+ * @param[in] variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM,
  *                 VAR_ZIPPER, VAR_BETWEEN, VAR_ENTROPIC or VAR_MODULAR
- * @param text  the lines
- * @param out  gets the board
+ * @param[in] text  the lines
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out);
 /**
  * @brief A board's lines as text (sudoku_geom_lines_text()'s form).
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
@@ -453,16 +453,16 @@ bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
  * @brief A Sandwich board from its clues as text: 18 numbers 0..35, the rows top
  * to bottom then the columns left to right, comma-separated;
  * sudoku_sandwich_text() writes it.
- * @param text  the clues
- * @param out  gets the board
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_sandwich_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Sandwich board's clues as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len);
@@ -470,16 +470,16 @@ bool sudoku_sandwich_text(const sudoku_geom_t *g, char *buf, int len);
  * @brief A Skyscraper board from its clues as text: 18 numbers 0..9 (0: no clue), the rows from the
  * left top to bottom, then the columns from the top left to right, comma-separated (kept in
  * marks); sudoku_sky_text() writes it.
- * @param text  the clues
- * @param out  gets the board
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_sky_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Skyscraper board's clues as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_sky_text(const sudoku_geom_t *g, char *buf, int len);
@@ -493,32 +493,32 @@ enum {
  * @brief An Outside Sudoku board from its clues as text: 18 entries, comma-separated: 0 (no clue) or
  * 1-3 different digits 1-9 (e.g. "37"), the rows from the left top to bottom, then the columns from
  * the top left to right (kept in marks); sudoku_outside_text() writes it.
- * @param text  the clues
- * @param out  gets the board
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_outside_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief An Outside Sudoku board's clues as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_outside_text(const sudoku_geom_t *g, char *buf, int len);
 /**
  * @brief A Rossini board from its arrows as text: 18 numbers 0..2 (ROSSINI_*), the rows from the left,
  * then the columns from the top, comma-separated (kept in marks); sudoku_rossini_text() writes it.
- * @param text  the arrows
- * @param out  gets the board
+ * @param[in] text  the arrows
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_rossini_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Rossini board's arrows as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_rossini_text(const sudoku_geom_t *g, char *buf, int len);
@@ -526,16 +526,16 @@ bool sudoku_rossini_text(const sudoku_geom_t *g, char *buf, int len);
  * @brief An X-Sums board from its clues as text: 18 numbers 0..45 (0: no clue), the rows from the
  * left top to bottom, then the columns from the top left to right, comma-separated (kept in
  * marks, like Skyscraper's); sudoku_xsum_text() writes it.
- * @param text  the clues
- * @param out  gets the board
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_xsum_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief An X-Sums board's clues as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_xsum_text(const sudoku_geom_t *g, char *buf, int len);
@@ -543,31 +543,31 @@ bool sudoku_xsum_text(const sudoku_geom_t *g, char *buf, int len);
  * @brief A Frame board from its clues as text: 18 numbers, 0 (no clue) or 6..24, the rows from the
  * left top to bottom, then the columns from the top left to right, comma-separated (kept in marks,
  * like Skyscraper's); sudoku_frame_text() writes it.
- * @param text  the clues
- * @param out  gets the board
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_frame_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Frame board's clues as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_frame_text(const sudoku_geom_t *g, char *buf, int len);
 /**
  * @brief X-Sums: the first digits (X) a clue allows: X itself and X - 1 other digits must be able to
  * add up to it (1: X = 1; 2: none; 45: X = 9).
- * @param clue  the clue, 1..45
+ * @param[in] clue  the clue, 1..45
  * @return the digits (bit d = d)
  */
 uint16_t sudoku_xsum_firsts(int clue);
 /**
  * @brief X-Sums: the clue of a row or column with these digits in it (the sum of the first X
  * from the clue's side, X being the first).
- * @param vals  the cells
- * @param lu  the row (0..8, from the left) or column (9..17, from the top)
+ * @param[in] vals  the cells
+ * @param[in] lu  the row (0..8, from the left) or column (9..17, from the top)
  * @return the sum, 0 if the first X aren't all filled
  */
 int sudoku_xsum_of(const uint8_t vals[81], int lu);
@@ -576,16 +576,16 @@ int sudoku_xsum_of(const uint8_t vals[81], int lu);
  * "t3,r,21;l5,u,14" (t: above column 0..8, l: left of row 0..8; r down-right, l down-left
  * (from the top only), u up-right (from the left only)), kept where Killer keeps its cages;
  * sudoku_lk_text() writes it.
- * @param text  the clues
- * @param out  gets the board
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_lk_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Little Killer board's clues as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_lk_text(const sudoku_geom_t *g, char *buf, int len);
@@ -593,16 +593,16 @@ bool sudoku_lk_text(const sudoku_geom_t *g, char *buf, int len);
  * @brief A Quadruple board from its circles as text: "cell:digits;cell:digits;..." (cell
  * 0..79 the top-left of the four, not in the last column; 1-4 digits 1-9 each);
  * sudoku_quads_text() writes it. Kept where Killer keeps its cages.
- * @param text  the circles
- * @param out  gets the board
+ * @param[in] text  the circles
+ * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_quad_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Quadruple board's circles as text.
- * @param g  the board
- * @param buf  gets it
- * @param len  its size
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false: buf too small
  */
 bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len);
@@ -610,40 +610,40 @@ bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len);
 /**
  * @brief Kropki, XV, Greater-Than: may a (the left / top cell) and b (its neighbour) stand
  * with that mark between them?
- * @param kind  EDGE_*
- * @param mark  MARK_* (0: none)
- * @param a  the left / top cell's digit
- * @param b  its neighbour's
+ * @param[in] kind  EDGE_*
+ * @param[in] mark  MARK_* (0: none)
+ * @param[in] a  the left / top cell's digit
+ * @param[in] b  its neighbour's
  * @return true if they may
  */
 bool is_sudoku_edge_ok(int kind, int mark, int a, int b);
 /**
  * @brief Region Sum Lines: the line's digits added up box by box (a box it enters twice counts
  * once, both parts together).
- * @param g  the board
- * @param t  the line
- * @param vals  the cells, 0 = empty
- * @param sum  gets each part's sum, in the order the line enters the boxes (9 at most)
- * @param full  gets whether each part is filled
+ * @param[in] g  the board
+ * @param[in] t  the line
+ * @param[in] vals  the cells, 0 = empty
+ * @param[out] sum  gets each part's sum, in the order the line enters the boxes (9 at most)
+ * @param[out] full  gets whether each part is filled
  * @return the parts
  */
 int sudoku_regionsum_parts(const sudoku_geom_t *g, int t, const uint8_t vals[81], int sum[9], bool full[9]);
 /**
  * @brief Quadruple: how many of circle q's digits the filled cells of vals still miss
  * (*empty: its empty cells)
- * @param g  the board
- * @param q  the circle
- * @param vals  the cells, 0 = empty
- * @param empty  gets its empty cells
+ * @param[in] g  the board
+ * @param[in] q  the circle
+ * @param[in] vals  the cells, 0 = empty
+ * @param[out] empty  gets its empty cells
  * @return the digits missed
  */
 int sudoku_quad_missing(const sudoku_geom_t *g, int q, const uint8_t vals[81], int *empty);
 
 /**
  * @brief Two cells share a unit (or a cage).
- * @param g  the board
- * @param a  a cell
- * @param b  another
+ * @param[in] g  the board
+ * @param[in] a  a cell
+ * @param[in] b  another
  * @return true if so
  */
 static inline bool is_sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
@@ -653,8 +653,8 @@ static inline bool is_sudoku_geom_peer(const sudoku_geom_t *g, int a, int b)
 
 /**
  * @brief A cell is on a diagonal that is a unit (X-Sudoku).
- * @param g  the board
- * @param cell  the cell
+ * @param[in] g  the board
+ * @param[in] cell  the cell
  * @return true if so
  */
 static inline bool is_sudoku_geom_on_diag(const sudoku_geom_t *g, int cell)
@@ -665,8 +665,8 @@ static inline bool is_sudoku_geom_on_diag(const sudoku_geom_t *g, int cell)
 
 /**
  * @brief in a Hyper window: -1, or the window 0..3
- * @param g  the board
- * @param cell  the cell
+ * @param[in] g  the board
+ * @param[in] cell  the cell
  * @return -1, or the window 0..3
  */
 static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
@@ -680,8 +680,8 @@ static inline int sudoku_geom_window(const sudoku_geom_t *g, int cell)
 
 /**
  * @brief on the Asterisk (9x9: rows and columns 1, 2, 4, 6, 7 around the centre)
- * @param g  the board
- * @param cell  the cell
+ * @param[in] g  the board
+ * @param[in] cell  the cell
  * @return true if so
  */
 static inline bool is_sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
@@ -707,8 +707,8 @@ static inline bool is_sudoku_geom_on_asterisk(const sudoku_geom_t *g, int cell)
 
 /**
  * @brief a box's centre on a Center Dot board (rows and columns 2, 5 and 8, counted from 1)
- * @param g  the board
- * @param cell  the cell
+ * @param[in] g  the board
+ * @param[in] cell  the cell
  * @return true if so
  */
 static inline bool is_sudoku_geom_on_centerdot(const sudoku_geom_t *g, int cell)
@@ -719,8 +719,8 @@ static inline bool is_sudoku_geom_on_centerdot(const sudoku_geom_t *g, int cell)
 /**
  * @brief Entropic, Modular Lines: the group a digit belongs to (Entropic: 1-3, 4-6, 7-9; Modular:
  * its remainder mod 3)
- * @param kind  LINE_ENTROPIC or LINE_MODULAR
- * @param d  the digit, 1..9
+ * @param[in] kind  LINE_ENTROPIC or LINE_MODULAR
+ * @param[in] d  the digit, 1..9
  * @return 0, 1 or 2
  */
 static inline int sudoku_line_group(int kind, int d)
@@ -730,8 +730,8 @@ static inline int sudoku_line_group(int kind, int d)
 
 /**
  * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot
- * @param g  the board
- * @param cell  the cell
+ * @param[in] g  the board
+ * @param[in] cell  the cell
  * @return true if so
  */
 static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
@@ -754,12 +754,12 @@ void sudoku_gen_yield(void);
  * closest one found (*got_level says what it is). False only if out of
  * tries for anything at all (shouldn't happen). Not reentrant: one
  * generator at a time.
- * @param variant  sudoku_variant_t
- * @param level  the level
- * @param seed  any random number
- * @param givens  gets the puzzle
- * @param board  gets its board, or NULL
- * @param got_level  gets the level it is
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] level  the level
+ * @param[in] seed  any random number
+ * @param[out] givens  gets the puzzle
+ * @param[out] board  gets its board, or NULL
+ * @param[out] got_level  gets the level it is
  * @return false only if out of tries for anything at all
  */
 bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], sudoku_geom_t *board,
@@ -768,24 +768,24 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
 /**
  * @brief Level of a puzzle by the techniques it needs; -1 if it doesn't have
  * exactly one solution. (Generator task.)
- * @param g  the board
- * @param givens  the puzzle
+ * @param[in] g  the board
+ * @param[in] givens  the puzzle
  * @return gen_level_t, or -1
  */
 int sudoku_grade(const sudoku_geom_t *g, const uint8_t givens[81]);
 
 /**
  * @brief Number of solutions, counting up to limit. (Generator task.)
- * @param g  the board
- * @param cells  the puzzle
- * @param limit  stop counting there
+ * @param[in] g  the board
+ * @param[in] cells  the puzzle
+ * @param[in] limit  stop counting there
  * @return the solutions, at most limit
  */
 int sudoku_count_solutions(const sudoku_geom_t *g, const uint8_t cells[81], int limit);
 /**
  * @brief A classic puzzle has exactly one solution (its own scratch: for the
  * database task, which checks imported puzzles while the generator may run).
- * @param cells  the puzzle
+ * @param[in] cells  the puzzle
  * @return true if so
  */
 bool is_sudoku_classic_unique(const uint8_t cells[81]);
@@ -793,8 +793,8 @@ bool is_sudoku_classic_unique(const uint8_t cells[81]);
  * @brief The same on any board (its own work space, like is_sudoku_classic_unique: for the
  * database task's import, alongside the UI's own solving); gives up (false) on a
  * puzzle that takes too long.
- * @param g  the board
- * @param cells  the puzzle
+ * @param[in] g  the board
+ * @param[in] cells  the puzzle
  * @return true if so
  */
 bool is_sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
@@ -803,10 +803,10 @@ bool is_sudoku_unique(const sudoku_geom_t *g, const uint8_t cells[81]);
  * @brief Digit d may go in the empty cell by every rule of the board, as far as the digits in vals
  * (filled, 0 = empty) tell: no solving ahead, just the rules against what's there (the
  * variant pages' worked examples, tools/variant_examples.c).
- * @param g  the board
- * @param vals  the cells, 0 = empty
- * @param cell  the cell
- * @param d  the digit
+ * @param[in] g  the board
+ * @param[in] vals  the cells, 0 = empty
+ * @param[in] cell  the cell
+ * @param[in] d  the digit
  * @return true if it fits
  */
 bool is_sudoku_fits(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
@@ -840,10 +840,10 @@ enum {
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
- * @param g  the board
- * @param vals  the cells, 0 = empty
- * @param cell  the cell
- * @param d  the digit
+ * @param[in] g  the board
+ * @param[in] vals  the cells, 0 = empty
+ * @param[in] cell  the cell
+ * @param[in] d  the digit
  * @return FIT_OK, or the first rule that rules d out
  */
 int sudoku_fits_why(const sudoku_geom_t *g, const uint8_t vals[81], int cell, int d);
@@ -851,18 +851,18 @@ int sudoku_fits_why(const sudoku_geom_t *g, const uint8_t vals[81], int cell, in
 /**
  * @brief Solves `cells` (81, row-major, 0 = empty) into `out`. False if the givens
  * break a rule or there is no solution. Milliseconds on the ESP32-P4. (UI task.)
- * @param g  the board
- * @param cells  the puzzle
- * @param out  gets the solution
+ * @param[in] g  the board
+ * @param[in] cells  the puzzle
+ * @param[out] out  gets the solution
  * @return false if the givens break a rule or there is no solution
  */
 bool sudoku_solve(const sudoku_geom_t *g, const uint8_t cells[81], uint8_t out[81]);
 
 /**
  * @brief A unit's cell.
- * @param g  the board
- * @param unit  the unit
- * @param k  0..n-1
+ * @param[in] g  the board
+ * @param[in] unit  the unit
+ * @param[in] k  0..n-1
  * @return its k-th cell, or -1
  */
 int sudoku_unit_cell(const sudoku_geom_t *g, int unit, int k);
@@ -943,10 +943,10 @@ typedef struct {
 /**
  * @brief The next step a person would take on the board vals (81, 0 = empty;
  * givens included), knowing the solution. False if the board is full.
- * @param g  the board
- * @param vals  the cells, 0 = empty
- * @param solution  the solution
- * @param out  gets the step
+ * @param[in] g  the board
+ * @param[in] vals  the cells, 0 = empty
+ * @param[in] solution  the solution
+ * @param[out] out  gets the step
  * @return false if the board is full
  */
 bool sudoku_next_step(const sudoku_geom_t *g, const uint8_t vals[81], const uint8_t solution[81], sudoku_step_t *out);
@@ -957,11 +957,11 @@ bool sudoku_next_step(const sudoku_geom_t *g, const uint8_t vals[81], const uint
  * now, and after that technique (and nothing else) one appears. *out is then that
  * single with the technique in out->tech, like sudoku_next_step() gives it. The
  * technique may not be the only way forward; it is one that works there.
- * @param g  the board
- * @param vals  the cells, 0 = empty
- * @param solution  the solution
- * @param tech  tech_kind_t
- * @param out  gets the single
+ * @param[in] g  the board
+ * @param[in] vals  the cells, 0 = empty
+ * @param[in] solution  the solution
+ * @param[in] tech  tech_kind_t
+ * @param[out] out  gets the single
  * @return true if it opens one up
  */
 bool sudoku_step_with(const sudoku_geom_t *g, const uint8_t vals[81], const uint8_t solution[81], int tech,

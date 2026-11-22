@@ -42,7 +42,7 @@ typedef enum {
 
 /**
  * @brief The lock to show.
- * @param force  the lock button on Home: even with the lock Off, as Swipe
+ * @param[in] force  the lock button on Home: even with the lock Off, as Swipe
  * @return a store_lock_t: LOCK_OFF (none), LOCK_SWIPE or LOCK_PIN
  */
 int lock_mode_shown(bool force);
@@ -50,8 +50,8 @@ int lock_mode_shown(bool force);
 void lock_begin(void);
 /**
  * @brief A key on the lock screen's pad.
- * @param k    '0'..'9', or '<' (backspace)
- * @param now  the time, ms (lv_tick_get())
+ * @param[in] k    '0'..'9', or '<' (backspace)
+ * @param[in] now  the time, ms (lv_tick_get())
  * @return what it did
  */
 lock_key_t lock_key(char k, uint32_t now);
@@ -67,8 +67,8 @@ int lock_len(void);
 int lock_tries_left(void);
 /**
  * @brief The wait after too many tries.
- * @param now    the time, ms (lv_tick_get())
- * @param ended  gets true once, when the wait has just ended
+ * @param[in] now    the time, ms (lv_tick_get())
+ * @param[out] ended  gets true once, when the wait has just ended
  * @return ms left (0: not waiting)
  */
 int32_t lock_wait_left(uint32_t now, bool *ended);
@@ -77,7 +77,7 @@ int32_t lock_wait_left(uint32_t now, bool *ended);
 void pin_setup_begin(void);
 /**
  * @brief A key on the PIN setup screen's pad.
- * @param k  '0'..'9', or '<' (backspace)
+ * @param[in] k  '0'..'9', or '<' (backspace)
  * @return what it did
  */
 pin_setup_t pin_setup_key(char k);

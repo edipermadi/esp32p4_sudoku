@@ -94,7 +94,7 @@ static bool tr_clock_tabs(void)
 
 /**
  * @brief Shows a tab (its button checked, its pane shown) and asks for what it shows.
- * @param tab  0 Achievements, 1 Daily, TR_WEEK, TR_RECORDS
+ * @param[in] tab  0 Achievements, 1 Daily, TR_WEEK, TR_RECORDS
  */
 static void tr_select_tab(int tab)
 {
@@ -109,7 +109,7 @@ static void tr_select_tab(int tab)
 
 /**
  * @brief A tab's button: that tab.
- * @param e  the event (user data: the tab)
+ * @param[in] e  the event (user data: the tab)
  */
 static void tr_tab_cb(lv_event_t *e)
 {
@@ -119,7 +119,7 @@ static void tr_tab_cb(lv_event_t *e)
 /**
  * @brief Home's Trophies button: the screen, on the tab shown last (Daily on today, Weekly on this
  *        week).
- * @param e  the event
+ * @param[in] e  the event
  */
 void trophy_cb(lv_event_t *e)
 {
@@ -203,7 +203,7 @@ static char s_toast_text[200];            /**< the toast's text: "Achievement un
 /**
  * @brief "Achievement unlocked" at the top of the screen, a moment after the Solved dialog, with a
  *        chime; gone after 5 s.
- * @param t  the one-shot timer
+ * @param[in] t  the one-shot timer
  */
 static void trophy_toast_cb(lv_timer_t *t)
 {
@@ -250,5 +250,5 @@ void trophy_toast_poll(void)
 lv_obj_t *screen_trophy(void) { return scr_trophy; }
 /** @brief Home's Trophies button line. @return it (NULL before Home is built) */
 lv_obj_t *home_trophy_sub(void) { return h_trophy_sub; }
-/** @brief Sets Home's Trophies button line (Home builds it). @param v the label */
+/** @brief Sets Home's Trophies button line (Home builds it). @param[in] v the label */
 void home_set_trophy_sub(lv_obj_t *v) { h_trophy_sub = v; }

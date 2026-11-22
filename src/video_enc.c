@@ -16,7 +16,7 @@
 #define OUT_MAX (512 * 1024)              /**< one encoded frame */
 /**
  * @brief Prints the internal RAM free and its largest block (the encoder needs ~52 KB in one piece).
- * @param when  before or after what
+ * @param[in] when  before or after what
  */
 static void log_internal(const char *when)
 {
@@ -52,10 +52,10 @@ struct video_enc {
  * (pre-v3 ESP32-P4 takes only this): even lines "u y y u y y ...", odd lines
  * "v y y v y y ...". One U and one V per 2x2 block, from the block's average
  * colour. BT.601 limited range, as H.264 players expect by default.
- * @param src  the picture
- * @param dst  gets the YUV
- * @param w  px
- * @param h  px
+ * @param[in] src  the picture
+ * @param[out] dst  gets the YUV
+ * @param[in] w  px
+ * @param[in] h  px
  */
 static void rgb888_to_ouyy_evyy(const uint8_t *src, uint8_t *dst, int w, int h)
 {
@@ -134,8 +134,8 @@ video_enc_t *video_enc_open(const char *path, int width, int height, int fps, in
 /**
  * @brief RGB888 (64-byte aligned, a whole number of cache lines: the caller's frame buffer)
  * -> v->yuv, by the PPA; false if it couldn't
- * @param v  the encoder
- * @param rgb888  the picture
+ * @param[in] v  the encoder
+ * @param[in] rgb888  the picture
  * @return false: it couldn't
  */
 static bool ppa_convert(video_enc_t *v, const uint8_t *rgb888)
@@ -188,7 +188,7 @@ bool video_enc_frame(video_enc_t *v, const uint8_t *rgb888, bool changed)
 
 /**
  * @brief Frees the encoder's buffers, the PPA and the encoder (not the file).
- * @param v  it
+ * @param[in] v  it
  */
 static void release(video_enc_t *v)
 {

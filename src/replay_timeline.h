@@ -28,22 +28,22 @@ extern "C" {
 
 /**
  * @brief Loads a log: the puzzle's givens and board, the moves and when each plays.
- * @param given  the puzzle's givens (81 cells, copied)
- * @param geo    its board (kept: it must stay valid while the log is played)
- * @param moves  the moves (copied)
- * @param n      how many (at most GAME_MOVES_MAX are kept)
+ * @param[in] given  the puzzle's givens (81 cells, copied)
+ * @param[in] geo    its board (kept: it must stay valid while the log is played)
+ * @param[in] moves  the moves (copied)
+ * @param[in] n      how many (at most GAME_MOVES_MAX are kept)
  * @return false if out of memory
  */
 bool replay_prepare(const uint8_t given[81], const sudoku_geom_t *geo, const game_move_t *moves, int n);
 /**
  * @brief Goes to a step.
- * @param k             0 .. replay_n() (clamped)
- * @param keep_playing  false: stops
+ * @param[in] k             0 .. replay_n() (clamped)
+ * @param[in] keep_playing  false: stops
  */
 void replay_seek(int k, bool keep_playing);
 /**
  * @brief Plays on, by the time since the last call (at the speed chosen).
- * @param dt  milliseconds
+ * @param[in] dt  milliseconds
  * @return true if the board changed or playing stopped (draw it)
  */
 bool replay_tick(uint32_t dt);
@@ -58,8 +58,8 @@ void replay_next_speed(void);
 int replay_speed_x(void);
 /**
  * @brief Sets the step and whether it plays, as they are (a video's frame).
- * @param k        the step
- * @param playing  whether it plays
+ * @param[in] k        the step
+ * @param[in] playing  whether it plays
  */
 void replay_set(int k, bool playing);
 /**
@@ -79,13 +79,13 @@ int replay_n(void);
 bool is_replay_playing(void);
 /**
  * @brief The game clock at a step: when move k-1 was made.
- * @param k  the step (0: 0)
+ * @param[in] k  the step (0: 0)
  * @return milliseconds
  */
 uint32_t replay_ms_at(int k);
 /**
  * @brief When a step plays on the replay's timeline (pauses shortened).
- * @param k  the step (0: 0)
+ * @param[in] k  the step (0: 0)
  * @return milliseconds
  */
 uint32_t replay_vt_at(int k);
@@ -96,16 +96,16 @@ uint32_t replay_vt_at(int k);
 const sudoku_geom_t *replay_geom(void);
 /**
  * @brief Whether a cell is a given.
- * @param i  the cell
+ * @param[in] i  the cell
  * @return its given digit, 0 if none
  */
 uint8_t replay_given(int i);
 /**
  * @brief The board at the step shown: each cell's digit and how it was put there, which break a
  *        rule, and the last move's cell.
- * @param val   gets each cell's digit (0: empty)
- * @param kind  gets each cell's MOVE_HAND / MOVE_FILL
- * @param bad   gets whether each cell's digit (not a given) breaks a rule
+ * @param[out] val   gets each cell's digit (0: empty)
+ * @param[out] kind  gets each cell's MOVE_HAND / MOVE_FILL
+ * @param[out] bad   gets whether each cell's digit (not a given) breaks a rule
  * @return the last move's cell, -1 at the start
  */
 int replay_board(uint8_t val[81], uint8_t kind[81], bool bad[81]);

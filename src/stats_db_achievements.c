@@ -186,7 +186,7 @@ _Static_assert(sizeof(ACH) / sizeof(ACH[0]) <= STATS_ACH_MAX, "raise STATS_ACH_M
 
 /**
  * @brief Days since 1970-01-01 of a date (proleptic Gregorian).
- * @param d  'YYYY-MM-DD'
+ * @param[in] d  'YYYY-MM-DD'
  * @return the days, or INT32_MIN if it isn't a date
  */
 static int32_t day_number(const char *d)

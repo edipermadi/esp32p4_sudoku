@@ -38,9 +38,9 @@ void sdb_do_saved_list(void)
 
 /**
  * @brief One number from a query with one int parameter.
- * @param sql       the query
- * @param a1        ?1 (bound if the query has a parameter)
- * @param fallback  the answer for none or an error
+ * @param[in] sql       the query
+ * @param[in] a1        ?1 (bound if the query has a parameter)
+ * @param[in] fallback  the answer for none or an error
  * @return the number
  */
 static int query_int_arg(const char *sql, int a1, int fallback)

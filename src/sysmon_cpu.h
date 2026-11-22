@@ -26,19 +26,19 @@ typedef struct {
 } sysmon_load_t;
 /**
  * @brief Forgets the previous reading: the next sysmon_load_permille() only takes one.
- * @param s  the load reader
+ * @param[in,out] s  the load reader
  */
 void sysmon_load_reset(sysmon_load_t *s);
 /**
  * @brief CPU load per core since the previous call, in per mille of the core.
- * @param s        the load reader (its previous reading, updated)
+ * @param[in,out] s        the load reader (its previous reading, updated)
  * @param[out] pm  core 0's and core 1's load, 0..1000
  * @return false on the first call (after sysmon_load_reset()): there's nothing to compare with yet
  */
 bool sysmon_load_permille(sysmon_load_t *s, int pm[2]);
 /**
  * @brief Keeps the temperature sensor on (the page is shown), or lets it be off between readings.
- * @param on  true: on until called with false
+ * @param[in] on  true: on until called with false
  */
 void sysmon_temp_hold(bool on);
 /**

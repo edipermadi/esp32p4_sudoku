@@ -50,7 +50,7 @@ typedef enum {
 void sd_probe_card(void);
 /**
  * @brief Starts card work in a task of its own; follow it with sd_state().
- * @param job  SD_JOB_PROBE: look for a card (then SD_FOUND or SD_NO_CARD); SD_JOB_FORMAT: close
+ * @param[in] job  SD_JOB_PROBE: look for a card (then SD_FOUND or SD_NO_CARD); SD_JOB_FORMAT: close
  *             sudoku.db, format the card FAT32 and start a fresh sudoku.db (then SD_DONE or SD_FAILED)
  * @return false if the task couldn't start
  */
@@ -62,7 +62,7 @@ bool sd_run(sd_job_t job);
 sd_state_t sd_state(void);
 /**
  * @brief Sets the state: the UI puts it back to SD_IDLE once it has shown a result.
- * @param st  the new state
+ * @param[in] st  the new state
  */
 void sd_set_state(sd_state_t st);
 /**
@@ -90,8 +90,8 @@ const char *sd_name(void);
 /**
  * @brief A size in GB with one decimal, as printed on cards ("14.8 GB": 10^9 bytes).
  * @param[out] buf  the text
- * @param n         buf's size
- * @param bytes     the size in bytes
+ * @param[in] n         buf's size
+ * @param[in] bytes     the size in bytes
  */
 void fmt_gb(char *buf, size_t n, uint64_t bytes);
 

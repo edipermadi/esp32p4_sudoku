@@ -15,7 +15,7 @@ static lv_obj_t *tr_play_btn;              /**< Play today's puzzle (today, not 
 
 /**
  * @brief Today's date, as the daily puzzle has it.
- * @param day  gets it, 'YYYY-MM-DD'
+ * @param[out] day  gets it, 'YYYY-MM-DD'
  * @return false while the clock isn't set
  */
 static bool tr_today(char day[12])
@@ -26,7 +26,7 @@ static bool tr_today(char day[12])
 
 /**
  * @brief \< \>: the day before or after, and its leaderboard.
- * @param e  the event (user data: -1 or 1)
+ * @param[in] e  the event (user data: -1 or 1)
  */
 static void tr_day_cb(lv_event_t *e)
 {

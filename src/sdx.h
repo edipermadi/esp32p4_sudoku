@@ -42,8 +42,8 @@ typedef struct {
 
 /**
  * @brief
- * @param line  the line
- * @param p  gets the puzzle
+ * @param[in,out] line  the line
+ * @param[out] p  gets the puzzle
  * @return true if it is a puzzle line
  */
 /** @brief Reads one line (changed in place: the fields are cut out of it). false: it isn't a
@@ -52,8 +52,8 @@ bool sdx_parse(char *line, sdx_puzzle_t *p);
 
 /**
  * @brief
- * @param p  the puzzle
- * @param out  gets its board
+ * @param[in] p  the puzzle
+ * @param[out] out  gets its board
  * @return false: its layout doesn't read
  */
 /** @brief The board of a parsed puzzle (Jigsaw's regions, Killer's cages, ...) into out.
@@ -62,9 +62,9 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out);
 
 /**
  * @brief
- * @param givens  the cells, 0 = empty
- * @param out  gets the text
- * @param n  its size
+ * @param[in] givens  the cells, 0 = empty
+ * @param[out] out  gets the text
+ * @param[in] n  its size
  * @return its length, or -1
  */
 /** @brief givens as text, runs of empty cells packed into letters a-z; its length, or -1
@@ -73,16 +73,16 @@ int sdx_pack_givens(const uint8_t givens[81], char *out, size_t n);
 
 /**
  * @brief
- * @param variant  sudoku_variant_t
- * @param level  gen_level_t, or -1
- * @param givens  the cells, 0 = empty
- * @param regions  Jigsaw's regions
- * @param cages  Killer's cages
- * @param marks  the marks (Kropki, XV, ...)
- * @param thermos  Thermo's lines
- * @param pack  pack the givens
- * @param out  gets the line
- * @param n  its size
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] level  gen_level_t, or -1
+ * @param[in] givens  the cells, 0 = empty
+ * @param[in] regions  Jigsaw's regions
+ * @param[in] cages  Killer's cages
+ * @param[in] marks  the marks (Kropki, XV, ...)
+ * @param[in] thermos  Thermo's lines
+ * @param[in] pack  pack the givens
+ * @param[out] out  gets the line
+ * @param[in] n  its size
  * @return its length, or -1
  */
 /** @brief A line: the variant and level as numbers (level < 0: "-"), the givens packed (pack)

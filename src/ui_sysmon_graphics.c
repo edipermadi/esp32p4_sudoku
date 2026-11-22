@@ -30,8 +30,8 @@ static uint32_t s_draw_us_max;                      /**< the longest (us) */
 /* ------------------------------------------------------------- sources */
 /**
  * @brief LVGL's sysmon report (every 300 ms): its busy %, added up for the next tick's average.
- * @param o        the observer
- * @param subject  the display's perf subject
+ * @param[in] o        the observer
+ * @param[in] subject  the display's perf subject
  */
 static void perf_cb(lv_observer_t *o, lv_subject_t *subject)
 {
@@ -45,7 +45,7 @@ static void perf_cb(lv_observer_t *o, lv_subject_t *subject)
 
 /**
  * @brief A frame drawn (RENDER_START, then RENDER_READY, only when something was redrawn): counted, with its time.
- * @param e  the display's event
+ * @param[in] e  the display's event
  */
 static void disp_ev(lv_event_t *e)
 {
@@ -65,7 +65,7 @@ static void disp_ev(lv_event_t *e)
 
 /**
  * @brief The objects in a tree.
- * @param o  its root (may be NULL)
+ * @param[in] o  its root (may be NULL)
  * @return the root and all under it
  */
 static uint32_t count_tree(lv_obj_t *o)

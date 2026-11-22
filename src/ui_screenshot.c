@@ -20,7 +20,7 @@ static lv_timer_t *ss_timer;                        /**< waits for the task (200
 /**
  * @brief The screenshot task: the frame widened to RGB888, compressed by the JPEG encoder and
  *        written to ss_path (deleted if it fails half way); ss_state says how it went, then it ends.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void ss_task(void *arg)
 {
@@ -76,7 +76,7 @@ static void ss_task(void *arg)
 
 /**
  * @brief Waits for the task, then says where the picture went (or that it failed).
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void ss_poll_cb(lv_timer_t *t)
 {
@@ -100,7 +100,7 @@ static void ss_poll_cb(lv_timer_t *t)
 /**
  * @brief A camera button: the screen copied now, written by a task as screenshots/YYYYMMDD-HHMMSS.jpg
  *        (without the clock: shot-\<seconds since start\>.jpg). One at a time; needs the card.
- * @param e  the event
+ * @param[in] e  the event
  */
 void screenshot_cb(lv_event_t *e)
 {

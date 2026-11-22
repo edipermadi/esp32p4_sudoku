@@ -32,7 +32,7 @@ static const char *l_map[MAX_PER_COLL + MAX_PER_COLL / 10 + 1];   /**< the grid'
 
 /**
  * @brief Whether a puzzle is one of the current player's unfinished games.
- * @param id  the puzzle
+ * @param[in] id  the puzzle
  * @return true: in progress
  */
 bool is_game_in_progress(uint16_t id)
@@ -51,7 +51,7 @@ bool is_game_in_progress(uint16_t id)
 /**
  * @brief The grid's look: solved puzzles green, the ones in progress orange (white numbers); the
  *        places past the collection's end not drawn.
- * @param e  the draw task event
+ * @param[in] e  the draw task event
  */
 static void list_btnm_draw_cb(lv_event_t *e)
 {
@@ -191,7 +191,7 @@ void refresh_list(void)
 
 /**
  * @brief Scrolls the collection column so the one shown is visible.
- * @param anim  animated or not
+ * @param[in] anim  animated or not
  */
 void list_reveal_coll(lv_anim_enable_t anim)
 {
@@ -220,7 +220,7 @@ void show_list(void)
 
 /**
  * @brief A collection in the column: shown.
- * @param e  the event (user data: the collection)
+ * @param[in] e  the event (user data: the collection)
  */
 static void coll_click_cb(lv_event_t *e)
 {
@@ -234,7 +234,7 @@ static void coll_click_cb(lv_event_t *e)
 
 /**
  * @brief Built-in / Saved: that tab, on its last collection.
- * @param e  the event (user data: the tab)
+ * @param[in] e  the event (user data: the tab)
  */
 static void list_tab_cb(lv_event_t *e)
 {
@@ -251,7 +251,7 @@ static void list_tab_cb(lv_event_t *e)
 
 /**
  * @brief A number in the grid: that puzzle, to play.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void btnm_cb(lv_event_t *e)
 {
@@ -269,7 +269,7 @@ static void btnm_cb(lv_event_t *e)
 
 /**
  * @brief The left-hand column card the Puzzles and Statistics screens share.
- * @param parent  the screen
+ * @param[in] parent  the screen
  * @return it
  */
 lv_obj_t *make_coll_column(lv_obj_t *parent)
@@ -288,12 +288,12 @@ lv_obj_t *make_coll_column(lv_obj_t *parent)
 
 /**
  * @brief A row of that column: a name on the left, a small count on the right.
- * @param list      the column
- * @param name      the name
- * @param name_lbl  gets its label
- * @param cnt_lbl   gets the count's label
- * @param cb        a tap on it
- * @param user      the tap's user data
+ * @param[in] list      the column
+ * @param[in] name      the name
+ * @param[out] name_lbl  gets its label
+ * @param[out] cnt_lbl   gets the count's label
+ * @param[in] cb        a tap on it
+ * @param[in] user      the tap's user data
  * @return the row
  */
 lv_obj_t *make_coll_btn(lv_obj_t *list, const char *name, lv_obj_t **name_lbl, lv_obj_t **cnt_lbl,

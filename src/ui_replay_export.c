@@ -19,9 +19,9 @@ static lv_obj_t *rx_lbl;                /**< "Frame 120 of 600   -   1.2 MB" */
 
 /**
  * @brief The invisible display's flush: nothing to send (the picture stays in the frame buffer).
- * @param d     the display
- * @param area  the area drawn
- * @param px    its pixels
+ * @param[in] d     the display
+ * @param[in] area  the area drawn
+ * @param[in] px    its pixels
  */
 static void rx_flush_cb(lv_display_t *d, const lv_area_t *area, uint8_t *px)
 {
@@ -30,7 +30,7 @@ static void rx_flush_cb(lv_display_t *d, const lv_area_t *area, uint8_t *px)
 
 /**
  * @brief The progress dialog's Cancel: the next step ends it.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void rx_cancel_cb(lv_event_t *e)
 {
@@ -39,7 +39,7 @@ static void rx_cancel_cb(lv_event_t *e)
 
 /**
  * @brief Ends the export: the file kept (or deleted), the display and dialog gone, and a notice.
- * @param ok  it was made to the end
+ * @param[in] ok  it was made to the end
  */
 static void rx_finish(bool ok)
 {
@@ -66,7 +66,7 @@ static void rx_finish(bool ok)
 /**
  * @brief The export's timer: draws and encodes frames for up to 30 ms a run (the progress dialog
  *        stays alive), then shows how far it is.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void rx_timer_cb(lv_timer_t *t)
 {

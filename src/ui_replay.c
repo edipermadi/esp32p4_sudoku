@@ -79,8 +79,8 @@ lv_obj_t *replay_screen_camera(void)
 
 /**
  * @brief Goes to a step and draws it.
- * @param k             the step (clamped)
- * @param keep_playing  false: stops
+ * @param[in] k             the step (clamped)
+ * @param[in] keep_playing  false: stops
  */
 static void rp_seek(int k, bool keep_playing)
 {
@@ -90,7 +90,7 @@ static void rp_seek(int k, bool keep_playing)
 
 /**
  * @brief The 40 ms timer: plays on by the time since its last run.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void rp_timer_cb(lv_timer_t *t)
 {
@@ -103,7 +103,7 @@ static void rp_timer_cb(lv_timer_t *t)
 
 /**
  * @brief The controls: start, one back, play / pause, one forward, end, speed.
- * @param e  the event (user data: 0..5)
+ * @param[in] e  the event (user data: 0..5)
  */
 static void rp_btn_cb(lv_event_t *e)
 {
@@ -134,7 +134,7 @@ static void rp_btn_cb(lv_event_t *e)
 
 /**
  * @brief The slider: that step (playing on if it was).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void rp_slider_cb(lv_event_t *e)
 {
@@ -155,7 +155,7 @@ static void rp_close(void)
 
 /**
  * @brief Back.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void rp_back_cb(lv_event_t *e)
 {
@@ -257,11 +257,11 @@ lv_obj_t *replay_screen_build(uint16_t id, const char *sub, const char *player)
 
 /**
  * @brief Opens the Replay screen for a log of a puzzle.
- * @param id      the puzzle
- * @param moves   the log
- * @param n       its length
- * @param sub     the line under the title
- * @param player  whose game (their avatar goes first)
+ * @param[in] id      the puzzle
+ * @param[in] moves   the log
+ * @param[in] n       its length
+ * @param[in] sub     the line under the title
+ * @param[in] player  whose game (their avatar goes first)
  */
 void open_replay(uint16_t id, const game_move_t *moves, int n, const char *sub, const char *player)
 {

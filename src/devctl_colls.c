@@ -12,7 +12,7 @@
 
 /**
  * @brief Sends a collection's name with %XX for spaces, '%' and control bytes (as ls does a file's).
- * @param s  the name
+ * @param[in] s  the name
  */
 static void print_coded(const char *s)
 {
@@ -28,7 +28,7 @@ static void print_coded(const char *s)
 
 /**
  * @brief A hex digit's value.
- * @param c  the character
+ * @param[in] c  the character
  * @return 0..15, or -1 if it isn't one
  */
 static int unhex(char c)

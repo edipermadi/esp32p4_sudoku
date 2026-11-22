@@ -32,9 +32,9 @@ static bool      g_layout_left;         /**< ... and on which side the pad is (L
 /* ------------------------------------------------------------- hints */
 /**
  * @brief A unit's name: "row 3", "column 5", "box 2" ("region 2"), "the top-left diagonal", "the top-left window", ...
- * @param u  the unit
- * @param buf  gets it
- * @param n  its size
+ * @param[in] u  the unit
+ * @param[out] buf  gets it
+ * @param[in] n  its size
  */
 static void unit_name(int u, char *buf, size_t n)
 {
@@ -102,10 +102,10 @@ static const char *units_word(void)
 
 /**
  * @brief "1, 4 or 7" from a candidate bit mask
- * @param mask  the digits (bit d = d)
- * @param last_word  before the last one: "or", "and"
- * @param buf  gets it
- * @param n  its size
+ * @param[in] mask  the digits (bit d = d)
+ * @param[in] last_word  before the last one: "or", "and"
+ * @param[out] buf  gets it
+ * @param[in] n  its size
  */
 static void digit_list(int mask, const char *last_word, char *buf, size_t n)
 {
@@ -127,8 +127,8 @@ static void digit_list(int mask, const char *last_word, char *buf, size_t n)
 
 /**
  * @brief Highlights a unit's cells (keeping a higher mark already there).
- * @param u  the unit
- * @param v  1 = where to look, 2 = the cell
+ * @param[in] u  the unit
+ * @param[in] v  1 = where to look, 2 = the cell
  */
 static void mark_unit(int u, uint8_t v)
 {
@@ -524,7 +524,7 @@ void hint_render(void)
 
 /**
  * @brief Restart confirmed: the game back to its givens.
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void restart_confirm_cb(lv_event_t *e)
 {
@@ -589,7 +589,7 @@ void restart_cb(lv_event_t *e)
 
 /**
  * @brief The time attack's Stop: the run ends (not recorded).
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void atk_stop_cb(lv_event_t *e)
 {
@@ -601,7 +601,7 @@ static void atk_stop_cb(lv_event_t *e)
 
 /**
  * @brief The time attack's Keep going: back to the puzzle.
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void atk_keep_cb(lv_event_t *e)
 {
@@ -642,9 +642,9 @@ void tick_cb(lv_timer_t *t)
 /**
  * @brief Killer: each cage outlined with a dashed line just inside its cells, and
  * its sum small in its top-left cell (cells: the grid's children 9..89)
- * @param grid  the board
- * @param geo  its board
- * @param layer  where
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
  */
 static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
@@ -718,9 +718,9 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
 /**
  * @brief Even-Odd: a ring in each odd cell (even ones are shaded, cell_base_bg);
  * Consecutive: a bar across the line between two cells 1 apart
- * @param grid  the board
- * @param geo  its board
- * @param layer  where
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
  */
 static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
@@ -857,9 +857,9 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
 
 /**
  * @brief Kropki, XV, Greater-Than: each mark on the line between its two cells.
- * @param grid  the board
- * @param geo  its board
- * @param layer  where
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
  */
 static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
@@ -880,9 +880,9 @@ static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
 
 /**
  * @brief Quadruple: each circle with its digits, where its four cells meet.
- * @param grid  the board
- * @param geo  its board
- * @param layer  where
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
  */
 static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
@@ -1020,9 +1020,9 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
 
 /**
  * @brief the board's lines (Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum) through the cells' centres
- * @param grid  the board
- * @param geo  its board
- * @param layer  where
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
  */
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
 {
@@ -1111,7 +1111,7 @@ void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len)
 
 /**
  * @brief a Little Killer clue's label draws its arrow, toward its diagonal's first cell
- * @param e  the draw event (the label's user data: its direction + 1, 0: none)
+ * @param[in] e  the draw event (the label's user data: its direction + 1, 0: none)
  */
 static void lk_clue_draw_cb(lv_event_t *e)
 {
@@ -1301,8 +1301,8 @@ static int tour_step;                    /**< the tour's step shown */
 
 /**
  * @brief The screen area a tour step lights up.
- * @param step  the step
- * @param a  gets it
+ * @param[in] step  the step
+ * @param[out] a  gets it
  */
 static void tour_area(int step, lv_area_t *a)
 {
@@ -1365,7 +1365,7 @@ static void tour_end(void)
 
 /**
  * @brief Next (the last step ends the tour).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void tour_next_cb(lv_event_t *e)
 {
@@ -1378,7 +1378,7 @@ static void tour_next_cb(lv_event_t *e)
 
 /**
  * @brief Skip: ends the tour.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void tour_skip_cb(lv_event_t *e)
 {
@@ -1387,10 +1387,10 @@ static void tour_skip_cb(lv_event_t *e)
 
 /**
  * @brief Dims a rectangle of the screen (the tour's cover around what is lit).
- * @param x1  left, px
- * @param y1  top
- * @param x2  right
- * @param y2  bottom
+ * @param[in] x1  left, px
+ * @param[in] y1  top
+ * @param[in] x2  right
+ * @param[in] y2  bottom
  */
 static void tour_dim(int x1, int y1, int x2, int y2)
 {
@@ -1408,7 +1408,7 @@ static void tour_dim(int x1, int y1, int x2, int y2)
 
 /**
  * @brief Shows a tour step: what it lights up, its title and text.
- * @param step  the step
+ * @param[in] step  the step
  */
 static void tour_show(int step)
 {
@@ -1501,7 +1501,7 @@ static void tour_show(int step)
 
 /**
  * @brief Starts the tour on the game screen, once per player (not in Learn, a time attack, or a solved game).
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void tour_check_cb(lv_timer_t *t)
 {

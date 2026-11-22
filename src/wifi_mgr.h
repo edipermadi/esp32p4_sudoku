@@ -59,7 +59,7 @@ void wifi_mgr_start(void);
 
 /**
  * @brief Switches Wi-Fi on or off (remembered).
- * @param on  on
+ * @param[in] on  on
  */
 void wifi_mgr_set_enabled(bool on);
 /**
@@ -69,8 +69,8 @@ void wifi_mgr_scan(void);
 /**
  * @brief Joins ssid; saved once it connects. pass "" means an open network, or
  * the stored password when ssid is the remembered network.
- * @param ssid  the network
- * @param pass  its password, or ""
+ * @param[in] ssid  the network
+ * @param[in] pass  its password, or ""
  */
 void wifi_mgr_connect(const char *ssid, const char *pass);
 /** @brief Disconnects and forgets the saved network. */
@@ -78,7 +78,7 @@ void wifi_mgr_forget(void);
 
 /**
  * @brief Wi-Fi now.
- * @param out  gets it
+ * @param[out] out  gets it
  */
 void wifi_mgr_get_status(wifi_status_t *out);
 /**
@@ -90,8 +90,8 @@ void wifi_mgr_get_status(wifi_status_t *out);
 bool is_wifi_mgr_radio_started(void);
 /**
  * @brief Copies up to max scan results (strongest first, one per SSID); returns the count.
- * @param out  gets them
- * @param max  out's room
+ * @param[out] out  gets them
+ * @param[in] max  out's room
  * @return how many
  */
 int wifi_mgr_get_aps(wifi_ap_t *out, int max);

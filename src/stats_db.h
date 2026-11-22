@@ -149,20 +149,20 @@ typedef enum {
 } stats_kind_t;
 /**
  * @brief A kind's name on the Statistics screen.
- * @param kind  a stats_kind_t
+ * @param[in] kind  a stats_kind_t
  * @return "New puzzles", "Daily puzzle", "X-Sudoku", ...
  */
 const char *stats_kind_name(int kind);
 /**
  * @brief A kind's prefix in level names ("X-Sudoku Hard").
- * @param kind  a stats_kind_t
+ * @param[in] kind  a stats_kind_t
  * @return "Generated", "Daily", "X-Sudoku", ...
  */
 const char *stats_kind_prefix(int kind);
 /**
  * @brief The kind of a generated puzzle of a variant.
- * @param variant  a sudoku_variant_t
- * @param daily    it's a daily puzzle
+ * @param[in] variant  a sudoku_variant_t
+ * @param[in] daily    it's a daily puzzle
  * @return its stats_kind_t (daily ones: KIND_DAILY)
  */
 int stats_kind_of(int variant, bool daily);
@@ -212,7 +212,7 @@ bool is_stats_db_ready(void);
 bool is_stats_db_busy(void);
 /**
  * @brief Waits until the open started by stats_db_start() has finished (or failed).
- * @param timeout_ms  how long to wait at most
+ * @param[in] timeout_ms  how long to wait at most
  * @return false: timed out
  */
 bool stats_db_wait_open(uint32_t timeout_ms);
@@ -224,21 +224,21 @@ bool is_stats_db_opening(void);
 /**
  * @brief After opening: the settings and saved game from sudoku.db, on top of what the board had
  *        (store_get_prefs()).
- * @param out  gets them
+ * @param[out] out  gets them
  * @return true once, when they are new
  */
 bool stats_db_take_prefs(store_prefs_t *out);
 
 /**
  * @brief Stores a number setting (queued; dropped without a database).
- * @param key    the settings key
- * @param value  its value
+ * @param[in] key    the settings key
+ * @param[in] value  its value
  */
 void stats_db_set_int(const char *key, int value);
 /**
  * @brief Stores a text setting (queued; dropped without a database).
- * @param key    the settings key
- * @param value  its value
+ * @param[in] key    the settings key
+ * @param[in] value  its value
  */
 void stats_db_set_text(const char *key, const char *value);
 #define STATS_MAX_GAMES 5                /**< unfinished games a player keeps */
@@ -248,15 +248,15 @@ void stats_db_set_text(const char *key, const char *value);
  * Cheap to call after every move: only the newest save of a game is written, so a burst of moves
  * never queues up behind the card. A player keeps up to STATS_MAX_GAMES; saving one more drops
  * the one played longest ago (and says so through stats_db_take_message()).
- * @param g       the game
- * @param moves   its move log
- * @param nmoves  its length (at most GAME_MOVES_MAX are kept)
+ * @param[in] g       the game
+ * @param[in] moves   its move log
+ * @param[in] nmoves  its length (at most GAME_MOVES_MAX are kept)
  */
 void stats_db_save_game(const saved_game_t *g, const game_move_t *moves, int nmoves);
 /**
  * @brief The current player's unfinished game of that puzzle is gone (solved, restarted,
  *        discarded).
- * @param puzzle  the puzzle id
+ * @param[in] puzzle  the puzzle id
  */
 void stats_db_clear_game(uint16_t puzzle);
 
@@ -272,29 +272,29 @@ typedef struct {
 } stats_game_row_t;
 /**
  * @brief The current player's unfinished games, played last first. Waits for the database.
- * @param out  gets up to STATS_MAX_GAMES rows
+ * @param[out] out  gets up to STATS_MAX_GAMES rows
  * @return how many; -1 without a database
  */
 int stats_db_list_games(stats_game_row_t *out);
 /**
  * @brief One of them, with its move log (then store_load_game_moves() picks the log up). Waits
  *        for the database.
- * @param puzzle  the puzzle id
- * @param out     gets the game
+ * @param[in] puzzle  the puzzle id
+ * @param[out] out     gets the game
  * @return false if there's no such game
  */
 bool stats_db_load_game(uint16_t puzzle, saved_game_t *out);
 
 /**
  * @brief Logs a finished puzzle (finished now) and updates its puzzle_stats row.
- * @param puzzle      the puzzle id
- * @param seconds     the time taken
- * @param mistakes    mistakes made
- * @param hints       cells filled with Fill
- * @param started_at  Unix time it was opened, 0 = unknown
- * @param moves       its move log
- * @param nmoves      its length
- * @param flags       GAME_FLAG_* (store.h)
+ * @param[in] puzzle      the puzzle id
+ * @param[in] seconds     the time taken
+ * @param[in] mistakes    mistakes made
+ * @param[in] hints       cells filled with Fill
+ * @param[in] started_at  Unix time it was opened, 0 = unknown
+ * @param[in] moves       its move log
+ * @param[in] nmoves      its length
+ * @param[in] flags       GAME_FLAG_* (store.h)
  */
 void stats_db_record_solve(uint16_t puzzle, uint32_t seconds, uint32_t mistakes, uint32_t hints,
                            int64_t started_at, const game_move_t *moves, int nmoves, uint32_t flags);
@@ -313,7 +313,7 @@ typedef struct {
 void stats_db_query_weeksum(void);
 /**
  * @brief The week's summary asked for.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_weeksum(stats_weeksum_t *out);
@@ -338,7 +338,7 @@ typedef struct {
 void stats_db_query_insights(void);
 /**
  * @brief The mistake insights asked for.
- * @param out  gets them
+ * @param[out] out  gets them
  * @return false if none arrived since the last call
  */
 bool stats_db_take_insights(stats_insights_t *out);
@@ -346,41 +346,41 @@ bool stats_db_take_insights(stats_insights_t *out);
 /**
  * @brief The current player finished a Learn practice (placed the digit its technique leads to).
  *        May unlock achievements (as a solve does).
- * @param technique  Learn's list index 0..9
+ * @param[in] technique  Learn's list index 0..9
  */
 void stats_db_learned(int technique);
 
 #define STATS_MAX_BOOKMARKS 64           /**< bookmarks a player keeps */
 /**
  * @brief Whether the current player bookmarked a puzzle (the star on the game screen).
- * @param puzzle  the puzzle id
+ * @param[in] puzzle  the puzzle id
  * @return true: bookmarked
  */
 bool is_stats_db_bookmarked(uint16_t puzzle);
 /**
  * @brief Sets or clears the current player's bookmark on a puzzle.
- * @param puzzle  the puzzle id
- * @param on      bookmarked or not
+ * @param[in] puzzle  the puzzle id
+ * @param[in] on      bookmarked or not
  */
 void stats_db_set_bookmark(uint16_t puzzle, bool on);
 /**
  * @brief The current player's bookmarks (Puzzles > Starred), newest first.
- * @param ids  gets the puzzle ids
- * @param max  their room
+ * @param[out] ids  gets the puzzle ids
+ * @param[in] max  their room
  * @return how many; -1 without a database
  */
 int stats_db_bookmarks(uint16_t *ids, int max);
 
 /**
  * @brief Whether the current player has seen something once.
- * @param what  its name, e.g. "tour" (the game screen's tour)
+ * @param[in] what  its name, e.g. "tour" (the game screen's tour)
  * @return true: seen
  */
 bool is_stats_db_seen(const char *what);
 /**
  * @brief Marks something as seen (or not) by the current player.
- * @param what  its name, e.g. "tour"
- * @param seen  seen or not
+ * @param[in] what  its name, e.g. "tour"
+ * @param[in] seen  seen or not
  */
 void stats_db_set_seen(const char *what, bool seen);
 
@@ -394,23 +394,23 @@ typedef struct {
 } stats_attack_row_t;
 /**
  * @brief Time attack: logs a finished run (Easy puzzles solved in 10 minutes).
- * @param solved    puzzles solved
- * @param mistakes  mistakes made
+ * @param[in] solved    puzzles solved
+ * @param[in] mistakes  mistakes made
  */
 void stats_db_record_attack(int solved, int mistakes);
 /**
  * @brief The time-attack leaderboard: each player's best run, best first.
- * @param rows  gets the rows
- * @param max   their room
+ * @param[out] rows  gets the rows
+ * @param[in] max   their room
  * @return how many
  */
 int stats_db_attack_board(stats_attack_row_t *rows, int max);
 /**
  * @brief The log sudoku.db had for the saved game it loaded last (at start-up, a player switch or
  *        stats_db_load_game()).
- * @param puzzle  gets which game it belongs to
- * @param out     gets the moves
- * @param max     their room
+ * @param[out] puzzle  gets which game it belongs to
+ * @param[out] out     gets the moves
+ * @param[in] max     their room
  * @return how many moves
  */
 int stats_db_copy_saved_moves(uint16_t *puzzle, game_move_t *out, int max);
@@ -430,33 +430,33 @@ typedef struct {
 } stats_replay_t;
 /**
  * @brief Asks for a solve with its move log (stats_db_take_replay()).
- * @param solve_id  solves.id
+ * @param[in] solve_id  solves.id
  */
 void stats_db_query_replay(int64_t solve_id);
 /**
  * @brief The solve asked for.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_replay(stats_replay_t *out);
 
 /**
  * @brief Asks for the Statistics screen's data (stats_db_take_view()).
- * @param level  -1 = all levels, a collection index, or STATS_LEVEL_KIND()
+ * @param[in] level  -1 = all levels, a collection index, or STATS_LEVEL_KIND()
  */
 void stats_db_query(int level);
 /**
  * @brief Copies the newest query result.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_view(stats_view_t *out);
 /**
  * @brief After opening: copies puzzle_stats out as PUZZLE_COUNT arrays (see
  *        store_merge_stats()).
- * @param best    best times
- * @param fewest  fewest mistakes
- * @param solves  times solved
+ * @param[out] best    best times
+ * @param[out] fewest  fewest mistakes
+ * @param[out] solves  times solved
  * @return true once, when they are new
  */
 bool stats_db_take_cache(uint16_t *best, uint8_t *fewest, uint8_t *solves);
@@ -487,14 +487,14 @@ typedef struct {
 #define STATS_PLAYER_COLORS 8
 /**
  * @brief Sets a player's colour.
- * @param id     players.id
- * @param color  0..STATS_PLAYER_COLORS-1
+ * @param[in] id     players.id
+ * @param[in] color  0..STATS_PLAYER_COLORS-1
  */
 void stats_db_set_player_color(int32_t id, int color);
 /**
  * @brief Sets a player's avatar.
- * @param id      players.id
- * @param avatar  1..AVATAR_COUNT (avatars.h), 0 = none
+ * @param[in] id      players.id
+ * @param[in] avatar  1..AVATAR_COUNT (avatars.h), 0 = none
  */
 void stats_db_set_player_avatar(int32_t id, int avatar);
 /** @brief Asks for the player list (stats_db_take_players()). */
@@ -505,42 +505,42 @@ void stats_db_list_players(void);
  * Results come back through stats_db_take_player_change() (and the stats cache, the player list,
  * or stats_db_take_message() for a refusal). The game in progress is saved for the player it
  * belongs to before a switch.
- * @param name  the name
+ * @param[in] name  the name
  */
 void stats_db_add_player(const char *name);
 /**
  * @brief Renames a player (results as stats_db_add_player()).
- * @param id    players.id
- * @param name  the new name
+ * @param[in] id    players.id
+ * @param[in] name  the new name
  */
 void stats_db_rename_player(int32_t id, const char *name);
 /**
  * @brief Switches to a player (results as stats_db_add_player()).
- * @param id  players.id
+ * @param[in] id  players.id
  */
 void stats_db_switch_player(int32_t id);
 /**
  * @brief Deletes a player with their solves, statistics and game in progress (not the last one).
  *        Deleting the current player switches to the first one left.
- * @param id  players.id
+ * @param[in] id  players.id
  */
 void stats_db_delete_player(int32_t id);
 /**
  * @brief The newest player list.
- * @param out  gets STATS_MAX_PLAYERS entries at most
+ * @param[out] out  gets STATS_MAX_PLAYERS entries at most
  * @return how many, or -1 if none arrived since the last call
  */
 int stats_db_take_players(stats_player_t *out);
 /**
  * @brief Who plays now, after an add, rename or switch.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if nothing changed since the last call
  */
 bool stats_db_take_player_change(stats_player_change_t *out);
 /**
  * @brief A message for the user (e.g. "name taken").
- * @param buf  gets it
- * @param len  its size
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  * @return false if none
  */
 bool stats_db_take_message(char *buf, int len);
@@ -586,26 +586,26 @@ typedef struct {
 
 /**
  * @brief Asks which days of a month had games (stats_db_take_month()).
- * @param year   the year; 0: the most recent month that has any
- * @param month  1..12
+ * @param[in] year   the year; 0: the most recent month that has any
+ * @param[in] month  1..12
  */
 void stats_db_query_month(int year, int month);
 /**
  * @brief The month asked for.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_month(stats_month_t *out);
 /**
  * @brief Asks who played what on a day (stats_db_take_day()).
- * @param year   the year
- * @param month  1..12
- * @param day    1..31
+ * @param[in] year   the year
+ * @param[in] month  1..12
+ * @param[in] day    1..31
  */
 void stats_db_query_day(int year, int month, int day);
 /**
  * @brief The day asked for.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_day(stats_day_t *out);
@@ -620,14 +620,14 @@ typedef struct {
 #define STATS_CAGES_LEN 1024             /**< a Killer puzzle's cages, as text */
 /**
  * @brief Stores a puzzle made on the board (generator.h). Waits for the database (milliseconds).
- * @param variant  a sudoku_variant_t
- * @param level    a gen_level_t
- * @param givens   the givens, 81 cells
- * @param regions  a Jigsaw puzzle's region map (81), else NULL
- * @param cages    a Killer puzzle's cages (sudoku_cages_text()), else NULL
- * @param marks    the variant's marks (sudoku_marks_text()), else NULL
- * @param thermos  a Thermo puzzle's thermometers (sudoku_thermos_text()), else NULL
- * @param day      a daily puzzle's date, else NULL
+ * @param[in] variant  a sudoku_variant_t
+ * @param[in] level    a gen_level_t
+ * @param[in] givens   the givens, 81 cells
+ * @param[in] regions  a Jigsaw puzzle's region map (81), else NULL
+ * @param[in] cages    a Killer puzzle's cages (sudoku_cages_text()), else NULL
+ * @param[in] marks    the variant's marks (sudoku_marks_text()), else NULL
+ * @param[in] thermos  a Thermo puzzle's thermometers (sudoku_thermos_text()), else NULL
+ * @param[in] day      a daily puzzle's date, else NULL
  * @return its id in the generated table (puzzle id = PUZZLE_GEN_BASE + it), or -1 without a
  *         database
  */
@@ -636,25 +636,25 @@ int stats_db_gen_add(int variant, int level, const uint8_t givens[81], const uin
 #define STATS_THERMOS_LEN 400            /**< a Thermo puzzle's thermometers, as text */
 /**
  * @brief Reads a puzzle made on the board back. Waits for the database (milliseconds).
- * @param id       its id in the generated table
- * @param givens   gets the givens, 81 cells
- * @param regions  (may be NULL) only filled for a Jigsaw puzzle
- * @param cages    (STATS_CAGES_LEN, may be NULL) a Killer puzzle's cages ("" otherwise)
- * @param marks    (82 bytes, may be NULL) the marks ("" unless a variant with marks)
- * @param thermos  (STATS_THERMOS_LEN, may be NULL) the thermometers ("" unless Thermo)
- * @param variant  gets its sudoku_variant_t
- * @param level    gets its gen_level_t
- * @param day      gets a daily puzzle's date, "" if not a daily
+ * @param[in] id       its id in the generated table
+ * @param[out] givens   gets the givens, 81 cells
+ * @param[out] regions  (may be NULL) only filled for a Jigsaw puzzle
+ * @param[out] cages    (STATS_CAGES_LEN, may be NULL) a Killer puzzle's cages ("" otherwise)
+ * @param[out] marks    (82 bytes, may be NULL) the marks ("" unless a variant with marks)
+ * @param[out] thermos  (STATS_THERMOS_LEN, may be NULL) the thermometers ("" unless Thermo)
+ * @param[out] variant  gets its sudoku_variant_t
+ * @param[out] level    gets its gen_level_t
+ * @param[out] day      gets a daily puzzle's date, "" if not a daily
  * @return false if there's no such puzzle
  */
 bool stats_db_gen_get(int id, uint8_t givens[81], uint8_t *regions, char *cages, char *marks, char *thermos,
                       int *variant, int *level, char day[12]);
 /**
  * @brief The daily puzzle of a day. Waits for the database.
- * @param day           'YYYY-MM-DD'
- * @param id            gets its id in the generated table (0 = not made yet)
- * @param solved_today  gets whether the current player solved it
- * @param streak        gets their streak of days in a row with the daily solved (ending today, or
+ * @param[in] day           'YYYY-MM-DD'
+ * @param[out] id            gets its id in the generated table (0 = not made yet)
+ * @param[out] solved_today  gets whether the current player solved it
+ * @param[out] streak        gets their streak of days in a row with the daily solved (ending today, or
  *                      yesterday if not yet today)
  * @return false without a database
  */
@@ -662,9 +662,9 @@ bool stats_db_daily_status(const char *day, int *id, bool *solved_today, int *st
 /**
  * @brief The current player's place on that day's leaderboard (best time; ties: fewer mistakes,
  *        then fewer hints). Waits for the database.
- * @param day   'YYYY-MM-DD'
- * @param rank  gets the place, 1..; 0 = not solved
- * @param of    gets how many players solved it
+ * @param[in] day   'YYYY-MM-DD'
+ * @param[out] rank  gets the place, 1..; 0 = not solved
+ * @param[out] of    gets how many players solved it
  * @return false without a database
  */
 bool stats_db_daily_rank(const char *day, int *rank, int *of);
@@ -681,8 +681,8 @@ typedef struct {
  * @brief Head-to-head on any puzzle: the current player's place among everyone who solved it, how
  *        many did, and the leader (when the current player leads, the runner-up instead). Waits for
  *        the database.
- * @param puzzle  the puzzle id
- * @param out     gets it
+ * @param[in] puzzle  the puzzle id
+ * @param[out] out     gets it
  * @return false without a database
  */
 bool stats_db_puzzle_rank(uint16_t puzzle, stats_h2h_t *out);
@@ -716,12 +716,12 @@ typedef struct {
 } stats_board_t;
 /**
  * @brief Asks for a day's leaderboard (stats_db_take_board()).
- * @param day  'YYYY-MM-DD'
+ * @param[in] day  'YYYY-MM-DD'
  */
 void stats_db_query_board(const char *day);
 /**
  * @brief The leaderboard asked for.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_board(stats_board_t *out);
@@ -749,7 +749,7 @@ void stats_db_import_puzzles(void);
 /**
  * @brief Imports one file of those kinds anywhere on the card: the same, but just that file
  *        (Files' preview).
- * @param path  a full path
+ * @param[in] path  a full path
  */
 void stats_db_import_file(const char *path);
 /** @brief How the last stats_db_import_file() went (stats_db_import_last()). */
@@ -763,7 +763,7 @@ typedef struct {
 /**
  * @brief The last stats_db_import_file()'s result; a caller that waits for one notes seq first and
  *        waits for it to change (devctl "import").
- * @param out  gets it
+ * @param[out] out  gets it
  */
 void stats_db_import_last(stats_import_result_t *out);
 /**
@@ -773,16 +773,16 @@ void stats_db_import_last(stats_import_result_t *out);
 bool stats_db_take_imports_changed(void);
 /**
  * @brief The imported collections (waits for the database).
- * @param out  gets STATS_MAX_IMPORTS at most
+ * @param[out] out  gets STATS_MAX_IMPORTS at most
  * @return how many; -1 without a database
  */
 int stats_db_list_imports(stats_import_t *out);
 /**
  * @brief The current player's solved puzzles among ids first .. first + count - 1. Waits for the
  *        database.
- * @param first   the first puzzle id
- * @param count   how many
- * @param solved  gets bit i set for each solved (count bits)
+ * @param[in] first   the first puzzle id
+ * @param[in] count   how many
+ * @param[out] solved  gets bit i set for each solved (count bits)
  * @return how many are solved
  */
 int stats_db_solved_in(uint16_t first, int count, uint8_t *solved);
@@ -790,32 +790,32 @@ int stats_db_solved_in(uint16_t first, int count, uint8_t *solved);
 /**
  * @brief Stores a puzzle typed in on the board (Classic), like an imported one, in the collection
  *        STATS_OWN_SOURCE, numbered from 1.
- * @param givens  the givens, 81 cells
- * @param level   a gen_level_t
- * @param number  gets its number in the collection
+ * @param[in] givens  the givens, 81 cells
+ * @param[in] level   a gen_level_t
+ * @param[out] number  gets its number in the collection
  * @return its generated.id, or -1
  */
 int stats_db_gen_add_own(const uint8_t givens[81], int level, int *number);
 /**
  * @brief The same for any variant, kept under source (numbered within it: "Received #3").
- * @param source   the collection
- * @param variant  a sudoku_variant_t
- * @param level    a gen_level_t
- * @param givens   the givens, 81 cells
- * @param regions  a Jigsaw puzzle's region map, else NULL
- * @param cages    a Killer puzzle's cages, else NULL
- * @param marks    the variant's marks, else NULL
- * @param thermos  a Thermo puzzle's thermometers, else NULL
- * @param number   gets its number in the collection
+ * @param[in] source   the collection
+ * @param[in] variant  a sudoku_variant_t
+ * @param[in] level    a gen_level_t
+ * @param[in] givens   the givens, 81 cells
+ * @param[in] regions  a Jigsaw puzzle's region map, else NULL
+ * @param[in] cages    a Killer puzzle's cages, else NULL
+ * @param[in] marks    the variant's marks, else NULL
+ * @param[in] thermos  a Thermo puzzle's thermometers, else NULL
+ * @param[out] number   gets its number in the collection
  * @return its generated.id, or -1
  */
 int stats_db_gen_add_from(const char *source, int variant, int level, const uint8_t givens[81],
                           const uint8_t *regions, const char *cages, const char *marks, const char *thermos, int *number);
 /**
  * @brief An imported puzzle's collection and number.
- * @param gid     its generated.id
- * @param name    gets the collection's name
- * @param number  gets its number in it
+ * @param[in] gid     its generated.id
+ * @param[out] name    gets the collection's name
+ * @param[out] number  gets its number in it
  * @return false if it isn't one
  */
 bool stats_db_gen_source(int gid, char name[STATS_IMPORT_NAME], int *number);
@@ -835,54 +835,54 @@ typedef struct {
 } stats_saved_t;
 /**
  * @brief All of them, oldest first (waits for the database).
- * @param out  gets STATS_MAX_SAVED at most
+ * @param[out] out  gets STATS_MAX_SAVED at most
  * @return how many; -1 without a database
  */
 int stats_db_list_saved(stats_saved_t *out);
 /**
  * @brief Puts a puzzle at the end of the collection called name, made if there's none (waits).
- * @param name    the collection
- * @param puzzle  the puzzle id
- * @param why     gets why not, on false (full, too many collections, no database)
- * @param why_n   its size
+ * @param[in] name    the collection
+ * @param[in] puzzle  the puzzle id
+ * @param[out] why     gets why not, on false (full, too many collections, no database)
+ * @param[in] why_n   its size
  * @return false: not added
  */
 bool stats_db_saved_add(const char *name, uint16_t puzzle, char *why, size_t why_n);
 /**
  * @brief Takes a puzzle out of a collection; the collection goes if that was its last (waits).
- * @param collection  saved_collections.id
- * @param puzzle      the puzzle id
+ * @param[in] collection  saved_collections.id
+ * @param[in] puzzle      the puzzle id
  * @return false on an error
  */
 bool stats_db_saved_remove(int collection, uint16_t puzzle);
 /**
  * @brief Deletes a whole saved collection. Its puzzles stay on the board (solves, History,
  *        Gameplays keep them). Waits.
- * @param collection  saved_collections.id
+ * @param[in] collection  saved_collections.id
  * @return false on an error
  */
 bool stats_db_saved_delete(int collection);
 /**
  * @brief Deletes an imported collection (its file may be imported again). Its puzzles stay on the
  *        board. Waits.
- * @param name  the collection's name
+ * @param[in] name  the collection's name
  * @return false on an error
  */
 bool stats_db_import_delete(const char *name);
 /**
  * @brief Writes a collection to the card as puzzles/\<its name\>.sdx (the format Import puzzles
  *        reads back, variants and all: see stats_db_import.c). Waits.
- * @param collection  saved_collections.id
- * @param msg         gets what happened
- * @param msg_n       its size
+ * @param[in] collection  saved_collections.id
+ * @param[out] msg         gets what happened
+ * @param[in] msg_n       its size
  * @return false on an error
  */
 bool stats_db_saved_export(int collection, char *msg, size_t msg_n);
 /**
  * @brief The current player's solved puzzles among ids[0..n-1]. Waits for the database.
- * @param ids     the puzzle ids
- * @param n       how many (at most 128)
- * @param solved  gets bit i set for each solved
+ * @param[in] ids     the puzzle ids
+ * @param[in] n       how many (at most 128)
+ * @param[out] solved  gets bit i set for each solved
  * @return how many are solved
  */
 int stats_db_solved_list(const uint16_t *ids, int n, uint8_t *solved);
@@ -909,12 +909,12 @@ typedef struct {
 } stats_week_t;
 /**
  * @brief Asks for a week (stats_db_take_week()).
- * @param monday  its Monday, 'YYYY-MM-DD'
+ * @param[in] monday  its Monday, 'YYYY-MM-DD'
  */
 void stats_db_query_week(const char *monday);
 /**
  * @brief The week asked for.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_week(stats_week_t *out);
@@ -956,15 +956,15 @@ typedef struct {
 void stats_db_query_achievements(void);
 /**
  * @brief The achievements asked for.
- * @param out  gets them
+ * @param[out] out  gets them
  * @return false if none arrived since the last call
  */
 bool stats_db_take_achievements(stats_achievements_t *out);
 /**
  * @brief Titles of achievements the last solve unlocked, comma-separated.
- * @param buf    gets them
- * @param len    its size
- * @param count  gets how many
+ * @param[out] buf    gets them
+ * @param[in] len    its size
+ * @param[out] count  gets how many
  * @return false if none
  */
 bool stats_db_take_unlocked(char *buf, int len, int *count);
@@ -997,7 +997,7 @@ typedef struct {
 void stats_db_query_records(void);
 /**
  * @brief The records asked for.
- * @param out  gets them
+ * @param[out] out  gets them
  * @return false if none arrived since the last call
  */
 bool stats_db_take_records(stats_records_t *out);
@@ -1037,22 +1037,22 @@ typedef struct {
  * Values are escaped (backslash, tab, newline, carriage return), NULL is \\N and a blob x'hex'.
  * A transaction left open is rolled back (an error). Changes bypass the RAM copies the screens
  * use: they show after a restart.
- * @param sql  the statements
- * @param out  gets the result lines
- * @param cap  its size
- * @param r    gets what happened
+ * @param[in] sql  the statements
+ * @param[out] out  gets the result lines
+ * @param[in] cap  its size
+ * @param[out] r    gets what happened
  * @return false on an error (r->err says)
  */
 bool stats_db_sql(const char *sql, char *out, size_t cap, stats_sql_result_t *r);
 
 /**
  * @brief Asks for a page of Gameplays (stats_db_take_plays()).
- * @param offset  the first row
+ * @param[in] offset  the first row
  */
 void stats_db_query_plays(int offset);
 /**
  * @brief The page asked for.
- * @param out  gets it
+ * @param[out] out  gets it
  * @return false if none arrived since the last call
  */
 bool stats_db_take_plays(stats_plays_t *out);
@@ -1071,8 +1071,8 @@ void stats_db_suspend(void);
 
 /**
  * @brief One line for Settings, e.g. "Stats in sudoku.db: 12 solves".
- * @param buf  gets it
- * @param len  its size
+ * @param[out] buf  gets it
+ * @param[in] len  its size
  */
 void stats_db_status(char *buf, int len);
 

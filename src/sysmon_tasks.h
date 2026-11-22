@@ -44,8 +44,8 @@ bool sysmon_tasks_poll(void);
 void sysmon_tasks_restart(void);
 /**
  * @brief Sorts the list (now, and the ones after it).
- * @param col   a SYSMON_COL_ column (NAME, CORE, CPU and STACK sort)
- * @param desc  highest first
+ * @param[in] col   a SYSMON_COL_ column (NAME, CORE, CPU and STACK sort)
+ * @param[in] desc  highest first
  */
 void sysmon_tasks_sort(int col, bool desc);
 /**
@@ -65,7 +65,7 @@ bool is_sysmon_tasks_sort_desc(void);
 int sysmon_tasks_count(void);
 /**
  * @brief A row of the list, in its order.
- * @param r              the row, 0 .. sysmon_tasks_count() - 1
+ * @param[in] r              the row, 0 .. sysmon_tasks_count() - 1
  * @param[out] permille  the task's share of a core, 0..1000 (if is_sysmon_tasks_cpu_valid())
  * @return the task (its name, core, priority, state, stack)
  */

@@ -33,8 +33,8 @@ static bool ps_from_dd;                   /**< opened by choosing PIN (cancel: b
 
 /**
  * @brief A 3 x 4 keypad: 1-9, (blank), 0, backspace.
- * @param parent  where
- * @param cb      a key (user data: '0'..'9', '<')
+ * @param[in] parent  where
+ * @param[in] cb      a key (user data: '0'..'9', '<')
  * @return it
  */
 static lv_obj_t *pin_pad(lv_obj_t *parent, lv_event_cb_t cb)
@@ -57,9 +57,9 @@ static lv_obj_t *pin_pad(lv_obj_t *parent, lv_event_cb_t cb)
 
 /**
  * @brief Fills the PIN's dots: the first n in a colour, the rest empty.
- * @param dots  the four dots
- * @param n     how many are filled
- * @param on    their colour
+ * @param[in] dots  the four dots
+ * @param[in] n     how many are filled
+ * @param[in] on    their colour
  */
 static void pin_dots(lv_obj_t *const *dots, int n, lv_color_t on)
 {
@@ -70,8 +70,8 @@ static void pin_dots(lv_obj_t *const *dots, int n, lv_color_t on)
 
 /**
  * @brief Makes the PIN's four dots, in a row.
- * @param parent  where
- * @param dots    gets them
+ * @param[in] parent  where
+ * @param[out] dots    gets them
  */
 static void pin_dots_make(lv_obj_t *parent, lv_obj_t **dots)
 {
@@ -91,7 +91,7 @@ static void pin_dots_make(lv_obj_t *parent, lv_obj_t **dots)
 
 /**
  * @brief Each second: the time and date, and the wait after too many wrong PINs.
- * @param t  the timer (NULL: a first call)
+ * @param[in] t  the timer (NULL: a first call)
  */
 static void lock_tick(lv_timer_t *t)
 {
@@ -137,7 +137,7 @@ static void lock_open(void)   /* unlock: remove the lock screen */
 
 /**
  * @brief A key on the lock screen's pad: the PIN checked once it has 4 digits.
- * @param e  the event (user data: the key)
+ * @param[in] e  the event (user data: the key)
  */
 static void lock_key_cb(lv_event_t *e)
 {
@@ -162,7 +162,7 @@ static void lock_key_cb(lv_event_t *e)
 
 /**
  * @brief Swipe: the time follows the finger up; far enough (LOCK_SWIPE_PX), and it's unlocked.
- * @param e  the press, pressing, release or press-lost event
+ * @param[in] e  the press, pressing, release or press-lost event
  */
 static void lock_swipe_cb(lv_event_t *e)
 {
@@ -249,7 +249,7 @@ void ui_lock_show(bool force)
 
 /**
  * @brief Closes the PIN setup screen.
- * @param done  a PIN was set (else: cancelled; opened from the dropdown, it goes back to the old mode)
+ * @param[in] done  a PIN was set (else: cancelled; opened from the dropdown, it goes back to the old mode)
  */
 static void pin_setup_close(bool done)
 {
@@ -267,7 +267,7 @@ static void pin_setup_close(bool done)
 
 /**
  * @brief A key on the PIN setup screen's pad: the PIN typed twice, then set.
- * @param e  the event (user data: the key)
+ * @param[in] e  the event (user data: the key)
  */
 static void pin_setup_key_cb(lv_event_t *e)
 {
@@ -293,7 +293,7 @@ static void pin_setup_key_cb(lv_event_t *e)
 
 /**
  * @brief The PIN setup screen's Cancel.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void pin_setup_cancel_cb(lv_event_t *e)
 {
@@ -302,7 +302,7 @@ static void pin_setup_cancel_cb(lv_event_t *e)
 
 /**
  * @brief Opens the PIN setup screen.
- * @param from_dd  opened by choosing PIN in the dropdown
+ * @param[in] from_dd  opened by choosing PIN in the dropdown
  */
 static void pin_setup_open(bool from_dd)
 {
@@ -334,7 +334,7 @@ static void pin_setup_open(bool from_dd)
 
 /**
  * @brief Settings' Lock screen dropdown: Off, Swipe, or PIN (a PIN set first).
- * @param e  the event
+ * @param[in] e  the event
  */
 void lock_dd_cb(lv_event_t *e)
 {
@@ -349,7 +349,7 @@ void lock_dd_cb(lv_event_t *e)
 
 /**
  * @brief Settings' Change PIN.
- * @param e  the event
+ * @param[in] e  the event
  */
 void pin_change_cb(lv_event_t *e)
 {

@@ -37,19 +37,19 @@ const char *trophies_week_shown(void);
 bool trophies_ask_week(void);
 /**
  * @brief Asks for the day shown's leaderboard (today if none, or if it's in the future).
- * @param today  today's date, 'YYYY-MM-DD'
+ * @param[in] today  today's date, 'YYYY-MM-DD'
  */
 void trophies_ask_board(const char *today);
 /**
  * @brief Moves the day shown (never past today) and asks for its leaderboard.
- * @param today  today's date, 'YYYY-MM-DD'
- * @param delta  days (negative: back)
+ * @param[in] today  today's date, 'YYYY-MM-DD'
+ * @param[in] delta  days (negative: back)
  */
 void trophies_step_day(const char *today, int delta);
 /**
  * @brief Moves the week shown (never past this week) and asks for it; nothing while the clock
  *        isn't set.
- * @param delta  weeks (negative: back)
+ * @param[in] delta  weeks (negative: back)
  */
 void trophies_step_week(int delta);
 

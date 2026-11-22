@@ -50,7 +50,7 @@ void fmt_bytes(char *buf, size_t n, uint64_t b)
 
 /**
  * @brief A row that spreads its children out (a title on the left, a value on the right).
- * @param parent  the card
+ * @param[in] parent  the card
  * @return the row
  */
 static lv_obj_t *plain_row(lv_obj_t *parent)
@@ -186,7 +186,7 @@ int32_t hist_pt(int16_t v) { return v == SYSMON_NONE ? LV_CHART_POINT_NONE : v; 
 
 /**
  * @brief Every second while the page is shown: each tab's numbers again (the Tasks tab: only while it's shown).
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void tick(lv_timer_t *t)
 {
@@ -201,7 +201,7 @@ static void tick(lv_timer_t *t)
 
 /**
  * @brief Every SYSMON_HIST_MS from start-up: a sample, and one more point on each tab's graphs (shifted left).
- * @param t  the timer, or NULL for the first idle reading
+ * @param[in] t  the timer, or NULL for the first idle reading
  */
 static void hist_sample(lv_timer_t *t)
 {
@@ -218,7 +218,7 @@ static void hist_sample(lv_timer_t *t)
 /* ------------------------------------------------------------- tabs */
 /**
  * @brief Shows a tab and hides the others; the Tasks tab asks for a task list at once.
- * @param tab  SM_SYSTEM .. SM_TASKS
+ * @param[in] tab  SM_SYSTEM .. SM_TASKS
  */
 static void select_tab(int tab)
 {
@@ -236,7 +236,7 @@ static void select_tab(int tab)
 
 /**
  * @brief A tab button: shows its tab.
- * @param e  the event (its user data is the tab)
+ * @param[in] e  the event (its user data is the tab)
  */
 static void on_tab(lv_event_t *e)
 {

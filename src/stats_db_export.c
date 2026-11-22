@@ -8,9 +8,9 @@
 
 /**
  * @brief Writes a CSV field: quoted when it holds a comma, quote or line break.
- * @param f     the file
- * @param s     the text
- * @param last  the row's last field (a line break follows, else a comma)
+ * @param[in] f     the file
+ * @param[in] s     the text
+ * @param[in] last  the row's last field (a line break follows, else a comma)
  */
 static void csv_field(FILE *f, const char *s, bool last)
 {
@@ -32,9 +32,9 @@ static void csv_field(FILE *f, const char *s, bool last)
 
 /**
  * @brief Unix time as local "YYYY-MM-DD HH:MM:SS".
- * @param buf  gets it ("" for 0)
- * @param n    its size
- * @param t    the time
+ * @param[out] buf  gets it ("" for 0)
+ * @param[in] n    its size
+ * @param[in] t    the time
  */
 static void csv_time(char *buf, size_t n, int64_t t)
 {
@@ -50,10 +50,10 @@ static void csv_time(char *buf, size_t n, int64_t t)
 
 /**
  * @brief Runs a query and writes every row to a CSV file (columns as text).
- * @param path       the file
- * @param header     its first line
- * @param sql        the query
- * @param time_cols  bit i: column i is a Unix time, written as a local date
+ * @param[in] path       the file
+ * @param[in] header     its first line
+ * @param[in] sql        the query
+ * @param[in] time_cols  bit i: column i is a Unix time, written as a local date
  * @return the row count, -1 on failure
  */
 static int csv_query(const char *path, const char *header, const char *sql, uint32_t time_cols)

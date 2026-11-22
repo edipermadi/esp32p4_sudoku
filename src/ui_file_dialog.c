@@ -21,7 +21,7 @@ static int s_dlg_mode;                  /**< which: DLG_RENAME, DLG_TRASH, DLG_P
 
 /**
  * @brief Deletes for good (a bin item, or everything in the bin), with "Deleting..." meanwhile.
- * @param name  the item's name in the bin; NULL: Empty
+ * @param[in] name  the item's name in the bin; NULL: Empty
  */
 static void job_start(const char *name)
 {
@@ -44,7 +44,7 @@ void file_dialog_close(void)
 
 /**
  * @brief Shows why not in the dialog, in orange (it stays open).
- * @param msg  the reason
+ * @param[in] msg  the reason
  */
 static void dlg_error(const char *msg)
 {
@@ -112,13 +112,13 @@ static void do_purge(void)
 
 /**
  * @brief The dialog's Cancel.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_dlg_cancel(lv_event_t *e) { file_dialog_close(); }
 
 /**
  * @brief The dialog's OK: what it asked (rename, into the bin, for good, empty the bin).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_dlg_ok(lv_event_t *e)
 {
@@ -141,7 +141,7 @@ static void on_dlg_ok(lv_event_t *e)
 
 /**
  * @brief The keyboard's Enter (rename) and its close key (cancel).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void on_kb(lv_event_t *e)
 {

@@ -29,7 +29,7 @@ enum {
 
 /**
  * @brief
- * @param name  the file's name
+ * @param[in] name  the file's name
  * @return MEDIA_NONE, MEDIA_IMAGE or MEDIA_VIDEO
  */
 /** @brief What a file is, by its name's extension. */
@@ -37,11 +37,11 @@ int media_view_kind(const char *name);
 
 /**
  * @brief
- * @param parent  the screen
- * @param dir  the folder
- * @param names  its viewable files
- * @param count  how many
- * @param index  the one shown
+ * @param[in] parent  the screen
+ * @param[in] dir  the folder
+ * @param[in] names  its viewable files
+ * @param[in] count  how many
+ * @param[in] index  the one shown
  */
 /** @brief Opens the viewer over parent (a screen) on names[index]; names are the
  * viewable files of folder dir, in the order Prev / Next go through them

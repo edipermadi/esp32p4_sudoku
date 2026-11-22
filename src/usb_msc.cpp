@@ -28,10 +28,10 @@ static volatile uint32_t s_suspended_ms;  /**< millis() when it was */
 
 /**
  * @brief
- * @param lba  the first sector
- * @param offset  into it (0)
- * @param buffer  gets the data
- * @param bufsize  bytes
+ * @param[in] lba  the first sector
+ * @param[in] offset  into it (0)
+ * @param[out] buffer  gets the data
+ * @param[in] bufsize  bytes
  * @return bufsize, or -1
  */
 /** @brief TinyUSB passes whole sectors in practice (bufsize = n * 512, offset = 0);
@@ -51,10 +51,10 @@ static int32_t on_read(uint32_t lba, uint32_t offset, void *buffer, uint32_t buf
 
 /**
  * @brief Writes whole sectors to the card for the computer (anything else is refused).
- * @param lba  the first sector
- * @param offset  into it (0)
- * @param buffer  the data
- * @param bufsize  bytes
+ * @param[in] lba  the first sector
+ * @param[in] offset  into it (0)
+ * @param[in] buffer  the data
+ * @param[in] bufsize  bytes
  * @return bufsize, or -1
  */
 static int32_t on_write(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize)
@@ -72,9 +72,9 @@ static int32_t on_write(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t
 
 /**
  * @brief The computer starts or stops the drive; an eject reports "no media" from then on.
- * @param power_condition  unused
- * @param start  start (else stop)
- * @param load_eject  load or eject
+ * @param[in] power_condition  unused
+ * @param[in] start  start (else stop)
+ * @param[in] load_eject  load or eject
  * @return true
  */
 static bool on_start_stop(uint8_t power_condition, bool start, bool load_eject)
@@ -89,10 +89,10 @@ static bool on_start_stop(uint8_t power_condition, bool start, bool load_eject)
 
 /**
  * @brief USB events: the bus suspended or resumed, the port plugged or unplugged.
- * @param arg  unused
- * @param base  the event base
- * @param id  the event
- * @param data  unused
+ * @param[in] arg  unused
+ * @param[in] base  the event base
+ * @param[in] id  the event
+ * @param[in] data  unused
  */
 static void on_usb_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {

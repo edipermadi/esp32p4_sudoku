@@ -64,7 +64,7 @@ static void flush_chunk(void)
 
 /**
  * @brief One byte onto the line being gathered (sent when it's full).
- * @param b  the byte
+ * @param[in] b  the byte
  */
 static void put(uint8_t b)
 {
@@ -82,9 +82,9 @@ static bool s_zon;                                  /**< the data being sent is 
 
 /**
  * @brief The compressor's output, onto the base64 lines.
- * @param p  the compressed bytes
- * @param n  how many
- * @param user  unused
+ * @param[in] p  the compressed bytes
+ * @param[in] n  how many
+ * @param[in] user  unused
  * @return MZ_TRUE (go on)
  */
 static mz_bool z_sink(const void *p, int n, void *user)
@@ -142,7 +142,7 @@ void devctl_z_end(void)
 
 /**
  * @brief A base64 character's value.
- * @param c  the character
+ * @param[in] c  the character
  * @return 0..63, or -1 if it isn't one
  */
 static int b64val(char c)

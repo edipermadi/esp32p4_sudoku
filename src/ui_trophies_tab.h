@@ -37,14 +37,14 @@ extern "C" {
  *  @{ */
 /**
  * @brief Replaces a list's contents with a line of text (loading, nothing yet, why not).
- * @param list  the list
- * @param text  the text
+ * @param[in] list  the list
+ * @param[in] text  the text
  */
 void tr_hint(lv_obj_t *list, const char *text);
 /**
  * @brief A card in a list: full width, the card colour, rounded, not scrollable.
- * @param list  the list
- * @param h     its height
+ * @param[in] list  the list
+ * @param[in] h     its height
  * @return the card
  */
 lv_obj_t *tr_card(lv_obj_t *list, int h);
@@ -57,7 +57,7 @@ lv_obj_t *tr_card(lv_obj_t *list, int h);
  *  @{ */
 /**
  * @brief Achievements: the count and the list.
- * @param scr  the screen
+ * @param[in] scr  the screen
  * @return its pane
  */
 lv_obj_t *tr_ach_build(lv_obj_t *scr);
@@ -67,13 +67,13 @@ void tr_ach_ask(void);
 void tr_ach_no_db(void);
 /**
  * @brief Achievements: unlocked ones first, then the rest.
- * @param a  the current player's achievements
+ * @param[in] a  the current player's achievements
  */
 void tr_ach_render(const stats_achievements_t *a);
 
 /**
  * @brief Daily: \< day \>, the leaderboard and Play today's puzzle.
- * @param scr  the screen
+ * @param[in] scr  the screen
  * @return its pane
  */
 lv_obj_t *tr_daily_build(lv_obj_t *scr);
@@ -84,13 +84,13 @@ void tr_daily_no_db(void);
 /**
  * @brief Daily: the day, its puzzle and the leaderboard; Play today's puzzle if it's today and you
  *        haven't solved it.
- * @param b  the day's leaderboard
+ * @param[in] b  the day's leaderboard
  */
 void tr_daily_render(const stats_board_t *b);
 
 /**
  * @brief Weekly: \< week \> and the list.
- * @param scr  the screen
+ * @param[in] scr  the screen
  * @return its pane
  */
 lv_obj_t *tr_weekly_build(lv_obj_t *scr);
@@ -100,13 +100,13 @@ void tr_weekly_ask(void);
 void tr_weekly_no_db(void);
 /**
  * @brief Weekly: the week and each player who solved a daily puzzle in it (a square per day).
- * @param w  the week
+ * @param[in] w  the week
  */
 void tr_weekly_render(const stats_week_t *w);
 
 /**
  * @brief Records: the list.
- * @param scr  the screen
+ * @param[in] scr  the screen
  * @return its pane
  */
 lv_obj_t *tr_records_build(lv_obj_t *scr);
@@ -116,7 +116,7 @@ void tr_records_ask(void);
 void tr_records_no_db(void);
 /**
  * @brief Records: each with its puzzle and date.
- * @param R  the current player's records
+ * @param[in] R  the current player's records
  */
 void tr_records_render(const stats_records_t *R);
 /** @} */

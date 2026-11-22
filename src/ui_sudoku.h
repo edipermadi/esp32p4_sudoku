@@ -39,21 +39,21 @@ esp_err_t sudoku_ui_start(void);
 
 /**
  * @brief Shows a message banner at the bottom of the screen for a while.
- * @param text  the message
- * @param ms    how long, ms
+ * @param[in] text  the message
+ * @param[in] ms    how long, ms
  */
 void sudoku_ui_notice(const char *text, uint32_t ms);
 /**
  * @brief A banner that stays while something runs (drawn at once, so it shows even while the
  *        caller holds the UI); called again, its text changes.
- * @param text  the message
+ * @param[in] text  the message
  */
 void sudoku_ui_progress(const char *text);
 /**
  * @brief Gives the banner of sudoku_ui_progress() its last text and removes it after a while (with
  *        no progress banner up: a plain notice).
- * @param text  the message
- * @param ms    how long, ms
+ * @param[in] text  the message
+ * @param[in] ms    how long, ms
  */
 void sudoku_ui_progress_done(const char *text, uint32_t ms);
 
@@ -63,8 +63,8 @@ void sudoku_ui_progress_done(const char *text, uint32_t ms);
  *  @{ */
 /**
  * @brief Covers the screen with a card that takes every tap, before the flash is written.
- * @param title  the card's title
- * @param text   what is happening (and that the screen goes dark)
+ * @param[in] title  the card's title
+ * @param[in] text   what is happening (and that the screen goes dark)
  */
 void sudoku_ui_flash_busy(const char *title, const char *text);
 /** @brief Turns the screen off (and keeps the screen timeout from firing) while the flash is written. */
@@ -83,11 +83,11 @@ void sudoku_ui_screen_off(void);
  * Checked first: nothing is entered if any pair can't be (no game shown, solved or paused, a cell
  * not on the board or a given, a digit out of range). A cell that already holds its digit is left
  * as it is.
- * @param cells   the cells, 0..80 row by row
- * @param digits  each one's digit
- * @param n       how many
- * @param why     gets why not, on -1
- * @param why_n   its size
+ * @param[in] cells   the cells, 0..80 row by row
+ * @param[in] digits  each one's digit
+ * @param[in] n       how many
+ * @param[out] why     gets why not, on -1
+ * @param[in] why_n   its size
  * @return how many were entered, or -1
  */
 int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why, size_t why_n);
@@ -109,8 +109,8 @@ typedef struct {
 } sudoku_ui_state_t;
 /**
  * @brief The game on screen.
- * @param st     gets its state
- * @param board  gets 81 characters and a terminator, row by row (cell 0 top left): '1'-'9' a given,
+ * @param[out] st     gets its state
+ * @param[out] board  gets 81 characters and a terminator, row by row (cell 0 top left): '1'-'9' a given,
  *               'a'-'i' a digit entered (a = 1), '.' empty, '#' not on the board (Mini)
  * @return false: no game on screen
  */
@@ -118,10 +118,10 @@ bool sudoku_ui_state(sudoku_ui_state_t *st, char board[82]);
 
 /**
  * @brief Where the board is, for scripts (devctl "screen").
- * @param buf  gets "home1" / "home2" (the menu's page), "list", "game", "stats", "settings",
+ * @param[out] buf  gets "home1" / "home2" (the menu's page), "list", "game", "stats", "settings",
  *             "sysmon", "players", "trophies", ... ("other" for the rest), with "+dialog" when a
  *             dialog or overlay covers it
- * @param n    its size
+ * @param[in] n    its size
  */
 void sudoku_ui_screen_name(char *buf, size_t n);
 
@@ -130,10 +130,10 @@ void sudoku_ui_screen_name(char *buf, size_t n);
  *        "colldel"): its puzzles stay on the board, with their solves, History and Gameplays; an
  *        imported one's file can be imported again. The screens are brought up to date; the Puzzles
  *        screen keeps the collection it showed (by name), or the Saved tab's first if that one went.
- * @param saved  true: a saved collection (made on the board); false: an imported one
- * @param name   its name, as the Saved tab lists it
- * @param msg    gets what happened ("variant-examples deleted", or why not)
- * @param n      its size
+ * @param[in] saved  true: a saved collection (made on the board); false: an imported one
+ * @param[in] name   its name, as the Saved tab lists it
+ * @param[out] msg    gets what happened ("variant-examples deleted", or why not)
+ * @param[in] n      its size
  * @return true if it was deleted
  */
 bool sudoku_ui_coll_delete(bool saved, const char *name, char *msg, size_t n);
@@ -142,9 +142,9 @@ bool sudoku_ui_coll_delete(bool saved, const char *name, char *msg, size_t n);
  * @brief A part of a puzzle sent by sound (devctl / Gibberlink "pz \<id\> \<i\>/\<n\> \<part\>",
  *        another board's Share > Send by sound). When the last part is in, the puzzle is checked
  *        (one solution), kept in Puzzles > Saved > "Received" and offered to play.
- * @param args  what follows "pz"
- * @param out   gets "OK pz 1/3", "OK pz done" or "ERR pz: ..."
- * @param n     its size
+ * @param[in] args  what follows "pz"
+ * @param[out] out   gets "OK pz 1/3", "OK pz done" or "ERR pz: ..."
+ * @param[in] n     its size
  * @return true if it went in
  */
 bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n);
@@ -159,7 +159,7 @@ const char *sudoku_ui_io_busy(void);
 /**
  * @brief A full-screen panel that blocks the screen (title "Benchmarking", the text under it), or
  *        updates its text (devctl genbench).
- * @param text  the text; NULL takes the panel away
+ * @param[in] text  the text; NULL takes the panel away
  */
 void sudoku_ui_busy(const char *text);
 

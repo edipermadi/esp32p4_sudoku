@@ -33,17 +33,17 @@ extern "C" {
 /**
  * @brief Loads a log for a puzzle into the timeline (replay_timeline.h): its givens and board (a
  *        Jigsaw's regions kept here).
- * @param id     the puzzle
- * @param moves  the log
- * @param n      its length
+ * @param[in] id     the puzzle
+ * @param[in] moves  the log
+ * @param[in] n      its length
  * @return false if the puzzle can't be loaded, or out of memory
  */
 bool replay_screen_load(uint16_t id, const game_move_t *moves, int n);
 /**
  * @brief Builds the Replay screen (on the default display) for the log loaded.
- * @param id      the puzzle
- * @param sub     the line under the title
- * @param player  whose game (their avatar goes first)
+ * @param[in] id      the puzzle
+ * @param[in] sub     the line under the title
+ * @param[in] player  whose game (their avatar goes first)
  * @return the screen
  */
 lv_obj_t *replay_screen_build(uint16_t id, const char *sub, const char *player);
@@ -56,7 +56,7 @@ void replay_screen_render(void);
 lv_obj_t *replay_screen_camera(void);
 /**
  * @brief Exports a solve as an MP4 in replays/ on the card, with a progress dialog.
- * @param r  the solve with its moves
+ * @param[in] r  the solve with its moves
  */
 void replay_export_start(const stats_replay_t *r);
 

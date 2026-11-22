@@ -18,8 +18,8 @@ static SemaphoreHandle_t s_sql_done;    /**< given when the worker has run it */
 
 /**
  * @brief Appends to the result (or marks it truncated).
- * @param s  the text
- * @param n  its length
+ * @param[in] s  the text
+ * @param[in] n  its length
  */
 static void sql_put(const char *s, size_t n)
 {
@@ -35,8 +35,8 @@ static void sql_put(const char *s, size_t n)
 /**
  * @brief Appends a column's value, escaped (backslash, tab, newline, carriage return), NULL as
  *        \\N, a blob as x'hex'.
- * @param st  the statement, on a row
- * @param i   the column
+ * @param[in] st  the statement, on a row
+ * @param[in] i   the column
  */
 static void sql_value(sqlite3_stmt *st, int i)
 {
@@ -78,7 +78,7 @@ static void sql_value(sqlite3_stmt *st, int i)
 
 /**
  * @brief SQLite's progress handler: stops a statement that runs past its time.
- * @param deadline  the time it must end (esp_timer, microseconds)
+ * @param[in] deadline  the time it must end (esp_timer, microseconds)
  * @return non-zero: interrupt it
  */
 static int sql_progress(void *deadline)

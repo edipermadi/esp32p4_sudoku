@@ -38,24 +38,24 @@ typedef struct {
 
 /**
  * @brief
- * @param f  the file
- * @param m  gets the index
- * @param err  gets why not
- * @param errn  its size
+ * @param[in] f  the file
+ * @param[out] m  gets the index
+ * @param[out] err  gets why not
+ * @param[in] errn  its size
  * @return true if it is one
  */
 /** @brief Reads the index of f. false: not an MP4 with an H.264 track (err says why). */
 bool mp4r_open(FILE *f, mp4r_t *m, char *err, size_t errn);
 /**
  * @brief Frees the index.
- * @param m  it
+ * @param[in] m  it
  */
 void mp4r_free(mp4r_t *m);
 
 /**
  * @brief
- * @param m  the index
- * @param i  the frame
+ * @param[in] m  the index
+ * @param[in] i  the frame
  * @return the key frame
  */
 /** @brief The key frame at or before frame i. */
@@ -63,11 +63,11 @@ uint32_t mp4r_key_before(const mp4r_t *m, uint32_t i);
 
 /**
  * @brief
- * @param f  the file
- * @param m  the index
- * @param i  the frame
- * @param out  gets it
- * @param cap  out's room
+ * @param[in] f  the file
+ * @param[in] m  the index
+ * @param[in] i  the frame
+ * @param[out] out  gets it
+ * @param[in] cap  out's room
  * @return its length, 0 on a read error
  */
 /** @brief Reads frame i and rewrites it as Annex-B into out (cap bytes; mp4r_annexb_cap()
@@ -75,7 +75,7 @@ uint32_t mp4r_key_before(const mp4r_t *m, uint32_t i);
 size_t mp4r_read_annexb(FILE *f, const mp4r_t *m, uint32_t i, uint8_t *out, size_t cap);
 /**
  * @brief Room enough for any frame as Annex-B (mp4r_read_annexb()).
- * @param m  the index
+ * @param[in] m  the index
  * @return bytes
  */
 size_t mp4r_annexb_cap(const mp4r_t *m);

@@ -95,7 +95,7 @@ static void show_sort_header(void)
 
 /**
  * @brief A column name tapped: sorted by it (again: reversed; CPU busiest first, the others from the top).
- * @param e  the event (its user data is the column)
+ * @param[in] e  the event (its user data is the column)
  */
 static void on_sort(lv_event_t *e)
 {

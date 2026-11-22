@@ -14,9 +14,9 @@ static uint8_t s_mask_sum[1024];
 
 /**
  * @brief Places a digit: the peers lose it as a candidate.
- * @param L  the techniques' state
- * @param c  the cell
- * @param d  the digit
+ * @param[in,out] L  the techniques' state
+ * @param[in] c  the cell
+ * @param[in] d  the digit
  */
 static void place(logic_t *L, int c, int d)
 {
@@ -90,13 +90,13 @@ static sudoku_tech_t *s_trace;
 
 /**
  * @brief Notes the first technique used (sudoku_next_step()'s, when s_trace is set).
- * @param kind  TECH_*
- * @param unit  its unit
- * @param unit2  its second unit
- * @param d1  its digit
- * @param d2  its second digit
- * @param c1  its first cell
- * @param c2  its second cell
+ * @param[in] kind  TECH_*
+ * @param[in] unit  its unit
+ * @param[in] unit2  its second unit
+ * @param[in] d1  its digit
+ * @param[in] d2  its second digit
+ * @param[in] c1  its first cell
+ * @param[in] c2  its second cell
  */
 static void trace(int kind, int unit, int unit2, int d1, int d2, int c1, int c2)
 {
@@ -116,14 +116,14 @@ static void trace(int kind, int unit, int unit2, int d1, int d2, int c1, int c2)
 
 /**
  * @brief the same, with a third line and the cells that make the pattern
- * @param kind  TECH_*
- * @param unit  its unit
- * @param unit2  its second unit
- * @param unit3  its third
- * @param d1  its digit
- * @param d2  its second digit
- * @param cells  the cells
- * @param n  how many
+ * @param[in] kind  TECH_*
+ * @param[in] unit  its unit
+ * @param[in] unit2  its second unit
+ * @param[in] unit3  its third
+ * @param[in] d1  its digit
+ * @param[in] d2  its second digit
+ * @param[in] cells  the cells
+ * @param[in] n  how many
  */
 static void trace_cells(int kind, int unit, int unit2, int unit3, int d1, int d2, const int *cells, int n)
 {
@@ -140,9 +140,9 @@ static void trace_cells(int kind, int unit, int unit2, int unit3, int d1, int d2
 
 /**
  * @brief Removes candidates from a cell.
- * @param L  the techniques' state
- * @param c  the cell
- * @param bits  the candidates (bit d = d)
+ * @param[in,out] L  the techniques' state
+ * @param[in] c  the cell
+ * @param[in] bits  the candidates (bit d = d)
  * @return true if any went (no candidate left: L->broken)
  */
 static bool eliminate(logic_t *L, int c, uint16_t bits)

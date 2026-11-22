@@ -21,16 +21,16 @@ extern "C" {
 
 /**
  * @brief An achievement's progress as text: "3 / 10", "2 h 5 min / 10 h", "4 / 7 days".
- * @param a    the achievement
- * @param buf  gets the text
- * @param n    its size
+ * @param[in] a    the achievement
+ * @param[out] buf  gets the text
+ * @param[in] n    its size
  */
 void trophies_ach_progress_text(const stats_ach_t *a, char *buf, size_t n);
 /**
  * @brief The achievements the last solve unlocked, as the toast's text
  *        ("Achievement unlocked:" and the titles on the next line).
- * @param text  gets it
- * @param n     its size
+ * @param[out] text  gets it
+ * @param[in] n     its size
  * @return false if none
  */
 bool trophies_take_unlocked(char *text, size_t n);

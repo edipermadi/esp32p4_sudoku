@@ -13,9 +13,9 @@ static bool s_change_new;                            /**< s_change is new */
 
 /**
  * @brief A player's name.
- * @param id   players.id
- * @param out  gets it
- * @param n    its size
+ * @param[in] id   players.id
+ * @param[out] out  gets it
+ * @param[in] n    its size
  * @return false if there's no such player
  */
 static bool player_name_of(int32_t id, char *out, size_t n)
@@ -35,7 +35,7 @@ static bool player_name_of(int32_t id, char *out, size_t n)
 
 /**
  * @brief Adds a player.
- * @param name  the name
+ * @param[in] name  the name
  * @return its id, 0 if the name is taken, -1 on error
  */
 static int32_t insert_player(const char *name)
@@ -112,7 +112,7 @@ void sdb_do_list(void)
 
 /**
  * @brief Hands who plays now to the UI (stats_db_take_player_change()).
- * @param switched  another player: their game in progress goes along
+ * @param[in] switched  another player: their game in progress goes along
  */
 static void post_change(bool switched)
 {
@@ -153,9 +153,9 @@ void sdb_do_switch(int32_t id)
 
 /**
  * @brief Trims and checks a name typed on the keyboard.
- * @param in   the name as typed
- * @param out  gets it trimmed
- * @param n    its size
+ * @param[in] in   the name as typed
+ * @param[out] out  gets it trimmed
+ * @param[in] n    its size
  * @return false if unusable
  */
 static bool clean_name(const char *in, char *out, size_t n)

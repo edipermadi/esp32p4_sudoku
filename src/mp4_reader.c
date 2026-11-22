@@ -11,19 +11,19 @@
 
 /**
  * @brief A big-endian 32-bit number.
- * @param p  its bytes
+ * @param[in] p  its bytes
  * @return it
  */
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 /**
  * @brief A big-endian 16-bit number.
- * @param p  its bytes
+ * @param[in] p  its bytes
  * @return it
  */
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 /**
  * @brief A big-endian 64-bit number.
- * @param p  its bytes
+ * @param[in] p  its bytes
  * @return it
  */
 static uint64_t rd64(const uint8_t *p) { return (uint64_t)rd32(p) << 32 | rd32(p + 4); }
@@ -55,10 +55,10 @@ typedef struct {
 
 /**
  * @brief Walks the boxes in [p, p+n); containers are entered. Payload pointers go into t.
- * @param p  the boxes
- * @param n  their bytes
- * @param t  gets the track's boxes
- * @param depth  how deep (0: the file)
+ * @param[in] p  the boxes
+ * @param[in] n  their bytes
+ * @param[out] t  gets the track's boxes
+ * @param[in] depth  how deep (0: the file)
  */
 static void walk(const uint8_t *p, size_t n, trak_t *t, int depth)
 {
@@ -120,10 +120,10 @@ static void walk(const uint8_t *p, size_t n, trak_t *t, int depth)
 
 /**
  * @brief avc1/avc3 sample entry -> size, NAL length size, SPS/PPS
- * @param t  the track's boxes
- * @param m  gets them
- * @param err  gets why not
- * @param errn  its size
+ * @param[in] t  the track's boxes
+ * @param[out] m  gets them
+ * @param[out] err  gets why not
+ * @param[in] errn  its size
  * @return false: not H.264
  */
 static bool parse_stsd(const trak_t *t, mp4r_t *m, char *err, size_t errn)
@@ -192,10 +192,10 @@ fail:
 
 /**
  * @brief Reads a track's tables into m: the frames' places, sizes, times and key frames.
- * @param t  the track's boxes
- * @param m  gets them
- * @param err  gets why not
- * @param errn  its size
+ * @param[in] t  the track's boxes
+ * @param[out] m  gets them
+ * @param[out] err  gets why not
+ * @param[in] errn  its size
  * @return false: not a video track it can read
  */
 static bool parse_trak(const trak_t *t, mp4r_t *m, char *err, size_t errn)

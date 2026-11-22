@@ -10,7 +10,7 @@ static lv_obj_t *s_progress;                        /**< the progress notice sho
 
 /**
  * @brief Removes a notice when its time is up.
- * @param t  the one-shot timer (user data: the notice)
+ * @param[in] t  the one-shot timer (user data: the notice)
  */
 void notice_del_cb(lv_timer_t *t)
 {
@@ -19,7 +19,7 @@ void notice_del_cb(lv_timer_t *t)
 
 /**
  * @brief The notice banner, on the top layer (no timer yet); its label is its only child.
- * @param text  its text
+ * @param[in] text  its text
  * @return it
  */
 static lv_obj_t *notice_make(const char *text)

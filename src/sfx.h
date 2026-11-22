@@ -36,12 +36,12 @@ typedef enum {
 esp_err_t sfx_init(void);
 /**
  * @brief Plays a sound effect (mixed over any playing; nothing while sound is off).
- * @param id  which
+ * @param[in] id  which
  */
 void sfx_play(sfx_id_t id);
 /**
  * @brief Sound on or off (Settings).
- * @param on  on
+ * @param[in] on  on
  */
 void sfx_set_enabled(bool on);
 /**
@@ -51,8 +51,8 @@ void sfx_set_enabled(bool on);
 bool is_sfx_enabled(void);
 /**
  * @brief
- * @param mono  the samples
- * @param frames  how many
+ * @param[in] mono  the samples
+ * @param[in] frames  how many
  * @return true when it starts
  */
 /** @brief Plays mono 16-bit PCM at sfx_rate() over the effects, whatever sfx_set_enabled

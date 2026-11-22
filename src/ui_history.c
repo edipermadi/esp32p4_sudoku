@@ -31,9 +31,9 @@ static lv_calendar_date_t hz_marked[31];  /**< highlighted days (the calendar ke
 
 /**
  * @brief A Unix time as the local "HH:MM".
- * @param buf  gets it ("?" for 0: not known)
- * @param n    its size
- * @param t    the time
+ * @param[out] buf  gets it ("?" for 0: not known)
+ * @param[in] n    its size
+ * @param[in] t    the time
  */
 static void fmt_clock(char *buf, size_t n, int64_t t)
 {
@@ -49,7 +49,7 @@ static void fmt_clock(char *buf, size_t n, int64_t t)
 
 /**
  * @brief Replaces the day's list with a line of text (what to do, nothing that day, why not).
- * @param text  the text
+ * @param[in] text  the text
  */
 static void history_hint(const char *text)
 {
@@ -63,7 +63,7 @@ static void history_hint(const char *text)
 /**
  * @brief Shows a day: its date, and a card per game (who, the puzzle, solved or in progress, the
  *        times, mistakes, hints, no notes); a solve with a move log can be tapped to replay it.
- * @param d  the day
+ * @param[in] d  the day
  */
 static void render_day(const stats_day_t *d)
 {
@@ -141,7 +141,7 @@ static void render_day(const stats_day_t *d)
 
 /**
  * @brief Highlights a month's days that had games on the calendar.
- * @param m  the month
+ * @param[in] m  the month
  */
 static void render_month(const stats_month_t *m)
 {
@@ -162,7 +162,7 @@ static void render_month(const stats_month_t *m)
  * @brief The calendar's drawing: the day picked with a solid accent fill and a white number (the
  *        calendar itself only marks it faintly, and only on highlighted days), and a badge with
  *        the number of games at the top right of each highlighted day.
- * @param e  the draw task event
+ * @param[in] e  the draw task event
  */
 static void history_cal_draw_cb(lv_event_t *e)
 {
@@ -238,7 +238,7 @@ static void history_cal_draw_cb(lv_event_t *e)
 
 /**
  * @brief A day tapped on the calendar: picked (drawn so), and its games asked for.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void history_day_cb(lv_event_t *e)
 {
@@ -253,7 +253,7 @@ static void history_day_cb(lv_event_t *e)
 /**
  * @brief Home's History button: the screen, on this month (no clock: the latest month played),
  *        nothing picked yet.
- * @param e  the event
+ * @param[in] e  the event
  */
 void history_cb(lv_event_t *e)
 {
@@ -279,7 +279,7 @@ void history_cb(lv_event_t *e)
 
 /**
  * @brief Back: Home.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void history_back_cb(lv_event_t *e)
 {
@@ -350,7 +350,7 @@ void build_history(void)
 
 /**
  * @brief A replayable game tapped: its replay (the Replay screen opens on sudoku.db's answer).
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void history_row_cb(lv_event_t *e)
 {

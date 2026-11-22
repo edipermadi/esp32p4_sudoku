@@ -62,7 +62,7 @@ char *devctl_line_buf(void)
 
 /**
  * @brief Runs a command line (from the port, or from devctl_run_line()).
- * @param line  the command line
+ * @param[in] line  the command line
  */
 static void run(char *line)
 {

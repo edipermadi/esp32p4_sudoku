@@ -20,7 +20,7 @@ static uint32_t sv_moved;                 /**< when it last moved */
 /**
  * @brief Each second: the clock's time and date, somewhere else each minute; after SAVER_CLOCK_MIN
  *        minutes it goes and the screen is dark.
- * @param t  the timer (NULL: the first call)
+ * @param[in] t  the timer (NULL: the first call)
  */
 static void saver_clock_tick(lv_timer_t *t)
 {
@@ -68,7 +68,7 @@ static void saver_clock_stop(void)
 /**
  * @brief The waking tap: the light back on the press; the cover goes once the finger is up, so the
  *        tap reaches nothing below.
- * @param e  the press, release or press-lost event
+ * @param[in] e  the press, release or press-lost event
  */
 static void saver_wake_cb(lv_event_t *e)
 {
@@ -87,7 +87,7 @@ static void saver_wake_cb(lv_event_t *e)
 /**
  * @brief The screen off: the game paused, the lock screen (if on) under a black cover, then the dim
  *        clock (if on) or dark at once.
- * @param lock_now  the lock button on Home: locked even with the lock Off, and no clock
+ * @param[in] lock_now  the lock button on Home: locked even with the lock Off, and no clock
  */
 static void saver_sleep(bool lock_now)
 {
@@ -134,7 +134,7 @@ void sudoku_ui_screen_off(void)
 
 /**
  * @brief The lock button on Home: the screen off now, and locked when it wakes.
- * @param e  the event
+ * @param[in] e  the event
  */
 void lock_now_cb(lv_event_t *e)
 {

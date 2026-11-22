@@ -13,7 +13,7 @@ static lv_obj_t *tr_ach_list;              /**< the cards */
 /**
  * @brief An achievement's card: a trophy and the date it was unlocked, or a lock and its progress
  *        (a bar where there is a count to show).
- * @param a  the achievement
+ * @param[in] a  the achievement
  */
 static void ach_card(const stats_ach_t *a)
 {

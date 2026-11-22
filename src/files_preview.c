@@ -19,11 +19,11 @@ static sudoku_geom_t *s_pv_geom;        /**< the board of the puzzle parsed last
 /**
  * @brief One line (sdx.h: an .sdx line, or just 81 digits as in .sdm) into variant, level, givens
  *        and its board. The same reading as the import's, without the one-solution check.
- * @param src   the line
- * @param var   gets its sudoku_variant_t
- * @param lv    gets its level (-1: none given)
- * @param g     gets its givens (81 cells)
- * @param geom  gets its board
+ * @param[in] src   the line
+ * @param[out] var   gets its sudoku_variant_t
+ * @param[out] lv    gets its level (-1: none given)
+ * @param[out] g     gets its givens (81 cells)
+ * @param[out] geom  gets its board
  * @return false if it isn't a puzzle
  */
 static bool pv_parse(const char *src, int *var, int *lv, uint8_t g[81], sudoku_geom_t *geom)

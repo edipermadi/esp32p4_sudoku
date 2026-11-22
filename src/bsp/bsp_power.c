@@ -19,8 +19,8 @@
  * @brief Drives a pin to a level and keeps it there through deep sleep. The pad hold
  * latches whatever the pad outputs; gpio_config() also takes the pin back from
  * a peripheral (LEDC on the backlight) to plain GPIO output.
- * @param gpio  the pin
- * @param level  0 or 1
+ * @param[in] gpio  the pin
+ * @param[in] level  0 or 1
  */
 static void drive_and_hold(int gpio, int level)
 {

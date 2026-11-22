@@ -13,11 +13,11 @@
  * @brief one attempt: clues taken away in random symmetric gen_pairs (a cell and its
  * 180-degree turn) while the solution stays unique; for Easy, stops at a
  * random few clues above the Easy minimum
- * @param G  the board
- * @param full  the solution
- * @param out  gets the puzzle
- * @param level  the level aimed at
- * @param rng  the random state
+ * @param[in] G  the board
+ * @param[in] full  the solution
+ * @param[out] out  gets the puzzle
+ * @param[in] level  the level aimed at
+ * @param[in,out] rng  the random state
  */
 static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81], gen_level_t level, uint32_t *rng)
 {
@@ -90,8 +90,8 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
 
 /**
  * @brief is region `reg` of the map one connected piece (4-neighbours)?
- * @param map  the region of each cell
- * @param reg  the region
+ * @param[in] map  the region of each cell
+ * @param[in] reg  the region
  * @return true if so
  */
 static bool is_region_connected(const uint8_t map[81], int reg)
@@ -131,8 +131,8 @@ static bool is_region_connected(const uint8_t map[81], int reg)
  * @brief A random Jigsaw map: the 3x3 boxes, reshaped by trading cells across
  * region borders (a cell of A goes to B, a cell of B next to A goes to A)
  * while both regions stay in one piece.
- * @param map  gets the region of each cell
- * @param rng  the random state
+ * @param[out] map  gets the region of each cell
+ * @param[in,out] rng  the random state
  */
 static void jigsaw_map(uint8_t map[81], uint32_t *rng)
 {
@@ -187,10 +187,10 @@ static void jigsaw_map(uint8_t map[81], uint32_t *rng)
  * random order), a cage grows to 2..max_size cells through neighbours whose
  * digit isn't in it yet. A lone cell left over joins a neighbouring cage
  * that can take its digit, if there is one.
- * @param full  the solution
- * @param max_size  cells per cage at most
- * @param rng  the random state
- * @param out  gets the board
+ * @param[in] full  the solution
+ * @param[in] max_size  cells per cage at most
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
  * @return false if the cages don't make one
  */
 static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out)
@@ -291,11 +291,11 @@ static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, su
  * side or diagonal, not crossing), each kept only if the grid keeps its rule: an arrow's shaft
  * (1-3 cells) adds up to its circle, a Renban (3-5 cells) is a run of consecutive digits, along a
  * Whispers line (3-6 cells) neighbours are 5 or more apart
- * @param variant  VAR_ARROW, VAR_RENBAN or VAR_WHISPER
- * @param full  the solution
- * @param rng  the random state
- * @param want  lines wanted
- * @param out  gets the lines
+ * @param[in] variant  VAR_ARROW, VAR_RENBAN or VAR_WHISPER
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
  * @return false: fewer than 3
  */
 static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
@@ -376,11 +376,11 @@ static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int w
 /**
  * @brief a free neighbour of cell cur (side by side or diagonal) for a line: not used by another line,
  * not on this one (on[], its cells so far)
- * @param cur  the cell
- * @param used  the cells on the other lines
- * @param on  this line's cells
- * @param n  how many
- * @param out  gets the neighbours
+ * @param[in] cur  the cell
+ * @param[in] used  the cells on the other lines
+ * @param[in] on  this line's cells
+ * @param[in] n  how many
+ * @param[out] out  gets the neighbours
  * @return how many
  */
 static int line_neighbours(int cur, const uint8_t used[81], const uint8_t *on, int n, int out[8])
@@ -407,10 +407,10 @@ static int line_neighbours(int cur, const uint8_t used[81], const uint8_t *on, i
 /**
  * @brief Palindrome: up to want lines (3-9 cells) over the full grid, grown from the middle out, a
  * cell at each end at a time, both holding the same digit (so they never see each other)
- * @param full  the solution
- * @param rng  the random state
- * @param want  lines wanted
- * @param out  gets the lines
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
  * @return false: fewer than 3
  */
 static bool palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
@@ -497,9 +497,9 @@ static bool palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, su
 /**
  * @brief Region Sum Lines: is a line (its cells on the full grid) one: in two boxes or more, the
  * same sum in each?
- * @param full  the solution
- * @param on  its cells
- * @param n  how many
+ * @param[in] full  the solution
+ * @param[in] on  its cells
+ * @param[in] n  how many
  * @return true if so
  */
 static bool is_regionsum_line(const uint8_t full[81], const uint8_t *on, int n)
@@ -527,10 +527,10 @@ static bool is_regionsum_line(const uint8_t full[81], const uint8_t *on, int n)
 /**
  * @brief Region Sum Lines: up to want lines over the full grid, random walks of up to 8 cells kept at
  * the longest length (3 or more) where each box they pass through adds up to the same
- * @param full  the solution
- * @param rng  the random state
- * @param want  lines wanted
- * @param out  gets the lines
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
  * @return false: fewer than 3
  */
 static bool regionsum_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
@@ -567,10 +567,10 @@ static bool regionsum_paths(const uint8_t full[81], uint32_t *rng, int want, sud
 /**
  * @brief Would a diagonal step from a to b cross the line, path (its cells in order)? Two cells corner
  * to corner, joined on the line, make an X with that step.
- * @param path  the line's cells, in order
- * @param n  how many
- * @param a  the step's cell on the line
- * @param b  the cell it goes to
+ * @param[in] path  the line's cells, in order
+ * @param[in] n  how many
+ * @param[in] a  the step's cell on the line
+ * @param[in] b  the cell it goes to
  * @return true if it crosses
  */
 static bool is_line_crossing(const uint8_t *path, int n, int a, int b)
@@ -590,9 +590,9 @@ static bool is_line_crossing(const uint8_t *path, int n, int a, int b)
 /**
  * @brief Would a diagonal step from a to b cross another line? Lines kept so far mark the 2x2 blocks
  * they cross diagonally (mark_line_blocks()); a diagonal step through a marked block would make an X.
- * @param blocks  per cell, 1: the 2x2 block with that cell at its top left has a line across it
- * @param a  the step's cell on the line
- * @param b  the cell it goes to
+ * @param[in] blocks  per cell, 1: the 2x2 block with that cell at its top left has a line across it
+ * @param[in] a  the step's cell on the line
+ * @param[in] b  the cell it goes to
  * @return true if it crosses
  */
 static bool is_block_crossed(const uint8_t blocks[81], int a, int b)
@@ -606,10 +606,10 @@ static bool is_block_crossed(const uint8_t blocks[81], int a, int b)
 
 /**
  * @brief Do two diagonal steps, a to b and c to d, cross each other (the two diagonals of one 2x2 block)?
- * @param a  the first step's cell
- * @param b  where it goes
- * @param c  the second step's cell
- * @param d  where it goes
+ * @param[in] a  the first step's cell
+ * @param[in] b  where it goes
+ * @param[in] c  the second step's cell
+ * @param[in] d  where it goes
  * @return true if so
  */
 static bool is_steps_crossing(int a, int b, int c, int d)
@@ -624,9 +624,9 @@ static bool is_steps_crossing(int a, int b, int c, int d)
 
 /**
  * @brief A line kept: the 2x2 blocks it crosses diagonally marked, for is_block_crossed().
- * @param blocks  the marks
- * @param path  the line's cells, in order
- * @param n  how many
+ * @param[in,out] blocks  the marks
+ * @param[in] path  the line's cells, in order
+ * @param[in] n  how many
  */
 static void mark_line_blocks(uint8_t blocks[81], const uint8_t *path, int n)
 {
@@ -643,10 +643,10 @@ static void mark_line_blocks(uint8_t blocks[81], const uint8_t *path, int n)
  * @brief Zipper Lines: up to want lines (3-7 cells) over the full grid, grown from the middle out, a
  * cell at each end at a time, each pair adding up to the line's total (odd: its middle digit; even:
  * the middle pair's sum); a line never crosses itself or another
- * @param full  the solution
- * @param rng  the random state
- * @param want  lines wanted
- * @param out  gets the lines
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
  * @return false: fewer than 3
  */
 static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
@@ -722,10 +722,10 @@ static bool zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
  * cells whose digits all lie on one side of it (above it, or below), kept at the longest length
  * whose last cell (the other circle) lies beyond all the cells between; a line never crosses itself
  * or another
- * @param full  the solution
- * @param rng  the random state
- * @param want  lines wanted
- * @param out  gets the lines
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
  * @return false: fewer than 3
  */
 static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
@@ -777,11 +777,11 @@ static bool between_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
  * @brief Entropic, Modular Lines: up to want lines over the full grid, random walks of 3 to 8 cells
  * through cells whose digit keeps the rule: each of the first three in a group of its own, every one
  * after in the group of the cell three back; a line never crosses itself or another
- * @param variant  VAR_ENTROPIC or VAR_MODULAR
- * @param full  the solution
- * @param rng  the random state
- * @param want  lines wanted
- * @param out  gets the lines
+ * @param[in] variant  VAR_ENTROPIC or VAR_MODULAR
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
  * @return false: fewer than 3
  */
 static bool group_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
@@ -826,10 +826,10 @@ static bool group_paths(int variant, const uint8_t full[81], uint32_t *rng, int 
 
 /**
  * @brief Thermo: up to want thermometers (3-6 cells) drawn over the full grid as random walks whose digits rise from the bulb.
- * @param full  the solution
- * @param rng  the random state
- * @param want  thermometers wanted
- * @param out  gets the board
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  thermometers wanted
+ * @param[out] out  gets the board
  * @return false: fewer than 3
  */
 static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)

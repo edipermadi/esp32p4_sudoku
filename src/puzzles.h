@@ -20,7 +20,7 @@ extern "C" {
 #define PUZZLE_GEN_RAM_BASE  0xF000     /**< the first id of puzzles kept in RAM (no card) */
 /**
  * @brief A generated puzzle (not built-in).
- * @param id  the puzzle
+ * @param[in] id  the puzzle
  * @return nonzero if so
  */
 static inline int puzzle_is_generated(uint16_t id)
@@ -29,7 +29,7 @@ static inline int puzzle_is_generated(uint16_t id)
 }
 /**
  * @brief
- * @param id  the puzzle
+ * @param[in] id  the puzzle
  * @return nonzero if so
  */
 /** @brief a puzzle this firmware can show: built-in or generated */
@@ -47,22 +47,22 @@ typedef struct {
 
 /**
  * @brief A built-in collection.
- * @param c  the collection, 0..PUZZLE_COLLECTION_COUNT-1
+ * @param[in] c  the collection, 0..PUZZLE_COLLECTION_COUNT-1
  * @return it
  */
 const puzzle_collection_t *puzzle_collection(int c);
 
 /**
  * @brief
- * @param id  the puzzle
- * @param cells  gets the cells
+ * @param[in] id  the puzzle
+ * @param[out] cells  gets the cells
  */
 /** @brief Unpacks puzzle `id` (0..PUZZLE_COUNT-1) into 81 cells, row-major, 0 = empty. */
 void puzzle_load(uint16_t id, uint8_t cells[81]);
 
 /**
  * @brief
- * @param id  the puzzle
+ * @param[in] id  the puzzle
  * @return the collection, 0..PUZZLE_COLLECTION_COUNT-1
  */
 /** @brief Collection that holds puzzle `id`. */

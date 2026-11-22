@@ -30,13 +30,13 @@ typedef struct {
 int tz_count(void);
 /**
  * @brief A time zone.
- * @param i  0..tz_count()-1
+ * @param[in] i  0..tz_count()-1
  * @return it, or NULL out of range
  */
 const tz_entry_t *tz_get(int i);
 /**
  * @brief
- * @param name  the IANA name
+ * @param[in] name  the IANA name
  * @return its index
  */
 /** @brief Index of name, or the UTC entry if unknown. */
@@ -49,7 +49,7 @@ int tz_find(const char *name);
 const char *tz_options(void);
 /**
  * @brief
- * @param name  the IANA name
+ * @param[in] name  the IANA name
  */
 /** @brief setenv("TZ") + tzset() for name; localtime() follows immediately. */
 void tz_apply(const char *name);

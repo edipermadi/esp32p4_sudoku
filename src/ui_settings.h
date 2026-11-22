@@ -32,19 +32,19 @@
  *  Each builds its tab's rows into @p pane (a scrolling column made by build_settings()).
  *  @{ */
 /** @brief Settings > Network: Wi-Fi (opens the Wi-Fi screen) and the time zone.
- *  @param pane  the tab's pane */
+ *  @param[in] pane  the tab's pane */
 void settings_tab_network(lv_obj_t *pane);
 /** @brief Settings > Display: theme, accent, colour-blind, digit size, brightness, screen off, lock, night mode.
- *  @param pane  the tab's pane */
+ *  @param[in] pane  the tab's pane */
 void settings_tab_display(lv_obj_t *pane);
 /** @brief Settings > Sound: sound effects, volume, Gibberlink.
- *  @param pane  the tab's pane */
+ *  @param[in] pane  the tab's pane */
 void settings_tab_sound(lv_obj_t *pane);
 /** @brief Settings > Game: timer, mistake check, no-notes challenge, left-handed, hints, tour.
- *  @param pane  the tab's pane */
+ *  @param[in] pane  the tab's pane */
 void settings_tab_game(lv_obj_t *pane);
 /** @brief Settings > Data: microSD card, USB drive, firmware update, import, export, backup, factory reset.
- *  @param pane  the tab's pane */
+ *  @param[in] pane  the tab's pane */
 void settings_tab_data(lv_obj_t *pane);
 /** @} */
 
@@ -52,37 +52,37 @@ void settings_tab_data(lv_obj_t *pane);
  *  @{ */
 /**
  * @brief A row of a tab: a card with a title, a hint under it, and room on the right for a control.
- * @param parent  the tab's pane
- * @param title   the setting's name
- * @param hint    a line about it, under the title (its label is the row's child 1, to change it later)
+ * @param[in] parent  the tab's pane
+ * @param[in] title   the setting's name
+ * @param[in] hint    a line about it, under the title (its label is the row's child 1, to change it later)
  * @return the row, to put a control on
  */
 lv_obj_t *settings_row(lv_obj_t *parent, const char *title, const char *hint);
 /**
  * @brief An on/off switch on the right of a row.
- * @param row  the row
- * @param on   its state
- * @param cb   called when it's switched (LV_EVENT_VALUE_CHANGED)
+ * @param[in] row  the row
+ * @param[in] on   its state
+ * @param[in] cb   called when it's switched (LV_EVENT_VALUE_CHANGED)
  * @return the switch
  */
 lv_obj_t *settings_switch(lv_obj_t *row, bool on, lv_event_cb_t cb);
 /**
  * @brief A dropdown on the right of a row, styled like the others (finger-sized list rows).
- * @param row      the row
- * @param options  the choices, one per line (kept, not copied: a static string)
- * @param sel      the one selected, from 0
- * @param width    its width in pixels
- * @param cb       called when a choice is picked (LV_EVENT_VALUE_CHANGED)
+ * @param[in] row      the row
+ * @param[in] options  the choices, one per line (kept, not copied: a static string)
+ * @param[in] sel      the one selected, from 0
+ * @param[in] width    its width in pixels
+ * @param[in] cb       called when a choice is picked (LV_EVENT_VALUE_CHANGED)
  * @return the dropdown
  */
 lv_obj_t *settings_dropdown(lv_obj_t *row, const char *options, uint32_t sel, int width, lv_event_cb_t cb);
 /**
  * @brief A slider on the right of a row, with its value ("80%") left of it.
- * @param row    the row
- * @param min    its lowest value
- * @param max    its highest value
- * @param value  its value now
- * @param cb     called while it moves (LV_EVENT_VALUE_CHANGED) and once let go (LV_EVENT_RELEASED): apply
+ * @param[in] row    the row
+ * @param[in] min    its lowest value
+ * @param[in] max    its highest value
+ * @param[in] value  its value now
+ * @param[in] cb     called while it moves (LV_EVENT_VALUE_CHANGED) and once let go (LV_EVENT_RELEASED): apply
  *               while it moves, save when let go
  * @param[out] lbl  the value's label, for @p cb to update
  * @return the slider
@@ -99,9 +99,9 @@ lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_c
 bool is_ui_dark(void);
 /**
  * @brief The settings come again (ui_settings.c): after the card was lent over USB, or a factory reset.
- * @param from_db  from sudoku.db, once it has (re)opened (sd_poll_cb() takes them then); false: from
+ * @param[in] from_db  from sudoku.db, once it has (re)opened (sd_poll_cb() takes them then); false: from
  *                 the settings in RAM, at once (apply_loaded_prefs())
- * @param to_home  then Home is shown (a factory reset)
+ * @param[in] to_home  then Home is shown (a factory reset)
  */
 void settings_reload(bool from_db, bool to_home);
 /** @brief The settings were reloaded: night mode is decided again at its next check (ui_settings_display.c). */

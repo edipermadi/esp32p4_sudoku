@@ -145,8 +145,8 @@ static const char SCHEMA_POST[] =
 
 /**
  * @brief Whether a table has a column.
- * @param table  the table
- * @param col    the column
+ * @param[in] table  the table
+ * @param[in] col    the column
  * @return true: it has
  */
 static bool has_column(const char *table, const char *col)

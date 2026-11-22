@@ -286,12 +286,12 @@ SemaphoreHandle_t sdb_lock(void);
 int32_t sdb_player(void);
 /**
  * @brief Sets who is playing (the worker only).
- * @param id  players.id
+ * @param[in] id  players.id
  */
 void sdb_set_player(int32_t id);
 /**
  * @brief Sets the solves counted.
- * @param n  all players' solves; -1 unknown
+ * @param[in] n  all players' solves; -1 unknown
  */
 void sdb_set_solves(int n);
 /** @brief Counts one more solve (if the count is known). */
@@ -310,46 +310,46 @@ gen_call_t *sdb_gen(void);
 void sdb_gen_reply(void);
 /**
  * @brief Runs SQL without results; an error is logged.
- * @param sql  one or more statements
+ * @param[in] sql  one or more statements
  * @return false on an error
  */
 bool sdb_exec(const char *sql);
 /**
  * @brief Runs a waited-for command (arguments and results in s_gen) and waits for the worker (up
  *        to 3 s).
- * @param type  the command
+ * @param[in] type  the command
  * @return false: no database, timed out, or the call failed (s_gen.ok)
  */
 bool sdb_gen_call(cmd_type_t type);
 /**
  * @brief Leaves a message for the user (stats_db_take_message()).
- * @param msg  the message
+ * @param[in] msg  the message
  */
 void sdb_post_message(const char *msg);
 /**
  * @brief A result buffer in PSRAM (internal RAM is kept for Wi-Fi and the video encoder), made the
  *        first time.
- * @param p     where the buffer is kept
- * @param size  its size
+ * @param[in,out] p     where the buffer is kept
+ * @param[in] size  its size
  * @return it, or NULL if out of memory
  */
 void *sdb_psram_buf(void **p, size_t size);
 /**
  * @brief One number from a query.
- * @param sql  the query
+ * @param[in] sql  the query
  * @return the first column of the first row; -1 for none, NULL or an error
  */
 int sdb_query_int(const char *sql);
 /**
  * @brief Queues a command for the worker (waits up to 100 ms for room).
- * @param c  the command (copied)
+ * @param[in] c  the command (copied)
  * @return false: not started, or the queue is full
  */
 bool sdb_send(const cmd_t *c);
 /**
  * @brief Steps a statement that returns no rows, then resets it; an error is logged.
- * @param st    the statement
- * @param what  what it does, for the log
+ * @param[in] st    the statement
+ * @param[in] what  what it does, for the log
  * @return false on an error
  */
 bool sdb_step_done(sqlite3_stmt *st, const char *what);
@@ -364,25 +364,25 @@ bool sdb_schema_create(void);
 /* ---- stats_db_prefs.c */
 /**
  * @brief Hands the settings read to the game (stats_db_take_prefs()).
- * @param p  the settings
+ * @param[in] p  the settings
  */
 void sdb_prefs_post(const store_prefs_t *p);
 /**
  * @brief The settings: what p holds, overridden by whatever sudoku.db holds.
- * @param p  in: the board's settings; out: the database's on top
+ * @param[in,out] p  in: the board's settings; out: the database's on top
  */
 void sdb_load_prefs(store_prefs_t *p);
 /**
  * @brief First use of this database: copies in the settings and game the board has.
- * @param p  the board's settings
+ * @param[in] p  the board's settings
  */
 void sdb_migrate_prefs(const store_prefs_t *p);
 /**
  * @brief Stores a setting.
- * @param key      the settings key
- * @param is_text  text holds the value (else ival)
- * @param ival     a number value
- * @param text     a text value
+ * @param[in] key      the settings key
+ * @param[in] is_text  text holds the value (else ival)
+ * @param[in] ival     a number value
+ * @param[in] text     a text value
  */
 void sdb_set_setting(const char *key, bool is_text, int ival, const char *text);
 
@@ -394,31 +394,31 @@ void sdb_set_setting(const char *key, bool is_text, int ival, const char *text);
 const char *sdb_player_name(void);
 /**
  * @brief CMD_ADD_PLAYER: adds a player and switches to them.
- * @param raw  the name as typed
+ * @param[in] raw  the name as typed
  */
 void sdb_do_add(const char *raw);
 /**
  * @brief CMD_DELETE_PLAYER: deletes a player with everything of theirs (not the last one).
- * @param id  players.id
+ * @param[in] id  players.id
  */
 void sdb_do_delete(int32_t id);
 /** @brief CMD_PLAYERS: the player list (stats_db_take_players()). */
 void sdb_do_list(void);
 /**
  * @brief CMD_RENAME_PLAYER: renames a player.
- * @param id   players.id
- * @param raw  the name as typed
+ * @param[in] id   players.id
+ * @param[in] raw  the name as typed
  */
 void sdb_do_rename(int32_t id, const char *raw);
 /**
  * @brief CMD_SWITCH_PLAYER: switches to a player, saving the game in progress for the one before.
- * @param id  players.id
+ * @param[in] id  players.id
  */
 void sdb_do_switch(int32_t id);
 /**
  * @brief Picks who is playing: settings.current_player if it still exists, else the first player;
  *        a database without players gets one.
- * @param name  the name for that first player (NULL: "Player 1")
+ * @param[in] name  the name for that first player (NULL: "Player 1")
  */
 void sdb_select_current_player(const char *name);
 
@@ -427,36 +427,36 @@ void sdb_select_current_player(const char *name);
 void sdb_game_forget(void);
 /**
  * @brief The current player's unfinished game of a puzzle is gone.
- * @param puzzle  the puzzle id
+ * @param[in] puzzle  the puzzle id
  */
 void sdb_clear_game(uint16_t puzzle);
 /** @brief CMD_LIST_GAMES: the current player's unfinished games (s_gen.games). */
 void sdb_do_list_games(void);
 /**
  * @brief CMD_REPLAY: one solve's move log and details, for the Replay screen.
- * @param id  solves.id
+ * @param[in] id  solves.id
  */
 void sdb_do_replay(int64_t id);
 /** @brief Writes the newest queued game, if any (for the player it belongs to). */
 void sdb_flush_game(void);
 /**
  * @brief The current player's unfinished game played last.
- * @param g  gets it; g->id = STORE_NO_GAME if none
+ * @param[out] g  gets it; g->id = STORE_NO_GAME if none
  */
 void sdb_load_game(saved_game_t *g);
 /**
  * @brief The current player's unfinished game of a puzzle; its moves go to the loaded-moves
  *        buffer (stats_db_copy_saved_moves()).
- * @param g       gets it; g->id = STORE_NO_GAME if none
- * @param puzzle  the puzzle id (STORE_NO_GAME: the one played last)
+ * @param[out] g       gets it; g->id = STORE_NO_GAME if none
+ * @param[in] puzzle  the puzzle id (STORE_NO_GAME: the one played last)
  */
 void sdb_load_game_of(saved_game_t *g, uint16_t puzzle);
 /**
  * @brief Saves one of the current player's unfinished games (the newest of them now); keeps
  *        STATS_MAX_GAMES, dropping the one played longest ago.
- * @param g       the game
- * @param moves   its move log
- * @param nmoves  its length
+ * @param[in] g       the game
+ * @param[in] moves   its move log
+ * @param[in] nmoves  its length
  */
 void sdb_save_game(const saved_game_t *g, const game_move_t *moves, int nmoves);
 
@@ -470,35 +470,35 @@ bool sdb_solves_prepare(void);
 void sdb_solves_finalize(void);
 /**
  * @brief CMD_QUERY: the Statistics screen's data (stats_db_take_view()).
- * @param level  -1 = all levels, a collection index, or STATS_LEVEL_KIND()
+ * @param[in] level  -1 = all levels, a collection index, or STATS_LEVEL_KIND()
  */
 void sdb_do_query(int level);
 /**
  * @brief CMD_SOLVE: logs a solve, updates puzzle_stats and checks the achievements.
- * @param c  the command
+ * @param[in] c  the command
  */
 void sdb_do_solve(const cmd_t *c);
 /** @brief The current player's puzzle_stats into arrays for the RAM copy (stats_db_take_cache()). */
 void sdb_load_cache(void);
 /**
  * @brief Merges the board's statistics (from before the database) into puzzle_stats, once.
- * @param a  the board's arrays
+ * @param[in] a  the board's arrays
  */
 void sdb_merge_legacy(const stats_arrays_t *a);
 
 /* ---- stats_db_kinds.c */
 /**
  * @brief Binds a puzzle's id (?1), level name (?2) and number in it (?3) to a statement.
- * @param st  the statement
- * @param id  the puzzle id
+ * @param[in] st  the statement
+ * @param[in] id  the puzzle id
  */
 void sdb_bind_puzzle(sqlite3_stmt *st, uint16_t id);
 /**
  * @brief A generated puzzle's kind and level from its level name: "X-Sudoku Hard" -> KIND_X,
  *        GEN_HARD.
- * @param name   the level name
- * @param kind   gets the stats_kind_t
- * @param level  gets the gen_level_t
+ * @param[in] name   the level name
+ * @param[out] kind   gets the stats_kind_t
+ * @param[out] level  gets the gen_level_t
  * @return false for any other level name
  */
 bool sdb_kind_level_of(const char *name, int *kind, int *level);
@@ -512,17 +512,17 @@ void sdb_do_gen_add(void);
 void sdb_do_gen_get(void);
 /**
  * @brief A generated puzzle's level, and whether it is a daily one.
- * @param gid      generated.id
- * @param daily    gets whether it's a daily puzzle
- * @param variant  gets its sudoku_variant_t
+ * @param[in] gid      generated.id
+ * @param[out] daily    gets whether it's a daily puzzle
+ * @param[out] variant  gets its sudoku_variant_t
  * @return its gen_level_t, -1 if there's no such puzzle
  */
 int sdb_gen_level_of(int gid, bool *daily, int *variant);
 /**
  * @brief An imported puzzle's collection and number (worker).
- * @param gid     generated.id
- * @param name    gets the collection's name
- * @param number  gets its number in it
+ * @param[in] gid     generated.id
+ * @param[out] name    gets the collection's name
+ * @param[out] number  gets its number in it
  * @return false if it isn't one
  */
 bool sdb_gen_source_of(int gid, char name[STATS_IMPORT_NAME], int *number);
@@ -530,7 +530,7 @@ bool sdb_gen_source_of(int gid, char name[STATS_IMPORT_NAME], int *number);
 /* ---- stats_db_rank.c */
 /**
  * @brief CMD_BOARD: a day's daily leaderboard (stats_db_take_board()).
- * @param day  'YYYY-MM-DD'
+ * @param[in] day  'YYYY-MM-DD'
  */
 void sdb_do_board(const char *day);
 /** @brief CMD_PRANK: head-to-head on s_gen.puzzle (stats_db_puzzle_rank()). */
@@ -539,7 +539,7 @@ void sdb_do_puzzle_rank(void);
 void sdb_do_rank(void);
 /**
  * @brief One number from a query on the current player (?1).
- * @param sql  the query
+ * @param[in] sql  the query
  * @return the number; 0 for none or an error
  */
 int sdb_query_int_player(const char *sql);
@@ -547,7 +547,7 @@ int sdb_query_int_player(const char *sql);
 /* ---- stats_db_achievements.c */
 /**
  * @brief An achievement's definition.
- * @param i  0 .. sdb_ach_count() - 1
+ * @param[in] i  0 .. sdb_ach_count() - 1
  * @return it
  */
 const ach_def_t *sdb_ach(int i);
@@ -560,28 +560,28 @@ int sdb_ach_count(void);
 void sdb_ach_backfill(void);
 /**
  * @brief Records the achievements a player has reached and not recorded yet.
- * @param player    players.id
- * @param announce  they go to stats_db_take_unlocked() and get the time now; false (first
+ * @param[in] player    players.id
+ * @param[in] announce  they go to stats_db_take_unlocked() and get the time now; false (first
  *                  fill): recorded quietly with no time
  */
 void sdb_ach_sync(int32_t player, bool announce);
 /**
  * @brief When each achievement was unlocked.
- * @param player  players.id
- * @param when    gets sdb_ach_count() times: Unix time, 1 = unlocked (time unknown), 0 = not yet
+ * @param[in] player  players.id
+ * @param[out] when    gets sdb_ach_count() times: Unix time, 1 = unlocked (time unknown), 0 = not yet
  */
 void sdb_ach_unlocked(int32_t player, int64_t *when);
 /**
  * @brief The progress of every achievement for a player.
- * @param player  players.id
- * @param val     gets sdb_ach_count() values
+ * @param[in] player  players.id
+ * @param[out] val     gets sdb_ach_count() values
  */
 void sdb_ach_values(int32_t player, int32_t *val);
 /** @brief CMD_ACH: the current player's achievements (stats_db_take_achievements()). */
 void sdb_do_achievements(void);
 /**
  * @brief The longest run of days in a row with the daily puzzle solved.
- * @param player  players.id
+ * @param[in] player  players.id
  * @return the days
  */
 int sdb_longest_daily_streak(int32_t player);
@@ -613,27 +613,27 @@ void sdb_do_solved_list(void);
 /* ---- stats_db_history.c */
 /**
  * @brief CMD_DAY: who played what on a day (stats_db_take_day()).
- * @param year   the year
- * @param month  1..12
- * @param day    1..31
+ * @param[in] year   the year
+ * @param[in] month  1..12
+ * @param[in] day    1..31
  */
 void sdb_do_day(int year, int month, int day);
 /** @brief CMD_INSIGHTS: the mistake insights (stats_db_take_insights()). */
 void sdb_do_insights(void);
 /**
  * @brief CMD_MONTH: which days of a month had games (stats_db_take_month()).
- * @param year   the year; 0: the most recent month that has any
- * @param month  1..12
+ * @param[in] year   the year; 0: the most recent month that has any
+ * @param[in] month  1..12
  */
 void sdb_do_month(int year, int month);
 /**
  * @brief CMD_PLAYS: a page of recorded solves, newest first (Gameplays).
- * @param offset  the first row
+ * @param[in] offset  the first row
  */
 void sdb_do_plays(int offset);
 /**
  * @brief CMD_WEEK: a weekly challenge (stats_db_take_week()).
- * @param monday  its Monday, 'YYYY-MM-DD'
+ * @param[in] monday  its Monday, 'YYYY-MM-DD'
  */
 void sdb_do_week(const char *monday);
 /** @brief CMD_WEEKSUM: the current player's week (stats_db_take_weeksum()). */
@@ -644,8 +644,8 @@ void sdb_do_weeksum(void);
 void sdb_do_records(void);
 /**
  * @brief A player's records.
- * @param player  players.id
- * @param R       gets them
+ * @param[in] player  players.id
+ * @param[out] R       gets them
  */
 void sdb_records_fill(int32_t player, stats_records_t *R);
 
@@ -659,17 +659,17 @@ void sdb_do_export(void);
 /**
  * @brief CMD_LEARNED: records a finished Learn practice (a technique's first may unlock an
  *        achievement).
- * @param technique  Learn's list index 0..9
+ * @param[in] technique  Learn's list index 0..9
  */
 void sdb_do_learned(int technique);
 /**
  * @brief The small reads (waited for): bookmarks, seen, the time-attack board.
- * @param type  CMD_BM_GET, CMD_BM_LIST, CMD_SEEN_GET or CMD_ATTACK_BOARD
+ * @param[in] type  CMD_BM_GET, CMD_BM_LIST, CMD_SEEN_GET or CMD_ATTACK_BOARD
  */
 void sdb_do_small_get(cmd_type_t type);
 /**
  * @brief The small writes: a bookmark, seen, a time-attack run.
- * @param c  the command (CMD_BM_SET, CMD_SEEN_SET or CMD_ATTACK)
+ * @param[in] c  the command (CMD_BM_SET, CMD_SEEN_SET or CMD_ATTACK)
  */
 void sdb_do_small_set(const cmd_t *c);
 

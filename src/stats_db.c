@@ -101,7 +101,7 @@ static void do_open_inner(open_seed_t *seed);
 
 /**
  * @brief CMD_OPEN: opens the database, then frees the seed and wakes stats_db_wait_open().
- * @param seed  what the board has (NULL: a reopen)
+ * @param[in] seed  what the board has (NULL: a reopen)
  */
 static void do_open(open_seed_t *seed)
 {
@@ -112,7 +112,7 @@ static void do_open(open_seed_t *seed)
 
 /**
  * @brief Opens (or creates) the database: the tables, the player, the settings and the cache.
- * @param seed  what the board has (NULL: a reopen)
+ * @param[in] seed  what the board has (NULL: a reopen)
  */
 static void do_open_inner(open_seed_t *seed)
 {
@@ -184,7 +184,7 @@ _Static_assert(GAME_FLAG_NO_NOTES == 1048576 && TECH_X_WING == 10 && TECH_SWORDF
 
 /**
  * @brief CMD_RESET: deletes sudoku.db and opens a new skeleton.
- * @param seed  what the board has now
+ * @param[in] seed  what the board has now
  */
 static void do_reset(open_seed_t *seed)
 {
@@ -206,7 +206,7 @@ static void do_reset(open_seed_t *seed)
 
 /**
  * @brief The worker task: runs the queued commands, one at a time.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void worker(void *arg)
 {
@@ -441,7 +441,7 @@ void stats_db_start_fresh(void)
 
 /**
  * @brief Starts the worker (once) and queues an open.
- * @param fresh  a new, empty database (after formatting)
+ * @param[in] fresh  a new, empty database (after formatting)
  */
 static void start(bool fresh)
 {

@@ -54,7 +54,7 @@ void fw_build_id(const esp_app_desc_t *d, char out[9])
 /**
  * @brief The write: update.bin read in FW_CHUNK pieces into the other app slot, the image checked
  *        (esp_ota_end()), set to boot, update.bin renamed update.done; then fw_state is the result.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void fw_task(void *arg)
 {

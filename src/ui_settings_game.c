@@ -19,7 +19,7 @@ static lv_obj_t *st_assist_dd;                      /**< the Mistake check dropd
 
 /**
  * @brief Show timer: saved (the time is kept either way).
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void timer_sw_cb(lv_event_t *e)
 {
@@ -28,7 +28,7 @@ static void timer_sw_cb(lv_event_t *e)
 
 /**
  * @brief Mistake check (Off, Rules, Solution): saved; the game redraws when shown.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void assist_dd_cb(lv_event_t *e)
 {
@@ -37,7 +37,7 @@ static void assist_dd_cb(lv_event_t *e)
 
 /**
  * @brief No-notes challenge: saved, for games started from now.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void no_notes_sw_cb(lv_event_t *e)
 {
@@ -46,7 +46,7 @@ static void no_notes_sw_cb(lv_event_t *e)
 
 /**
  * @brief Left-handed: saved, and the game screen's board and pad swap sides now.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void left_hand_sw_cb(lv_event_t *e)
 {
@@ -56,7 +56,7 @@ static void left_hand_sw_cb(lv_event_t *e)
 
 /**
  * @brief Hints (Full, Nudge only): saved.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void hint_mode_dd_cb(lv_event_t *e)
 {
@@ -65,7 +65,7 @@ static void hint_mode_dd_cb(lv_event_t *e)
 
 /**
  * @brief Game screen tour, Show again: shown the next time a puzzle opens.
- * @param e  the LVGL event (its target is the control)
+ * @param[in] e  the LVGL event (its target is the control)
  */
 static void tour_again_cb(lv_event_t *e)
 {

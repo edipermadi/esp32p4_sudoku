@@ -34,35 +34,35 @@ int serial_available(void);
 int serial_read(void);
 /**
  * @brief Sends bytes.
- * @param buf  the bytes
- * @param n    how many
+ * @param[in] buf  the bytes
+ * @param[in] n    how many
  */
 void serial_write(const uint8_t *buf, size_t n);
 /**
  * @brief Sends one byte.
- * @param c  the byte
+ * @param[in] c  the byte
  */
 void serial_write_byte(uint8_t c);
 /**
  * @brief Sends a string (as Serial.print()).
- * @param s  the string
+ * @param[in] s  the string
  */
 void serial_print(const char *s);
 /**
  * @brief Sends a string and "\r\n" (as Serial.println()).
- * @param s  the string
+ * @param[in] s  the string
  */
 void serial_println(const char *s);
 /**
  * @brief Sends formatted text (as Serial.printf()).
- * @param fmt  printf's format, then its arguments
+ * @param[in] fmt  printf's format, then its arguments
  */
 void serial_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 /** @brief Waits until everything sent has left the port. */
 void serial_flush(void);
 /**
  * @brief Switches the port's speed.
- * @param baud  the new speed, e.g. 921600
+ * @param[in] baud  the new speed, e.g. 921600
  */
 void serial_set_baud(uint32_t baud);
 

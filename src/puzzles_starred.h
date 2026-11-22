@@ -30,14 +30,14 @@ int puzzles_load_starred(void);
 int puzzles_starred_count(void);
 /**
  * @brief A starred puzzle.
- * @param i  0 .. puzzles_starred_count() - 1
+ * @param[in] i  0 .. puzzles_starred_count() - 1
  * @return its id
  */
 uint16_t puzzles_starred_id(int i);
 /**
  * @brief Takes a puzzle's star off.
- * @param i   its place in the list read
- * @param id  gets its id
+ * @param[in] i   its place in the list read
+ * @param[out] id  gets its id
  * @return false if there's no such place
  */
 bool puzzles_unstar(int i, uint16_t *id);

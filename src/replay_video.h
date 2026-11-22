@@ -38,7 +38,7 @@ extern "C" {
  *  @{ */
 /**
  * @brief The replay asked for from sudoku.db is to be exported, not shown (or shown).
- * @param v  true: exported
+ * @param[in] v  true: exported
  */
 void replay_set_want_export(bool v);
 /**
@@ -63,18 +63,18 @@ bool is_replay_exporting(void);
 /**
  * @brief A video's file name from the player, puzzle and when it was solved: letters, digits, - and
  *        _ only ("Ana_Classic-Easy-12_20261121-1743").
- * @param r       the solve
- * @param puzzle  the puzzle's name
- * @param out     gets the name (without .mp4)
- * @param n       its size
+ * @param[in] r       the solve
+ * @param[in] puzzle  the puzzle's name
+ * @param[out] out     gets the name (without .mp4)
+ * @param[in] n       its size
  */
 void replay_video_name(const stats_replay_t *r, const char *puzzle, char *out, size_t n);
 /**
  * @brief Starts an export of the timeline prepared (replay_prepare()): replays/\<file\>.mp4 opened,
  *        the frame buffer made, the frames counted.
- * @param file  the file name (replay_video_name())
- * @param w     the frame's width
- * @param h     its height
+ * @param[in] file  the file name (replay_video_name())
+ * @param[in] w     the frame's width
+ * @param[in] h     its height
  * @return false if the frame buffer or the encoder (or the file) couldn't be opened
  */
 bool replay_video_open(const char *file, int w, int h);
@@ -86,14 +86,14 @@ bool replay_video_open(const char *file, int w, int h);
 uint8_t *replay_video_fb(void);
 /**
  * @brief Which step a video frame shows.
- * @param f        the frame
- * @param playing  gets whether it "plays" there
+ * @param[in] f        the frame
+ * @param[out] playing  gets whether it "plays" there
  * @return the step: moves shown
  */
 int replay_video_k_at(int f, bool *playing);
 /**
  * @brief Encodes the next frame from the frame buffer.
- * @param changed  the picture changed since the last frame
+ * @param[in] changed  the picture changed since the last frame
  * @return false if the encoder failed
  */
 bool replay_video_frame(bool changed);
@@ -121,7 +121,7 @@ void replay_video_cancel(void);
 bool is_replay_video_cancelled(void);
 /**
  * @brief Ends the encoding: the file closed (kept) or aborted (deleted).
- * @param ok  keep it
+ * @param[in] ok  keep it
  * @return false if it was to be kept but couldn't be closed
  */
 bool replay_video_end(bool ok);
@@ -132,10 +132,10 @@ bool replay_video_end(bool ok);
 void replay_video_free(void);
 /**
  * @brief What to tell the user afterwards: where it was saved and its size, or why not.
- * @param ok     it was saved
- * @param bytes  its size
- * @param msg    gets the message
- * @param n      its size
+ * @param[in] ok     it was saved
+ * @param[in] bytes  its size
+ * @param[out] msg    gets the message
+ * @param[in] n      its size
  */
 void replay_video_result(bool ok, uint32_t bytes, char *msg, size_t n);
 /** @} */

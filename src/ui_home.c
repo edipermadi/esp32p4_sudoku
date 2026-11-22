@@ -71,11 +71,11 @@ static void home_total_text(void)
 
 /**
  * @brief A row of the week's comparison.
- * @param parent  where
- * @param name  the row's name
- * @param a  this week
- * @param b  last week
- * @param head  the header row
+ * @param[in] parent  where
+ * @param[in] name  the row's name
+ * @param[in] a  this week
+ * @param[in] b  last week
+ * @param[in] head  the header row
  */
 static void week_row(lv_obj_t *parent, const char *name, const char *a, const char *b, bool head)
 {
@@ -96,7 +96,7 @@ static void week_row(lv_obj_t *parent, const char *name, const char *a, const ch
 
 /**
  * @brief The solved line tapped: this week against last.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void week_cb(lv_event_t *e)
 {
@@ -252,7 +252,7 @@ void home_cb(lv_event_t *e)
 
 /**
  * @brief Home > Puzzles.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void puzzles_cb(lv_event_t *e)
 {
@@ -284,7 +284,7 @@ void st_wifi_eye_cb(lv_event_t *e)
 
 /**
  * @brief Home > Settings (the Network tab, the network's name hidden).
- * @param e  the event
+ * @param[in] e  the event
  */
 static void settings_cb(lv_event_t *e)
 {
@@ -369,7 +369,7 @@ void clock_cb(lv_timer_t *t)
 /**
  * @brief Resumes one of the current player's unfinished games (from RAM, or loaded
  * from sudoku.db with its move log). False if it isn't there any more.
- * @param id  the puzzle
+ * @param[in] id  the puzzle
  * @return false if it isn't there any more
  */
 static bool resume_game(uint16_t id)
@@ -402,7 +402,7 @@ static void ug_close(void)
 
 /**
  * @brief Its Close.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void ug_close_cb(lv_event_t *e)
 {
@@ -411,7 +411,7 @@ static void ug_close_cb(lv_event_t *e)
 
 /**
  * @brief An unfinished game tapped: resumed.
- * @param e  the event (user data: the puzzle)
+ * @param[in] e  the event (user data: the puzzle)
  */
 static void ug_resume_cb(lv_event_t *e)
 {
@@ -424,7 +424,7 @@ static void ug_resume_cb(lv_event_t *e)
 
 /**
  * @brief An unfinished game's Discard.
- * @param e  the event (user data: the puzzle)
+ * @param[in] e  the event (user data: the puzzle)
  */
 static void ug_discard_cb(lv_event_t *e)
 {
@@ -494,7 +494,7 @@ static void ug_open(void)
 
 /**
  * @brief Continue: the game in progress, or the dialog when there are more.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void continue_cb(lv_event_t *e)
 {
@@ -512,7 +512,7 @@ static void continue_cb(lv_event_t *e)
 
 /**
  * @brief Another game in progress: discard it and start the new one.
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void discard_confirm_cb(lv_event_t *e)
 {
@@ -523,7 +523,7 @@ static void discard_confirm_cb(lv_event_t *e)
 
 /**
  * @brief Another game in progress: resume that one instead.
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void resume_other_cb(lv_event_t *e)
 {
@@ -565,10 +565,10 @@ void open_puzzle(uint16_t id)
 
 /**
  * @brief big menu button: icon + title, optional muted subtitle below
- * @param parent  where
- * @param text  the title
- * @param cb  a tap
- * @param sub  gets the subtitle, or NULL for none
+ * @param[in] parent  where
+ * @param[in] text  the title
+ * @param[in] cb  a tap
+ * @param[out] sub  gets the subtitle, or NULL for none
  * @return the button
  */
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub)
@@ -735,7 +735,7 @@ void games_refresh(void)
 
 /**
  * @brief Home > Statistics.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void stats_cb(lv_event_t *e)
 {
@@ -748,7 +748,7 @@ static void stats_cb(lv_event_t *e)
 
 /**
  * @brief Home > Gameplays.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void plays_cb(lv_event_t *e)
 {
@@ -758,7 +758,7 @@ static void plays_cb(lv_event_t *e)
 
 /**
  * @brief Home > Players.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void profile_cb(lv_event_t *e)
 {

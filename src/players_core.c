@@ -128,7 +128,7 @@ void players_delete_confirmed(void)
 
 /**
  * @brief The end of a group: the first emoji after it.
- * @param g  the group
+ * @param[in] g  the group
  * @return the avatar, from 0
  */
 static int av_group_end(int g)

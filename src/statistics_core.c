@@ -17,8 +17,8 @@ static int x_sel;                        /**< 0 = all levels, 1.. = collection x
 
 /**
  * @brief Adds a puzzle's statistics from RAM to a level's.
- * @param st  the level
- * @param id  the puzzle
+ * @param[in,out] st  the level
+ * @param[in] id  the puzzle
  */
 static void add_puzzle_stat(stats_level_t *st, uint16_t id)
 {
@@ -44,8 +44,8 @@ static void add_puzzle_stat(stats_level_t *st, uint16_t id)
 
 /**
  * @brief The fallback when there is no sudoku.db: this session's RAM statistics as a view.
- * @param level  -1 all levels, or a collection
- * @param v      gets the view
+ * @param[in] level  -1 all levels, or a collection
+ * @param[out] v      gets the view
  */
 static void view_from_ram(int level, stats_view_t *v)
 {

@@ -32,7 +32,7 @@ uint64_t sysmon_uptime_s(void);
 /**
  * @brief The chip as one line: "ESP32-P4 v1.0, 2 cores, 360 MHz".
  * @param[out] buf  the text
- * @param n         buf's size
+ * @param[in] n         buf's size
  */
 void sysmon_chip_text(char *buf, size_t n);
 /**

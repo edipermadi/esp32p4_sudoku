@@ -52,13 +52,13 @@ typedef enum {
 bool fw_file_desc(esp_app_desc_t *d, uint32_t *size);
 /**
  * @brief A build's ID: the first 8 hex digits of its ELF file's SHA-256 (as a crash log prints it).
- * @param d         the build's app description (esp_app_get_description() for the one running)
+ * @param[in] d         the build's app description (esp_app_get_description() for the one running)
  * @param[out] out  the ID, 8 characters and a NUL
  */
 void fw_build_id(const esp_app_desc_t *d, char out[9]);
 /**
  * @brief Writes update.bin into the other app slot, in a task of its own; follow it with fw_update_state().
- * @param size  update.bin's size in bytes (from fw_file_desc())
+ * @param[in] size  update.bin's size in bytes (from fw_file_desc())
  * @return false if it couldn't start (one is running already, or no task)
  */
 bool fw_update_start(uint32_t size);

@@ -45,9 +45,9 @@ esp_err_t bsp_i2c_init(i2c_master_bus_handle_t *ret_bus)
 
 /**
  * @brief Reads GT911 registers.
- * @param reg  the first
- * @param buf  gets them
- * @param len  how many
+ * @param[in] reg  the first
+ * @param[out] buf  gets them
+ * @param[in] len  how many
  * @return ESP_OK, or why not
  */
 static esp_err_t gt911_read(uint16_t reg, uint8_t *buf, size_t len)
@@ -58,8 +58,8 @@ static esp_err_t gt911_read(uint16_t reg, uint8_t *buf, size_t len)
 
 /**
  * @brief Writes a GT911 register.
- * @param reg  the register
- * @param val  its value
+ * @param[in] reg  the register
+ * @param[in] val  its value
  * @return ESP_OK, or why not
  */
 static esp_err_t gt911_write_u8(uint16_t reg, uint8_t val)

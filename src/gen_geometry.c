@@ -87,14 +87,14 @@ static sudoku_geom_t *s_geom;
 
 /**
  * @brief Builds a board: its cells, units, peers and tables.
- * @param g  gets it
- * @param variant  sudoku_variant_t
- * @param n  digits and side: 9, 6 or 4
- * @param box_h  a box's height
- * @param box_w  a box's width
- * @param diag  the diagonals are units
- * @param windows  the Hyper windows are units
- * @param regions  Jigsaw's region map, NULL = boxes of box_h x box_w
+ * @param[out] g  gets it
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] n  digits and side: 9, 6 or 4
+ * @param[in] box_h  a box's height
+ * @param[in] box_w  a box's width
+ * @param[in] diag  the diagonals are units
+ * @param[in] windows  the Hyper windows are units
+ * @param[in] regions  Jigsaw's region map, NULL = boxes of box_h x box_w
  */
 static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_w, bool diag, bool windows,
                        const uint8_t *regions)
@@ -370,7 +370,7 @@ bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
 
 /**
  * @brief The kind of lines a variant has.
- * @param variant  sudoku_variant_t
+ * @param[in] variant  sudoku_variant_t
  * @return LINE_*
  */
 static int line_kind_of(int variant)

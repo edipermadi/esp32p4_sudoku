@@ -14,7 +14,7 @@ static lv_obj_t *tr_week_list;             /**< the players' cards */
 
 /**
  * @brief \< \>: the week before or after.
- * @param e  the event (user data: -1 or 1)
+ * @param[in] e  the event (user data: -1 or 1)
  */
 static void tr_week_cb(lv_event_t *e)
 {

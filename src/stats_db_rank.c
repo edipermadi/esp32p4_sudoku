@@ -18,9 +18,9 @@ static bool s_board_new;             /**< s_board is new */
 
 /**
  * @brief The daily puzzle of a day.
- * @param day      'YYYY-MM-DD'
- * @param level    gets its gen_level_t
- * @param variant  gets its sudoku_variant_t
+ * @param[in] day      'YYYY-MM-DD'
+ * @param[out] level    gets its gen_level_t
+ * @param[out] variant  gets its sudoku_variant_t
  * @return its generated.id (0 = not made)
  */
 static int daily_id_of(const char *day, int *level, int *variant)
@@ -46,8 +46,8 @@ static int daily_id_of(const char *day, int *level, int *variant)
 
 /**
  * @brief Everyone's best solve of a puzzle, fastest first, into b->rows.
- * @param b       the leaderboard
- * @param puzzle  the puzzle id (-1: none, every player unsolved)
+ * @param[in,out] b       the leaderboard
+ * @param[in] puzzle  the puzzle id (-1: none, every player unsolved)
  */
 static void board_rows(stats_board_t *b, int puzzle)
 {
@@ -78,8 +78,8 @@ static void board_rows(stats_board_t *b, int puzzle)
 
 /**
  * @brief A day's daily leaderboard.
- * @param b    gets it
- * @param day  'YYYY-MM-DD'
+ * @param[out] b    gets it
+ * @param[in] day  'YYYY-MM-DD'
  */
 static void board_fill(stats_board_t *b, const char *day)
 {

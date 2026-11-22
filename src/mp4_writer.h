@@ -25,28 +25,28 @@ typedef struct mp4w mp4w_t;
 
 /**
  * @brief Starts an MP4 file. max_frames bounds the sample table (frames past it are refused).
- * @param path  the file
- * @param width  px
- * @param height  px
- * @param fps  frames a second
- * @param max_frames  the most frames
+ * @param[in] path  the file
+ * @param[in] width  px
+ * @param[in] height  px
+ * @param[in] fps  frames a second
+ * @param[in] max_frames  the most frames
  * @return the writer, or NULL
  */
 /** @brief max_frames bounds the sample table (frames past it are refused). */
 mp4w_t *mp4w_open(const char *path, int width, int height, int fps, int max_frames);
 /**
  * @brief
- * @param w  the writer
- * @param annexb  the frame
- * @param len  its bytes
- * @param key  an IDR frame
+ * @param[in] w  the writer
+ * @param[in] annexb  the frame
+ * @param[in] len  its bytes
+ * @param[in] key  an IDR frame
  * @return false: it failed
  */
 /** @brief One encoded frame (Annex-B). key: an IDR frame. */
 bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key);
 /**
  * @brief
- * @param w  the writer
+ * @param[in] w  the writer
  * @return true if the file is good
  */
 /** @brief Writes the index (moov) and closes the file; false if anything failed.
@@ -54,13 +54,13 @@ bool mp4w_add_frame(mp4w_t *w, const uint8_t *annexb, size_t len, bool key);
 bool mp4w_close(mp4w_t *w);
 /**
  * @brief
- * @param w  the writer
+ * @param[in] w  the writer
  */
 /** @brief Closes without finishing and deletes the file. */
 void mp4w_abort(mp4w_t *w);
 /**
  * @brief
- * @param w  the writer
+ * @param[in] w  the writer
  * @return bytes
  */
 /** @brief Bytes written so far. */

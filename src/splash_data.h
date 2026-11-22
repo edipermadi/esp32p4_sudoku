@@ -19,7 +19,7 @@ extern "C" {
 
 /**
  * @brief The splash screen's JPEG.
- * @param len  gets its length, bytes
+ * @param[out] len  gets its length, bytes
  * @return its bytes (in flash)
  */
 const uint8_t *splash_jpeg(size_t *len);

@@ -14,8 +14,8 @@ static volatile bool s_imports_changed;              /**< an import changed the 
 
 /**
  * @brief 81 cells from text.
- * @param p    the text (digits, '.' or '0' = empty)
- * @param out  gets the cells
+ * @param[in] p    the text (digits, '.' or '0' = empty)
+ * @param[out] out  gets the cells
  * @return false if it isn't a puzzle
  */
 static bool parse_cells(const char *p, uint8_t out[81])
@@ -36,11 +36,11 @@ static bool parse_cells(const char *p, uint8_t out[81])
 
 /**
  * @brief The puzzles of one file.
- * @param path   the file
- * @param xml    OpenSudoku's XML: the puzzles are data="..." (or '...') attributes; else a puzzle
+ * @param[in] path   the file
+ * @param[in] xml    OpenSudoku's XML: the puzzles are data="..." (or '...') attributes; else a puzzle
  *               per line
- * @param cells  gets them
- * @param max    puzzles at most
+ * @param[out] cells  gets them
+ * @param[in] max    puzzles at most
  * @return how many
  */
 static int parse_file(const char *path, bool xml, uint8_t (*cells)[81], int max)
@@ -74,8 +74,8 @@ static int parse_file(const char *path, bool xml, uint8_t (*cells)[81], int max)
 
 /**
  * @brief Whether a name ends with a suffix (any case).
- * @param s       the name
- * @param suffix  the suffix, e.g. ".sdm"
+ * @param[in] s       the name
+ * @param[in] suffix  the suffix, e.g. ".sdm"
  * @return true: it does
  */
 static bool is_ends_with(const char *s, const char *suffix)
@@ -86,10 +86,10 @@ static bool is_ends_with(const char *s, const char *suffix)
 
 /**
  * @brief Adds a collection's row to imported.
- * @param name   the collection's name
- * @param file   the file it came from
- * @param first  its first generated.id
- * @param count  its puzzles: first .. first + count - 1
+ * @param[in] name   the collection's name
+ * @param[in] file   the file it came from
+ * @param[in] first  its first generated.id
+ * @param[in] count  its puzzles: first .. first + count - 1
  * @return false: a name taken already (the file is skipped), or an error
  */
 static bool import_collection(const char *name, const char *file, int first, int count)
@@ -117,10 +117,10 @@ static bool import_collection(const char *name, const char *file, int first, int
 /**
  * @brief A collection's name with a number after it ("base 2"), the name shortened so the number
  *        always fits.
- * @param name  gets it
- * @param n     its size
- * @param base  the name
- * @param k     the number
+ * @param[out] name  gets it
+ * @param[in] n     its size
+ * @param[in] base  the name
+ * @param[in] k     the number
  */
 static void numbered_name(char *name, size_t n, const char *base, int k)
 {
@@ -136,11 +136,11 @@ static void numbered_name(char *name, size_t n, const char *base, int k)
 
 /**
  * @brief Reads an .sdx file into generated and imported (in the caller's transaction).
- * @param path  the file
- * @param file  its name, kept to skip it next time
- * @param base  the collection's name (more than 100 puzzles: "base 1", "base 2", ...)
- * @param max   puzzles at most
- * @param bad   counts the lines left out
+ * @param[in] path  the file
+ * @param[in] file  its name, kept to skip it next time
+ * @param[in] base  the collection's name (more than 100 puzzles: "base 1", "base 2", ...)
+ * @param[in] max   puzzles at most
+ * @param[in,out] bad   counts the lines left out
  * @return how many went in, or -1 if writing failed
  */
 static int import_sdx(const char *path, const char *file, const char *base, int max, int *bad)
@@ -257,11 +257,11 @@ static int import_sdx(const char *path, const char *file, const char *base, int 
 /**
  * @brief One file into generated and imported, as a collection named after it (more than 100
  *        puzzles: "name 1", "name 2" ...), in its own transaction.
- * @param path   the file
- * @param fn     its name, kept to skip it next time
- * @param cells  room for max puzzles
- * @param max    puzzles at most
- * @param bad    counts the puzzles left out (broken, or not exactly one solution)
+ * @param[in] path   the file
+ * @param[in] fn     its name, kept to skip it next time
+ * @param[in] cells  room for max puzzles
+ * @param[in] max    puzzles at most
+ * @param[in,out] bad    counts the puzzles left out (broken, or not exactly one solution)
  * @return how many went in, 0 if none did, -1 if writing failed
  */
 static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], int max, int *bad)
@@ -403,9 +403,9 @@ static stats_import_result_t s_import_last;     /**< the last file import's resu
 
 /**
  * @brief A file import finished: its result kept for stats_db_import_last(), its message for the notice.
- * @param got  puzzles imported (or 0, -1, -2: see stats_import_result_t)
- * @param bad  puzzles left out
- * @param msg  what happened
+ * @param[in] got  puzzles imported (or 0, -1, -2: see stats_import_result_t)
+ * @param[in] bad  puzzles left out
+ * @param[in] msg  what happened
  */
 static void import_finished(int got, int bad, const char *msg)
 {
@@ -513,8 +513,8 @@ void sdb_do_solved_in(void)
 
 /**
  * @brief One number from a query with one text parameter (?1).
- * @param sql   the query
- * @param text  ?1
+ * @param[in] sql   the query
+ * @param[in] text  ?1
  * @return the number; 0 for none or an error
  */
 static int query_int_text(const char *sql, const char *text)

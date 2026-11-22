@@ -97,9 +97,9 @@ void devctl_poll(void);
  *
  * Only touches, wait (at most 10 s), fill, state (one line: "OK state s<0|1> <board>"), ping, heap
  * (short), screenoff and pz; not shot, files, sql, baud or bench.
- * @param line      the command
+ * @param[in] line      the command
  * @param[out] out  the answer ("OK ..." / "ERR ...", one line), not sent to the port
- * @param n         out's size
+ * @param[in] n         out's size
  * @return true if the answer is OK
  */
 bool devctl_run_line(const char *line, char *out, size_t n);

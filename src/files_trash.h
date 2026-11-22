@@ -26,16 +26,16 @@ extern "C" {
 
 /**
  * @brief The Recycle bin's name of an item -> where it was, relative to the card's root.
- * @param name  its name in the bin
- * @param out   gets the path
- * @param n     its size
+ * @param[in] name  its name in the bin
+ * @param[out] out   gets the path
+ * @param[in] n     its size
  */
 void files_trash_decode(const char *name, char *out, size_t n);
 /**
  * @brief Moves an entry of the folder shown into the Recycle bin (made if it isn't there).
- * @param name  its name
- * @param err   gets why not, on false
- * @param n     its size
+ * @param[in] name  its name
+ * @param[out] err   gets why not, on false
+ * @param[in] n     its size
  * @return false if it couldn't be moved
  */
 bool files_trash(const char *name, char *err, size_t n);
@@ -48,7 +48,7 @@ typedef enum {
 } files_restore_t;
 /**
  * @brief Puts a Recycle bin item back where it was (making the folders on the way if they're gone).
- * @param name  its name in the bin
+ * @param[in] name  its name in the bin
  * @return what happened
  */
 files_restore_t files_restore(const char *name);
@@ -60,7 +60,7 @@ typedef enum {
 } files_purge_t;
 /**
  * @brief Deletes for good, on a task: a Recycle bin item, or everything in the bin.
- * @param name  the item's name in the bin; NULL: Empty (every item)
+ * @param[in] name  the item's name in the bin; NULL: Empty (every item)
  * @return what happened
  */
 files_purge_t files_purge(const char *name);

@@ -38,13 +38,13 @@ static bool s_rows_cpu;                         /**< rows[].permille is valid (a
 static int s_sort_col = SYSMON_COL_CPU;         /**< the order: a column, kept between visits */
 static bool s_sort_desc = true;                 /**< ... and its direction */
 
-/** @brief The core a task is pinned to, for sorting (unpinned after the cores). @param t the task @return the key */
+/** @brief The core a task is pinned to, for sorting (unpinned after the cores). @param[in] t the task @return the key */
 static int core_key(const TaskStatus_t *t)
 {
     return t->xCoreID == tskNO_AFFINITY ? 99 : (int)t->xCoreID;   /* unpinned after the cores */
 }
 
-/** @brief qsort's comparison for the chosen order. @param a a row @param b another @return <0, 0, >0 */
+/** @brief qsort's comparison for the chosen order. @param[in] a a row @param[in] b another @return <0, 0, >0 */
 static int row_cmp(const void *a, const void *b)
 {
     const row_t *x = a, *y = b;
@@ -74,7 +74,7 @@ static int row_cmp(const void *a, const void *b)
     return c;
 }
 
-/** @brief The reader: a list each time it's notified, on core 0. @param arg unused */
+/** @brief The reader: a list each time it's notified, on core 0. @param[in] arg unused */
 static void task_reader(void *arg)
 {
     for (;;) {

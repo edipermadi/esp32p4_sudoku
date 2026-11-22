@@ -87,7 +87,7 @@ static voice_t s_voices[SFX_VOICES];    /**< the voices */
 
 /**
  * @brief Starts a voice's note: its length in frames, the phase from 0.
- * @param v  the voice
+ * @param[in,out] v  the voice
  */
 static void voice_start_note(voice_t *v)
 {
@@ -98,7 +98,7 @@ static void voice_start_note(voice_t *v)
 
 /**
  * @brief Starts a sound on a free voice (or the first one, stolen).
- * @param id  the sound
+ * @param[in] id  the sound
  */
 static void voice_start(sfx_id_t id)
 {
@@ -118,8 +118,8 @@ static void voice_start(sfx_id_t id)
 
 /**
  * @brief
- * @param pos  frames into the note
- * @param len  the note's frames
+ * @param[in] pos  frames into the note
+ * @param[in] len  the note's frames
  * @return the level, 0..1
  */
 /** @brief Envelope: 2 ms attack, then exponential decay with a short linear tail to 0. */
@@ -136,8 +136,8 @@ static float envelope(uint32_t pos, uint32_t len)
 
 /**
  * @brief One oscillator sample.
- * @param wave  wave_t
- * @param ph  the phase, 0..1
+ * @param[in] wave  wave_t
+ * @param[in] ph  the phase, 0..1
  * @return -1..1
  */
 static float osc(uint8_t wave, float ph)
@@ -154,8 +154,8 @@ static float osc(uint8_t wave, float ph)
 
 /**
  * @brief Mixes the voices and the PCM clip into stereo frames.
- * @param out  gets frames * 2 samples
- * @param frames  how many
+ * @param[out] out  gets frames * 2 samples
+ * @param[in] frames  how many
  * @return false: all silent
  */
 static bool render(int16_t *out, int frames)
@@ -209,7 +209,7 @@ static bool render(int16_t *out, int frames)
 
 /**
  * @brief The mixer task: starts what's queued, writes 10 ms chunks to the speaker, silence when idle.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void sfx_task(void *arg)
 {

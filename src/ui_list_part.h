@@ -33,7 +33,7 @@ extern "C" {
  *  @{ */
 /**
  * @brief Builds the right pane's list of rows (hidden).
- * @param scr  the screen
+ * @param[in] scr  the screen
  * @return it
  */
 lv_obj_t *list_rows_build(lv_obj_t *scr);
@@ -41,20 +41,20 @@ lv_obj_t *list_rows_build(lv_obj_t *scr);
 void list_rows_clear(void);
 /**
  * @brief A line of text instead of rows (nothing there, or why not).
- * @param text  the text
+ * @param[in] text  the text
  */
 void list_rows_note(const char *text);
 /**
  * @brief A row: number, puzzle name, a coloured line under it and an optional icon button on the
  *        right.
- * @param i       its place (shown from 1; the taps' user data)
- * @param id      the puzzle
- * @param sub     the line under the name
- * @param sub_c   its colour
- * @param cb      a tap on the row
- * @param act     the button's icon (NULL: none)
- * @param act_c   its colour
- * @param act_cb  a tap on it
+ * @param[in] i       its place (shown from 1; the taps' user data)
+ * @param[in] id      the puzzle
+ * @param[in] sub     the line under the name
+ * @param[in] sub_c   its colour
+ * @param[in] cb      a tap on the row
+ * @param[in] act     the button's icon (NULL: none)
+ * @param[in] act_c   its colour
+ * @param[in] act_cb  a tap on it
  */
 void list_add_row(int i, uint16_t id, const char *sub, lv_color_t sub_c, lv_event_cb_t cb, const char *act,
                   lv_color_t act_c, lv_event_cb_t act_cb);
@@ -73,12 +73,12 @@ int list_fill_starred(void);
  *  @{ */
 /**
  * @brief Delete: asks first, then deletes the collection shown.
- * @param e  the event
+ * @param[in] e  the event
  */
 void list_del_cb(lv_event_t *e);
 /**
  * @brief Export: the saved collection shown, written to the card (puzzles/\<name\>.sdx).
- * @param e  the event
+ * @param[in] e  the event
  */
 void list_export_cb(lv_event_t *e);
 /** @} */

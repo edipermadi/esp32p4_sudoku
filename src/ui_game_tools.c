@@ -72,7 +72,7 @@ static void atk_start(void)
 
 /**
  * @brief The time attack leaderboard into a card.
- * @param c  the card
+ * @param[in] c  the card
  */
 static void atk_board_fill(lv_obj_t *c)
 {
@@ -105,7 +105,7 @@ static void atk_board_fill(lv_obj_t *c)
 
 /**
  * @brief Start (the time attack's dialog).
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void atk_go_cb(lv_event_t *e)
 {
@@ -115,7 +115,7 @@ static void atk_go_cb(lv_event_t *e)
 
 /**
  * @brief Back to Home (the time attack's dialog).
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void atk_home_cb(lv_event_t *e)
 {
@@ -345,7 +345,7 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
 
 /**
  * @brief Draws a rules card's picture.
- * @param e  the draw event (the object's user data: the rules_pic_t)
+ * @param[in] e  the draw event (the object's user data: the rules_pic_t)
  */
 static void rules_pic_draw_cb(lv_event_t *e)
 {
@@ -568,7 +568,7 @@ static void rules_pic_draw_cb(lv_event_t *e)
 
 /**
  * @brief Shows a variant's rules card.
- * @param variant  sudoku_variant_t
+ * @param[in] variant  sudoku_variant_t
  */
 static void rules_show(int variant)
 {
@@ -619,8 +619,8 @@ static uint8_t *qr_temp;                            /**< qrcodegen's work space,
 
 /**
  * @brief the text in the code; false if it doesn't fit buf
- * @param buf  gets the text
- * @param n  its size
+ * @param[out] buf  gets the text
+ * @param[in] n  its size
  * @return false if it doesn't fit
  */
 static bool share_text(char *buf, size_t n)
@@ -709,7 +709,7 @@ static bool share_text(char *buf, size_t n)
 
 /**
  * @brief the code: black modules on white (whatever the theme), with a quiet zone of 3
- * @param e  the draw event
+ * @param[in] e  the draw event
  */
 static void qr_draw_cb(lv_event_t *e)
 {
@@ -779,8 +779,8 @@ lv_obj_t *qr_dialog(const char *title, const char *text, const char *note)
 
 /**
  * @brief CRC-16/CCITT-FALSE, the parts' check.
- * @param p  the text
- * @param n  its length
+ * @param[in] p  the text
+ * @param[in] n  its length
  * @return the CRC
  */
 static uint16_t pz_crc16(const char *p, size_t n)
@@ -797,8 +797,8 @@ static uint16_t pz_crc16(const char *p, size_t n)
 
 /**
  * @brief the puzzle on screen as that line (sdx_format, the givens packed); its length, 0 if it doesn't fit
- * @param buf  gets the line
- * @param n  its size
+ * @param[out] buf  gets the line
+ * @param[in] n  its size
  * @return its length, 0 if it doesn't fit
  */
 static int pz_line(char *buf, size_t n)
@@ -899,7 +899,7 @@ static lv_timer_t *pz_send_timer;       /**< waits until the parts are sent */
 
 /**
  * @brief Once the parts are sent: says so.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void pz_send_poll(lv_timer_t *t)
 {
@@ -913,7 +913,7 @@ static void pz_send_poll(lv_timer_t *t)
 
 /**
  * @brief Send by sound: the puzzle's parts queued for Gibberlink.
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void pz_send_cb(lv_event_t *e)
 {
@@ -963,7 +963,7 @@ static TaskHandle_t pz_check_task;                /**< the check (sudoku_grade) 
 
 /**
  * @brief The received puzzle's check (its own task): graded, then it waits to be deleted.
- * @param arg  unused
+ * @param[in] arg  unused
  */
 static void pz_check_fn(void *arg)
 {
@@ -975,7 +975,7 @@ static uint16_t pz_play_id;                       /**< the one just received (it
 
 /**
  * @brief Play (the received puzzle's dialog).
- * @param e  the event (user data: the dialog)
+ * @param[in] e  the event (user data: the dialog)
  */
 static void pz_play_cb(lv_event_t *e)
 {
@@ -985,7 +985,7 @@ static void pz_play_cb(lv_event_t *e)
 
 /**
  * @brief The received puzzle's check is done: kept in Puzzles > Saved > "Received" and offered to play, or why not.
- * @param t  the timer
+ * @param[in] t  the timer
  */
 static void pz_check_poll(lv_timer_t *t)
 {
@@ -1038,9 +1038,9 @@ static void pz_check_poll(lv_timer_t *t)
 
 /**
  * @brief the whole line: its fields read (sdx_parse), the board made, the check started; why on failure
- * @param line  the line
- * @param why  gets why not
- * @param n  its size
+ * @param[in,out] line  the line
+ * @param[out] why  gets why not
+ * @param[in] n  its size
  * @return true if the check started
  */
 static bool pz_take(char *line, char *why, size_t n)
@@ -1171,7 +1171,7 @@ static lv_obj_t *sv_box;
 
 /**
  * @brief Closes the Save dialog.
- * @param e  the event (NULL from code)
+ * @param[in] e  the event (NULL from code)
  */
 static void sv_close_cb(lv_event_t *e)
 {
@@ -1195,7 +1195,7 @@ void sv_changed(void)
 
 /**
  * @brief A collection tapped: the puzzle put in or taken out.
- * @param e  the event (user data: the collection)
+ * @param[in] e  the event (user data: the collection)
  */
 static void sv_toggle_cb(lv_event_t *e)
 {
@@ -1223,7 +1223,7 @@ static void sv_toggle_cb(lv_event_t *e)
 
 /**
  * @brief The new collection's name typed: made, with the puzzle in it.
- * @param text  the name
+ * @param[in] text  the name
  */
 static void sv_new_done(const char *text)
 {
@@ -1257,7 +1257,7 @@ static void sv_new_done(const char *text)
 
 /**
  * @brief New collection...: asks for its name.
- * @param e  the event
+ * @param[in] e  the event
  */
 static void sv_new_cb(lv_event_t *e)
 {

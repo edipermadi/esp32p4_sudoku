@@ -10,7 +10,7 @@
 
 /**
  * @brief A starred row: its puzzle, to play.
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void star_row_cb(lv_event_t *e)
 {
@@ -23,7 +23,7 @@ static void star_row_cb(lv_event_t *e)
 
 /**
  * @brief A row's star: unstarred, the row goes.
- * @param e  the event (user data: the row)
+ * @param[in] e  the event (user data: the row)
  */
 static void star_row_off_cb(lv_event_t *e)
 {
@@ -71,7 +71,7 @@ int list_fill_starred(void)
 /**
  * @brief The ⋮ menu's Starred puzzles / All puzzles: the right pane shows the starred ones, or the
  *        collection again.
- * @param e  the event
+ * @param[in] e  the event
  */
 void list_star_cb(lv_event_t *e)
 {

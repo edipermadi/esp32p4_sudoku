@@ -80,11 +80,11 @@ uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const u
  * @brief Entropic, Modular Lines: the digits the cell at a place of a line may hold (gen_line_allow()'s
  * case, kept apart: inside it, the bigger function made every other line kind slower, Between
  * Lines by 15-20 %)
- * @param G     the board
- * @param t     the line
- * @param p     the place on it
- * @param v     the digits (0: empty)
- * @param cand  the candidates of the empty ones, or NULL
+ * @param[in] G     the board
+ * @param[in] t     the line
+ * @param[in] p     the place on it
+ * @param[in] v     the digits (0: empty)
+ * @param[in] cand  the candidates of the empty ones, or NULL
  * @return a candidate mask
  */
 static __attribute__((noinline)) uint16_t group_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v,
@@ -443,9 +443,9 @@ typedef struct {
 
 /**
  * @brief Puts a digit in a cell: its units and cage take it.
- * @param g  the search's board
- * @param i  the cell
- * @param d  the digit
+ * @param[in,out] g  the search's board
+ * @param[in] i  the cell
+ * @param[in] d  the digit
  */
 static void grid_set(grid_t *g, int i, int d)
 {
@@ -464,9 +464,9 @@ static void grid_set(grid_t *g, int i, int d)
 
 /**
  * @brief Takes a digit out of a cell (undoes grid_set()).
- * @param g  the search's board
- * @param i  the cell
- * @param d  the digit
+ * @param[in,out] g  the search's board
+ * @param[in] i  the cell
+ * @param[in] d  the digit
  */
 static void grid_clear(grid_t *g, int i, int d)
 {
@@ -485,10 +485,10 @@ static void grid_clear(grid_t *g, int i, int d)
 
 /**
  * @brief smallest and largest sums of k distinct digits from mask
- * @param mask  the digits (bit d = d)
- * @param k  how many
- * @param lo  gets the smallest sum (0: fewer than k digits)
- * @param hi  gets the largest
+ * @param[in] mask  the digits (bit d = d)
+ * @param[in] k  how many
+ * @param[out] lo  gets the smallest sum (0: fewer than k digits)
+ * @param[out] hi  gets the largest
  */
 static void mask_k_range(uint16_t mask, int k, int *lo, int *hi)
 {
@@ -509,8 +509,8 @@ static void mask_k_range(uint16_t mask, int k, int *lo, int *hi)
 
 /**
  * @brief X-Sums: can a row or column with these digits per place (from the clue) still make clue c?
- * @param m  each place's digits (a filled one: its digit)
- * @param c  the clue
+ * @param[in] m  each place's digits (a filled one: its digit)
+ * @param[in] c  the clue
  * @return true: still possible
  */
 static bool is_xsum_ok(const uint16_t m[9], int c)
@@ -591,11 +591,11 @@ uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v
 
 /**
  * @brief Do a row's or column's first three digits keep its clue (Frame, Outside Sudoku, Rossini)?
- * @param G  the board
- * @param lu  the row or column
- * @param a  the first digit from the clue
- * @param b  the second
- * @param c  the third
+ * @param[in] G  the board
+ * @param[in] lu  the row or column
+ * @param[in] a  the first digit from the clue
+ * @param[in] b  the second
+ * @param[in] c  the third
  * @return true if so
  */
 static inline bool is_first3_ok(const sudoku_geom_t *G, int lu, int a, int b, int c)
@@ -693,8 +693,8 @@ static why_t *s_why;                    /**< the question, or NULL */
 
 /**
  * @brief The digits a cell may still take, by every rule of the board.
- * @param g  the search's board
- * @param i  the cell
+ * @param[in] g  the search's board
+ * @param[in] i  the cell
  * @return them (bit d = d)
  */
 static uint16_t grid_free(const grid_t *g, int i)
@@ -934,9 +934,9 @@ static uint16_t grid_free(const grid_t *g, int i)
 
 /**
  * @brief Loads a puzzle into the search's board.
- * @param g  gets it
- * @param G  the board
- * @param cells  the digits, 0 = empty
+ * @param[out] g  gets it
+ * @param[in] G  the board
+ * @param[in] cells  the digits, 0 = empty
  * @return false if a given breaks a rule
  */
 static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
@@ -981,9 +981,9 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
 
 /**
  * @brief counts solutions up to limit; with rng, fills g with a random solution
- * @param g  the search's board
- * @param limit  stop counting there
- * @param rng  a random state, or NULL
+ * @param[in,out] g  the search's board
+ * @param[in] limit  stop counting there
+ * @param[in,out] rng  a random state, or NULL
  * @return the solutions found, at most limit
  */
 static int search(grid_t *g, int limit, uint32_t *rng)

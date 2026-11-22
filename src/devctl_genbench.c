@@ -20,9 +20,9 @@
 
 /**
  * @brief A variant or level by number, name or the start of a name (any case).
- * @param s  the word
- * @param name  its names
- * @param n  how many there are
+ * @param[in] s  the word
+ * @param[in] name  its names
+ * @param[in] n  how many there are
  * @return its number; -1 none, -2 ambiguous
  */
 static int gb_pick(const char *s, const char *(*name)(int), int n)
@@ -61,7 +61,7 @@ static sudoku_geom_t *s_gb_board;                   /**< the board of the puzzle
 
 /**
  * @brief One puzzle, on the worker core like New puzzle's (with its yields: the task watchdog).
- * @param arg  unused (the request is in s_gb)
+ * @param[in] arg  unused (the request is in s_gb)
  */
 static void gb_task(void *arg)
 {
