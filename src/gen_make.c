@@ -286,12 +286,18 @@ static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, su
 
 /* Thermometers over a solved grid: from random cells, a path grows through
  * neighbours (diagonals too) whose digit is higher, 3 to 6 cells long. */
+/* (rule_paths() keeps Dutch Whispers and Parity lines from crossing with these, defined further down) */
+static bool is_line_crossing(const uint8_t *path, int n, int a, int b);
+static bool is_block_crossed(const uint8_t blocks[81], int a, int b);
+static void mark_line_blocks(uint8_t blocks[81], const uint8_t *path, int n);
+
 /**
- * @brief Arrow, Renban, Whispers: up to want lines drawn over the full grid as random walks (side by
+ * @brief Arrow, Renban, Whispers, Parity: up to want lines drawn over the full grid as random walks (side by
  * side or diagonal, not crossing), each kept only if the grid keeps its rule: an arrow's shaft
  * (1-3 cells) adds up to its circle, a Renban (3-5 cells) is a run of consecutive digits, along a
- * Whispers line (3-6 cells) neighbours are 5 or more apart
- * @param[in] variant  VAR_ARROW, VAR_RENBAN or VAR_WHISPER
+ * German (Dutch) Whispers line (3-6 cells) neighbours are 5 (4) or more apart, along a Parity line (3-8
+ * cells) one odd, one even
+ * @param[in] variant  VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_DUTCH or VAR_PARITY
  * @param[in] full  the solution
  * @param[in,out] rng  the random state
  * @param[in] want  lines wanted
@@ -300,12 +306,15 @@ static bool killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, su
  */
 static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
-    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
+    /* (Dutch Whispers, Parity: lines that never cross, as the newer line variants; the older ones' puzzles stay) */
+    const bool uncrossed = variant == VAR_DUTCH || variant == VAR_PARITY;
     int n = 0;
     for (int tries = 0; tries < 2000 && n < want; tries++) {
         int c = (int)(rnd(rng) % 81);
         int target = variant == VAR_ARROW ? 2 + (int)(rnd(rng) % 3)          /* circle + 1-3 */
-                     : variant == VAR_RENBAN ? 3 + (int)(rnd(rng) % 3) : 3 + (int)(rnd(rng) % 4);
+                     : variant == VAR_RENBAN ? 3 + (int)(rnd(rng) % 3) : variant == VAR_PARITY ? 3 + (int)(rnd(rng) % 6)
+                     : 3 + (int)(rnd(rng) % 4);
         if (used[c] || (variant == VAR_WHISPER && full[c] == 5) || (variant == VAR_ARROW && full[c] < 3)) {
             continue;
         }
@@ -323,13 +332,15 @@ static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int w
                     for (int k = 0; k < len; k++) {
                         on |= cells[n][k] == o;
                     }
-                    if (on) {
+                    if (on || (uncrossed && (is_line_crossing(cells[n], len, cur, o) || is_block_crossed(blocks, cur, o)))) {
                         continue;
                     }
                     int x = full[o];
                     bool ok;
-                    if (variant == VAR_WHISPER) {
-                        ok = abs(x - full[cur]) >= 5;
+                    if (variant == VAR_WHISPER || variant == VAR_DUTCH) {
+                        ok = abs(x - full[cur]) >= (variant == VAR_DUTCH ? 4 : 5);
+                    } else if (variant == VAR_PARITY) {
+                        ok = (x ^ full[cur]) & 1;
                     } else if (variant == VAR_RENBAN) {
                         bool seen = false;
                         for (int k = 0; k < len; k++) {
@@ -368,6 +379,7 @@ static bool rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int w
         for (int k = 0; k < len; k++) {
             used[cells[n][k]] = 1;
         }
+        mark_line_blocks(blocks, cells[n], len);
         lens[n++] = (uint8_t)len;
     }
     return n >= 3 && gen_geom_lines(variant, cells, lens, n, out);
@@ -825,26 +837,29 @@ static bool group_paths(int variant, const uint8_t full[81], uint32_t *rng, int 
 }
 
 /**
- * @brief Thermo: up to want thermometers (3-6 cells) drawn over the full grid as random walks whose digits rise from the bulb.
+ * @brief Thermo: up to want thermometers (3-6 cells) drawn over the full grid as random walks whose digits rise from the bulb;
+ *        Slow Thermo (3-7 cells): or stay the same (where a step can: half the time; a solved grid only repeats a
+ *        digit in cells that don't see each other)
+ * @param[in] slow  Slow Thermo
  * @param[in] full  the solution
  * @param[in,out] rng  the random state
  * @param[in] want  thermometers wanted
  * @param[out] out  gets the board
  * @return false: fewer than 3
  */
-static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+static bool thermo_paths(bool slow, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
-    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};   /* (Slow: never crossing) */
     int n = 0;
     for (int tries = 0; tries < 400 && n < want; tries++) {
-        int c = (int)(rnd(rng) % 81), target = 3 + (int)(rnd(rng) % 4);
-        if (used[c] || full[c] > 9 - (target - 1)) {
+        int c = (int)(rnd(rng) % 81), target = 3 + (int)(rnd(rng) % (slow ? 5 : 4));
+        if (used[c] || (!slow && full[c] > 9 - (target - 1))) {
             continue;
         }
         int len = 0;
         cells[n][len++] = (uint8_t)c;
         while (len < target) {
-            int cur = cells[n][len - 1], r = cur / 9, q = cur % 9, cand[8], nc = 0;
+            int cur = cells[n][len - 1], r = cur / 9, q = cur % 9, cand[8], nc = 0, same[8], ns = 0;
             for (int dr = -1; dr <= 1; dr++) {
                 for (int dq = -1; dq <= 1; dq++) {
                     int rr = r + dr, qq = q + dq, o = rr * 9 + qq;
@@ -855,10 +870,18 @@ static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
                     for (int k = 0; k < len; k++) {
                         on |= cells[n][k] == o;
                     }
+                    on |= slow && (is_line_crossing(cells[n], len, cur, o) || is_block_crossed(blocks, cur, o));
                     if (!on && full[o] > full[cur]) {
                         cand[nc++] = o;
                     }
+                    if (!on && slow && full[o] == full[cur]) {
+                        same[ns++] = o;
+                    }
                 }
+            }
+            if (ns && (!nc || rnd(rng) % 2)) {     /* Slow: the same digit, half the time it can */
+                cells[n][len++] = (uint8_t)same[rnd(rng) % (uint32_t)ns];
+                continue;
             }
             if (!nc) {
                 break;
@@ -871,9 +894,12 @@ static bool thermo_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
         for (int k = 0; k < len; k++) {
             used[cells[n][k]] = 1;
         }
+        if (slow) {
+            mark_line_blocks(blocks, cells[n], len);
+        }
         lens[n++] = (uint8_t)len;
     }
-    return n >= 3 && gen_geom_lines(VAR_THERMO, cells, lens, n, out);
+    return n >= 3 && gen_geom_lines(slow ? VAR_SLOW : VAR_THERMO, cells, lens, n, out);
 }
 
 /* ---------------------------------------------------------------- generating (all variants) */
@@ -885,8 +911,9 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     static sudoku_geom_t *jig;                      /* a board made with its puzzle, being tried (PSRAM) */
     const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
-    const bool thermo = variant == VAR_THERMO, sandwich = variant == VAR_SANDWICH;
-    const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER;
+    const bool thermo = variant == VAR_THERMO || variant == VAR_SLOW, sandwich = variant == VAR_SANDWICH;
+    const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_DUTCH ||
+                       variant == VAR_PARITY;
     const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
     const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
@@ -1121,7 +1148,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             }
         } else if (thermo) {                        /* a grid, then thermometers along rising digits */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
-            if (!thermo_paths(full, &rng, level >= GEN_HARD ? 10 : 7, jig)) {
+            if (!thermo_paths(variant == VAR_SLOW, full, &rng, level >= GEN_HARD ? 10 : 7, jig)) {
                 continue;
             }
         } else if (sandwich) {                      /* a grid, then its 18 sums */

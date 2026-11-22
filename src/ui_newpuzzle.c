@@ -101,6 +101,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {37, 117, 1406, 1360},  /* Outside Sudoku (2026-11-22) */
     {41, 292, 1780, 643},   /* Rossini */
     {274, 512, 798, 839},   /* Diagonal Non-Consecutive */
+    {16, 460, 1277, 1349},  /* Dutch Whispers (2026-11-22) */
+    {9, 187, 784, 754},     /* Parity Lines */
+    {11, 188, 696, 535},    /* Slow Thermo */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -444,7 +447,7 @@ static lv_obj_t *gen_pick_desc;                     /**< its line about the vari
 static int gen_pick_var = VAR_CLASSIC;              /**< variant chosen there (kept until power-off) */
 
 #define GEN_CATS     4                  /**< the dialog's tabs */
-#define GEN_CAT_SLOTS 12                /**< variant buttons per tab: 3 rows of 4 (the unused ones hidden) */
+#define GEN_CAT_SLOTS 16                /**< variant buttons per tab: 4 rows of 4 (the unused ones hidden) */
 #define GEN_CAT_END  0xFF               /**< after a tab's last variant */
 
 /** @brief the New puzzle dialog's tabs: their names */
@@ -459,7 +462,7 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     },
     {
         VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM, VAR_ZIPPER, VAR_BETWEEN,
-        VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
+        VAR_ENTROPIC, VAR_MODULAR, VAR_DUTCH, VAR_PARITY, VAR_SLOW, GEN_CAT_END
     },
     {VAR_KILLER, VAR_SANDWICH, VAR_SKY, VAR_LK, VAR_XSUM, VAR_FRAME, VAR_OUTSIDE, VAR_ROSSINI, GEN_CAT_END},
 };
@@ -474,6 +477,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_PALINDROME] = "Palindrome", [VAR_REGIONSUM] = "Region Sum", [VAR_XSUM] = "X-Sums", [VAR_ZIPPER] = "Zipper",
     [VAR_FRAME] = "Frame", [VAR_BETWEEN] = "Between", [VAR_ENTROPIC] = "Entropic", [VAR_MODULAR] = "Modular",
     [VAR_CENTERDOT] = "Center Dot", [VAR_OUTSIDE] = "Outside", [VAR_ROSSINI] = "Rossini", [VAR_DIAGNC] = "Diagonal NC",
+    [VAR_DUTCH] = "Dutch", [VAR_PARITY] = "Parity", [VAR_SLOW] = "Slow Thermo",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -518,6 +522,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_OUTSIDE] = "9x9: a clue by a row or column lists digits that are among its first three cells.",
     [VAR_ROSSINI] = "9x9: an arrow by a row or column: its first three digits rise that way; no arrow: they don't.",
     [VAR_DIAGNC] = "9x9: two cells that touch at a corner never hold digits 1 apart.",
+    [VAR_DUTCH] = "9x9 with amber lines (Dutch Whispers): neighbours along a line differ by 4 or more.",
+    [VAR_PARITY] = "9x9 with red lines: neighbours along a line are one odd and one even digit.",
+    [VAR_SLOW] = "9x9 with thermometers: the digits rise from the bulb, or stay the same where they may.",
 };
 static lv_obj_t *gen_lvl_btn[GEN_LEVELS];          /**< the level buttons (Kids 4x4: Hard and Expert off) */
 
@@ -688,7 +695,7 @@ static void new_puzzle_cb(lv_event_t *e)
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     gen_var_bm = vm;
     lv_buttonmatrix_set_one_checked(vm, true);
-    lv_obj_set_size(vm, LV_PCT(100), 148);          /* three rows */
+    lv_obj_set_size(vm, LV_PCT(100), 200);          /* four rows */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);

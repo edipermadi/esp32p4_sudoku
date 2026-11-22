@@ -47,7 +47,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "palindrome": "Palindrome", "region-sum-lines": "Region", "x-sums": "X-Sums", "zipper-lines": "Zipper",
          "frame": "Frame", "between-lines": "Between", "entropic-lines": "Entropic", "modular-lines": "Modular",
          "center-dot": "Center", "outside-sudoku": "Outside", "rossini": "Rossini",
-         "diagonal-non-consecutive": "Diagonal"}
+         "diagonal-non-consecutive": "Diagonal", "dutch-whispers": "Dutch", "parity-lines": "Parity",
+         "slow-thermo": "Slow"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -61,6 +62,7 @@ MUTED, THERMO, SUM_FG = (120, 126, 138), (196, 200, 207), (43, 111, 224)
 ARROW, RENBAN, WHISPER = (140, 146, 158), (222, 200, 245), (120, 205, 150)   # (the board's, on white)
 PALINDROME, REGIONSUM, ZIPPER = (178, 181, 187), (119, 173, 241), (234, 149, 185)
 ENTROPIC, MODULAR = (239, 178, 108), (98, 192, 192)
+DUTCH, PARITY = (228, 190, 64), (230, 128, 128)
 GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
 
 
@@ -179,10 +181,13 @@ def rule_words(d, vals, c, v, r):
         if d["thermos"]:
             return "its place on its thermometer keeps it between %d and %d" % (r["lo"], r["hi"])
         return "the chains of signs in its box keep it between %d and %d" % (r["lo"], r["hi"])
-    if rule == "thermo":
+    if rule == "thermo":                                    # (Slow Thermo, where the two don't see each other: or the same)
+        same = r.get("same_ok")
         if r["after"]:
-            return "it comes after the %d in %s on its thermometer, so it's above %d" % (w, at, w)
-        return "it comes before the %d in %s on its thermometer, so it's below %d" % (w, at, w)
+            return "it comes after the %d in %s on its thermometer, so it's %s" % (
+                w, at, "%d or more" % w if same else "above %d" % w)
+        return "it comes before the %d in %s on its thermometer, so it's %s" % (
+            w, at, "%d or less" % w if same else "below %d" % w)
     if rule == "cage":
         cage = d["cages"][r["cage"]]
         filled = [vals[x] for x in cage["cells"] if vals[x]]
@@ -222,6 +227,10 @@ def rule_words(d, vals, c, v, r):
         kind = d.get("line_kind", 0)
         if kind == 3:                                       # German Whispers
             return "it's next to the %d in %s on a green line, and %d is less than 5 away from it" % (w, at, v)
+        if kind == 10:                                      # Dutch Whispers
+            return "it's next to the %d in %s on an amber line, and %d is less than 4 away from it" % (w, at, v)
+        if kind == 11:                                      # Parity Lines
+            return "it's next to the %d in %s on a red line, and %d is %s too" % (w, at, v, "odd" if v % 2 else "even")
         if kind == 4:                                       # Palindrome: the cell mirroring it
             return "it mirrors the %d in %s on its grey line, which reads the same from both ends" % (w, at)
         if kind == 6:                                       # Zipper: mirrored cells add up to the line's total
@@ -533,7 +542,7 @@ def make_drawer(d, fonts):
         kind = d.get("line_kind", 0)
         for t in d["thermos"]:                              # the lines, under the digits
             pts = [centre(c) for c in t]
-            if kind == 0:                                   # Thermo: a soft grey line from a round bulb
+            if kind in (0, 12):                             # Thermo, Slow Thermo: a soft grey line from a round bulb
                 g.line(pts, fill=THERMO, width=int(CELL * 0.3), joint="curve")
                 for px, py in pts:
                     rr = CELL * 0.15
@@ -566,6 +575,8 @@ def make_drawer(d, fonts):
                     g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=PALINDROME)
             elif kind == 5:                                 # Region Sum Lines: a narrow blue line
                 g.line(pts, fill=REGIONSUM, width=int(CELL * 0.12), joint="curve")
+            elif kind in (10, 11):                          # Dutch Whispers, Parity Lines: a narrow amber / red line
+                g.line(pts, fill=DUTCH if kind == 10 else PARITY, width=int(CELL * 0.12), joint="curve")
             elif kind in (8, 9):                            # Entropic, Modular Lines: a narrow orange / teal line
                 g.line(pts, fill=ENTROPIC if kind == 8 else MODULAR, width=int(CELL * 0.12), joint="curve")
             elif kind == 6:                                 # Zipper Lines: a narrow pink line

@@ -20,7 +20,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "German Whispers", "Skyscraper", "Little Killer", "Palindrome",
                                                      "Region Sum Lines", "X-Sums", "Zipper Lines", "Frame", "Between Lines",
                                                      "Entropic Lines", "Modular Lines", "Center Dot", "Outside Sudoku",
-                                                     "Rossini", "Diagonal Non-Consecutive"
+                                                     "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
+                                                     "Parity Lines", "Slow Thermo"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -250,7 +251,7 @@ void sudoku_geom_init(void)
     g[VAR_KILLER].variant = VAR_KILLER;
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
-                                  VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI
+                                  VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -270,7 +271,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_SKY ||
             variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
             variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN || variant == VAR_ENTROPIC ||
-            variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI) {
+            variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI || variant == VAR_DUTCH ||
+            variant == VAR_PARITY || variant == VAR_SLOW) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -379,7 +381,8 @@ static int line_kind_of(int variant)
            variant == VAR_WHISPER ? LINE_WHISPER : variant == VAR_PALINDROME ? LINE_PALINDROME :
            variant == VAR_REGIONSUM ? LINE_REGIONSUM : variant == VAR_ZIPPER ? LINE_ZIPPER :
            variant == VAR_BETWEEN ? LINE_BETWEEN : variant == VAR_ENTROPIC ? LINE_ENTROPIC :
-           variant == VAR_MODULAR ? LINE_MODULAR : LINE_THERMO;
+           variant == VAR_MODULAR ? LINE_MODULAR : variant == VAR_DUTCH ? LINE_DUTCH :
+           variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -419,6 +422,17 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
             }
             if (out->line_kind == LINE_WHISPER) {
                 out->allow[c] &= (uint16_t)~(1u << 5);
+            }
+        }
+        if (out->line_kind == LINE_SLOW) {          /* as Thermo, counting only the steps that must rise */
+            int rises = 0, before = 0;
+            for (int i = 1; i < lens[t]; i++) {
+                rises += sudoku_thermo_step(out, t, i);
+            }
+            for (int i = 0; i < lens[t]; i++) {
+                before += i ? sudoku_thermo_step(out, t, i) : 0;
+                int lo = 1 + before, hi = 9 - (rises - before);
+                out->allow[cells[t][i]] &= (uint16_t)(((1u << (hi + 1)) - 1) & ~((1u << lo) - 1));
             }
         }
         if (out->line_kind == LINE_PALINDROME) {    /* mirrored cells hold the same digit: they can't see each other */

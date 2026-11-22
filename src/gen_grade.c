@@ -545,7 +545,7 @@ bool gen_lk_logic(logic_t *L)
 bool gen_thermo_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
-    if (G->line_kind != LINE_THERMO) {              /* Arrow, Renban, Whispers, ...: each cell by its line */
+    if (G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {   /* Arrow, Renban, Whispers, ...: each cell by its line */
         for (int t = 0; t < G->nthermos; t++) {
             for (int p = 0; p < G->thermo_n[t]; p++) {
                 int c = G->thermo_cell[t][p];
@@ -573,14 +573,14 @@ bool gen_thermo_logic(logic_t *L)
             lo[i] = __builtin_ctz(m);
             hi[i] = 31 - __builtin_clz(m);
         }
-        for (int i = 1; i < n; i++) {
-            if (lo[i] < lo[i - 1] + 1) {
-                lo[i] = lo[i - 1] + 1;
+        for (int i = 1; i < n; i++) {               /* (Slow Thermo: the step is 0 where the two don't see each other) */
+            if (lo[i] < lo[i - 1] + sudoku_thermo_step(G, t, i)) {
+                lo[i] = lo[i - 1] + sudoku_thermo_step(G, t, i);
             }
         }
         for (int i = n - 2; i >= 0; i--) {
-            if (hi[i] > hi[i + 1] - 1) {
-                hi[i] = hi[i + 1] - 1;
+            if (hi[i] > hi[i + 1] - sudoku_thermo_step(G, t, i + 1)) {
+                hi[i] = hi[i + 1] - sudoku_thermo_step(G, t, i + 1);
             }
         }
         for (int i = 0; i < n; i++) {
@@ -1052,7 +1052,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->nquads) {
         return 28;
     }
-    if (G->nthermos && G->line_kind != LINE_THERMO) {
+    if (G->nthermos && G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {
         return 28;
     }
     if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini) {

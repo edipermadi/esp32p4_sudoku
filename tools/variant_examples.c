@@ -469,6 +469,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_BETWEEN:
     case VAR_ENTROPIC:
     case VAR_MODULAR:
+    case VAR_DUTCH:
+    case VAR_PARITY:
+    case VAR_SLOW:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -525,15 +528,16 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     }
     case FIT_THERMO: {
         int t = G->thermo_of[c], p = G->thermo_pos[c];
-        if (G->line_kind != LINE_THERMO) {          /* Arrow, Renban, Whispers, ...: the line (and a neighbour) */
+        if (G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {   /* Arrow, Renban, Whispers, ...: the line (and a neighbour) */
             int o = -1, m = G->thermo_n[t] - 1 - p;
             if ((G->line_kind == LINE_PALINDROME || G->line_kind == LINE_ZIPPER) && m != p && v[G->thermo_cell[t][m]]) {
                 o = G->thermo_cell[t][m];             /* (the cell mirroring it) */
             }
-            for (int k = -1; G->line_kind == LINE_WHISPER && k <= 1; k += 2) {
-                int q = p + k;
-                if (q >= 0 && q < G->thermo_n[t] && v[G->thermo_cell[t][q]] &&
-                        abs(v[G->thermo_cell[t][q]] - d) < 5) {
+            const bool nbr = G->line_kind == LINE_WHISPER || G->line_kind == LINE_DUTCH || G->line_kind == LINE_PARITY;
+            for (int k = -1; nbr && k <= 1; k += 2) {   /* the neighbour on it that rules d out */
+                int q = p + k, x = q >= 0 && q < G->thermo_n[t] ? v[G->thermo_cell[t][q]] : 0;
+                if (x && (G->line_kind == LINE_PARITY ? !((x ^ d) & 1)
+                          : abs(x - d) < (G->line_kind == LINE_DUTCH ? 4 : 5))) {
                     o = G->thermo_cell[t][q];
                 }
             }
@@ -541,8 +545,11 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
             return;
         }
         int before = p > 0 ? G->thermo_cell[t][p - 1] : -1, after = p + 1 < G->thermo_n[t] ? G->thermo_cell[t][p + 1] : -1;
-        int o = before >= 0 && v[before] && d <= v[before] ? before : after;
-        printf(", \"rule\": \"thermo\", \"with\": %d, \"after\": %s", o, o == before ? "true" : "false");
+        /* (Slow Thermo: the same digit is fine where the two don't see each other) */
+        const int up = p > 0 ? sudoku_thermo_step(G, t, p) : 1, down = after >= 0 ? sudoku_thermo_step(G, t, p + 1) : 1;
+        int o = before >= 0 && v[before] && d < v[before] + up ? before : after;
+        printf(", \"rule\": \"thermo\", \"with\": %d, \"after\": %s, \"same_ok\": %s", o, o == before ? "true" : "false",
+               (o == before ? up : down) ? "false" : "true");
         return;
     }
     case FIT_CAGE:

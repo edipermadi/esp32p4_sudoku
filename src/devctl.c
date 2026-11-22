@@ -137,6 +137,10 @@ static void run(char *line)
         devctl_colldel(line);
         return;
     }
+    if (!strcmp(cmd, "open")) {                    /* open builtin|saved|imported <name> <n> (serial only) */
+        devctl_open(line);
+        return;
+    }
     if (!strcmp(cmd, "genbench")) {                /* genbench <variant|all> [level|all] [n] */
         devctl_genbench(line);
         return;

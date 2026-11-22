@@ -60,6 +60,9 @@ Collections on the Puzzles screen's Saved and Imported tabs:
                             the Puzzles screen's Delete collection does: its puzzles stay on
                             the board, with their solves, History and Gameplays; an imported
                             file can be imported again
+    open KIND NAME N        open puzzle N of a collection on the game screen, as a tap on the
+                            Puzzles screen does (KIND: builtin, saved or imported; quote a name
+                            with spaces; any case): open builtin "Gnome 1 Easy" 12
 
 SQL on sudoku.db, on the board (its database task runs it; 20 s at most a statement):
     python3 tools/devctl.py --sql "SELECT * FROM players"      one or more statements, then exit
@@ -643,6 +646,12 @@ def run(board, words):
         board.ser.write(("colldel %s %s\n" % (words[1], enc(" ".join(words[2:])))).encode())
         board.wait_for("OK colldel", 30, fail="ERR")
         print("deleted the %s collection %s" % (words[1], " ".join(words[2:])))
+    elif cmd == "open":
+        if len(words) < 4 or words[1] not in ("builtin", "saved", "imported") or not words[-1].isdigit():
+            sys.exit("open builtin|saved|imported NAME N (quote a name with spaces)")
+        board.ser.write(("open %s %s %s\n" % (words[1], enc(" ".join(words[2:-1])), words[-1])).encode())
+        line = board.wait_for("OK open", 30, fail="ERR")
+        print("opened %s" % line.split(" ", 2)[2])
     elif cmd == "heap":
         board.ser.write((" ".join(words) + "\n").encode())
         end = time.time() + 10

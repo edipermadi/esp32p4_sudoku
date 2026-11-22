@@ -106,6 +106,60 @@ int sudoku_ui_fill(const uint8_t *cells, const uint8_t *digits, int n, char *why
     return placed;
 }
 
+/**
+ * @brief Whether a dialog or overlay covers the screen: anything screen-sized on the top layer (not the
+ *        Gibberlink icon, a notice)
+ * @return true if one does
+ */
+static bool is_overlay_open(void)
+{
+    lv_obj_t *top = lv_layer_top();
+    for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
+        lv_obj_t *c = lv_obj_get_child(top, (int32_t)i);
+        if (!lv_obj_is_hidden(c) && lv_obj_get_width(c) >= SCR_W - 20 && lv_obj_get_height(c) >= SCR_W - 20) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* (documented in ui_sudoku.h) */
+bool sudoku_ui_open_puzzle(int tab, const char *name, int number, char *msg, size_t n)
+{
+    if (is_overlay_open()) {
+        snprintf(msg, n, "a dialog or overlay is open (the lock screen?): close it first");
+        return false;
+    }
+    if (is_game_attack() && lv_screen_active() == screen_game()) {
+        snprintf(msg, n, "a time attack is running");
+        return false;
+    }
+    int c = -1;
+    for (int k = 0; k < coll_total() && c < 0; k++) {
+        if (coll_tab(k) == tab && !strcasecmp(coll_name(k), name)) {
+            c = k;
+        }
+    }
+    static const char *const TAB[COLL_TABS] = {"built-in", "saved", "imported"};
+    if (c < 0) {
+        snprintf(msg, n, "no %s collection called \"%s\"", tab >= 0 && tab < COLL_TABS ? TAB[tab] : "?", name);
+        return false;
+    }
+    if (number < 1 || number > coll_size(c)) {
+        snprintf(msg, n, "%s has puzzles 1 to %d", coll_name(c), coll_size(c));
+        return false;
+    }
+    const uint16_t id = coll_puzzle(c, number - 1);
+    game_set_from_coll(c);                          /* (as a tap on the Puzzles screen: List goes back there) */
+    open_puzzle(id);
+    puzzle_name(id, msg, n);
+    if (lv_screen_active() != screen_game()) {      /* (no card: a dialog asks about the game in progress) */
+        size_t len = strlen(msg);
+        snprintf(msg + len, n - len, " (asking first)");
+    }
+    return true;
+}
+
 /* (documented in ui_sudoku.h) */
 void sudoku_ui_screen_name(char *buf, size_t n)
 {
@@ -127,14 +181,8 @@ void sudoku_ui_screen_name(char *buf, size_t n)
         int page = (int)((lv_obj_get_scroll_x(home_menu()) + HOME_GRID_W / 2) / HOME_GRID_W) + 1;
         len += snprintf(buf + len, n - (size_t)len, "%d", page);
     }
-    /* a dialog or overlay: anything screen-sized on the top layer (not the Gibberlink icon, a notice) */
-    lv_obj_t *top = lv_layer_top();
-    for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
-        lv_obj_t *c = lv_obj_get_child(top, (int32_t)i);
-        if (!lv_obj_is_hidden(c) && lv_obj_get_width(c) >= SCR_W - 20 && lv_obj_get_height(c) >= SCR_W - 20) {
-            snprintf(buf + len, n - (size_t)len, "+dialog");
-            break;
-        }
+    if (is_overlay_open()) {
+        snprintf(buf + len, n - (size_t)len, "+dialog");
     }
 }
 

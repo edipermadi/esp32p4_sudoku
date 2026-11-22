@@ -139,6 +139,20 @@ void sudoku_ui_screen_name(char *buf, size_t n);
 bool sudoku_ui_coll_delete(bool saved, const char *name, char *msg, size_t n);
 
 /**
+ * @brief Opens a puzzle of a collection on the game screen, as tapping it on the Puzzles screen does (devctl
+ *        "open"): the game in progress, an unfinished one resumed, or a new start; the game's List goes back to
+ *        that collection. Refused while a dialog or overlay is open (the lock screen among them) or a time attack
+ *        runs. Without a card, a game in progress makes a dialog ask first, as on the screen.
+ * @param[in] tab     the collection's tab: 0 built-in, 1 saved, 2 imported (COLL_TAB_*, collections.h)
+ * @param[in] name    its name, as the tab lists it (any case)
+ * @param[in] number  the puzzle's number in it, from 1
+ * @param[out] msg    gets the puzzle's name ("Easy #5", with " (asking first)" when a dialog asks), or why not
+ * @param[in] n       its size
+ * @return true if it was opened (or a dialog asks first)
+ */
+bool sudoku_ui_open_puzzle(int tab, const char *name, int number, char *msg, size_t n);
+
+/**
  * @brief A part of a puzzle sent by sound (devctl / Gibberlink "pz \<id\> \<i\>/\<n\> \<part\>",
  *        another board's Share > Send by sound). When the last part is in, the puzzle is checked
  *        (one solution), kept in Puzzles > Saved > "Received" and offered to play.

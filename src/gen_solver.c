@@ -135,22 +135,35 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
     uint16_t free = 0x3FE;
     switch (G->line_kind) {
     case LINE_THERMO:                               /* above the cell before it, below the one after */
+    case LINE_SLOW: {                               /* (Slow: or the same, where the two don't see each other) */
+        const int up = p > 0 ? sudoku_thermo_step(G, t, p) : 1, down = p + 1 < n ? sudoku_thermo_step(G, t, p + 1) : 1;
         if (p > 0 && v[cell[p - 1]]) {
-            free &= (uint16_t)~((1u << (v[cell[p - 1]] + 1)) - 1);
+            free &= (uint16_t)~((1u << (v[cell[p - 1]] + up)) - 1);
         }
         if (p + 1 < n && v[cell[p + 1]]) {
-            free &= (uint16_t)((1u << v[cell[p + 1]]) - 1);
+            free &= (uint16_t)((1u << (v[cell[p + 1]] - down + 1)) - 1);
         }
         if (cand) {
             if (p > 0 && LMASK(cell[p - 1])) {
-                free &= (uint16_t)~((1u << (LO(LMASK(cell[p - 1])) + 1)) - 1);
+                free &= (uint16_t)~((1u << (LO(LMASK(cell[p - 1])) + up)) - 1);
             }
             if (p + 1 < n && LMASK(cell[p + 1])) {
-                free &= (uint16_t)((1u << HI(LMASK(cell[p + 1]))) - 1);
+                free &= (uint16_t)((1u << (HI(LMASK(cell[p + 1])) - down + 1)) - 1);
             }
         }
         break;
-    case LINE_WHISPER:                              /* 5 or more away from each neighbour on it */
+    }
+    case LINE_PARITY:                               /* the other parity from each neighbour on it */
+        for (int k = -1; k <= 1; k += 2) {
+            int q = p + k;
+            if (q >= 0 && q < n && LMASK(cell[q])) {
+                const uint16_t m = LMASK(cell[q]), even = 0x154, odd = 0x2AA;
+                free &= (uint16_t)((m & even ? odd : 0) | (m & odd ? even : 0));
+            }
+        }
+        break;
+    case LINE_WHISPER:                              /* 5 (Dutch: 4) or more away from each neighbour on it */
+    case LINE_DUTCH:
         for (int k = -1; k <= 1; k += 2) {
             int q = p + k;
             if (q < 0 || q >= n) {
@@ -162,7 +175,7 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
             }
             for (int d = 1; d <= 9; d++) {
                 for (int w = 1; w <= 9; w++) {
-                    if ((m >> w & 1) && abs(d - w) >= 5) {
+                    if ((m >> w & 1) && abs(d - w) >= (G->line_kind == LINE_DUTCH ? 4 : 5)) {
                         ok |= (uint16_t)(1u << d);
                         break;
                     }

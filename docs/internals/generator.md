@@ -41,7 +41,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 | `consec` | Consecutive bars; with `consec_on` and no bars: Non-Consecutive |
 | `edge_kind`, `edge` | Kropki dots, XV marks, Greater-Than signs, on each cell's right and lower edge |
 | `quad_*` | Quadruple circles |
-| `thermo_*`, `line_kind` | Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper, Between, Entropic and Modular Lines: one set of "paths of cells", with `line_kind` saying how to read them |
+| `thermo_*`, `line_kind` | Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper, Between, Entropic, Modular Lines, Dutch Whispers, Parity Lines and Slow Thermo: one set of "paths of cells", with `line_kind` saying how to read them |
 | `sandwich_sum` | Sandwich: 18 sums |
 | `sky` | Skyscraper: 18 clues, 0 = none |
 | `lk_*` | Little Killer diagonals |
@@ -83,7 +83,7 @@ The exact search says *whether* a puzzle has one solution but not *how hard* it 
    |---|---|---|
    | `gen_cage_logic` | Killer | cage sums |
    | `gen_consec_logic` | Consecutive, Non-Consecutive | bars |
-   | `gen_thermo_logic` | Thermo, Arrow, Renban, Whispers, Palindrome, Region Sum, Zipper, Between, Entropic, Modular | thermometers and lines (a mirrored cell's candidates; the range of each box's part; the totals a zipper can have; the circles' pairs; the groups each third of a line can be) |
+   | `gen_thermo_logic` | Thermo, Slow Thermo, Arrow, Renban, Whispers (German, Dutch), Parity, Palindrome, Region Sum, Zipper, Between, Entropic, Modular | thermometers and lines (a mirrored cell's candidates; the range of each box's part; the totals a zipper can have; the circles' pairs; the groups each third of a line can be) |
    | `gen_sandwich_logic` | Sandwich | where the 1 and 9 can be |
    | `gen_edge_logic` | Kropki, XV, Greater-Than | marks |
    | `gen_quad_logic` | Quadruple | circles |
@@ -135,6 +135,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
   | Greater-Than | a sign between every pair of neighbours inside a box |
   | Quadruple | 14 circles (Hard/Expert 18) at random corners, each with 2–4 of its four digits |
   | Thermo | `thermo_paths()`: 7 thermometers (Hard/Expert 10) along rising digits |
+  | Slow Thermo | `thermo_paths()` too: 7 thermometers (Hard/Expert 10) of 3 to 7 cells along digits that rise or stay the same (where a step can stay the same, it does half the time) |
   | Arrow, Renban, Whispers | `rule_paths()`: 8 lines (Hard/Expert 10) grown cell by cell (sideways or diagonally) through cells that keep the rule: a shaft that sums to its circle, a run of consecutive digits, neighbours 5 apart |
   | Sandwich | all 18 sums |
   | Skyscraper | each line's count, kept for about 75 % of the lines (Hard/Expert 60 %) |
@@ -148,9 +149,10 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
   | Rossini | every line's arrow: rising, falling, or none |
   | Between Lines | `between_paths()`: 8 walks (Hard/Expert 10) from a circle through digits on one side of it, cut at the longest length whose last cell lies beyond all the ones between |
 
+  | Dutch Whispers, Parity Lines | `rule_paths()`, as German Whispers: 8 lines (Hard/Expert 10) of 3 to 6 (Parity 3 to 8) cells whose neighbours are 4 or more apart (one odd, one even) |
   | Entropic, Modular Lines | `group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |
 
-  The newest line kinds (Zipper, Between, Entropic, Modular) never let a line cross itself or another diagonally (`is_line_crossing()`, and the 2x2 blocks earlier lines cross: `is_block_crossed()`); the older ones may (changing them would change their puzzles for a seed). The same four dig logic-first below Expert, like Kropki, XV, Greater-Than and Quadruple: a removal the grader's logic solves within the level is unique without a count. Between Lines also knows that its cells between the circles which share a row, column or box must differ (`between_need`: the circles at least that far apart), and its uniqueness counts give up after 1500 nodes (the others: 6000).
+  The newest line kinds (Zipper, Between, Entropic, Modular, Dutch Whispers, Parity, Slow Thermo) never let a line cross itself or another diagonally (`is_line_crossing()`, and the 2x2 blocks earlier lines cross: `is_block_crossed()`); the older ones may (changing them would change their puzzles for a seed). Zipper, Between, Entropic and Modular also dig logic-first below Expert, like Kropki, XV, Greater-Than and Quadruple: a removal the grader's logic solves within the level is unique without a count. Between Lines also knows that its cells between the circles which share a row, column or box must differ (`between_need`: the circles at least that far apart), and its uniqueness counts give up after 1500 nodes (the others: 6000).
 
   These boards go in `jig`, a geometry allocated once in PSRAM. The one that wins is copied out to the caller with the givens.
 

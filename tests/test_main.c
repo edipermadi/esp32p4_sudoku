@@ -107,6 +107,15 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             if (i && g->line_kind == LINE_WHISPER && abs(x - sol[g->thermo_cell[t][i - 1]]) < 5) {
                 return false;
             }
+            if (i && g->line_kind == LINE_DUTCH && abs(x - sol[g->thermo_cell[t][i - 1]]) < 4) {
+                return false;
+            }
+            if (i && g->line_kind == LINE_PARITY && !((x ^ sol[g->thermo_cell[t][i - 1]]) & 1)) {
+                return false;
+            }
+            if (i && g->line_kind == LINE_SLOW && x < sol[g->thermo_cell[t][i - 1]]) {
+                return false;
+            }
             if (g->line_kind == LINE_RENBAN && (seen >> x & 1)) {
                 return false;
             }
@@ -335,6 +344,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_BETWEEN:
     case VAR_ENTROPIC:
     case VAR_MODULAR:
+    case VAR_DUTCH:
+    case VAR_PARITY:
+    case VAR_SLOW:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -448,6 +460,34 @@ static void test_geometry(void)
     v[10] = 4;
     CHECK(is_sudoku_fits(&b, v, 20, 6) && !is_sudoku_fits(&b, v, 20, 7) && is_sudoku_fits(&b, v, 30, 5) &&
           !is_sudoku_fits(&b, v, 30, 3));
+    /* Dutch Whispers: r1c1 a 5 leaves r1c2 1 or 9 (German: nothing); a 3 leaves 7, 8, 9 */
+    CHECK(sudoku_geom_lines_text(VAR_DUTCH, "0,1,2", &b) && b.line_kind == LINE_DUTCH && (b.allow[1] >> 5 & 1));
+    memset(v, 0, 81);
+    v[0] = 5;
+    CHECK(is_sudoku_fits(&b, v, 1, 1) && is_sudoku_fits(&b, v, 1, 9) && !is_sudoku_fits(&b, v, 1, 2) &&
+          !is_sudoku_fits(&b, v, 1, 8));
+    v[0] = 3;
+    CHECK(is_sudoku_fits(&b, v, 1, 7) && !is_sudoku_fits(&b, v, 1, 6));
+    /* Parity: r1c1 a 4: r1c2 odd, then r1c3 even */
+    CHECK(sudoku_geom_lines_text(VAR_PARITY, "0,1,2", &b) && b.line_kind == LINE_PARITY);
+    memset(v, 0, 81);
+    v[0] = 4;
+    CHECK(is_sudoku_fits(&b, v, 1, 7) && !is_sudoku_fits(&b, v, 1, 6));
+    v[1] = 7;
+    CHECK(is_sudoku_fits(&b, v, 2, 2) && !is_sudoku_fits(&b, v, 2, 3));
+    /* Slow Thermo: 18,28,38 crosses from box 1 to box 5 at r3c1-r4c2 (no shared row, column or box: may repeat),
+     * then r4c2-r5c3 share box 4 (must rise); so r3c1 is 1-8, r5c3 2-9 */
+    CHECK(sudoku_geom_lines_text(VAR_SLOW, "18,28,38", &b) && b.line_kind == LINE_SLOW);
+    CHECK(!(b.allow[18] >> 9 & 1) && (b.allow[18] >> 8 & 1) && !(b.allow[38] >> 1 & 1) && (b.allow[38] >> 2 & 1));
+    memset(v, 0, 81);
+    v[18] = 4;
+    CHECK(is_sudoku_fits(&b, v, 28, 4) && is_sudoku_fits(&b, v, 28, 6) && !is_sudoku_fits(&b, v, 28, 3));
+    v[28] = 4;
+    CHECK(!is_sudoku_fits(&b, v, 38, 4) && is_sudoku_fits(&b, v, 38, 5));
+    CHECK(sudoku_geom_lines_text(VAR_THERMO, "18,28,38", &b));   /* (Thermo: rises at every step) */
+    memset(v, 0, 81);
+    v[18] = 4;
+    CHECK(!is_sudoku_fits(&b, v, 28, 4));
     /* Outside: row 1's first three hold 3 and 7; with r1c1 = 3 and r1c2 = 5, r1c3 is 7; 7 isn't further on */
     CHECK(!sudoku_geom_outside_text("1234,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));
     CHECK(sudoku_geom_outside_text("37,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b) && !(b.allow[5] >> 7 & 1) &&
@@ -536,7 +576,8 @@ static void test_generate(void)
                 continue;
             }
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
-            if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR) {
+            if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR || v == VAR_DUTCH ||
+                    v == VAR_PARITY || v == VAR_SLOW) {
                 CHECKF(!is_lines_crossing(&board), "%s %s: two lines cross", variant_name(v), gen_level_name(lv));
             }
             CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));
@@ -641,7 +682,7 @@ static void test_sdx_edges(void)
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
     snprintf(buf, sizeof(buf), "Kids 4x4||%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_KIDS && p.level == -1);
-    snprintf(buf, sizeof(buf), "37|0|%s", E1);      /* no variant 37 */
+    snprintf(buf, sizeof(buf), "%d|0|%s", VAR_COUNT, E1);   /* no such variant */
     CHECK(!sdx_parse(buf, &p));
     snprintf(buf, sizeof(buf), "Disjoint Groups|easy|%s", E1);
     CHECK(sdx_parse(buf, &p) && p.variant == VAR_DISJOINT && p.level == GEN_EASY);

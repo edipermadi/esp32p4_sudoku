@@ -102,6 +102,13 @@
  *                no arrow: they neither rise nor fall
  *   VAR_DIAGNC   Diagonal Non-Consecutive: Classic rules, and two cells that touch
  *                at a corner never hold digits 1 apart
+ *   VAR_DUTCH    Dutch Whispers: Classic rules, and neighbours along a line differ
+ *                by at least 4
+ *   VAR_PARITY   Parity Lines: Classic rules, and neighbours along a line are one
+ *                odd and one even
+ *   VAR_SLOW     Slow Thermo: Classic rules, and along each thermometer the digits
+ *                rise or stay the same from its bulb (the same only where two
+ *                neighbours on it don't share a row, column or box)
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -196,6 +203,9 @@ typedef enum {
     VAR_OUTSIDE,                        /**< Outside Sudoku */
     VAR_ROSSINI,                        /**< Rossini */
     VAR_DIAGNC,                         /**< Diagonal Non-Consecutive */
+    VAR_DUTCH,                          /**< Dutch Whispers */
+    VAR_PARITY,                         /**< Parity Lines */
+    VAR_SLOW,                           /**< Slow Thermo */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -207,7 +217,8 @@ typedef enum {
  *         "Disjoint Groups", "Asterisk", "Kropki", "XV", "Greater-Than", "Quadruple", "Arrow",
  *         "Renban", "German Whispers", "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
  *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
- *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive"
+ *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
+ *         "Parity Lines", "Slow Thermo"
  */
 const char *variant_name(int variant);
 
@@ -236,7 +247,10 @@ enum {
     LINE_ZIPPER,                        /**< Zipper Lines: cells mirrored about the middle add up the same */
     LINE_BETWEEN,                       /**< Between Lines: digits strictly between the two end circles' */
     LINE_ENTROPIC,                      /**< Entropic Lines: any three in a row: a low, a middle and a high digit */
-    LINE_MODULAR                        /**< Modular Lines: any three in a row: one of each remainder mod 3 */
+    LINE_MODULAR,                       /**< Modular Lines: any three in a row: one of each remainder mod 3 */
+    LINE_DUTCH,                         /**< Dutch Whispers: neighbours differ by 4 or more */
+    LINE_PARITY,                        /**< Parity Lines: neighbours are one odd, one even */
+    LINE_SLOW                           /**< Slow Thermo: digits rise or stay the same from the bulb */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -431,11 +445,12 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len);
 bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief The same for any line variant (Thermo, Arrow: its circle first, Renban, German Whispers,
- * Palindrome, Region Sum, Zipper, Between Lines: its circles at both ends, Entropic, Modular);
+ * Palindrome, Region Sum, Zipper, Between Lines: its circles at both ends, Entropic, Modular, Dutch
+ * Whispers, Parity, Slow Thermo: from its bulb);
  * sudoku_thermos_text() writes them all. A Palindrome line's cells that mirror each other mustn't see
  * each other (they hold the same digit); a Between, Entropic or Modular line has 3 cells at least.
  * @param[in] variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM,
- *                 VAR_ZIPPER, VAR_BETWEEN, VAR_ENTROPIC or VAR_MODULAR
+ *                 VAR_ZIPPER, VAR_BETWEEN, VAR_ENTROPIC, VAR_MODULAR, VAR_DUTCH, VAR_PARITY or VAR_SLOW
  * @param[in] text  the lines
  * @param[out] out  gets the board
  * @return false if the text isn't one
@@ -726,6 +741,19 @@ static inline bool is_sudoku_geom_on_centerdot(const sudoku_geom_t *g, int cell)
 static inline int sudoku_line_group(int kind, int d)
 {
     return kind == LINE_ENTROPIC ? (d - 1) / 3 : d % 3;
+}
+
+/**
+ * @brief Thermo, Slow Thermo: how much a thermometer's digit rises at least from the cell before it: 1 on a
+ * Thermo; on a Slow Thermo 1 where the two cells see each other (they can't hold the same digit), else 0
+ * @param[in] g  the board
+ * @param[in] t  the thermometer
+ * @param[in] i  the place along it, 1.. (from the cell at i - 1)
+ * @return 0 or 1
+ */
+static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
+{
+    return g->line_kind != LINE_SLOW || is_sudoku_geom_peer(g, g->thermo_cell[t][i - 1], g->thermo_cell[t][i]);
 }
 
 /**

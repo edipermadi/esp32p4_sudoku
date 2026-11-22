@@ -328,13 +328,18 @@ int compute_conflicts(void)
         const uint8_t *cell = g_geo->thermo_cell[t];
         switch (g_geo->line_kind) {
         case LINE_THERMO:                           /* two neighbours along it that don't rise */
+        case LINE_SLOW:                             /* ... that fall (a repeat in a row, column or box shows anyway) */
         case LINE_WHISPER:                          /* two neighbours less than 5 apart */
+        case LINE_DUTCH:                            /* ... less than 4 apart */
+        case LINE_PARITY:                           /* two odd or two even neighbours */
             for (int i = 1; i < n; i++) {
                 int a = cell[i - 1], b = cell[i];
                 if (!g_b.val[a] || !g_b.val[b]) {
                     continue;
                 }
-                bool bad = g_geo->line_kind == LINE_THERMO ? g_b.val[b] <= g_b.val[a] : abs(g_b.val[a] - g_b.val[b]) < 5;
+                const int x = g_b.val[a], y = g_b.val[b], k = g_geo->line_kind;
+                bool bad = k == LINE_THERMO ? y <= x : k == LINE_SLOW ? y < x : k == LINE_PARITY ? !((x ^ y) & 1)
+                           : abs(x - y) < (k == LINE_DUTCH ? 4 : 5);
                 if (bad) {
                     g_conflict[a] = g_conflict[b] = true;
                 }

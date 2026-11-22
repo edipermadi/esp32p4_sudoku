@@ -914,7 +914,8 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
  * @brief A line through cell centres pts[0..n-1] (cs: the cell size), as its kind is drawn, under the
  * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey
  * ring (the circle) and a thin shaft from its edge with an arrowhead at the end; LINE_RENBAN a
- * wide purple band; LINE_WHISPER a narrow green line. Also the rules card's picture.
+ * wide purple band; LINE_WHISPER a narrow green line, LINE_DUTCH an amber one, LINE_PARITY a red one;
+ * LINE_SLOW as LINE_THERMO. Also the rules card's picture.
  * @param[in] layer  where
  * @param[in] kind  LINE_*
  * @param[in] pts  the cells' centres

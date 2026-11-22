@@ -52,11 +52,14 @@ python3 tools/devctl.py --port /dev/ttyACM1 "import variants.sdx 'puzzles/Hard o
 python3 tools/devctl.py --port /dev/ttyACM1 colls
 python3 tools/devctl.py --port /dev/ttyACM1 "colldel imported variant-examples"
 python3 tools/devctl.py --port /dev/ttyACM1 "colldel saved 'My favourites'"
+python3 tools/devctl.py --port /dev/ttyACM1 "open builtin 'Gnome 1 Easy' 12"      # -> the game screen
+python3 tools/devctl.py --port /dev/ttyACM1 "open imported variant-examples 40"
 ```
 
 - `import LOCAL [REMOTE]` brings a puzzle file from the computer into **Puzzles → Imported** in one go: it puts the file on the card (`puzzles/` and its own name, unless REMOTE says where), then imports it exactly as **Settings → Data → Import puzzles** (or Files' Import) does: `.sdm` / `.txt`, `.sdx` (any variant) or `.opensudoku`, each puzzle checked for one solution and graded, the collection named after the file (more than 100 puzzles: "name 2", "name 3" ...). It waits for the import (grading takes a while: up to 5 minutes) and prints what happened, as the board's notice says it. The file stays on the card, like a file imported from the screen; a file imported already is refused (`colldel` it first, or give it another name), and so is any import until the board's clock is set (each collection is dated: `synctime`, or `waitclock` for Wi-Fi, first in a script that has just opened the port).
 - `colls` lists the collections on the Puzzles screen's **Imported** and **Saved** tabs: the ones imported from the card (`imported`), then the ones made on the board with Save (`saved`), each with its number of puzzles.
 - `colldel KIND NAME` deletes one, exactly as **⋮ → Delete collection** on that screen does: its puzzles stay on the board, with their solves, History and Gameplays, so nothing played is lost; an imported collection's file can be imported again (Settings > Data > Import puzzles). The Puzzles screen and the rest update at once. It refuses while the card is busy (an export, a backup, Files ...).
+- `open KIND NAME N` opens puzzle N of a collection on the game screen, exactly as tapping it on the Puzzles screen does: the game in progress stays saved, an unfinished game of that puzzle is resumed, and **List** goes back to the collection. KIND is `builtin`, `saved` or `imported`; NAME is as the tab lists it (any case; quote one with spaces). It's refused while a dialog or overlay is open (the lock screen among them; close it first) or a time attack runs. Without a card, a game in progress makes a dialog ask first, as on the screen, and the answer says "(asking first)".
 
 ## SQL on sudoku.db
 

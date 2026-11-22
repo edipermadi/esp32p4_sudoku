@@ -178,7 +178,8 @@ static const uint8_t PIC_PALINDROME[] = {1, 4, 9, 14, 11, 0xFF};   /**< 3 7 5 7 
 static const uint8_t PIC_REGIONSUM[] = {1, 2, 3, 4, 0xFF};  /**< 2 6 | 5 3: 8 in each box */
 static const uint8_t PIC_ZIPPER[] = {0, 1, 2, 3, 4, 0xFF};  /**< 1 3 7 4 6: 1 + 6 = 3 + 4 = 7 */
 static const uint8_t PIC_BETWEEN[] = {0, 1, 2, 3, 0xFF};    /**< (3) 6 5 (8) */
-static const uint8_t PIC_GROUPS[] = {0, 1, 2, 3, 4, 0xFF};  /**< Entropic 2 9 4 1 8; Modular 1 5 3 7 2 */
+static const uint8_t PIC_GROUPS[] = {0, 1, 2, 3, 4, 0xFF};  /**< Entropic 2 9 4 1 8; Modular 1 5 3 7 2; Parity 3 8 1 6 7 */
+static const uint8_t PIC_SLOW[] = {0, 1, 6, 7, 0xFF};       /**< 2 4, then 4 again across the boxes' corner, 7 */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 
 /** @brief Each variant's rules card picture. */
@@ -256,6 +257,9 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
         6, 1, 3, 1, "247953", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, 0, NULL, NULL, 0, 0, LV_SYMBOL_RIGHT
     },
     [VAR_DIAGNC] = {3, 3, 0, 0, "248" "651" "937", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
+    [VAR_DUTCH] = {4, 1, 0, 0, "2738", NULL, NULL, NULL, NULL, NULL, PIC_WHISPER, NULL, -1, 0, NULL, NULL, LINE_DUTCH},
+    [VAR_PARITY] = {5, 1, 0, 0, "38167", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_PARITY},
+    [VAR_SLOW] = {4, 2, 2, 2, "24.." "..47", NULL, NULL, NULL, NULL, NULL, PIC_SLOW, NULL, -1, 0, NULL, NULL, LINE_SLOW},
     [VAR_CENTERDOT] = {
         9, 9, 3, 3, "........." ".3..7..1." "........." "........." ".6..2..9." "........."
         "........." ".8..4..5." ".........",
@@ -341,6 +345,13 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "toward where it points: 2, 4, 7. A row or column with no arrow: its first three neither rise nor fall.",
     [VAR_DIAGNC] = "Classic rules, and two cells that touch at a corner never hold digits 1 apart: no 4 or 6 in a "
     "corner of the 5. Side by side doesn't count: the 4 and 6 next to the 5 are fine.",
+    [VAR_DUTCH] = "Classic rules, and along each amber line, two neighbours differ by at least 4: 2, 7, 3, 8 (7 and "
+    "3 are just far enough apart). A 5 can be on a line, between a 1 and a 9.",
+    [VAR_PARITY] = "Classic rules, and along each red line, neighbours are one odd and one even digit: 3, 8, 1, 6, 7. "
+    "So the digits on a line alternate odd, even, odd, ...",
+    [VAR_SLOW] = "Classic rules, and along each thermometer the digits rise from the round bulb or stay the same: "
+    "2, 4, 4, 7. A digit can only stay the same where the two cells share no row, column or box, as across the "
+    "corner between two boxes here.",
 };
 
 /**
@@ -664,6 +675,7 @@ static bool share_text(char *buf, size_t n)
         key = sudoku_marks_text(G, extra, sizeof(extra)) ? "marks" : NULL;
         break;
     case VAR_THERMO:
+    case VAR_SLOW:
         key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "thermos" : NULL;
         break;
     case VAR_ARROW:
@@ -675,6 +687,8 @@ static bool share_text(char *buf, size_t n)
     case VAR_BETWEEN:
     case VAR_ENTROPIC:
     case VAR_MODULAR:
+    case VAR_DUTCH:
+    case VAR_PARITY:
         key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL;
         break;
     case VAR_SANDWICH:
@@ -883,6 +897,9 @@ static int pz_line(char *buf, size_t n)
     case VAR_BETWEEN:
     case VAR_ENTROPIC:
     case VAR_MODULAR:
+    case VAR_DUTCH:
+    case VAR_PARITY:
+    case VAR_SLOW:
         if (sudoku_thermos_text(G, extra, sizeof(extra))) {
             thermos = extra;
         }

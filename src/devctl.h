@@ -78,6 +78,8 @@ extern "C" {
  *   colldel saved|imported <name>   deletes it as the Puzzles screen's Delete collection does: its
  *                                puzzles stay on the board (solves, History, Gameplays); an imported
  *                                file can be imported again -> "OK colldel" or "ERR colldel: <why>"
+ *   open builtin|saved|imported <collection> <number>   opens that puzzle on the game screen, as a tap
+ *                                on the Puzzles screen does -> "OK open Easy #5" or "ERR open: <why>"
  *
  * Every command answers "OK <command>" (or "ERR <why>") once done.
  *

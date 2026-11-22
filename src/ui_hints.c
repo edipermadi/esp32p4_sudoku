@@ -95,7 +95,8 @@ static const char *units_word(void)
         return "row, column, box or the box centres";
     }
     if (game_geo()->nthermos)
-        return game_geo()->line_kind == LINE_THERMO ? "row, column or box (or the thermometer)"
+        return game_geo()->line_kind == LINE_THERMO || game_geo()->line_kind == LINE_SLOW
+               ? "row, column or box (or the thermometer)"
                : "row, column or box (or the line)";
     return "row, column or box";
 }
@@ -257,6 +258,8 @@ void hint_render(void)
                  "high (7-9) digit" :
                  lk == LINE_MODULAR ? "Any three cells in a row on this line hold one of 1 4 7, one of 2 5 8 and one "
                  "of 3 6 9" :
+                 lk == LINE_DUTCH ? "Along this line, neighbours are 4 or more apart" :
+                 lk == LINE_PARITY ? "Along this line, neighbours are one odd and one even digit" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -273,8 +276,11 @@ void hint_render(void)
                 len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
             }
         }
-        snprintf(tech, sizeof(tech), "Along the thermometer the digits rise from the bulb, so row %d, column %d can "
-                 "only be %s. ", c / 9 + 1, c % 9 + 1, digs);
+        snprintf(tech, sizeof(tech), "%s, so row %d, column %d can only be %s. ",
+                 game_geo()->line_kind == LINE_SLOW
+                 ? "Along the thermometer the digits rise or stay the same from the bulb (they rise where two "
+                 "neighbours share a row, column or box)" : "Along the thermometer the digits rise from the bulb",
+                 c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_DIAGNC) {            /* Diagonal Non-Consecutive: the cell and its corners */
         int c = t->unit;
         for (int k = 0; c >= 0 && c < 81 && k < 5; k++) {
@@ -926,6 +932,16 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;
+    case LINE_DUTCH:
+        ld.color = lv_color_hex(0xD9A400);
+        ld.opa = LV_OPA_80;
+        ld.width = cs * 12 / 100;
+        break;
+    case LINE_PARITY:
+        ld.color = lv_color_hex(0xD94A4A);
+        ld.opa = LV_OPA_70;
+        ld.width = cs * 12 / 100;
+        break;
     case LINE_PALINDROME:
         ld.color = lv_color_hex(0x8A8F98);
         ld.opa = LV_OPA_60;
@@ -983,7 +999,7 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
     d.radius = LV_RADIUS_CIRCLE;
     int r = cs * 4 / 10;
     lv_area_t b = {.x1 = pts[0].x - r, .y1 = pts[0].y - r, .x2 = pts[0].x + r, .y2 = pts[0].y + r};
-    if (kind == LINE_THERMO) {                      /* the bulb */
+    if (kind == LINE_THERMO || kind == LINE_SLOW) {   /* the bulb */
         d.bg_color = C_MUTED;
         d.bg_opa = LV_OPA_40;
         lv_draw_rect(layer, &d, &b);
@@ -1270,7 +1286,8 @@ void game_layout(void)
             game_var() != VAR_SKY && game_var() != VAR_LK && game_var() != VAR_PALINDROME &&
             game_var() != VAR_REGIONSUM && game_var() != VAR_XSUM && game_var() != VAR_ZIPPER &&
             game_var() != VAR_FRAME && game_var() != VAR_BETWEEN && game_var() != VAR_OUTSIDE &&
-            game_var() != VAR_ROSSINI && game_var() != VAR_ENTROPIC && game_var() != VAR_MODULAR) {
+            game_var() != VAR_ROSSINI && game_var() != VAR_ENTROPIC && game_var() != VAR_MODULAR &&
+            game_var() != VAR_DUTCH && game_var() != VAR_PARITY && game_var() != VAR_SLOW) {
         lv_obj_invalidate(game_grid());
         return;
     }

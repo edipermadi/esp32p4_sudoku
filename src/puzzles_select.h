@@ -13,7 +13,7 @@ extern "C" {
 /**
  * @defgroup puzzles_select Selection
  * @ingroup puzzles_core
- * @brief The tab shown (0 Built-in, 1 Saved: imported and saved), the collection shown, the one last
+ * @brief The tab shown (COLL_TAB_*: Built-in, Saved, Imported), the collection shown, the one last
  *        shown in each tab, and whether the right pane shows the starred puzzles instead.
  * @{
  */

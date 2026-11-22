@@ -64,16 +64,16 @@ void devctl_colls(void)
     devctl_reply("OK colls %d\n", n);
 }
 
-/* (documented in devctl_internal.h) */
-void devctl_colldel(const char *line)
+/**
+ * @brief A collection's name as sent: %XX for a space, % or a control byte (as paths are)
+ * @param[in] word  the name as sent
+ * @param[out] name  gets it
+ * @param[in] size  its size
+ */
+static void decode_name(const char *word, char *name, size_t size)
 {
-    char kind[16] = "", word[3 * STATS_IMPORT_NAME + 1] = "", name[STATS_IMPORT_NAME];
-    if (sscanf(line, "%*s %15s %84s", kind, word) != 2 || (strcmp(kind, "saved") && strcmp(kind, "imported"))) {
-        devctl_reply("ERR colldel: colldel saved|imported <name> (%%XX for a space)\n");
-        return;
-    }
     size_t k = 0;
-    for (const char *p = word; *p && k + 1 < sizeof(name); p++) {
+    for (const char *p = word; *p && k + 1 < size; p++) {
         char c = *p;
         if (c == '%' && unhex(p[1]) >= 0 && unhex(p[2]) >= 0) {
             c = (char)(unhex(p[1]) << 4 | unhex(p[2]));
@@ -82,6 +82,41 @@ void devctl_colldel(const char *line)
         name[k++] = c;
     }
     name[k] = 0;
+}
+
+/* (documented in devctl_internal.h) */
+void devctl_open(const char *line)
+{
+    static const char *const KIND[] = {"builtin", "saved", "imported"};   /* (COLL_TAB_*'s order) */
+    char kind[16] = "", word[3 * STATS_IMPORT_NAME + 1] = "", name[STATS_IMPORT_NAME];
+    int number = 0, tab = -1;
+    if (sscanf(line, "%*s %15s %84s %d", kind, word, &number) == 3) {
+        for (int t = 0; t < 3; t++) {
+            tab = strcmp(kind, KIND[t]) ? tab : t;
+        }
+    }
+    if (tab < 0) {
+        devctl_reply("ERR open: open builtin|saved|imported <collection> <number> (%%XX for a space)\n");
+        return;
+    }
+    decode_name(word, name, sizeof(name));
+    char msg[96];
+    if (sudoku_ui_open_puzzle(tab, name, number, msg, sizeof(msg))) {
+        devctl_reply("OK open %s\n", msg);
+    } else {
+        devctl_reply("ERR open: %s\n", msg);
+    }
+}
+
+/* (documented in devctl_internal.h) */
+void devctl_colldel(const char *line)
+{
+    char kind[16] = "", word[3 * STATS_IMPORT_NAME + 1] = "", name[STATS_IMPORT_NAME];
+    if (sscanf(line, "%*s %15s %84s", kind, word) != 2 || (strcmp(kind, "saved") && strcmp(kind, "imported"))) {
+        devctl_reply("ERR colldel: colldel saved|imported <name> (%%XX for a space)\n");
+        return;
+    }
+    decode_name(word, name, sizeof(name));
     const char *busy = sudoku_ui_io_busy();
     if (busy) {
         devctl_reply("ERR colldel: %s\n", busy);

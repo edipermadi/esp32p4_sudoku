@@ -13,7 +13,7 @@
  * | devctl_clock.c     | clock, settime |
  * | devctl_genbench.c  | genbench |
  * | devctl_sql.c       | sql |
- * | devctl_colls.c     | colls, colldel |
+ * | devctl_colls.c     | colls, colldel, open |
  * | devctl_stream.c    | the data to and from the host: numbered base64 lines with a CRC, compression, base64 in |
  */
 #pragma once
@@ -200,6 +200,13 @@ void devctl_colls(void);
  * @param[in] line  the command line
  */
 void devctl_colldel(const char *line);
+/**
+ * @brief open \<builtin|saved|imported\> \<collection\> \<number\>: opens that puzzle on the game screen, as a tap on
+ *        the Puzzles screen does (sudoku_ui_open_puzzle()); the name with %XX for spaces, any case. Answers "OK open
+ *        \<the puzzle's name\>" or "ERR open: \<why\>". Serial only.
+ * @param[in] line  the command line
+ */
+void devctl_open(const char *line);
 /** @} */
 
 /** @} */

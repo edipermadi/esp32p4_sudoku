@@ -62,6 +62,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Outside Sudoku", OF_VARIANT(34)},
     {"Fastest Rossini", OF_VARIANT(35)},
     {"Fastest Diagonal Non-Consecutive", OF_VARIANT(36)},
+    {"Fastest Dutch Whispers", OF_VARIANT(37)},
+    {"Fastest Parity Lines", OF_VARIANT(38)},
+    {"Fastest Slow Thermo", OF_VARIANT(39)},
 };
 
 /* (documented in stats_db_internal.h) */

@@ -399,7 +399,8 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
         return buf;
     }
     if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER || v == VAR_PALINDROME ||
-            v == VAR_REGIONSUM || v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR) &&
+            v == VAR_REGIONSUM || v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR ||
+            v == VAR_DUTCH || v == VAR_PARITY || v == VAR_SLOW) &&
             buf &&
             sudoku_geom_lines_text(v, thermos, buf)) {
         return buf;
