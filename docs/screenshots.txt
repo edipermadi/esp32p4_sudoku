@@ -45,7 +45,7 @@ wait 400
 expect list
 tap 682 36                  # the menu
 wait 500
-tap 600 223                 # Learn: the techniques
+tap 600 223                 # Learn: the techniques (its first tab)
 wait 800
 expect list+dialog
 shot docs/screenshots/learn.png

@@ -141,7 +141,9 @@ src/ui_replay.c         the Replay screen (ui_replay_part.h)
 src/ui_replay_export.c  a replay exported as an MP4: the invisible display, the progress dialog
 src/ui_screenshot.c     the camera buttons: the screen as a JPEG on the card
 src/ui_insights.c       mistake insights (Statistics)
-src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Learn, Enter a puzzle
+src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Enter a puzzle
+src/ui_learn.c          Learn: the lessons in tabs, the search for a lesson's puzzle (on the worker core), the practice game
+src/learn_core.c        Learn's lessons without LVGL: the ten techniques and a variant rule each, and the search for a position to practise one
 src/ui_list.c           Puzzles: the screen, tabs, collection column, panel, grid of numbers (ui_list_part.h)
 src/ui_list_rows.c      its rows: a saved or imported collection's puzzles
 src/ui_list_starred.c   its Starred: the bookmarks

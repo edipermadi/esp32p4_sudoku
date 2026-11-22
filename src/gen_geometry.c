@@ -576,6 +576,50 @@ bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out)
 }
 
 /* (documented in generator.h) */
+void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, char marks[82], char *thermos,
+                         int thermos_len)
+{
+    cages[0] = marks[0] = thermos[0] = 0;
+    switch (g->variant) {
+    case VAR_KILLER:
+        sudoku_cages_text(g, cages, cages_len);
+        break;
+    case VAR_QUAD:
+        sudoku_quads_text(g, cages, cages_len);     /* (where cages go) */
+        break;
+    case VAR_LK:
+        sudoku_lk_text(g, cages, cages_len);        /* (the same) */
+        break;
+    case VAR_SANDWICH:
+        sudoku_sandwich_text(g, marks, 82);
+        break;
+    case VAR_SKY:
+        sudoku_sky_text(g, marks, 82);
+        break;
+    case VAR_XSUM:
+        sudoku_xsum_text(g, marks, 82);
+        break;
+    case VAR_FRAME:
+        sudoku_frame_text(g, marks, 82);
+        break;
+    case VAR_OUTSIDE:
+        sudoku_outside_text(g, marks, 82);
+        break;
+    case VAR_ROSSINI:
+        sudoku_rossini_text(g, marks, 82);
+        break;
+    default:
+        if (g->variant == VAR_EVENODD || g->variant == VAR_CONSEC || g->edge_kind) {
+            sudoku_marks_text(g, marks, 82);
+        }
+        break;
+    }
+    if (g->nthermos) {
+        sudoku_thermos_text(g, thermos, thermos_len);   /* (any lines) */
+    }
+}
+
+/* (documented in generator.h) */
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len)
 {
     int pos = 0;

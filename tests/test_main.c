@@ -15,6 +15,7 @@
 #include <string.h>
 #include <time.h>
 #include "generator.h"
+#include "learn_core.h"
 #include "puzzles.h"
 #include "sdx.h"
 
@@ -820,13 +821,58 @@ static void test_hints(void)
 
 typedef struct { const char *name; void (*fn)(void); } test_t;
 
+/* Learn: every lesson has a position (two seeds each), and it's the lesson's: the right variant's board, the
+ * step's digit the solution's, a single only the variant's rule makes (or the rule's technique); every variant
+ * but Classic, Mini and Kids has a lesson */
+static void test_learn(void)
+{
+    static sudoku_geom_t board;
+    static learn_found_t f;
+    bool has[VAR_COUNT] = {false};
+    CHECK(learn_count() > LEARN_RULES);
+    for (int k = 0; k < learn_count(); k++) {
+        CHECKF(learn_name(k)[0] && learn_desc(k)[0] && learn_group(k) >= 0 && learn_group(k) < LEARN_GROUPS,
+               "lesson %d: name, text, tab", k);
+        CHECKF((k < LEARN_RULES) == (learn_variant(k) < 0) && (k < LEARN_RULES) == (learn_group(k) == LEARN_TECHNIQUES),
+               "%s: technique lessons first", learn_name(k));
+        const int var = learn_variant(k);
+        if (var >= 0) {
+            CHECKF(!has[var], "%s: one lesson per variant", learn_name(k));
+            has[var] = true;
+        }
+        for (uint32_t seed = 1; seed <= 2; seed++) {
+            bool ok = learn_find(k, seed * 7919u, &board, &f);
+            CHECKF(ok, "%s: found (seed %u)", learn_name(k), seed);
+            if (!ok) {
+                continue;
+            }
+            const sudoku_geom_t *G = var >= 0 ? &board : sudoku_geom(VAR_CLASSIC);
+            uint8_t sol[81], givens[81];
+            if (var >= 0) {
+                memcpy(givens, f.givens, 81);
+            } else {
+                puzzle_load(f.puzzle, givens);
+            }
+            CHECKF(G->variant == (var >= 0 ? var : VAR_CLASSIC), "%s: the variant's board", learn_name(k));
+            CHECKF(sudoku_solve(G, givens, sol) && f.step.cell >= 0 && f.step.cell < 81 && !f.vals[f.step.cell] &&
+                   f.step.digit == sol[f.step.cell], "%s: the step is the solution's", learn_name(k));
+            for (int c = 0; c < 81; c++) {
+                CHECKF(!f.vals[c] || f.vals[c] == sol[c], "%s: the position is the solution's", learn_name(k));
+            }
+        }
+    }
+    for (int v = 0; v < VAR_COUNT; v++) {
+        CHECKF(has[v] == (v != VAR_CLASSIC && v != VAR_MINI && v != VAR_KIDS), "%s: a lesson", variant_name(v));
+    }
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
         {"geometry", test_geometry},         {"built-in puzzles", test_builtin},
         {"generator", test_generate},        {"determinism (golden)", test_determinism},
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
-        {"hints", test_hints},
+        {"hints", test_hints},               {"learn", test_learn},
     };
     sudoku_geom_init();
     int failed_tests = 0;

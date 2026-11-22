@@ -19,17 +19,6 @@ static void gen_cat_cb(lv_event_t *e);
 static void gen_cancel_cb(lv_event_t *e);
 static void gen_backdrop_cb(lv_event_t *e);
 static void new_puzzle_cb(lv_event_t *e);
-static int learn_variant(int target);
-static int learn_variant_tech(int target);
-static int learn_tech(int target);
-static bool is_learn_match(int target, const sudoku_step_t *st);
-static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudoku_step_t *st);
-static int learn_variant_find(int target);
-static void learn_task(void *arg);
-static void learn_poll_cb(lv_timer_t *t);
-static void learn_pick_cb(lv_event_t *e);
-static void learn_close_cb(lv_event_t *e);
-static void learn_cb(lv_event_t *e);
 static void ed_refresh(void);
 static void ed_cell_cb(lv_event_t *e);
 static void ed_digit_cb(lv_event_t *e);
@@ -42,12 +31,6 @@ static void ed_check_done(lv_timer_t *t);
 static void ed_play_cb(lv_event_t *e);
 static void enter_cb(lv_event_t *e);
 
-/** Learn's techniques' names, LEARN_* in order. */
-static const char *const LEARN_NAMES[LEARN_COUNT] = {"Hidden single", "Naked single", "Pointing", "Claiming",
-                                                     "Naked pair", "Hidden pair", "Naked triple", "X-Wing",
-                                                     "Swordfish", "XY-Wing", "Killer cage", "Thermometer",
-                                                     "Sandwich clue", "Consecutive bars"
-                                                    };
 
 /* ------------------------------------------------------------- new puzzle (generator) */
 /**
@@ -142,42 +125,7 @@ static void gen_task(void *arg)
     uint32_t t0 = (uint32_t)(esp_timer_get_time() / 1000);
     sudoku_generate(gen_var_req, (gen_level_t)gen_level_req, gen_seed ? gen_seed : esp_random(), gen_givens,
                     gen_board, &got);
-    gen_cages[0] = 0;
-    if (gen_var_req == VAR_KILLER) {
-        sudoku_cages_text(gen_board, gen_cages, STATS_CAGES_LEN);
-    }
-    if (gen_var_req == VAR_QUAD) {
-        sudoku_quads_text(gen_board, gen_cages, STATS_CAGES_LEN);    /* (where cages go) */
-    }
-    gen_marks[0] = 0;
-    if (gen_var_req == VAR_EVENODD || gen_var_req == VAR_CONSEC || gen_board->edge_kind) {
-        sudoku_marks_text(gen_board, gen_marks, 82);
-    }
-    if (gen_var_req == VAR_SANDWICH) {
-        sudoku_sandwich_text(gen_board, gen_marks, 82);
-    }
-    if (gen_var_req == VAR_SKY) {
-        sudoku_sky_text(gen_board, gen_marks, 82);
-    }
-    if (gen_var_req == VAR_XSUM) {
-        sudoku_xsum_text(gen_board, gen_marks, 82);
-    }
-    if (gen_var_req == VAR_FRAME) {
-        sudoku_frame_text(gen_board, gen_marks, 82);
-    }
-    if (gen_var_req == VAR_OUTSIDE) {
-        sudoku_outside_text(gen_board, gen_marks, 82);
-    }
-    if (gen_var_req == VAR_ROSSINI) {
-        sudoku_rossini_text(gen_board, gen_marks, 82);
-    }
-    if (gen_var_req == VAR_LK) {
-        sudoku_lk_text(gen_board, gen_cages, STATS_CAGES_LEN);    /* (where cages go) */
-    }
-    gen_thermos[0] = 0;
-    if (gen_board->nthermos) {
-        sudoku_thermos_text(gen_board, gen_thermos, STATS_THERMOS_LEN);    /* (any lines) */
-    }
+    sudoku_layout_texts(gen_board, gen_cages, STATS_CAGES_LEN, gen_marks, gen_thermos, STATS_THERMOS_LEN);
     int clues = 0;
     for (int i = 0; i < 81; i++) {
         clues += gen_givens[i] != 0;
@@ -239,13 +187,18 @@ static void gen_poll_cb(lv_timer_t *t)
 }
 
 /** @brief seed 0 = a random puzzle; a daily one (always classic) has its date as the seed and day set */
-static lv_timer_t *learn_timer;                     /**< (Learn: its variant lessons use the generator too) */
 static bool gen_bench;                              /**< devctl genbench has the generator */
+
+/* (documented in ui_internal.h) */
+bool is_gen_busy(void)
+{
+    return gen_timer || gen_bench;
+}
 
 /* (documented in ui_sudoku.h) */
 bool gen_bench_begin(void)
 {
-    if (gen_timer || learn_timer || gen_bench) {
+    if (gen_timer || is_learn_busy() || gen_bench) {
         return false;
     }
     gen_bench = true;
@@ -267,7 +220,7 @@ void gen_bench_end(void)
  */
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day)
 {
-    if (gen_timer || learn_timer || gen_bench) {
+    if (gen_timer || is_learn_busy() || gen_bench) {
         return;    /* one at a time */
     }
     if (!gen_board && !(gen_board = heap_caps_malloc(sizeof(*gen_board), MALLOC_CAP_SPIRAM))) {
@@ -666,10 +619,6 @@ static void new_puzzle_cb(lv_event_t *e)
 
     /* the tabs (Grids, Marks, Lines, Clues), then the tab's variants (one checked): rows of four */
     static const char *const CAT_MAP[] = {"Grids", "Marks", "Lines", "Clues", ""};
-    lv_obj_t *tabs = lv_buttonmatrix_create(lv_msgbox_get_content(m));
-    lv_buttonmatrix_set_map(tabs, CAT_MAP);
-    lv_buttonmatrix_set_button_ctrl_all(tabs, LV_BUTTONMATRIX_CTRL_CHECKABLE);
-    lv_buttonmatrix_set_one_checked(tabs, true);
     for (int c = 0; c < GEN_CATS; c++) {            /* the tab of the variant picked last */
         for (int i = 0; GEN_CAT_VARS[c][i] != GEN_CAT_END; i++) {
             if (GEN_CAT_VARS[c][i] == gen_pick_var) {
@@ -678,26 +627,7 @@ static void new_puzzle_cb(lv_event_t *e)
             }
         }
     }
-    lv_buttonmatrix_set_button_ctrl(tabs, (uint32_t)gen_pick_cat, LV_BUTTONMATRIX_CTRL_CHECKED);
-    lv_obj_set_size(tabs, LV_PCT(100), 44);
-    lv_obj_set_style_pad_all(tabs, 0, 0);
-    lv_obj_set_style_pad_column(tabs, 8, 0);
-    lv_obj_set_style_margin_top(tabs, 12, 0);
-    lv_obj_set_style_border_width(tabs, 0, 0);
-    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_text_font(tabs, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS);   /* a tab: its name, underlined when shown */
-    lv_obj_set_style_shadow_width(tabs, 0, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(tabs, C_MUTED, LV_PART_ITEMS);
-    lv_obj_set_style_border_side(tabs, LV_BORDER_SIDE_BOTTOM, LV_PART_ITEMS);
-    lv_obj_set_style_border_width(tabs, 2, LV_PART_ITEMS);
-    lv_obj_set_style_border_color(tabs, C_GRID_THIN, LV_PART_ITEMS);
-    lv_obj_set_style_radius(tabs, 0, LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(tabs, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_border_width(tabs, 4, LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_border_color(tabs, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_t *tabs = make_tab_strip(lv_msgbox_get_content(m), CAT_MAP, gen_pick_cat);
     lv_obj_add_event_cb(tabs, gen_cat_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
@@ -766,404 +696,6 @@ static void new_puzzle_cb(lv_event_t *e)
     if (backdrop && backdrop != lv_layer_top()) {
         lv_obj_add_event_cb(backdrop, gen_backdrop_cb, LV_EVENT_CLICKED, NULL);
     }
-}
-
-/* ------------------------------------------------------------- learn (practice a technique) */
-/**
- * @brief Learn (Puzzles screen): pick a technique; a worker task walks built-in
- * puzzles forward with the hint engine (sudoku_next_step) until the next
- * step needs that technique, and the game opens at that point as a practice
- * game, with the hint card on the technique. Practice games aren't saved,
- * recorded or counted.
- */
-static const char *const LEARN_DESC[LEARN_COUNT] = {
-    "A digit has only one place left in a row, column or box.",
-    "A cell has only one digit left that fits.",
-    "In a box, a digit's places all lie on one line: the rest of that line can't have it.",
-    "On a line, a digit's places all lie in one box: the rest of that box can't have it.",
-    "Two cells of a unit can only be the same two digits: no other cell there can be either.",
-    "Two digits fit only the same two cells of a unit: those cells can't be anything else.",
-    "Three cells of a unit can only be the same three digits between them: no other cell there can.",
-    "In two rows a digit fits only the same two columns: it can't be elsewhere in those columns.",
-    "The same with three rows and three columns (or three columns and three rows).",
-    "A cell that is x or y sees an x-or-z and a y-or-z cell: one of those is z, so what sees both isn't.",
-    "A cage's sum allows only some sets of digits: with what's around it, its cells narrow down.",
-    "Digits rise from the bulb: each cell lies between what the cells before and after it can be.",
-    "The sum between a row's 1 and 9 leaves the 1 and the 9 only a few places in that row or column.",
-    "A bar: the two cells differ by 1. No bar: they don't. Both narrow down a cell's digits.",
-};
-
-/**
- * @brief The variant lessons: a new puzzle of that variant (made on the spot, kept in RAM only).
- * @param[in] target  LEARN_*
- * @return its variant, or -1 (a technique lesson)
- */
-static int learn_variant(int target)
-{
-    switch (target) {
-    case LEARN_CAGE:
-        return VAR_KILLER;
-    case LEARN_THERMO:
-        return VAR_THERMO;
-    case LEARN_SANDWICH:
-        return VAR_SANDWICH;
-    case LEARN_CONSEC:
-        return VAR_CONSEC;
-    }
-    return -1;
-}
-
-/**
- * @brief The technique a variant lesson shows.
- * @param[in] target  LEARN_*
- * @return TECH_*
- */
-static int learn_variant_tech(int target)
-{
-    switch (target) {
-    case LEARN_CAGE:
-        return TECH_CAGE;
-    case LEARN_THERMO:
-        return TECH_THERMO;
-    case LEARN_SANDWICH:
-        return TECH_SANDWICH;
-    case LEARN_CONSEC:
-        return TECH_CONSEC;
-    }
-    return TECH_NONE;
-}
-
-/**
- * @brief the techniques that sudoku_step_with() finds a lesson position for (the newer, rarer ones:
- * the hint engine seldom reaches them first, so any position where they open a single will do)
- * @param[in] target  LEARN_*
- * @return TECH_*, or TECH_NONE
- */
-static int learn_tech(int target)
-{
-    switch (target) {
-    case LEARN_NAKED_TRIPLE:
-        return TECH_NAKED_TRIPLE;
-    case LEARN_X_WING:
-        return TECH_X_WING;
-    case LEARN_SWORDFISH:
-        return TECH_SWORDFISH;
-    case LEARN_XY_WING:
-        return TECH_XY_WING;
-    }
-    return TECH_NONE;
-}
-
-static lv_obj_t *learn_box;                         /**< the Learn dialog */
-static lv_obj_t *learn_wait;                        /**< "Finding a puzzle..." */
-static volatile int learn_state;                    /**< 0 searching, 1 found, 2 nothing found */
-static int learn_target;                /**< the lesson asked for, LEARN_* */
-static uint16_t learn_id;               /**< the lesson's puzzle */
-static uint8_t learn_vals[81];          /**< its position */
-static sudoku_step_t learn_step;        /**< the step it shows */
-
-/**
- * @brief does this step need the technique (for a naked single: a cell with one candidate is enough)
- * @param[in] target  LEARN_*
- * @param[in] st  the step
- * @return true if so
- */
-static bool is_learn_match(int target, const sudoku_step_t *st)
-{
-    switch (target) {
-    case LEARN_HIDDEN:
-        return st->kind == STEP_HIDDEN_SINGLE && !st->tech.kind;
-    case LEARN_NAKED:
-        return st->kind == STEP_NAKED_SINGLE && !st->tech.kind;
-    case LEARN_POINTING:
-        return st->tech.kind == TECH_POINTING;
-    case LEARN_CLAIMING:
-        return st->tech.kind == TECH_CLAIMING;
-    case LEARN_NAKED_PAIR:
-        return st->tech.kind == TECH_NAKED_PAIR;
-    case LEARN_HIDDEN_PAIR:
-        return st->tech.kind == TECH_HIDDEN_PAIR;
-    }
-    return false;
-}
-
-/**
- * @brief a naked single on the board: a cell only one digit fits (singles are found
- * as hidden ones first, so the hint engine seldom names this one itself)
- * @param[in] vals  the board
- * @param[in] sol  the solution
- * @param[out] st  gets the step
- * @return true if there is one
- */
-static bool learn_find_naked(const uint8_t vals[81], const uint8_t sol[81], sudoku_step_t *st)
-{
-    const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
-    for (int c = 0; c < 81; c++) {
-        if (vals[c]) {
-            continue;
-        }
-        uint16_t m = 0x3FE;
-        for (int p = 0; p < G->npeers[c]; p++) {
-            m &= (uint16_t)~(1u << vals[G->peers[c][p]]);
-        }
-        if (__builtin_popcount(m) == 1 && __builtin_ctz(m) == sol[c]) {
-            memset(st, 0, sizeof(*st));
-            st->kind = STEP_NAKED_SINGLE;
-            st->cell = c;
-            st->digit = sol[c];
-            st->unit = -1;
-            return true;
-        }
-    }
-    return false;
-}
-
-/* a variant lesson's puzzle, for learn_poll_cb to put in the RAM cache */
-static uint8_t learn_givens[81];                    /**< a variant lesson's puzzle */
-static sudoku_geom_t *learn_board;                  /**< PSRAM */
-static char *learn_cages;                           /**< its cages (PSRAM) */
-static char *learn_thermos;                         /**< its lines (PSRAM) */
-static char learn_marks[82];            /**< its marks */
-
-/**
- * @brief A variant lesson's position: new puzzles of the variant until a step needs the technique.
- * @param[in] target  LEARN_*
- * @return 1 found, 2 nothing found
- */
-static int learn_variant_find(int target)
-{
-    static uint8_t vals[81], sol[81];
-    const int var = learn_variant(target), tech = learn_variant_tech(target);
-    for (int tries = 0; tries < 6; tries++) {      /* most puzzles have one early; a few seconds each at most */
-        gen_level_t got;
-        if (!sudoku_generate(var, GEN_MEDIUM, esp_random(), learn_givens, learn_board, &got)) {
-            continue;
-        }
-        if (!sudoku_solve(learn_board, learn_givens, sol)) {
-            continue;
-        }
-        memcpy(vals, learn_givens, 81);
-        for (int step = 0; step < 81; step++) {
-            sudoku_step_t st;
-            if (!sudoku_next_step(learn_board, vals, sol, &st) || st.cell < 0) {
-                break;
-            }
-            if (st.tech.kind == tech) {
-                memcpy(learn_vals, vals, 81);
-                learn_step = st;
-                learn_cages[0] = learn_marks[0] = learn_thermos[0] = 0;
-                if (var == VAR_KILLER) {
-                    sudoku_cages_text(learn_board, learn_cages, STATS_CAGES_LEN);
-                }
-                if (var == VAR_CONSEC) {
-                    sudoku_marks_text(learn_board, learn_marks, sizeof(learn_marks));
-                }
-                if (var == VAR_SANDWICH) {
-                    sudoku_sandwich_text(learn_board, learn_marks, sizeof(learn_marks));
-                }
-                if (var == VAR_THERMO) {
-                    sudoku_thermos_text(learn_board, learn_thermos, STATS_THERMOS_LEN);
-                }
-                return 1;
-            }
-            vals[st.cell] = (uint8_t)st.digit;      /* on to the next step */
-        }
-    }
-    return 2;
-}
-
-/**
- * @brief The lesson search (core 0): a position where the technique opens up a single; learn_state then says found or not.
- * @param[in] arg  unused
- */
-static void learn_task(void *arg)
-{
-    static uint8_t vals[81], sol[81];
-    const sudoku_geom_t *G = sudoku_geom(VAR_CLASSIC);
-    const int target = learn_target;
-    if (learn_variant(target) >= 0) {
-        learn_state = learn_variant_find(target);
-        vTaskDelete(NULL);
-        return;
-    }
-    /* the harder collections first for the harder techniques */
-    uint32_t r = esp_random();
-    int found = 0;
-    for (int tries = 0; tries < 2000 && !found; tries++) {     /* (pairs are the rarest: ~200 puzzles) */
-        int c = (int)((r + (uint32_t)tries * 7) % PUZZLE_COLLECTION_COUNT);
-        if (target >= LEARN_POINTING && strstr(puzzle_collection(c)->name, "Easy")) {
-            continue;
-        }
-        uint16_t id = (uint16_t)(puzzle_collection(c)->first + (esp_random() % puzzle_collection(c)->count));
-        puzzle_load(id, vals);
-        if (!sudoku_solve(G, vals, sol)) {
-            continue;
-        }
-        sudoku_step_t st, w;
-        const int tech = learn_tech(target);
-        for (int step = 0; step < 81 && !found; step++) {
-            if (target == LEARN_NAKED && step >= 8 && learn_find_naked(vals, sol, &st)) {
-                found = 1;
-            } else if (!sudoku_next_step(G, vals, sol, &st) || st.cell < 0) {
-                break;
-            } else if (tech && (st.tech.kind || st.kind == STEP_NONE) && sudoku_step_with(G, vals, sol, tech, &w)) {
-                st = w;                             /* stuck on singles, and this technique opens one */
-                found = 1;
-            } else if (!tech && is_learn_match(target, &st)) {
-                found = 1;
-            }
-            if (found) {
-                learn_id = id;
-                memcpy(learn_vals, vals, 81);
-                learn_step = st;
-                break;
-            }
-            vals[st.cell] = (uint8_t)st.digit;      /* on to the next step */
-        }
-    }
-    learn_state = found ? 1 : 2;
-    vTaskDelete(NULL);
-}
-
-/**
- * @brief Waits for the lesson search: then opens the lesson, or says none was found.
- * @param[in] t  the timer
- */
-static void learn_poll_cb(lv_timer_t *t)
-{
-    if (learn_state == 0) {
-        return;
-    }
-    lv_timer_delete(learn_timer);
-    learn_timer = NULL;
-    if (learn_wait) {
-        lv_msgbox_close(learn_wait);
-    }
-    learn_wait = NULL;
-    if (learn_state != 1) {
-        sudoku_ui_notice("Couldn't find an example just now: try again.", 3000);
-        return;
-    }
-    /* the puzzle, at that point, as a practice game */
-    int var = learn_variant(learn_target);
-    if (var >= 0) {                                 /* made just now: kept in RAM only, as without a card */
-        learn_id = gen_ram_take();
-        gen_cache_put(learn_id, var, GEN_MEDIUM, learn_givens, NULL, var == VAR_KILLER ? learn_cages : NULL,
-                      learn_marks[0] ? learn_marks : NULL, learn_thermos[0] ? learn_thermos : NULL, NULL);
-    }
-    start_game(learn_id, false);
-    game_set_practice(learn_target);
-    game_set_flags(0);                                    /* (practice: never the no-notes challenge) */
-    challenge_ui();
-    uint8_t given[81];
-    puzzle_get(learn_id, given);
-    for (int i = 0; i < 81; i++) {
-        if (!given[i]) {
-            game_put_value(i, learn_vals[i]);
-        }
-    }
-    game_set_undo_len(0);
-    game_set_undo_head(0);
-    game_set_nmoves(0);
-    compute_conflicts();
-    update_header();
-    hint_set_info(&(learn_step));                            /* the hint card on the technique */
-    hint_set_step(1);
-    hint_render();
-}
-
-/**
- * @brief A lesson picked: the search starts.
- * @param[in] e  the event (user data: LEARN_*)
- */
-static void learn_pick_cb(lv_event_t *e)
-{
-    int target = (int)(intptr_t)lv_event_get_user_data(e);
-    if (learn_box) {
-        lv_msgbox_close_async(learn_box);
-    }
-    learn_box = NULL;
-    if (learn_timer || gen_bench) {
-        return;    /* (genbench: the generator is busy) */
-    }
-    char text[120];
-    if (learn_variant(target) >= 0) {
-        if (gen_timer) {
-            return;    /* New puzzle is using the generator (one at a time) */
-        }
-        if (!learn_board && !(learn_board = heap_caps_malloc(sizeof(*learn_board), MALLOC_CAP_SPIRAM))) {
-            return;
-        }
-        if (!learn_cages && !(learn_cages = heap_caps_malloc(STATS_CAGES_LEN, MALLOC_CAP_SPIRAM))) {
-            return;
-        }
-        if (!learn_thermos && !(learn_thermos = heap_caps_malloc(STATS_THERMOS_LEN, MALLOC_CAP_SPIRAM))) {
-            return;
-        }
-        snprintf(text, sizeof(text), "Making a %s puzzle where the next step uses its rule...",
-                 variant_name(learn_variant(target)));
-    } else {
-        snprintf(text, sizeof(text), "Finding a puzzle where the next step is a %s...", LEARN_NAMES[target]);
-    }
-    learn_target = target;
-    learn_state = 0;
-    learn_wait = make_msgbox(LV_SYMBOL_EYE_OPEN "  Learn", text);
-    /* 16 KB: the variant lessons run the generator (as gen_task); 8 KB overflowed */
-    if (xTaskCreatePinnedToCore(learn_task, "learn", 16384, NULL, 2, NULL, WORKER_CORE) != pdPASS) {
-        lv_msgbox_close(learn_wait);
-        learn_wait = NULL;
-        return;
-    }
-    learn_timer = lv_timer_create(learn_poll_cb, 50, NULL);
-}
-
-/**
- * @brief Closes the Learn dialog.
- * @param[in] e  the event
- */
-static void learn_close_cb(lv_event_t *e)
-{
-    if (learn_box) {
-        lv_msgbox_close_async(learn_box);
-    }
-    learn_box = NULL;
-}
-
-/**
- * @brief Learn: the dialog of techniques.
- * @param[in] e  the event
- */
-static void learn_cb(lv_event_t *e)
-{
-    lv_obj_t *m = make_msgbox("Learn a technique", NULL);
-    learn_box = m;
-    lv_obj_set_width(m, 640);
-    lv_obj_t *c = lv_msgbox_get_content(m);
-    lv_obj_set_height(c, 500);                      /* ten techniques: the list scrolls */
-    lv_obj_set_scroll_dir(c, LV_DIR_VER);
-    make_wrap_text(c, &lv_font_montserrat_16, C_MUTED,
-                   "Pick one: a puzzle opens where it's the next step, with the hint showing where to look. "
-                   "Practice games aren't saved or counted.");
-    for (int i = 0; i < LEARN_COUNT; i++) {
-        if (i == LEARN_CAGE) {                      /* the variants' own rules: a heading over them */
-            lv_obj_t *hd = make_wrap_text(c, &lv_font_montserrat_16, C_MUTED,
-                                          "Variant rules: a new puzzle of that kind is made (a few seconds).");
-            lv_obj_set_style_margin_top(hd, 14, 0);
-        }
-        lv_obj_t *row = make_btn(c, 0, 0, 0, 86, NULL, NULL, learn_pick_cb, (void *)(intptr_t)i);   /* 2 lines */
-        lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_style_bg_color(row, C_CARD2, 0);
-        lv_obj_set_style_margin_top(row, 8, 0);
-        lv_obj_t *n = make_label(row, &lv_font_montserrat_18, C_TEXT);
-        lv_label_set_text(n, LEARN_NAMES[i]);
-        lv_obj_align(n, LV_ALIGN_TOP_LEFT, 14, 8);
-        lv_obj_t *d = make_label(row, &lv_font_montserrat_14, C_MUTED);
-        lv_obj_set_width(d, 580);
-        lv_label_set_long_mode(d, LV_LABEL_LONG_MODE_WRAP);   /* (the descriptions take up to two lines) */
-        lv_label_set_text(d, LEARN_DESC[i]);
-        lv_obj_align(d, LV_ALIGN_TOP_LEFT, 14, 36);
-    }
-    msgbox_button(m, "Close", learn_close_cb, false);
 }
 
 /* ------------------------------------------------------------- enter a puzzle by hand */
@@ -1473,5 +1005,4 @@ void new_menu_cb(lv_event_t *e)
 }
 
 /* ---- accessors: the other UI files reach this file's state through these */
-const char *const *learn_names(void) { return LEARN_NAMES; }
 lv_obj_t *screen_edit(void) { return scr_edit; }

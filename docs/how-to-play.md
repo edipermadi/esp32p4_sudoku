@@ -33,6 +33,7 @@
 | Accent colour                   | **Settings → Accent colour**                     |
 | A player's colour               | Tap the dot by their name on **Players**         |
 | Practise a technique            | **Puzzles → ⋮ → Learn**                          |
+| Learn a variant's rule          | **Puzzles → ⋮ → Learn**, then its tab (Grids, Marks, Lines, Clues) |
 | Bigger digits on the board      | **Settings → Display → Digit size** → Large      |
 | This week against last week     | Tap the "puzzles solved" line on the home screen  |
 | Ten minutes of Easy puzzles     | **Time attack** on the home screen, then **Start** |

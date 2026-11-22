@@ -615,6 +615,36 @@ void puzzle_name(uint16_t id, char *buf, size_t n)
 }
 
 /* (documented in ui_internal.h) */
+lv_obj_t *make_tab_strip(lv_obj_t *parent, const char *const *map, int checked)
+{
+    lv_obj_t *tabs = lv_buttonmatrix_create(parent);
+    lv_buttonmatrix_set_map(tabs, map);
+    lv_buttonmatrix_set_button_ctrl_all(tabs, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    lv_buttonmatrix_set_one_checked(tabs, true);
+    lv_buttonmatrix_set_button_ctrl(tabs, (uint32_t)checked, LV_BUTTONMATRIX_CTRL_CHECKED);
+    lv_obj_set_size(tabs, LV_PCT(100), 44);
+    lv_obj_set_style_pad_all(tabs, 0, 0);
+    lv_obj_set_style_pad_column(tabs, 8, 0);
+    lv_obj_set_style_margin_top(tabs, 12, 0);
+    lv_obj_set_style_border_width(tabs, 0, 0);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_text_font(tabs, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS);   /* a tab: its name, underlined when shown */
+    lv_obj_set_style_shadow_width(tabs, 0, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(tabs, C_MUTED, LV_PART_ITEMS);
+    lv_obj_set_style_border_side(tabs, LV_BORDER_SIDE_BOTTOM, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(tabs, 2, LV_PART_ITEMS);
+    lv_obj_set_style_border_color(tabs, C_GRID_THIN, LV_PART_ITEMS);
+    lv_obj_set_style_radius(tabs, 0, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_opa(tabs, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(tabs, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_border_width(tabs, 4, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(tabs, C_ACCENT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    return tabs;
+}
+
+/* (documented in ui_internal.h) */
 lv_obj_t *make_btn(lv_obj_t *parent, int x, int y, int w, int h, const char *text,
                    const lv_font_t *font, lv_event_cb_t cb, void *user)
 {

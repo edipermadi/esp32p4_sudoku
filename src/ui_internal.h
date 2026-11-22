@@ -142,11 +142,6 @@ typedef struct {
 #define L_TAB_H   48                        /**< Built-in | Saved | Imported (as icons), over the collection column */
 #define L_GRID_Y  (L_PANE_Y + 62)           /**< the right pane's grid or rows, under name and stats */
 #define L_COLLS (PUZZLE_COLLECTION_COUNT + STATS_MAX_IMPORTS + STATS_MAX_SAVED)   /**< built-in, imported, saved */
-/** @brief Learn: the techniques there are practice puzzles for */
-enum { LEARN_HIDDEN = 0, LEARN_NAKED, LEARN_POINTING, LEARN_CLAIMING, LEARN_NAKED_PAIR, LEARN_HIDDEN_PAIR,
-       LEARN_NAKED_TRIPLE, LEARN_X_WING, LEARN_SWORDFISH, LEARN_XY_WING,
-       LEARN_CAGE, LEARN_THERMO, LEARN_SANDWICH, LEARN_CONSEC, LEARN_COUNT
-     };   /**< (the last four: variant rules) */
 
 /* ------------------------------------------------------------- generated puzzles */
 /** @brief The puzzles made on the board live in sudoku.db (stats_db_gen_*); the last
@@ -638,12 +633,12 @@ lv_obj_t *game_pause_ovl(void);
 bool is_game_paused(void);
 /**
  * @brief Learn: the technique practised.
- * @return LEARN_*, -1: a real game
+ * @return the lesson (learn_core.h), -1: a real game
  */
 int game_practice(void);
 /**
  * @brief Sets it.
- * @param[in] v  LEARN_*, -1: a real game
+ * @param[in] v  the lesson (learn_core.h), -1: a real game
  */
 void game_set_practice(int v);
 /**
@@ -936,10 +931,29 @@ void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len);
  * Little Killer one per place on a line between cells (10 above, 10 left) */
 #define BOARD_CLUES 20
 /**
- * @brief Learn's techniques' names.
- * @return LEARN_COUNT strings
+ * @brief Learn (Puzzles > ⋮ > Learn): the dialog of lessons, in tabs (ui_learn.c).
+ * @param[in] e  the event
  */
-const char *const *learn_names(void);
+void learn_cb(lv_event_t *e);
+/**
+ * @brief Learn is looking for a lesson's puzzle (its variant lessons run the generator: one job at a time) (ui_learn.c).
+ * @return true while it is
+ */
+bool is_learn_busy(void);
+/**
+ * @brief New puzzle or devctl genbench has the generator (ui_newpuzzle.c).
+ * @return true while one has
+ */
+bool is_gen_busy(void);
+/**
+ * @brief A tab strip over a dialog's content, as New puzzle's and Learn's: the tabs' names, the one shown
+ *        underlined in the accent colour (one checked at a time; LV_EVENT_VALUE_CHANGED when another is tapped).
+ * @param[in] parent  the dialog's content
+ * @param[in] map  the names, then ""
+ * @param[in] checked  the tab shown
+ * @return the button matrix
+ */
+lv_obj_t *make_tab_strip(lv_obj_t *parent, const char *const *map, int checked);
 /**
  * @brief The Enter a puzzle screen.
  * @return it, NULL: not built

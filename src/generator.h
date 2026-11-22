@@ -475,6 +475,21 @@ bool sudoku_geom_lines_text(int variant, const char *text, sudoku_geom_t *out);
  */
 bool sudoku_thermos_text(const sudoku_geom_t *g, char *buf, int len);
 /**
+ * @brief A board's layout as the texts the game keeps with a puzzle (sudoku.db's generated table, the RAM cache):
+ *        Killer's cages, Quadruple's circles and Little Killer's diagonals go in cages; the marks of Even-Odd,
+ *        Consecutive, Kropki, XV, Greater-Than and Fortress, and the clues of Sandwich, Skyscraper, X-Sums, Frame,
+ *        Outside Sudoku and Rossini, in marks; any lines (thermometers, arrows, ...) in thermos. Jigsaw's regions
+ *        are g->region itself. A text the variant doesn't use is "".
+ * @param[in] g  the board
+ * @param[out] cages  gets that text
+ * @param[in] cages_len  its size (STATS_CAGES_LEN)
+ * @param[out] marks  gets that text (82 at least)
+ * @param[out] thermos  gets that text
+ * @param[in] thermos_len  its size (STATS_THERMOS_LEN)
+ */
+void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, char marks[82], char *thermos,
+                         int thermos_len);
+/**
  * @brief A Sandwich board from its clues as text: 18 numbers 0..35, the rows top
  * to bottom then the columns left to right, comma-separated;
  * sudoku_sandwich_text() writes it.

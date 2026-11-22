@@ -4,6 +4,7 @@
  * @brief The game screen: the rules check, saving, the board, confetti, input, building the screen.
  */
 #include "ui_internal.h"
+#include "learn_core.h"
 
 /* this file's own functions, in any order */
 static bool is_peer(int a, int b);
@@ -78,7 +79,7 @@ static uint8_t  g_sol[81];       /**< the solution, for Fill */
 static game_move_t *g_moves;     /**< move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
 static int      h_step;          /**< 0 = no hint open, 1 = nudge shown, 2 = reason shown */
 static sudoku_step_t h_info;     /**< the hint shown: its step */
-static int      g_practice = -1;  /**< Learn: the technique being practised (LEARN_*), -1 = a real game */
+static int      g_practice = -1;  /**< Learn: the lesson being practised (learn_core.h), -1 = a real game */
 static bool     g_attack;         /**< this game is part of a run */
 static bool     g_starred;        /**< the puzzle is bookmarked (Star in the ⋮ menu) */
 static bool     g_can_star;       /**< ... and can be (not Learn's, nor one kept only in RAM) */
@@ -677,7 +678,7 @@ void update_header(void)
     char base[40], name[64], best[24], buf[48];
     puzzle_name(g_id, base, sizeof(base));
     if (g_practice >= 0) {
-        snprintf(base, sizeof(base), "Practice: %s", learn_names()[g_practice]);
+        snprintf(base, sizeof(base), "Practice: %s", learn_name(g_practice));
     }
     snprintf(name, sizeof(name), "%s%s", g_attack ? "Time attack: " : "", base);
     lv_label_set_text(g_title, name);
