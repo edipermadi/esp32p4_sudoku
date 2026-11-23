@@ -84,8 +84,11 @@ void sdb_do_small_set(const cmd_t *c)
     if (sqlite3_bind_parameter_index(st, "?5")) {
         sqlite3_bind_int(st, 5, (int)c->mistakes);
     }
-    sdb_step_done(st, "bookmark/seen/attack");
+    bool ok = sdb_step_done(st, "bookmark/seen/attack");
     sqlite3_finalize(st);
+    if (ok && c->type == CMD_ATTACK) {
+        sdb_ach_sync(sdb_player(), true);    /* (the time attack achievements) */
+    }
 }
 
 /* (documented in stats_db_internal.h) */

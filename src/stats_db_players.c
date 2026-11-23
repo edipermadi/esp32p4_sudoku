@@ -248,6 +248,7 @@ void sdb_do_delete(int32_t id)
         "DELETE FROM puzzle_stats WHERE player_id = ?1",
         "DELETE FROM saved_game WHERE player_id = ?1",
         "DELETE FROM achievements WHERE player_id = ?1",
+        "DELETE FROM achievement_progress WHERE player_id = ?1",
         "DELETE FROM learned WHERE player_id = ?1",
         "DELETE FROM bookmarks WHERE player_id = ?1",
         "DELETE FROM seen WHERE player_id = ?1",

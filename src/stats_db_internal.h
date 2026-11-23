@@ -563,7 +563,8 @@ int sdb_ach_count(void);
 /** @brief The achievements already earned by every player, recorded quietly (at open). */
 void sdb_ach_backfill(void);
 /**
- * @brief Records the achievements a player has reached and not recorded yet.
+ * @brief Works out a player's progress, caches it (achievement_progress) and records the
+ *        achievements reached and not recorded yet.
  * @param[in] player    players.id
  * @param[in] announce  they go to stats_db_take_unlocked() and get the time now; false (first
  *                  fill): recorded quietly with no time

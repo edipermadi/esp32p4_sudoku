@@ -74,6 +74,11 @@ static const char SCHEMA[] =
     "  key TEXT NOT NULL,"
     "  unlocked_at INTEGER,"                             /* Unix time; NULL = found done at first fill / no clock */
     "  PRIMARY KEY (player_id, key));"
+    "CREATE TABLE IF NOT EXISTS achievement_progress("   /* each achievement's progress: a cache, */
+    "  player_id INTEGER NOT NULL REFERENCES players(id),"   /* refreshed by sdb_ach_sync() */
+    "  key TEXT NOT NULL,"
+    "  value INTEGER NOT NULL,"
+    "  PRIMARY KEY (player_id, key));"
     "CREATE TABLE IF NOT EXISTS generated("              /* puzzles made on the board */
     "  id INTEGER PRIMARY KEY,"                          /* puzzle id = 2000 + id */
     "  level INTEGER NOT NULL,"                          /* 0 Easy, 1 Medium, 2 Hard, 3 Expert */

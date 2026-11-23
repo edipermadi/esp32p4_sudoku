@@ -47,6 +47,7 @@ MENU = [
     ("docs/variants/README.md", "variants.html", "Variants"),
     ("docs/features-game.md", "features-game.html", "Playing a game"),
     ("docs/features-progress.md", "features-progress.html", "Players & progress"),
+    ("docs/achievements.md", "achievements.html", "Achievements"),
     ("docs/features-settings.md", "features-settings.html", "Home, settings & system"),
     ("docs/how-to-play.md", "how-to-play.html", "How to play"),
     ("docs/data.md", "data.html", "Data & storage"),

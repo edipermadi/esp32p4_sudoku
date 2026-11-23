@@ -20,6 +20,11 @@ static int s_unlocked_n;             /**< how many */
 
 #define CLASSIC_9X9  "(puzzle < 2000 OR " OF_VARIANT(0) ")"         /**< SQL: a Classic 9x9 puzzle */
 
+/** SQL: how many different variants the player (?1) solved (the built-in collections are Classic) */
+#define VARIANTS_SOLVED \
+    "SELECT COUNT(*) FROM (SELECT 0 FROM solves WHERE player_id = ?1 AND puzzle < 2000" \
+    " UNION SELECT g.variant FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id WHERE s.player_id = ?1)"
+
 /** SQL: the days the player (?1) solved the daily puzzle of, oldest first */
 #define DAILY_DAYS \
     "SELECT DISTINCT g.day FROM solves s JOIN generated g ON s.puzzle = 2000 + g.id" \
@@ -62,7 +67,8 @@ static const ach_def_t ACH[] = {
     },
     {
         "quick", "Quick thinker", "Solve a 9x9 puzzle in under 5 minutes.", 1, ACH_UNIT_COUNT,
-        "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND seconds < 300 AND NOT " OF_VARIANT(2)
+        "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND seconds < 300"
+        " AND NOT " OF_VARIANT(2) " AND NOT " OF_VARIANT(11)          /* (not Mini 6x6, not Kids 4x4) */
     },
     {
         "fast_hard", "Speed demon", "Solve a Hard or harder puzzle in under 10 minutes, without hints.", 1,
@@ -110,7 +116,7 @@ static const ach_def_t ACH[] = {
         "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(10)
     },
     {
-        "variety_5", "Collector", "Solve every kind: Classic, X-Sudoku, Hyper, Jigsaw, Killer and Mini 6x6.", 6,
+        "variety_5", "Collector", "Solve each of the six original kinds: Classic, X-Sudoku, Hyper, Jigsaw, Killer and Mini 6x6.", 6,
         ACH_UNIT_COUNT,
         "SELECT EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " CLASSIC_9X9 ")"
         " + EXISTS(SELECT 1 FROM solves WHERE player_id = ?1 AND " OF_VARIANT(1) ")"
@@ -177,6 +183,28 @@ static const ach_def_t ACH[] = {
         "no_notes_hard", "All in your head", "Solve a Hard or harder puzzle in the no-notes challenge.", 1,
         ACH_UNIT_COUNT,
         "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND (flags & 1048576) != 0 AND " HARD_OR_MORE
+    },
+    /* time attack: the runs (attack), checked again when one is recorded */
+    {
+        "attack_5", "Against the clock", "Solve 5 puzzles in one time attack.", 5, ACH_UNIT_COUNT,
+        "SELECT COALESCE(MAX(solved), 0) FROM attack WHERE player_id = ?1"
+    },
+    {
+        "attack_clean", "Cool under pressure", "Solve 8 puzzles in one time attack without a mistake.", 8,
+        ACH_UNIT_COUNT,
+        "SELECT COALESCE(MAX(solved), 0) FROM attack WHERE player_id = ?1 AND mistakes = 0"
+    },
+    {
+        "variants_10", "Globetrotter", "Solve 10 different variants (Classic counts as one).", 10, ACH_UNIT_COUNT,
+        VARIANTS_SOLVED
+    },
+    {
+        "variants_all", "Rule book", "Solve every variant at least once.", VAR_COUNT, ACH_UNIT_COUNT,
+        VARIANTS_SOLVED
+    },
+    {
+        "kids", "Little steps", "Solve a Kids 4x4.", 1, ACH_UNIT_COUNT,
+        "SELECT COUNT(*) FROM solves WHERE player_id = ?1 AND " OF_VARIANT(11)
     },
 };
 
@@ -279,6 +307,64 @@ void sdb_ach_unlocked(int32_t player, int64_t *when)
     sqlite3_finalize(st);
 }
 
+/**
+ * @brief Writes a player's progress into the cache (achievement_progress).
+ * @param[in] player  players.id
+ * @param[in] val     sdb_ach_count() values, from sdb_ach_values()
+ */
+static void ach_cache_put(int32_t player, const int32_t *val)
+{
+    sqlite3_stmt *st = NULL;
+    if (!sdb_exec("SAVEPOINT ach_cache")) {
+        return;
+    }
+    bool ok = sqlite3_prepare_v2(sdb_db(), "INSERT OR REPLACE INTO achievement_progress(player_id, key, value)"
+                                 " VALUES(?1, ?2, ?3)", -1, &st, NULL) == SQLITE_OK;
+    for (int i = 0; ok && i < ACH_COUNT; i++) {
+        sqlite3_reset(st);
+        sqlite3_bind_int(st, 1, player);
+        sqlite3_bind_text(st, 2, ACH[i].key, -1, SQLITE_STATIC);
+        sqlite3_bind_int(st, 3, val[i]);
+        ok = sdb_step_done(st, "achievement progress");
+    }
+    sqlite3_finalize(st);                                  /* (NULL: nothing) */
+    if (!ok) {
+        sdb_exec("ROLLBACK TO ach_cache");
+    }
+    sdb_exec("RELEASE ach_cache");
+}
+
+/**
+ * @brief Reads a player's progress from the cache (achievement_progress).
+ * @param[in] player  players.id
+ * @param[out] val     gets sdb_ach_count() values
+ * @return true if every achievement was there (false: a new firmware's, a new player: work them out)
+ */
+static bool ach_cache_get(int32_t player, int32_t *val)
+{
+    bool have[ACH_COUNT] = {false};
+    int n = 0;
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(sdb_db(), "SELECT key, value FROM achievement_progress WHERE player_id = ?1", -1, &st,
+                           NULL) != SQLITE_OK) {
+        return false;
+    }
+    sqlite3_bind_int(st, 1, player);
+    while (sqlite3_step(st) == SQLITE_ROW) {
+        const char *key = (const char *)sqlite3_column_text(st, 0);
+        for (int i = 0; key && i < ACH_COUNT; i++) {
+            if (!have[i] && strcmp(ACH[i].key, key) == 0) {
+                val[i] = sqlite3_column_int(st, 1);
+                have[i] = true;
+                n++;
+                break;
+            }
+        }
+    }
+    sqlite3_finalize(st);
+    return n == ACH_COUNT;
+}
+
 /* (documented in stats_db_internal.h) */
 void sdb_ach_sync(int32_t player, bool announce)
 {
@@ -288,6 +374,7 @@ void sdb_ach_sync(int32_t player, bool announce)
     int32_t val[ACH_COUNT];
     int64_t when[ACH_COUNT];
     sdb_ach_values(player, val);
+    ach_cache_put(player, val);                            /* what the Trophies screen reads */
     sdb_ach_unlocked(player, when);
     time_t now = time(NULL);
     char titles[sizeof(s_unlocked)] = "";
@@ -358,10 +445,16 @@ void sdb_do_achievements(void)
     memset(a, 0, sizeof(*a));
     a->player_id = sdb_player();
     if (sdb_db()) {
-        sdb_ach_sync(sdb_player(), false);                 /* nothing missed (e.g. a restored sudoku.db) */
+        /* the progress cached by the last sdb_ach_sync() (at open, after a solve, a Learn practice, a
+         * time attack run); only when it's missing are they worked out (and recorded) here */
         int32_t val[ACH_COUNT];
         int64_t when[ACH_COUNT];
-        sdb_ach_values(sdb_player(), val);
+        if (!ach_cache_get(sdb_player(), val)) {
+            sdb_ach_sync(sdb_player(), false);
+            if (!ach_cache_get(sdb_player(), val)) {
+                sdb_ach_values(sdb_player(), val);
+            }
+        }
         sdb_ach_unlocked(sdb_player(), when);
         for (int i = 0; i < ACH_COUNT; i++) {
             stats_ach_t *x = &a->a[a->n++];

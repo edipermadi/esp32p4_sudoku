@@ -13,7 +13,7 @@ The tables fall into four groups:
 | Group | Tables | Keyed by |
 |---|---|---|
 | **People** | `players` | `id` |
-| **Per player** | `solves`, `puzzle_stats`, `saved_game`, `bookmarks`, `achievements`, `learned`, `seen`, `attack` | `player_id` (+ puzzle, key ...) |
+| **Per player** | `solves`, `puzzle_stats`, `saved_game`, `bookmarks`, `achievements`, `achievement_progress`, `learned`, `seen`, `attack` | `player_id` (+ puzzle, key ...) |
 | **Puzzles and collections** | `generated`, `imported`, `saved_collections`, `saved_puzzles` | `id`; shared by all players |
 | **Device** | `settings` | `key` |
 
@@ -45,6 +45,7 @@ erDiagram
     players ||--o{ saved_game : "up to 5 in progress"
     players ||--o{ bookmarks : "stars"
     players ||--o{ achievements : "unlocks"
+    players ||--o{ achievement_progress : "progress (cache)"
     players ||--o{ learned : "practises"
     players ||--o{ seen : "was shown"
     players ||--o{ attack : "time attack runs"
@@ -136,6 +137,11 @@ erDiagram
         TEXT key PK
         INTEGER unlocked_at
     }
+    achievement_progress {
+        INTEGER player_id PK
+        TEXT key PK
+        INTEGER value
+    }
     learned {
         INTEGER player_id PK
         INTEGER technique PK
@@ -180,6 +186,8 @@ The `REFERENCES players(id)` clauses document the links, but SQLite's `foreign_k
 **`bookmarks`**: starred puzzles (player + puzzle id, with the time). The Starred list sorts them newest first.
 
 **`achievements`**: one row per unlocked achievement (`key` from the `ACH` list in `src/stats_db_achievements.c`). They are checked after every solve against `solves`, `puzzle_stats`, `attack` and `learned`. `unlocked_at` is NULL when the achievement was found already done or the clock wasn't set.
+
+**`achievement_progress`**: a cache of each player's progress toward every achievement (`player_id`, `key`, `value`), so the Trophies screen reads one table instead of running every achievement's query. It is written whenever achievements are checked: at open (for every player), after a solve, a first Learn practice and a time attack run. When a player's rows are missing or incomplete (a new player, a firmware with new achievements), the Trophies screen works them out and fills it.
 
 **`learned`**: Learn practices finished (technique 0–9).
 
@@ -248,7 +256,7 @@ The same four fields make up a `.sdx` line (`src/sdx.c`), so sharing, importing 
 
 Since SQLite doesn't enforce the links, the firmware deletes in a fixed order, each in one transaction:
 
-- **Deleting a player** removes their rows from `solves`, `puzzle_stats`, `saved_game`, `achievements`, `learned`, `bookmarks`, `seen` and `attack`, and then the `players` row.
+- **Deleting a player** removes their rows from `solves`, `puzzle_stats`, `saved_game`, `achievements`, `achievement_progress`, `learned`, `bookmarks`, `seen` and `attack`, and then the `players` row.
 - **Deleting a saved collection** removes its `saved_puzzles` and then its `saved_collections` row.
 - **Deleting an imported collection** removes only its `imported` row. Its `generated` puzzles stay, so solves, stars and saved collections that refer to them still work.
 - **`generated` rows are never deleted.** A solve or a star can point at any of them for good.
