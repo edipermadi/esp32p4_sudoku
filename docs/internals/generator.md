@@ -2,7 +2,7 @@
 
 [← Internals](README.md) · [README](../../README.md) · [Features](../features.md) · [Data & storage](../data.md) · [Development](../development.md) · [Variants](../variants/README.md)
 
-How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them and gives hints. It is all in `src/gen_*.c` (`gen_geometry.c` the boards and texts, `gen_solver.c` the rules and the search, `gen_grade.c` the techniques, `gen_make.c` generating, `gen_regions.c` Jigsaw regions and Killer cages, `gen_lines.c` the line variants' lines, `gen_hints.c` hints; they share `gen_internal.h`) and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`.
+How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them, gives hints and finds Learn's positions. It is all in `src/gen_*.c` (`gen_geometry.c` the boards and texts, `gen_solver.c` the rules and the search, `gen_grade.c` the techniques, `gen_make.c` generating, `gen_regions.c` Jigsaw regions and Killer cages, `gen_lines.c` the line variants' lines, `gen_hints.c` hints; they share `gen_internal.h`) and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`.
 
 ## In one paragraph
 
@@ -188,6 +188,26 @@ This is why `dig()` keeps a few special cases ("Classic digs as it always has"):
 - **The progress bar**: there is no real progress to report (an attempt may land on the first try or the 400th). The bar shows `1 − e^(−elapsed / expected)`, where *expected* is the measured average for that variant and level (`GEN_EXPECT_MS`, from the [board benchmark](../development.md#puzzle-generation-speed)). It is about two-thirds full at the usual time and never passes 97 % until done.
 - **Saving**: the finished puzzle and its clue text go into `generated` (`stats_db_gen_add`), and the puzzle opens as id 2000 + its row. Without a card it gets a RAM-only id until power-off.
 - **Benchmarking**: `devctl genbench <variant> <level|all> <count>` runs the generator on the board at full clock and reports average, min and max times, how many came out on level, and the average givens. [Development → Puzzle generation speed](../development.md#puzzle-generation-speed) has the table.
+
+## Hints and Learn
+
+The same logic that grades a puzzle gives the hints (`sudoku_next_step()` in `src/gen_hints.c`). Given the board as the player has it and the solution, it finds the step a person would take next:
+
+1. **A wrong digit first**: any cell whose digit isn't the solution's is the step (`STEP_WRONG`): the hint says to check it, then to erase it.
+2. **Then the logic, round by round** (at most 64 rounds), on the board's candidates:
+   1. a **hidden single** (a digit with one place left in a unit; boxes first, the easiest to spot), else
+   2. a **naked single** (a cell with one candidate left), else
+   3. the **first technique that removes a candidate**, in this order: the variant's own rules (cages, the Consecutive bars, thermometers and lines, Sandwich sums, Kropki/XV/Greater-Than marks, Quadruple circles, Skyscraper, Little Killer, X-Sums, the first-three clues of Frame, Outside and Rossini, Diagonal Non-Consecutive), then locked candidates (pointing, claiming), pairs, a naked triple, X-Wing, Swordfish, XY-Wing. It is recorded in `out->tech` (the first one used), and the round starts again.
+3. **Nothing simple**: the empty cell with the fewest candidates, and its digit from the solution (`STEP_NONE`).
+
+The step carries the cell, the digit, the unit of a single, and the technique that led there with what it involved (its unit, cells, digits). The game screen shows it in two stages: first a **nudge** (where to look: the technique's area or the single's unit highlighted), then **More** gives the reason and the cell, and **Place it** (or **Erase it**) acts. The words and highlights are made in `hint_explain()` (`src/hint_core.c`, plain C, tested on the PC for every variant's example); Settings > Game > Hints: Nudge only stops at the first stage. Each technique a hint showed sets its bit in the game's flags, kept with the solve (the **Gone fishing** and **On a wing** achievements).
+
+**Learn** (`src/learn_core.c`) finds a position to practise each lesson on:
+
+- **The ten techniques** (hidden single … XY-Wing) use the built-in Classic puzzles: a puzzle is played forward with `sudoku_next_step()` until the next step is that technique. The four rarest (naked triple, X-Wing, Swordfish, XY-Wing) almost never come first, so for them the puzzle is played until the singles run out and `sudoku_step_with()` checks that this technique, and nothing else, opens up a single.
+- **A variant's rule** (one lesson per variant but Classic, Mini and Kids) uses new puzzles of that variant (Medium), played forward until the next step needs the rule: its technique where the hint engine has one (a cage, a line, a clue, the marks), or, for a variant that only adds regions or cells that see each other, a single that the same digits on a Classic board wouldn't give.
+
+The search runs on core 0 (task `learn`) from a seed, and the PC tests check every lesson finds a position whose step is the solution's.
 
 ## Adding a variant
 

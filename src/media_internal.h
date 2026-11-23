@@ -9,8 +9,6 @@
 #include <stdint.h>
 #include "media_core.h"
 
-extern uint16_t media_xmap[MEDIA_SCR];  /**< each output column's source column (media_make_xmap()) */
-
 /**
  * @brief The worker's message for the page (and the log).
  * @param[in] fmt  printf format
@@ -47,11 +45,12 @@ void media_publish(int w, int h);
  */
 void media_fit(int w, int h, int *dw, int *dh);
 /**
- * @brief Fills media_xmap for a scale (nearest pixel).
+ * @brief The column map for a scale (nearest pixel): each output column's source column.
  * @param[in] sw  the source's width
- * @param[in] dw  the width shown
+ * @param[in] dw  the width shown (at most MEDIA_SCR)
+ * @return dw entries, valid until the next call
  */
-void media_make_xmap(int sw, int dw);
+const uint16_t *media_make_xmap(int sw, int dw);
 /**
  * @brief Has the page asked the worker to stop?
  * @return true if so

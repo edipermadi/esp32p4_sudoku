@@ -54,10 +54,12 @@ MENU = [
     ("docs/building.md", "building.html", "Building"),
     ("docs/development.md", "development.html", "Development"),
     ("docs/internals/README.md", "internals.html", "Internals"),
+    ("docs/internals/db/README.md", "db.html", "Database tables"),
     ("docs/devctl.md", "devctl.html", "Remote control"),
     ("docs/devctl-protocol.md", "devctl-protocol.html", "devctl protocol"),
 ]
-SECTIONS = {"docs/variants/README.md": "variant-", "docs/internals/README.md": "internals-"}
+SECTIONS = {"docs/variants/README.md": "variant-", "docs/internals/README.md": "internals-",
+            "docs/internals/db/README.md": "db-"}
 DOWNLOADS = ["docs/variant-examples.sdx"]
 # pages with a diagram load Mermaid (pinned), in the page's light or dark look
 MERMAID = """<script type="module">

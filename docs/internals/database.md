@@ -2,7 +2,7 @@
 
 [← Internals](README.md) · [README](../../README.md) · [Features](../features.md) · [How to play](../how-to-play.md) · [Data & storage](../data.md) · [Building](../building.md) · [Development](../development.md) · [Remote control](../devctl.md)
 
-How `sudoku.db` is laid out: its tables, what each one is for, and how they connect. [Data & storage](../data.md) lists every column; this page explains the design. The schema is in `src/stats_db_schema.c` (`T_*`, `SCHEMA`, `SCHEMA_POST`) and is described again at the top of `src/stats_db.h`.
+How `sudoku.db` is laid out: its tables, what each one is for, and how they connect. Each table has a page of its own with every column, when it's written and read, and example queries: [Database tables](db/README.md). The schema is in `src/stats_db_schema.c` (`T_*`, `SCHEMA`, `SCHEMA_POST`) and is described again at the top of `src/stats_db.h`.
 
 ## Overview
 
@@ -165,39 +165,41 @@ erDiagram
     }
 ```
 
-(Columns are shortened in the diagram; [Data & storage](../data.md) has all of them.)
+(Columns are shortened in the diagram; each table's page under [Database tables](db/README.md) has all of them.)
 
 The `REFERENCES players(id)` clauses document the links, but SQLite's `foreign_keys` pragma is off, so the database doesn't enforce them. The firmware keeps them consistent itself (see [Deleting](#deleting)).
 
 ## The tables
 
+In short here; each name links to the table's own page.
+
 ### People
 
-**`players`**: one row per player. `name` is unique, case-insensitive. `color` and `avatar` are only for display. Which player is playing now is not stored here but in `settings.current_player`. A database from before players existed gets "Player 1" (id 1), and all its old data becomes theirs.
+**[`players`](db/players.md)**: one row per player. `name` is unique, case-insensitive. `color` and `avatar` are only for display. Which player is playing now is not stored here but in `settings.current_player`. A database from before players existed gets "Player 1" (id 1), and all its old data becomes theirs.
 
 ### Per player: history and progress
 
-**`solves`**: the log, one row per finished puzzle, never changed afterwards. It records time, mistakes and Fill uses (`hints`), when the puzzle was started and finished, the full move log (`moves`, which Replay and MP4 export read) and `flags` (the no-notes challenge and which hint techniques were shown). Everything historic is computed from here: charts, streaks, records, the daily calendar and most achievements.
+**[`solves`](db/solves.md)**: the log, one row per finished puzzle, never changed afterwards. It records time, mistakes and Fill uses (`hints`), when the puzzle was started and finished, the full move log (`moves`, which Replay and MP4 export read) and `flags` (the no-notes challenge and which hint techniques were shown). Everything historic is computed from here: charts, streaks, records, the daily calendar and most achievements.
 
-**`puzzle_stats`**: a summary of `solves`, one row per player and puzzle: best time, fewest mistakes and number of solves. It exists so the puzzle list and the home screen don't need to scan the log. At start-up the current player's rows are loaded into RAM, the "copy" the UI reads. It is updated in the **same transaction** as the `solves` insert, with an upsert (`MIN` for the bests, `+1` for the count), so the two never disagree.
+**[`puzzle_stats`](db/puzzle_stats.md)**: a summary of `solves`, one row per player and puzzle: best time, fewest mistakes and number of solves. It exists so the puzzle list and the home screen don't need to scan the log. At start-up the current player's rows are loaded into RAM, the "copy" the UI reads. It is updated in the **same transaction** as the `solves` insert, with an upsert (`MIN` for the bests, `+1` for the count), so the two never disagree.
 
-**`saved_game`**: games in progress, up to 5 per player (`STATS_MAX_GAMES`), keyed by player and puzzle. It is rewritten after every move: digits (`cells`), pencil marks (`notes`, 81 × 16-bit masks), cell colours, the clock, mistakes, Fill uses and the move log so far. `seq` orders the games, and the highest was played last. A sixth game pushes out the one with the lowest `seq`. On a solve, the game's moves and flags move into `solves`, and its row is deleted.
+**[`saved_game`](db/saved_game.md)**: games in progress, up to 5 per player (`STATS_MAX_GAMES`), keyed by player and puzzle. It is rewritten after every move: digits (`cells`), pencil marks (`notes`, 81 × 16-bit masks), cell colours, the clock, mistakes, Fill uses and the move log so far. `seq` orders the games, and the highest was played last. A sixth game pushes out the one with the lowest `seq`. On a solve, the game's moves and flags move into `solves`, and its row is deleted.
 
-**`bookmarks`**: starred puzzles (player + puzzle id, with the time). The Starred list sorts them newest first.
+**[`bookmarks`](db/bookmarks.md)**: starred puzzles (player + puzzle id, with the time). The Starred list sorts them newest first.
 
-**`achievements`**: one row per unlocked achievement (`key` from the `ACH` list in `src/stats_db_achievements.c`). They are checked after every solve against `solves`, `puzzle_stats`, `attack` and `learned`. `unlocked_at` is NULL when the achievement was found already done or the clock wasn't set.
+**[`achievements`](db/achievements.md)**: one row per unlocked achievement (`key` from the `ACH` list in `src/stats_db_achievements.c`). They are checked after every solve against `solves`, `puzzle_stats`, `attack` and `learned`. `unlocked_at` is NULL when the achievement was found already done or the clock wasn't set.
 
-**`achievement_progress`**: a cache of each player's progress toward every achievement (`player_id`, `key`, `value`), so the Trophies screen reads one table instead of running every achievement's query. It is written whenever achievements are checked: at open (for every player), after a solve, a first Learn practice and a time attack run. When a player's rows are missing or incomplete (a new player, a firmware with new achievements), the Trophies screen works them out and fills it.
+**[`achievement_progress`](db/achievement_progress.md)**: a cache of each player's progress toward every achievement (`player_id`, `key`, `value`), so the Trophies screen reads one table instead of running every achievement's query. It is written whenever achievements are checked: at open (for every player), after a solve, a first Learn practice and a time attack run. When a player's rows are missing or incomplete (a new player, a firmware with new achievements), the Trophies screen works them out and fills it.
 
-**`learned`**: Learn practices finished (technique 0–9).
+**[`learned`](db/learned.md)**: Learn practices finished (technique 0–9).
 
-**`seen`**: one-time things a player has been shown (`what = 'tour'`).
+**[`seen`](db/seen.md)**: one-time things a player has been shown (`what = 'tour'`).
 
-**`attack`**: Time Attack runs (Easy puzzles solved in 10 minutes). These are separate from `solves` because a run is many puzzles. The leaderboard groups them by player.
+**[`attack`](db/attack.md)**: Time Attack runs (Easy puzzles solved in 10 minutes). These are separate from `solves` because a run is many puzzles. The leaderboard groups them by player.
 
 ### Puzzles and collections (shared by all players)
 
-**`generated`**: every puzzle that isn't built in, one row each, so its digits survive a restart:
+**[`generated`](db/generated.md)**: every puzzle that isn't built in, one row each, so its digits survive a restart:
 
 - **New puzzle**: `day` NULL, `source` NULL.
 - **Daily puzzle**: `day` = its date `YYYY-MM-DD`. There is one per day, made the first time it's opened that day; later opens find it by `day`.
@@ -212,15 +214,15 @@ The `REFERENCES players(id)` clauses document the links, but SQLite's `foreign_k
 | `marks` | Even-Odd, Consecutive, Kropki, XV, Greater-Than, Fortress (81 characters); Sandwich sums, Skyscraper, X-Sums and Frame clues (18 numbers); Outside Sudoku clues (18 digit sets); Rossini arrows (18 numbers) |
 | `thermos` | Thermo bulbs-first; Arrow (circle first), Renban, German Whispers, Palindrome, Region Sum, Zipper, Between, Entropic, Modular Lines, Dutch Whispers and Parity Lines lines; Slow Thermo bulbs-first |
 
-The same four fields make up a `.sdx` line (`src/sdx.c`), so sharing, importing and exporting all use one format. The rules (Classic, X-Sudoku, Hyper, Mini ...) aren't stored: they come from `variant`. `puzzle_geom()` in `src/ui_common.c` rebuilds a board from `variant` and these columns.
+The same four fields make up a `.sdx` line (`src/sdx.c`), so sharing, importing and exporting all use one format. The rules (Classic, X-Sudoku, Hyper, Mini ...) aren't stored: they come from `variant`. `puzzle_geom()` in `src/puzzles_lookup.c` rebuilds a board from `variant` and these columns.
 
-**`imported`**: one row per collection imported from `puzzles/`. Its puzzles are the consecutive `generated` ids `first_id .. first_id + count − 1` (a file with more than 100 puzzles becomes several collections). `file` stops the same file being imported twice.
+**[`imported`](db/imported.md)**: one row per collection imported from `puzzles/`. Its puzzles are the consecutive `generated` ids `first_id .. first_id + count − 1` (a file with more than 100 puzzles becomes several collections). `file` stops the same file being imported twice.
 
-**`saved_collections`** and **`saved_puzzles`**: collections the players make with the game screen's **Save**. `saved_puzzles` refers to puzzles by puzzle id, usually 2000 + `generated.id`, and `number` is its place in the collection. A collection disappears with its last puzzle.
+**[`saved_collections`](db/saved_collections.md)** and **[`saved_puzzles`](db/saved_puzzles.md)**: collections the players make with the game screen's **Save**. `saved_puzzles` refers to puzzles by puzzle id, usually 2000 + `generated.id`, and `number` is its place in the collection. A collection disappears with its last puzzle.
 
 ### Device
 
-**`settings`**: key–value pairs (`key TEXT PRIMARY KEY, value` with no type), for the board rather than per player: brightness, sound, dark mode, screen-off minutes, night mode, time zone, `rules_seen` (a bit per variant), `current_player` and so on. The Wi-Fi network isn't here; it stays in the board's NVS.
+**[`settings`](db/settings.md)**: key–value pairs (`key TEXT PRIMARY KEY, value` with no type), for the board rather than per player: brightness, sound, dark mode, screen-off minutes, night mode, time zone, `rules_seen` (a bit per variant), `current_player` and so on. The Wi-Fi network isn't here; it stays in the board's NVS.
 
 ## Indexes and the view
 
@@ -229,7 +231,7 @@ The same four fields make up a `.sdx` line (`src/sdx.c`), so sharing, importing 
 | `solves_puzzle` | `solves(puzzle)` | variant and daily filters, records |
 | `solves_player` | `solves(player_id, puzzle)` | a player's history, charts, achievements |
 | `puzzle_stats_level` | `puzzle_stats(player_id, level, number)` | the per-collection rows on Statistics |
-| `level_stats` (view) | `puzzle_stats` ⨝ `players` | per player and level: solved, solves, fastest, average, mistakes; for `sqlite3` users |
+| [`level_stats`](db/level_stats.md) (view) | `puzzle_stats` ⨝ `players` | per player and level: solved, solves, fastest, average, mistakes; for `sqlite3` users |
 
 `SCHEMA_POST` drops and recreates the index and the view on every start, so they always match the current build.
 

@@ -40,7 +40,7 @@
 #define PATH_B     512                  /**< a path's room */
 
 /* ------------------------------------------------------------- state */
-uint16_t media_xmap[MEDIA_SCR];        /**< each output column's source column (media_make_xmap()) */
+static uint16_t s_xmap[MEDIA_SCR];      /**< each output column's source column (media_make_xmap()) */
 /* shared with the worker */
 static uint16_t *s_buf[2];                    /**< 64-byte aligned, PSRAM, kept once made */
 static volatile bool s_running;               /**< the worker runs a job */
@@ -151,11 +151,12 @@ void media_fit(int w, int h, int *dw, int *dh)
 
 
 /* (documented in media_internal.h) */
-void media_make_xmap(int sw, int dw)
+const uint16_t *media_make_xmap(int sw, int dw)
 {
     for (int x = 0; x < dw; x++) {
-        media_xmap[x] = (uint16_t)(((int64_t)x * 2 + 1) * sw / (2 * dw));
+        s_xmap[x] = (uint16_t)(((int64_t)x * 2 + 1) * sw / (2 * dw));
     }
+    return s_xmap;
 }
 
 

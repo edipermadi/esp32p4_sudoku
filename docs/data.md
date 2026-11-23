@@ -2,7 +2,7 @@
 
 [← README](../README.md) · [Features](features.md) · [How to play](how-to-play.md) · [Data & storage](data.md) · [Building](building.md) · [Development](development.md) · [Remote control](devctl.md)
 
-Where the game keeps its data (`sudoku.db` on the microSD card), and the maintenance tools under **Settings → Data**. For the schema's design (tables, keys, how they connect), see [Database design](internals/database.md).
+Where the game keeps its data (`sudoku.db` on the microSD card), and the maintenance tools under **Settings → Data**. For the schema's design (tables, keys, how they connect), see [Database design](internals/database.md), and a page per table: [Database tables](internals/db/README.md).
 
 | **Settings → Data** | **Files** (home screen) | **System → Storage** (home screen) |
 |---|---|---|
@@ -25,7 +25,7 @@ Where the game keeps its data (`sudoku.db` on the microSD card), and the mainten
   - `learned`: Learn practices each player has finished (placed the digit the technique leads to): `player_id`, `technique` (Learn's list, 0 Hidden single .. 9 XY-Wing) and `at`.
   - `achievements`: `player_id`, `key` (e.g. `clean_25`, `streak_7`; every key is listed in [Achievements](achievements.md)) and `unlocked_at` (Unix time; NULL when it was found already done or the clock wasn't set).
   - `achievement_progress`: each player's progress toward every achievement, a cache the Trophies screen reads: `player_id`, `key` and `value` (minutes for **Marathon**, days for the daily ones). Rebuilt at startup, so it is safe to delete.
-  - `settings`: `dark_mode`, `sound`, `brightness` (10–100), `volume` (0–100), `assist` (Mistake check: 0 Off, 1 Rules, 2 Solution), `show_timer`, `accent` (0 Blue .. 4 Pink), `rules_seen` (bit per variant), `screen_off_minutes`, `saver_clock`, `lock_mode`, `lock_pin`, `cvd` (colour-blind friendly), `no_notes` (the no-notes challenge for new games), `left_hand` (the number pad on the left), `big_digits` (Digit size: Large), `is_hint_nudge` (Hints: Nudge only), `night_mode`, `night_start` and `night_end` (hours 0–23), `night_brightness` (10–100), `time_zone`, `last_level`, `current_player` and `migrated_from_nvs`.
+  - `settings`: `dark_mode`, `sound`, `brightness` (10–100), `volume` (0–100), `assist` (Mistake check: 0 Off, 1 Rules, 2 Solution), `show_timer`, `accent` (0 Blue .. 4 Pink), `rules_seen` (bit per variant), `screen_off_minutes`, `saver_clock`, `lock_mode`, `lock_pin`, `cvd` (colour-blind friendly), `no_notes` (the no-notes challenge for new games), `left_hand` (the number pad on the left), `big_digits` (Digit size: Large), `hint_nudge` (Hints: Nudge only), `gibberlink` (remote control by sound), `night_mode`, `night_start` and `night_end` (hours 0–23), `night_brightness` (10–100), `time_zone`, `last_level`, `current_player` and `migrated_from_nvs`.
 
   ```
   sqlite3 -box sudoku.db "SELECT level, number, seconds, mistakes, datetime(started_at, 'unixepoch', 'localtime') AS started, datetime(finished_at, 'unixepoch', 'localtime') AS finished FROM solves ORDER BY id DESC LIMIT 10"

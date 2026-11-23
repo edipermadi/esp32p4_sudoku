@@ -119,13 +119,13 @@ static void i420_to_565(const uint8_t *yp, int W, int H, int vw, int vh, uint16_
         }
         return;
     }
-    media_make_xmap(vw, dw);
+    const uint16_t *xmap = media_make_xmap(vw, dw);
     for (int y = 0; y < dh; y++) {
         int sy = media_src_row(y, vh, dh);
         const uint8_t *yr = yp + (size_t)sy * W, *ur = up + (size_t)(sy / 2) * (W / 2), *vr = vp + (size_t)(sy / 2) * (W / 2);
         uint16_t *o = dst + (size_t)y * dw;
         for (int x = 0; x < dw; x++) {
-            int sx = media_xmap[x];
+            int sx = xmap[x];
             int c = t_y[yr[sx]], u = ur[sx >> 1], v = vr[sx >> 1];
             int r = clamp8((c + t_rv[v]) >> 8);
             int g = clamp8((c + t_gu[u] + t_gv[v]) >> 8);

@@ -101,7 +101,7 @@ void media_jpeg_run(const char *path)
         goto done;
     }
     uint16_t *dst = media_back_buf();
-    media_make_xmap((int)info.width, dw);
+    const uint16_t *xmap = media_make_xmap((int)info.width, dw);
     for (int y = 0; y < dh; y++) {
         const uint16_t *row = out + (size_t)media_src_row(y, (int)info.height, dh) * aw;
         uint16_t *o = dst + (size_t)y * dw;
@@ -109,7 +109,7 @@ void media_jpeg_run(const char *path)
             memcpy(o, row, (size_t)dw * 2);
         } else {
             for (int x = 0; x < dw; x++) {
-                o[x] = row[media_xmap[x]];
+                o[x] = row[xmap[x]];
             }
         }
     }
