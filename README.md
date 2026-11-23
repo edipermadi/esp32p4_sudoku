@@ -1,6 +1,10 @@
 # esp32p4_sudoku
 
 [![Firmware](https://github.com/edipermadi/esp32p4_sudoku/actions/workflows/firmware.yml/badge.svg?branch=main)](https://github.com/edipermadi/esp32p4_sudoku/actions/workflows/firmware.yml)
+[![Release](https://img.shields.io/github/v/release/edipermadi/esp32p4_sudoku?sort=semver)](https://github.com/edipermadi/esp32p4_sudoku/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/edipermadi/esp32p4_sudoku)](LICENSE)
+[![Web flasher](https://img.shields.io/badge/flash-in%20browser-blue?logo=googlechrome&logoColor=white)](https://edipermadi.github.io/esp32p4_sudoku/)
+![LVGL](https://img.shields.io/badge/LVGL-9.6-343839)
 
 A touch-screen Sudoku for the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B** (4" 720×720 MIPI-DSI, GT911 touch, ES8311 speaker), built with LVGL 9.6 as an Arduino sketch.
 
