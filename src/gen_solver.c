@@ -654,6 +654,7 @@ typedef struct {
 #define R_CAGE    (1u << 11)            /**< Killer */
 #define R_NROOM   (1u << 12)            /**< Numbered Rooms */
 #define R_SKYSUM  (1u << 13)            /**< Sum Skyscrapers */
+#define R_159     (1u << 14)            /**< 159 Sudoku */
 /** @} */
 
 /**
@@ -1015,6 +1016,125 @@ static why_t *s_why;                    /**< the question, or NULL */
 /** a rule (FIT_*) took the digit asked about out of free */
 #define WHY(c) do { if (s_why && !s_why->code && !(free >> s_why->d & 1)) s_why->code = (c); } while (0)
 
+/** @brief Product Killer: every set of digits 1-9 (bit d) with its product, sorted by product (is_product_made()) */
+static struct {
+    uint32_t prod;                                  /**< the product */
+    uint16_t mask;                                  /**< the digits */
+} s_prod_sets[512];
+
+/** @brief fills s_prod_sets (once; two tasks doing it at once write the same) */
+static void prod_sets_make(void)
+{
+    if (s_prod_sets[511].prod) {
+        return;
+    }
+    static uint32_t prod[512];
+    static uint16_t order[512];
+    for (int m = 0; m < 512; m++) {
+        prod[m] = 1;
+        for (int d = 1; d <= 9; d++) {
+            prod[m] *= (m >> (d - 1) & 1) ? (uint32_t)d : 1u;
+        }
+        order[m] = (uint16_t)m;
+    }
+    for (int i = 1; i < 512; i++) {                 /* (insertion sort: once, 512 sets) */
+        uint16_t x = order[i];
+        int j = i;
+        for (; j > 0 && prod[order[j - 1]] > prod[x]; j--) {
+            order[j] = order[j - 1];
+        }
+        order[j] = x;
+    }
+    for (int i = 511; i >= 0; i--) {                /* (the last one written last: it says "made") */
+        s_prod_sets[i].mask = (uint16_t)(order[i] << 1);
+        s_prod_sets[i].prod = prod[order[i]];
+    }
+}
+
+/**
+ * @brief Product Killer: the digits of every set of k different digits from avail that multiply to p
+ * @param[in] p  the product
+ * @param[in] k  how many digits
+ * @param[in] avail  the digits to take from (bit d)
+ * @return the digits that are in one such set at least
+ */
+static uint16_t product_sets(int p, int k, uint16_t avail)
+{
+    int lo = 0, hi = 512;                           /* the first set with product p */
+    while (lo < hi) {
+        const int mid = (lo + hi) / 2;
+        if (s_prod_sets[mid].prod < (uint32_t)p) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    uint16_t ok = 0;
+    for (; lo < 512 && s_prod_sets[lo].prod == (uint32_t)p; lo++) {
+        const uint16_t m = s_prod_sets[lo].mask;
+        if (!(m & ~avail) && gen_popcount(m) == k) {
+            ok |= m;
+        }
+    }
+    return ok;
+}
+
+/* (documented in gen_internal.h) */
+uint16_t gen_product_allow(const sudoku_geom_t *G, const uint8_t *v, int c, int i)
+{
+    int p = G->cage_prod[c], empty = 0;
+    uint16_t used = 0;
+    for (int j = 0; j < G->cage_n[c]; j++) {        /* what the placed digits leave of the product */
+        const int x = G->cage_cell[c][j], d = x == i ? 0 : v[x];
+        if (!d) {
+            empty++;
+        } else if (p % d) {
+            return 0;
+        } else {
+            p /= d;
+            used |= (uint16_t)(1u << d);
+        }
+    }
+    prod_sets_make();                               /* (empty: i itself among them) */
+    return empty ? product_sets(p, empty, (uint16_t)(0x3FE & ~used)) : 0;
+}
+
+/**
+ * @brief 159 Sudoku: the digits a cell may hold by its row's columns 1, 5 and 9 (the digit in column k is the
+ * column of the k): as one of those, where its digit points must take k; holding 1, 5 or 9, its row's column for
+ * that digit must point back at it
+ * @param[in] v  the digits (0: empty)
+ * @param[in] i  the cell
+ * @return a candidate mask
+ */
+static uint16_t idx159_allow(const uint8_t *v, int i)
+{
+    const int r = i / 9, q = i % 9;
+    uint16_t free = 0x3FE;
+    if (q % 4 == 0) {                               /* column 1, 5 or 9: says where k is */
+        const int k = q + 1;
+        int at = -1;
+        for (int j = 0; j < 9; j++) {
+            at = v[r * 9 + j] == k && r * 9 + j != i ? j : at;
+        }
+        uint16_t ok = 0;
+        for (int c = 1; c <= 9; c++) {
+            const int t = r * 9 + c - 1;
+            if (at >= 0 ? c - 1 == at : t == i ? c == k : (!v[t] || v[t] == k)) {
+                ok |= (uint16_t)(1u << c);
+            }
+        }
+        free &= ok;
+    }
+    for (int k = 1; k <= 9; k += 4) {               /* holding k: column k must say this column */
+        const int idx = r * 9 + k - 1;
+        if (idx != i && v[idx] && v[idx] != q + 1) {
+            free &= (uint16_t)~(1u << k);
+        }
+    }
+    return free;
+}
+
 /**
  * @brief The digits a cell may still take, by every rule of the board.
  * @param[in] g  the search's board
@@ -1153,6 +1273,10 @@ static uint16_t grid_free(const grid_t *g, int i)
         WHY(G->frame ? (line ? FIT_FRAME_COL : FIT_FRAME_ROW) : G->outside ? (line ? FIT_OUTSIDE_COL : FIT_OUTSIDE_ROW)
             : (line ? FIT_ROSSINI_COL : FIT_ROSSINI_ROW));
     }
+    if ((rules & R_159) && free) {                  /* 159 Sudoku: its row's columns 1, 5, 9 */
+        free &= idx159_allow(g->v, i);
+    }
+    WHY(FIT_159);
     for (int k = 0; (rules & R_DIAGNC) && free && k < 4; k++) {   /* Diagonal Non-Consecutive: the corner cells */
         int r = i / 9 + (k < 2 ? -1 : 1), c = i % 9 + (k % 2 ? 1 : -1);
         int w = r >= 0 && r < 9 && c >= 0 && c < 9 ? g->v[r * 9 + c] : 0;
@@ -1262,9 +1386,12 @@ static uint16_t grid_free(const grid_t *g, int i)
     int c = (rules & R_CAGE) ? G->cage_of[i] : CAGE_NONE;
     if (c != CAGE_NONE && free) {                    /* Killer: what the cage's sum still allows */
         free &= (uint16_t)~g->cage_used[c];
-        if (!G->cage_sum[c]) {
+        if (!G->cage_sum[c]) {                      /* (Sumless Killer, Extra Regions: no repeat, and no sum) */
+            if (G->cage_prod[c] && free) {
+                free &= gen_product_allow(G, g->v, c, i);   /* (Product Killer: what the product still allows) */
+            }
             WHY(FIT_CAGE);
-            return free;                            /* (Sumless Killer: no repeat, and no sum) */
+            return free;
         }
         int left = g->cage_left[c], others = g->cage_empty[c] - 1;
         uint16_t ok = 0;
@@ -1316,7 +1443,8 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->nquads ? R_QUAD : 0) | (G->skyscraper ? R_SKY : 0) | (G->xsums ? R_XSUM : 0) |
                (G->frame || G->outside || G->rossini ? R_FIRST3 : 0) | (G->diag_nc ? R_DIAGNC : 0) |
                (G->nlk ? R_LK : 0) | (G->sandwich ? R_SANDWICH : 0) | (G->nthermos ? R_LINE : 0) |
-               (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0);
+               (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0) |
+               (G->idx159 ? R_159 : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

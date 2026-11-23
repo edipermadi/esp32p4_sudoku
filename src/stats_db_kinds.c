@@ -16,7 +16,8 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
                                                          "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner",
                                                          "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
-                                                         "Diagonal Consecutive", "10 Lines", "Girandola"
+                                                         "Diagonal Consecutive", "10 Lines", "Girandola",
+                                                         "159 Sudoku", "Product Killer", "Extra Regions"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -30,7 +31,8 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Diagonal Non-Consecutive", "Dutch Whispers", "Parity",
                                                           "Slow Thermo", "Fortress", "Argyle", "Nabner",
                                                           "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
-                                                          "Diagonal Consecutive", "10 Lines", "Girandola"
+                                                          "Diagonal Consecutive", "10 Lines", "Girandola",
+                                                          "159 Sudoku", "Product Killer", "Extra Regions"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -146,6 +148,12 @@ int stats_kind_of(int variant, bool daily)
         return KIND_TEN;
     case VAR_GIRANDOLA:
         return KIND_GIRANDOLA;
+    case VAR_159:
+        return KIND_159;
+    case VAR_PRODUCT:
+        return KIND_PRODUCT;
+    case VAR_REGIONS:
+        return KIND_REGIONS;
     default:
         return KIND_NEW;
     }

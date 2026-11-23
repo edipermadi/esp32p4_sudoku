@@ -159,6 +159,9 @@ typedef enum {
     KIND_DIAGCONSEC,                     /**< Diagonal Consecutive */
     KIND_TEN,                            /**< 10 Lines */
     KIND_GIRANDOLA,                      /**< Girandola */
+    KIND_159,                            /**< 159 Sudoku */
+    KIND_PRODUCT,                        /**< Product Killer */
+    KIND_REGIONS,                        /**< Extra Regions */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

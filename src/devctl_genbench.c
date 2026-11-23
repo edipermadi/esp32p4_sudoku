@@ -126,8 +126,8 @@ void devctl_genbench(const char *line)
     serial_printf("GENBENCH CPU %u MHz, %d puzzle%s each\n", (unsigned)getCpuFrequencyMhz(), n, n == 1 ? "" : "s");
     for (int v = v0; v < (all_v ? VAR_COUNT : v0 + 1); v++) {
         for (int l = l0; l < (all_l ? GEN_LEVELS : l0 + 1); l++) {
-            if (all_l && v == VAR_KIDS && l >= GEN_HARD) {
-                continue;    /* (Kids 4x4: Easy and Medium only) */
+            if (all_l && l > (int)sudoku_top_level(v)) {
+                continue;    /* (Kids 4x4: Easy and Medium only; Product Killer: no Expert) */
             }
             uint32_t sum = 0, mn = UINT32_MAX, mx = 0;
             int on = 0, clues = 0;

@@ -254,6 +254,13 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int r = 0; g->idx159 && r < 9; r++) {     /* 159 Sudoku: column k says where the k is */
+        for (int k = 1; k <= 9; k += 4) {
+            if (sol[r * 9 + sol[r * 9 + k - 1] - 1] != k) {
+                return false;
+            }
+        }
+    }
     for (int c = 0; g->diag_nc && c < 81; c++) {    /* Diagonal (Non-)Consecutive: corners 1 apart just where marked */
         if (c % 9 < 8 && c < 72 && (abs(sol[c] - sol[c + 10]) == 1) != ((g->dmark[c] & DMARK_DR) != 0)) {
             return false;
@@ -334,6 +341,13 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
         if (g->cage_sum[k] && sum != g->cage_sum[k]) {   /* (Sumless Killer: none) */
             return false;
         }
+        int prod = 1;
+        for (int j = 0; j < g->cage_n[k]; j++) {
+            prod *= sol[g->cage_cell[k][j]];
+        }
+        if (g->cage_prod[k] && prod != g->cage_prod[k]) {   /* Product Killer */
+            return false;
+        }
         for (int i = 0; i < g->cage_n[k]; i++) {   /* and no repeat in a cage */
             for (int j = 0; j < i; j++) {
                 if (sol[g->cage_cell[k][i]] == sol[g->cage_cell[k][j]]) {
@@ -372,6 +386,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->frame_sum, b->frame_sum, 18) && a->outside == b->outside &&
            !memcmp(a->outside_set, b->outside_set, sizeof(a->outside_set)) && a->rossini == b->rossini &&
            !memcmp(a->rossini_dir, b->rossini_dir, 18) && a->diag_nc == b->diag_nc && !memcmp(a->dmark, b->dmark, 81) &&
+           a->idx159 == b->idx159 && !memcmp(a->cage_prod, b->cage_prod, sizeof(a->cage_prod)) &&
            !memcmp(a->lk_sum, b->lk_sum, a->nlk) && !memcmp(a->lk_dir, b->lk_dir, a->nlk) &&
            !memcmp(a->lk_cell, b->lk_cell, sizeof(a->lk_cell[0]) * a->nlk) &&
            a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
@@ -394,6 +409,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_KILLER:
     case VAR_SUMLESS:
+    case VAR_PRODUCT:
+    case VAR_REGIONS:
         sudoku_cages_text(g, cages, len);
         break;
     case VAR_QUAD:
@@ -480,6 +497,7 @@ static void test_geometry(void)
         {VAR_MINI, 6, 36, 18, 12},     {VAR_KIDS, 4, 16, 12, 7},
         {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
         {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
+        {VAR_159, 9, 81, 27, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);

@@ -136,6 +136,13 @@
  *                that each add up to 10
  *   VAR_GIRANDOLA Girandola: Classic rules, and nine cells in a pinwheel pattern
  *                (is_sudoku_geom_on_girandola()) also hold 1-9
+ *   VAR_159      159 Sudoku: Classic rules, and in each row the digit in column 1 is
+ *                the column of its 1, in column 5 the column of its 5, in column 9
+ *                the column of its 9
+ *   VAR_PRODUCT  Product Killer: Classic rules, plus cages whose digits multiply to
+ *                their number (cage_prod), none repeated
+ *   VAR_REGIONS  Extra Regions: Classic rules, plus a few shaded regions (cages without
+ *                sums, drawn tinted) in which no digit repeats
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -244,6 +251,9 @@ typedef enum {
     VAR_DIAGCONSEC,                     /**< Diagonal Consecutive */
     VAR_TEN,                            /**< 10 Lines */
     VAR_GIRANDOLA,                      /**< Girandola */
+    VAR_159,                            /**< 159 Sudoku */
+    VAR_PRODUCT,                        /**< Product Killer */
+    VAR_REGIONS,                        /**< Extra Regions */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -257,7 +267,8 @@ typedef enum {
  *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
  *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
  *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner", "Numbered Rooms", "Sum Skyscrapers",
- *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola"
+ *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola",
+ *         "159 Sudoku", "Product Killer", "Extra Regions"
  */
 const char *variant_name(int variant);
 
@@ -362,7 +373,8 @@ typedef struct {
     /* Killer: cages (their cells are peers too: no digit twice in a cage) */
     uint8_t ncages;                     /**< Killer: cages */
     uint8_t cage_of[81];                /**< each cell's cage, CAGE_NONE = not in a cage */
-    uint8_t cage_sum[CAGES_MAX];        /**< each cage's sum (Sumless Killer: 0, none) */
+    uint8_t cage_sum[CAGES_MAX];        /**< each cage's sum (Sumless Killer, Product Killer, Extra Regions: 0, none) */
+    uint16_t cage_prod[CAGES_MAX];      /**< Product Killer: each cage's product (0 on every other board) */
     uint8_t cage_n[CAGES_MAX];          /**< each cage's cells: how many */
     uint8_t cage_cell[CAGES_MAX][9];    /**< cells of each cage, the top-left one first */
     uint16_t allow[81];                 /**< digits each cell may hold (candidate bits; Even-Odd narrows its marked cells) */
@@ -396,6 +408,7 @@ typedef struct {
     uint16_t outside_set[18];           /**< per row and column (as frame_sum), the digits among its first 3 (bit d = d), 0 = no clue */
     bool rossini;                       /**< Rossini: the arrows are rules (every row and column has one, or none: neither) */
     uint8_t rossini_dir[18];            /**< per row and column (as frame_sum), its first 3 digits: ROSSINI_* */
+    bool idx159;                        /**< 159 Sudoku: columns 1, 5 and 9 give the place of the 1, 5 and 9 in their row */
     bool diag_nc;                       /**< Diagonal Non-Consecutive: cells touching at a corner aren't 1 apart
                                          *   (Diagonal Consecutive too, but where dmark joins them: there they are) */
     uint8_t dmark[81];                  /**< Diagonal Consecutive: marks, bit DMARK_DR = with the cell down-right,
@@ -458,12 +471,30 @@ bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
 /**
  * @brief A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
  * (cells 0..80 row by row, each in one cage at most), into out; false if
- * the text isn't one. Every sum 0 ("0:cell,...;0:...") is a Sumless Killer board. sudoku_cages_text() writes it (false: buf too small).
+ * the text isn't one. Every sum 0 ("0:cell,...;0:...") is a Sumless Killer board.
+ * (Product Killer: sudoku_geom_product_text(); Extra Regions: sudoku_geom_regions_text().) sudoku_cages_text() writes it (false: buf too small).
  * @param[in] text  the cages
  * @param[out] out  gets the board
  * @return false if the text isn't one
  */
 bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Product Killer board from its cages as text: "product:cell,cell,...;..." (as
+ * sudoku_geom_killer_text(), each number the product of the cage's digits, up to 60480).
+ * sudoku_cages_text() writes it.
+ * @param[in] text  the cages
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_product_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief An Extra Regions board from its regions as text: "0:cell,cell,...;0:..." (as a Sumless Killer's
+ * cages). sudoku_cages_text() writes it.
+ * @param[in] text  the regions
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_regions_text(const char *text, sudoku_geom_t *out);
 /**
  * @brief A Killer board's cages as text (sudoku_geom_killer_text()'s form).
  * @param[in] g  the board
@@ -928,7 +959,8 @@ static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
 }
 
 /**
- * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot, the Girandola
+ * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot, the Girandola, 159
+ * Sudoku's columns 1, 5 and 9, Extra Regions' regions
  * @param[in] g  the board
  * @param[in] cell  the cell
  * @return true if so
@@ -936,7 +968,8 @@ static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
 static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 {
     return is_sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || is_sudoku_geom_on_asterisk(g, cell) ||
-           is_sudoku_geom_on_centerdot(g, cell) || is_sudoku_geom_on_girandola(g, cell);
+           is_sudoku_geom_on_centerdot(g, cell) || is_sudoku_geom_on_girandola(g, cell) ||
+           (g->idx159 && cell % 9 % 4 == 0) || (g->variant == VAR_REGIONS && g->cage_of[cell] != CAGE_NONE);
 }
 
 /* ---------------------------------------------------------------- generating */
@@ -945,6 +978,15 @@ static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
  * the program defines its own (the firmware: a tick for the idle task, against the task watchdog). */
 void sudoku_gen_yield(void);
 
+/**
+ * @brief The hardest level a variant is made at: Kids 4x4 Medium, Product Killer Hard (its cages give so much
+ * away that Expert puzzles are rare: hundreds of tries each), the others Expert. sudoku_generate() makes a
+ * Product Killer request above it at Hard (a Kids 4x4 one never comes out above Medium anyway); the New puzzle
+ * dialog and genbench leave the levels above it out.
+ * @param[in] variant  sudoku_variant_t
+ * @return the level
+ */
+gen_level_t sudoku_top_level(int variant);
 /**
  * @brief Fills givens (81, 0 = empty) with a new puzzle of that variant and level.
  * seed: any random number. board (may be NULL) gets the puzzle's geometry:
@@ -1039,7 +1081,8 @@ enum {
     FIT_NROOM_ROW,                      /**< Numbered Rooms: the row's clue */
     FIT_NROOM_COL,                      /**< Numbered Rooms: the column's clue */
     FIT_SKYSUM_ROW,                     /**< Sum Skyscrapers: the row's clue */
-    FIT_SKYSUM_COL                      /**< Sum Skyscrapers: the column's clue */
+    FIT_SKYSUM_COL,                     /**< Sum Skyscrapers: the column's clue */
+    FIT_159                             /**< 159 Sudoku: the row's column 1, 5 or 9 (or what it points at) */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1098,7 +1141,8 @@ typedef enum {
     TECH_ROSSINI,            /**< Rossini: an arrow (or none) */
     TECH_DIAGNC,             /**< Diagonal Non-Consecutive: the cells touching at a corner */
     TECH_NROOM,              /**< Numbered Rooms: a clue */
-    TECH_SKYSUM              /**< Sum Skyscrapers: a clue */
+    TECH_SKYSUM,             /**< Sum Skyscrapers: a clue */
+    TECH_159                 /**< 159 Sudoku: a row's column 1, 5 or 9 and the cell it points at */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {

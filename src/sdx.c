@@ -133,6 +133,10 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_KILLER:
     case VAR_SUMLESS:
         return sudoku_geom_killer_text(p->cages, out);
+    case VAR_PRODUCT:
+        return sudoku_geom_product_text(p->cages, out);
+    case VAR_REGIONS:
+        return sudoku_geom_regions_text(p->cages, out);
     case VAR_QUAD:
         return sudoku_geom_quad_text(p->cages, out);   /* (its circles go where cages do) */
     case VAR_EVENODD:

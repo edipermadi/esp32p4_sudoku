@@ -427,6 +427,36 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int k = 0; k < geo->ncages && geo->cage_prod[0]; k++) {   /* Product Killer: a digit that doesn't divide, or full and wrong */
+        int left = geo->cage_prod[k], filled = 0, n = geo->cage_n[k];
+        bool bad = false;
+        for (int i = 0; i < n; i++) {
+            int d = val[geo->cage_cell[k][i]];
+            if (d) {
+                filled++;
+                bad |= left % d != 0;
+                left = left % d ? left : left / d;
+            }
+        }
+        if (bad || (filled == n && left != 1)) {
+            for (int i = 0; i < n; i++) {
+                if (val[geo->cage_cell[k][i]]) {
+                    out[geo->cage_cell[k][i]] = true;
+                }
+            }
+        }
+    }
+    for (int r = 0; geo->idx159 && r < 9; r++) {   /* 159 Sudoku: a column 1, 5 or 9 pointing at another digit */
+        for (int k = 1; k <= 9; k += 4) {
+            const int idx = r * 9 + k - 1, c = val[idx];
+            for (int j = 0; c && j < 9; j++) {      /* (k where it doesn't point, or another digit where it does) */
+                const int x = val[r * 9 + j];
+                if (x && ((x == k) != (j == c - 1))) {
+                    out[idx] = out[r * 9 + j] = true;
+                }
+            }
+        }
+    }
     for (int k = 0; k < geo->ncages && geo->cage_sum[0]; k++) {   /* Killer: a cage over its sum, or full and short of it */
         int sum = 0, filled = 0, n = geo->cage_n[k];
         for (int i = 0; i < n; i++) {

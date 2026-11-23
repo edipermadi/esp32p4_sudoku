@@ -76,6 +76,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Diagonal Consecutive", OF_VARIANT(48)},
     {"Fastest 10 Lines", OF_VARIANT(49)},
     {"Fastest Girandola", OF_VARIANT(50)},
+    {"Fastest 159 Sudoku", OF_VARIANT(51)},
+    {"Fastest Product Killer", OF_VARIANT(52)},
+    {"Fastest Extra Regions", OF_VARIANT(53)},
 };
 
 #define REC_OTHERS 5                    /**< the records after the fastest ones (a day, a run, a streak, solved, time) */

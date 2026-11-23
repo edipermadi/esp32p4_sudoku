@@ -117,10 +117,11 @@ static void why(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char 
             return;
         }
     }
-    for (int i = 0; G->variant == VAR_SUMLESS && G->cage_of[c] != CAGE_NONE && i < G->cage_n[G->cage_of[c]]; i++) {
+    for (int i = 0; (G->variant == VAR_SUMLESS || G->variant == VAR_REGIONS) && G->cage_of[c] != CAGE_NONE && i < G->cage_n[G->cage_of[c]]; i++) {
         int o = G->cage_cell[G->cage_of[c]][i];     /* Sumless Killer: a cage-mate in another row, column and box */
         if (o != c && v[o] == d) {
-            sprintf(b, "r%dc%d is %d (in the same cage)", o / 9 + 1, o % 9 + 1, d);
+            sprintf(b, "r%dc%d is %d (in the same %s)", o / 9 + 1, o % 9 + 1, d,
+                    G->variant == VAR_REGIONS ? "shaded region" : "cage");
             return;
         }
     }
@@ -156,10 +157,10 @@ static int blocker(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, ch
             return o;
         }
     }
-    for (int i = 0; G->variant == VAR_SUMLESS && G->cage_of[c] != CAGE_NONE && i < G->cage_n[G->cage_of[c]]; i++) {
+    for (int i = 0; (G->variant == VAR_SUMLESS || G->variant == VAR_REGIONS) && G->cage_of[c] != CAGE_NONE && i < G->cage_n[G->cage_of[c]]; i++) {
         int o = G->cage_cell[G->cage_of[c]][i];
         if (o != c && v[o] == d) {
-            strcpy(via, "the same cage");
+            strcpy(via, G->variant == VAR_REGIONS ? "the same region" : "the same cage");
             return o;
         }
     }
@@ -195,7 +196,11 @@ static void context(const sudoku_geom_t *G, const uint8_t v[81], int c)
     }
     if (G->cage_of[c] != CAGE_NONE) {
         int k = G->cage_of[c];
-        printf("         cage sum %d:", G->cage_sum[k]);
+        if (G->cage_prod[k]) {
+            printf("         cage product %d:", G->cage_prod[k]);
+        } else {
+            printf("         cage sum %d:", G->cage_sum[k]);
+        }
         for (int i = 0; i < G->cage_n[k]; i++) {
             int o = G->cage_cell[k][i];
             printf(" r%dc%d(%c)", o / 9 + 1, o % 9 + 1, v[o] ? '0' + v[o] : '.');
@@ -445,6 +450,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_KILLER:
     case VAR_SUMLESS:
+    case VAR_PRODUCT:
+    case VAR_REGIONS:
         sudoku_cages_text(g, cages, len);
         break;
     case VAR_QUAD:
@@ -593,6 +600,9 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_CAGE:
         printf(", \"rule\": \"cage\", \"cage\": %d", G->cage_of[c]);
         return;
+    case FIT_159:
+        printf(", \"rule\": \"159\"");
+        return;
     case FIT_QUAD:
         for (int s = 0; s < 4 && G->quad_of[c][s] != QUAD_NONE; s++) {
             int qd = G->quad_of[c][s], empty, miss = sudoku_quad_missing(G, qd, v, &empty);
@@ -708,7 +718,7 @@ static void layout_json(const sudoku_geom_t *G)
     }
     printf("],\n \"cages\": [");
     for (int k = 0; k < G->ncages; k++) {
-        printf("%s{\"sum\": %d, \"cells\": [", k ? ", " : "", G->cage_sum[k]);
+        printf("%s{\"sum\": %d, \"prod\": %d, \"cells\": [", k ? ", " : "", G->cage_sum[k], G->cage_prod[k]);
         for (int j = 0; j < G->cage_n[k]; j++) {
             printf("%s%d", j ? "," : "", G->cage_cell[k][j]);
         }

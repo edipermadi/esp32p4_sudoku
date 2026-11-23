@@ -157,20 +157,67 @@ static bool eliminate(logic_t *L, int c, uint16_t bits)
     return true;
 }
 
+/**
+ * @brief Product Killer: the product of a set of digits
+ * @param[in] m  the digits (bit d)
+ * @return their product
+ */
+static int mask_product(uint16_t m)
+{
+    int p = 1;
+    for (int d = 2; d <= 9; d++) {
+        p *= (m >> d & 1) ? d : 1;
+    }
+    return p;
+}
+
+/**
+ * @brief Product Killer: tries every way to fill a cage's empty cells with different digits from their
+ * candidates that multiply to what's left; marks each digit that fits somewhere
+ * @param[in] L  the logic state
+ * @param[in] empty  the empty cells
+ * @param[in] n  how many
+ * @param[in] at  the cell to fill next
+ * @param[in] left  what's left of the product
+ * @param[in] used  the digits taken
+ * @param[in] pick  the digits picked so far, per cell
+ * @param[in,out] fits  gets, per cell, the digits of each way that works
+ */
+static void product_ways(const logic_t *L, const int *empty, int n, int at, int left, uint16_t used, uint8_t *pick,
+                         uint16_t *fits)
+{
+    if (at == n) {
+        if (left == 1) {
+            for (int i = 0; i < n; i++) {
+                fits[i] |= (uint16_t)(1u << pick[i]);
+            }
+        }
+        return;
+    }
+    const uint16_t m = (uint16_t)(L->cand[empty[at]] & ~used);
+    for (int d = 1; d <= 9; d++) {
+        if ((m >> d & 1) && left % d == 0) {
+            pick[at] = (uint8_t)d;
+            product_ways(L, empty, n, at + 1, left / d, (uint16_t)(used | 1u << d), pick, fits);
+        }
+    }
+}
+
 /* (documented in gen_internal.h) */
 bool gen_cage_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
     for (int k = 0; k < G->ncages; k++) {
-        if (!G->cage_sum[k]) {
-            continue;                               /* (Sumless Killer: no sum, its cells are only peers) */
+        const bool prod = G->cage_prod[k] != 0;     /* (Product Killer: the digits multiply to it) */
+        if (!G->cage_sum[k] && !prod) {
+            continue;                               /* (Sumless Killer, Extra Regions: no sum, its cells are only peers) */
         }
-        int left = G->cage_sum[k], n = 0, empty[9];
+        int left = prod ? G->cage_prod[k] : G->cage_sum[k], n = 0, empty[9];
         uint16_t used = 0, avail = 0;
         for (int i = 0; i < G->cage_n[k]; i++) {
             int c = G->cage_cell[k][i];
             if (L->v[c]) {
-                left -= L->v[c];
+                left = !prod ? left - L->v[c] : left % L->v[c] ? -1 : left / L->v[c];
                 used |= (uint16_t)(1u << L->v[c]);
             } else {
                 empty[n++] = c;
@@ -180,10 +227,28 @@ bool gen_cage_logic(logic_t *L)
         if (!n) {
             continue;
         }
+        if (prod) {                                 /* each cell by every way to fill the cage */
+            uint16_t fits[9] = {0};
+            uint8_t pick[9];
+            if (left > 0) {
+                product_ways(L, empty, n, 0, left, used, pick, fits);
+            }
+            bool changed = false;
+            uint16_t allowed = 0;
+            for (int i = 0; i < n; i++) {
+                changed |= eliminate(L, empty[i], (uint16_t)(L->cand[empty[i]] & ~fits[i]));
+                allowed |= fits[i];
+            }
+            if (changed) {
+                trace(TECH_CAGE, k, -1, allowed, 0, -1, -1);
+                return true;
+            }
+            continue;
+        }
         avail &= (uint16_t)~used;
         uint16_t allowed = 0;
         for (uint16_t m = avail; m; m = (uint16_t)((m - 1) & avail)) {
-            if (gen_popcount(m) != n || s_mask_sum[m] != left) {
+            if (gen_popcount(m) != n || (prod ? mask_product(m) : s_mask_sum[m]) != left) {
                 continue;
             }
             bool fits = true;
@@ -201,6 +266,39 @@ bool gen_cage_logic(logic_t *L)
         if (changed) {
             trace(TECH_CAGE, k, -1, allowed, 0, -1, -1);
             return true;
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_159_logic(logic_t *L)
+{
+    for (int r = 0; r < 9; r++) {
+        for (int q = 0; q < 9; q++) {
+            const int i = r * 9 + q;
+            if (L->v[i]) {
+                continue;
+            }
+            uint16_t keep = L->cand[i];
+            if (q % 4 == 0) {                       /* column 1, 5 or 9: where it points must be able to take k */
+                const int k = q + 1;
+                for (int c = 1; c <= 9; c++) {
+                    const int t = r * 9 + c - 1;
+                    const bool can = t == i ? c == k : L->v[t] ? L->v[t] == k : (L->cand[t] >> k & 1) != 0;
+                    keep &= can ? (uint16_t)0xFFFF : (uint16_t)~(1u << c);
+                }
+            }
+            for (int k = 1; k <= 9; k += 4) {       /* holding k: column k must be able to say this column */
+                const int idx = r * 9 + k - 1;
+                const bool can = idx == i || (L->v[idx] ? L->v[idx] == q + 1 : (L->cand[idx] >> (q + 1) & 1) != 0);
+                keep &= can ? (uint16_t)0xFFFF : (uint16_t)~(1u << k);
+            }
+            if (keep != L->cand[i]) {
+                eliminate(L, i, (uint16_t)(L->cand[i] & ~keep));
+                trace(TECH_159, i, -1, keep, 0, i, -1);
+                return true;
+            }
         }
     }
     return false;
@@ -1071,6 +1169,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if ((G->frame || G->outside || G->rossini) && gen_first3_logic(&L)) {
             continue;    /* Frame, Outside Sudoku, Rossini: the clues */
         }
+        if (G->idx159 && gen_159_logic(&L)) {
+            continue;
+        }
         if (G->diag_nc && gen_diagnc_logic(&L)) {
             continue;    /* Diagonal Non-Consecutive: the corners */
         }
@@ -1086,8 +1187,11 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
 /* (documented in gen_internal.h) */
 int gen_easy_min_clues(const sudoku_geom_t *G)
 {
-    if (G->variant == VAR_SUMLESS) {
+    if (G->variant == VAR_SUMLESS || G->variant == VAR_REGIONS) {
         return 26;
+    }
+    if (G->idx159) {
+        return 30;
     }
     if (G->ncages) {
         return 8;

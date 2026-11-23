@@ -57,6 +57,9 @@ static const char *units_word(const sudoku_geom_t *geo)
     if (geo->variant == VAR_JIGSAW) {
         return "row, column or region";
     }
+    if (geo->variant == VAR_REGIONS) {
+        return "row, column, box or shaded region";
+    }
     if (geo->ncages) {
         return "row, column, box or cage";
     }
@@ -270,6 +273,25 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  ? "Along the thermometer the digits rise or stay the same from the bulb (they rise where two "
                  "neighbours share a row, column or box)" : "Along the thermometer the digits rise from the bulb",
                  c / 9 + 1, c % 9 + 1, digs);
+    } else if (t->kind == TECH_159) {              /* 159 Sudoku: the cell, and its row's columns 1, 5 and 9 */
+        int c = t->unit;
+        for (int k = 0; c >= 0 && c < 81 && k < 9; k += 4) {
+            mark[c / 9 * 9 + k] = 1;
+        }
+        if (c >= 0 && c < 81) {
+            mark[c] = 1;
+        }
+        snprintf(u1, sizeof(u1), "row %d", c / 9 + 1);
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        snprintf(tech, sizeof(tech), "In row %d, the digit in column 1 is the column of its 1, in column 5 of its 5 "
+                 "and in column 9 of its 9, so row %d, column %d can only be %s. ", c / 9 + 1, c / 9 + 1, c % 9 + 1,
+                 digs);
     } else if (t->kind == TECH_DIAGNC) {            /* Diagonal Non-Consecutive: the cell and its corners */
         int c = t->unit;
         for (int k = 0; c >= 0 && c < 81 && k < 5; k++) {
@@ -367,7 +389,9 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             mark[geo->cage_cell[k][i]] = 1;
         }
         int c0 = k >= 0 && k < geo->ncages ? geo->cage_cell[k][0] : 0;
-        snprintf(u1, sizeof(u1), "the %d cage", k >= 0 && k < geo->ncages ? geo->cage_sum[k] : 0);
+        const bool prod = geo->variant == VAR_PRODUCT;
+        const int num = k >= 0 && k < geo->ncages ? (prod ? geo->cage_prod[k] : geo->cage_sum[k]) : 0;
+        snprintf(u1, sizeof(u1), "the %d cage", num);
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
@@ -375,9 +399,9 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                 len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
             }
         }
-        snprintf(tech, sizeof(tech), "The cage at row %d, column %d adds up to %d: with what's in it and around "
-                 "it, its empty cells can only be %s. ", c0 / 9 + 1, c0 % 9 + 1,
-                 k >= 0 && k < geo->ncages ? geo->cage_sum[k] : 0, digs);
+        snprintf(tech, sizeof(tech), "The cage at row %d, column %d %s %d: with what's in it and around "
+                 "it, its empty cells can only be %s. ", c0 / 9 + 1, c0 % 9 + 1, prod ? "multiplies to" : "adds up to",
+                 num, digs);
     } else if (t->kind == TECH_NAKED_TRIPLE || t->kind == TECH_X_WING || t->kind == TECH_SWORDFISH ||
                t->kind == TECH_XY_WING) {
         for (int i = 0; i < t->ncells; i++) {

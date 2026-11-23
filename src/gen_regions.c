@@ -217,3 +217,104 @@ bool gen_sumless_cages(const uint8_t full[81], uint32_t *rng, sudoku_geom_t *out
     }
     return m >= 4 && gen_geom_killer(cage_of, sums, m, out);
 }
+
+/* (documented in gen_internal.h) */
+bool gen_product_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out)
+{
+    if (!gen_killer_cages(full, max_size, rng, out)) {
+        return false;
+    }
+    uint8_t cage_of[81];
+    uint16_t prods[CAGES_MAX];
+    memcpy(cage_of, out->cage_of, 81);
+    const int n = out->ncages;
+    for (int k = 0; k < n; k++) {
+        prods[k] = 1;
+        for (int i = 0; i < out->cage_n[k]; i++) {
+            prods[k] = (uint16_t)(prods[k] * full[out->cage_cell[k][i]]);
+        }
+    }
+    return gen_geom_product(cage_of, prods, n, out);
+}
+
+/**
+ * @brief Extra Regions: does a cell touch, side by side or at a corner, a cell of another region than this one?
+ * @param[in] cage_of  each cell's region (CAGE_NONE: none)
+ * @param[in] c  the cell
+ * @param[in] mine  this region (its own cells don't count)
+ * @return true if so
+ */
+static bool is_region_near(const uint8_t cage_of[81], int c, int mine)
+{
+    for (int dr = -1; dr <= 1; dr++) {
+        for (int dq = -1; dq <= 1; dq++) {
+            const int r = c / 9 + dr, q = c % 9 + dq;
+            if (r >= 0 && r < 9 && q >= 0 && q < 9 && cage_of[r * 9 + q] != CAGE_NONE && cage_of[r * 9 + q] != mine) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_extra_regions(const uint8_t full[81], int want, uint32_t *rng, sudoku_geom_t *out)
+{
+    uint8_t cage_of[81], zero[CAGES_MAX] = {0};
+    memset(cage_of, CAGE_NONE, sizeof(cage_of));
+    int n = 0;
+    for (int tries = 0; tries < 400 && n < want; tries++) {
+        int start = (int)(rnd(rng) % 81), target = 5 + (int)(rnd(rng) % 5), nc = 0;
+        uint8_t cells[9];
+        uint16_t digits = 0;
+        /* (a region keeps a cell away from the others, corners too: their tints stay apart) */
+        if (cage_of[start] != CAGE_NONE || is_region_near(cage_of, start, n)) {
+            continue;
+        }
+        cells[nc++] = (uint8_t)start;
+        digits = (uint16_t)(1u << full[start]);
+        cage_of[start] = (uint8_t)n;
+        while (nc < target) {
+            uint8_t cand[36];
+            int ncand = 0;
+            for (int i = 0; i < nc; i++) {
+                const int c = cells[i], r = c / 9, q = c % 9;
+                const int nb[4] = {q > 0 ? c - 1 : -1, q < 8 ? c + 1 : -1, r > 0 ? c - 9 : -1, r < 8 ? c + 9 : -1};
+                for (int j = 0; j < 4; j++) {
+                    const int o = nb[j];
+                    if (o < 0 || cage_of[o] != CAGE_NONE || (digits >> full[o] & 1)) {
+                        continue;
+                    }
+                    if (!is_region_near(cage_of, o, n)) {
+                        cand[ncand++] = (uint8_t)o;
+                    }
+                }
+            }
+            if (!ncand) {
+                break;
+            }
+            const int o = cand[rnd(rng) % (uint32_t)ncand];
+            cells[nc++] = (uint8_t)o;
+            cage_of[o] = (uint8_t)n;
+            digits |= (uint16_t)(1u << full[o]);
+        }
+        bool boxes = false, rows = false, cols = false;   /* (in one row, column or box: it says nothing new) */
+        for (int i = 1; i < nc; i++) {
+            boxes |= out->region[cells[i]] != out->region[cells[0]];
+            rows |= cells[i] / 9 != cells[0] / 9;
+            cols |= cells[i] % 9 != cells[0] % 9;
+        }
+        if (nc < 5 || !boxes || !rows || !cols) {
+            for (int i = 0; i < nc; i++) {
+                cage_of[cells[i]] = CAGE_NONE;
+            }
+            continue;
+        }
+        n++;
+    }
+    if (n < 3 || !gen_geom_killer(cage_of, zero, n, out)) {
+        return false;
+    }
+    out->variant = VAR_REGIONS;
+    return true;
+}

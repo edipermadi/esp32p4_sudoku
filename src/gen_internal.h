@@ -315,6 +315,12 @@ bool gen_first3_logic(logic_t *L);
  */
 bool gen_diagnc_logic(logic_t *L);
 /**
+ * @brief 159 Sudoku: a row's columns 1, 5 and 9 against the cells they point at
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_159_logic(logic_t *L);
+/**
  * @brief Does the board have a clue about the first three cells of this row or column (Frame, Outside
  *        Sudoku, Rossini: every line)?
  * @param[in] G          the board
@@ -389,6 +395,24 @@ bool gen_fish(logic_t *L, int size);
  *         (or only some sums are 0)
  */
 bool gen_geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncages, sudoku_geom_t *out);
+/**
+ * @brief Builds a Product Killer board: a classic board plus cages, each with the product of its digits.
+ * @param[in] cage_of  the cage of each cell (CAGE_NONE: none)
+ * @param[in] prods    each cage's product (none 0)
+ * @param[in] ncages   how many cages
+ * @param[out] out     gets the board
+ * @return false if the cages aren't a board's (see gen_geom_killer())
+ */
+bool gen_geom_product(const uint8_t cage_of[81], const uint16_t *prods, int ncages, sudoku_geom_t *out);
+/**
+ * @brief Product Killer: the digits cell i may hold by its cage's product (with the other digits placed)
+ * @param[in] G  the board
+ * @param[in] v  the digits (0: empty; i's own is left out)
+ * @param[in] c  i's cage
+ * @param[in] i  the cell
+ * @return a candidate mask
+ */
+uint16_t gen_product_allow(const sudoku_geom_t *G, const uint8_t *v, int c, int i);
 /**
  * @brief Builds a board from its decorations: a classic board with lines of the variant's kind (Thermo,
  *        Arrow, Renban, Whispers).
@@ -515,6 +539,25 @@ bool gen_killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudok
  * @return false: fewer than 4 cages left
  */
 bool gen_sumless_cages(const uint8_t full[81], uint32_t *rng, sudoku_geom_t *out);
+/**
+ * @brief Product Killer: cages drawn over the full grid as for Killer, each with the product of its digits
+ * @param[in] full  the solution
+ * @param[in] max_size  the cage size aimed at, as gen_killer_cages()
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
+ * @return false: no cages
+ */
+bool gen_product_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out);
+/**
+ * @brief Extra Regions: up to want regions of 5 to 9 connected cells over the full grid, each with
+ *        different digits, reaching over a box, a row and a column, and never touching another (corners too)
+ * @param[in] full  the solution
+ * @param[in] want  regions wanted
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board (it must be a classic board already: its boxes are read)
+ * @return false: fewer than 3
+ */
+bool gen_extra_regions(const uint8_t full[81], int want, uint32_t *rng, sudoku_geom_t *out);
 /**
  * @brief Between Lines: up to want lines over the full grid, from a circle, a random walk of up to 7
  * cells whose digits all lie on one side of it (above it, or below), kept at the longest length

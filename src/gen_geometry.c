@@ -24,7 +24,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Parity Lines", "Slow Thermo", "Fortress", "Argyle",
                                                      "Nabner", "Numbered Rooms", "Sum Skyscrapers",
                                                      "Lockout Lines", "Sumless Killer", "Double Arrow",
-                                                     "Diagonal Consecutive", "10 Lines", "Girandola"
+                                                     "Diagonal Consecutive", "10 Lines", "Girandola",
+                                                     "159 Sudoku", "Product Killer", "Extra Regions"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -298,6 +299,9 @@ void sudoku_geom_init(void)
     g[VAR_NONCONSEC] = g[VAR_CLASSIC];              /* Consecutive with no bars: no neighbours 1 apart */
     g[VAR_NONCONSEC].variant = VAR_NONCONSEC;
     g[VAR_NONCONSEC].consec_on = true;
+    g[VAR_159] = g[VAR_CLASSIC];                    /* columns 1, 5, 9 say where the 1, 5, 9 are */
+    g[VAR_159].variant = VAR_159;
+    g[VAR_159].idx159 = true;
     g[VAR_DIAGNC] = g[VAR_CLASSIC];                 /* no digits 1 apart corner to corner */
     g[VAR_DIAGNC].variant = VAR_DIAGNC;
     g[VAR_DIAGNC].diag_nc = true;
@@ -317,7 +321,7 @@ void sudoku_geom_init(void)
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
-                                  VAR_DIAGCONSEC, VAR_TEN
+                                  VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -340,7 +344,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI || variant == VAR_DUTCH ||
             variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS || variant == VAR_NABNER ||
             variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
-            variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN) {
+            variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
+            variant == VAR_PRODUCT || variant == VAR_REGIONS) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -848,6 +853,23 @@ bool gen_geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncages,
                 out->peers[a][out->npeers[a]++] = (uint8_t)b;
             }
         }
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_product(const uint8_t cage_of[81], const uint16_t *prods, int ncages, sudoku_geom_t *out)
+{
+    static const uint8_t ZERO[CAGES_MAX];
+    if (!gen_geom_killer(cage_of, ZERO, ncages, out)) {   /* (the cages, no sums: their cells differ) */
+        return false;
+    }
+    out->variant = VAR_PRODUCT;
+    for (int k = 0; k < ncages; k++) {
+        if (!prods[k]) {
+            return false;
+        }
+        out->cage_prod[k] = prods[k];
     }
     return true;
 }

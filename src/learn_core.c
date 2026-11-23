@@ -38,6 +38,8 @@ static const learn_lesson_t LESSONS[] = {
     {"Asterisk", "The nine asterisk cells hold 1-9 too: a digit can have one place left among them.", VAR_ASTERISK, TECH_NONE, false},
     {"Center Dot", "The nine box centres hold 1-9 too: a digit can have one place left among them.", VAR_CENTERDOT, TECH_NONE, false},
     {"Girandola", "The nine pinwheel cells hold 1-9 too: a digit can have one place left among them.", VAR_GIRANDOLA, TECH_NONE, false},
+    {"Extra region", "No digit repeats in a shaded region: its cells see each other across rows, columns and boxes.", VAR_REGIONS, TECH_NONE, false},
+    {"159 Sudoku", "Columns 1, 5 and 9 say where the row's 1, 5 and 9 are: the two must agree.", VAR_159, TECH_159, false},
     {"Argyle lines", "No digit repeats on an argyle line: the cells along one see each other, like a row's.", VAR_ARGYLE, TECH_NONE, false},
     /* Marks: rules between cells */
     {"Anti-Knight", "Cells a knight's move apart can't hold the same digit: they see each other too.", VAR_KNIGHT, TECH_NONE, false},
@@ -73,6 +75,7 @@ static const learn_lesson_t LESSONS[] = {
     /* Clues */
     {"Killer cage", "A cage's sum allows only some sets of digits: with what's around it, its cells narrow down.", VAR_KILLER, TECH_CAGE, false},
     {"Sumless cage", "No digit repeats in a cage: its cells see each other, like a box's, across box borders.", VAR_SUMLESS, TECH_NONE, false},
+    {"Product cage", "A cage's digits multiply to its number: only some sets of digits do, and each must divide it.", VAR_PRODUCT, TECH_CAGE, false},
     {"Sandwich clue", "The sum between a row's 1 and 9 leaves the 1 and the 9 only a few places in that row or column.", VAR_SANDWICH, TECH_SANDWICH, false},
     {"Skyscraper clue", "How many buildings are seen: a 1 means the 9 is first, a 9 that they rise 1 to 9.", VAR_SKY, TECH_SKY, false},
     {"Little Killer clue", "A diagonal's sum, repeats allowed: what's left of it bounds its empty cells.", VAR_LK, TECH_LK, false},
@@ -126,6 +129,8 @@ int learn_group(int k)
     case VAR_ASTERISK:
     case VAR_CENTERDOT:
     case VAR_GIRANDOLA:
+    case VAR_REGIONS:
+    case VAR_159:
     case VAR_ARGYLE:
         return LEARN_GRIDS;
     case VAR_KNIGHT:
@@ -143,6 +148,7 @@ int learn_group(int k)
         return LEARN_MARKS;
     case VAR_KILLER:
     case VAR_SUMLESS:
+    case VAR_PRODUCT:
     case VAR_SANDWICH:
     case VAR_SKY:
     case VAR_LK:

@@ -41,9 +41,11 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
          * the lines run on to the next cell so the outline stays joined */
         int x1 = left ? a.x1 - 1 : a.x1 + in, x2 = right ? a.x2 + 1 : a.x2 - in;
         int y1 = up ? a.y1 - 1 : a.y1 + in, y2 = down ? a.y2 + 1 : a.y2 - in;
-        bool label = geo->cage_cell[k][0] == i && geo->cage_sum[k];   /* (Sumless Killer: none) */
+        bool label = geo->cage_cell[k][0] == i && (geo->cage_sum[k] || geo->cage_prod[k]);   /* (Sumless Killer: none) */
+        const int num = geo->cage_prod[k] ? geo->cage_prod[k] : geo->cage_sum[k];   /* (Product Killer: up to 5 digits) */
+        const int ndig = num >= 10000 ? 5 : num >= 1000 ? 4 : num >= 100 ? 3 : 2;
         if (!up) {
-            ld.p1.x = label ? a.x1 + in + 18 : x1;      /* room for the sum */
+            ld.p1.x = label ? a.x1 + in + 4 + 7 * ndig : x1;   /* room for the sum (18 px for two digits) */
             ld.p1.y = ld.p2.y = a.y1 + in;
             ld.p2.x = x2;
             if (ld.p1.x < ld.p2.x) {
@@ -71,15 +73,15 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
             lv_draw_line(layer, &ld);
         }
         if (label) {
-            char sum[4];
-            snprintf(sum, sizeof(sum), "%d", geo->cage_sum[k]);
+            char sum[8];
+            snprintf(sum, sizeof(sum), "%d", num);
             lv_draw_label_dsc_t d;
             lv_draw_label_dsc_init(&d);
             d.font = &lv_font_montserrat_12;
             d.color = C_TEXT;
             d.text = sum;
             d.text_local = 1;
-            lv_area_t la = {.x1 = a.x1 + 2, .y1 = a.y1 + 1, .x2 = a.x1 + 26, .y2 = a.y1 + 15};
+            lv_area_t la = {.x1 = a.x1 + 2, .y1 = a.y1 + 1, .x2 = a.x1 + 6 + 8 * ndig, .y2 = a.y1 + 15};
             lv_draw_label(layer, &d, &la);
         }
     }
@@ -493,7 +495,7 @@ void board_regions_draw_cb(lv_event_t *e)
     if (geo && geo->nthermos) {
         board_thermos_draw(grid, geo, lv_event_get_layer(e));
     }
-    if (geo && geo->ncages) {
+    if (geo && geo->ncages && geo->variant != VAR_REGIONS) {   /* (Extra Regions: tinted instead) */
         board_cages_draw(grid, geo, lv_event_get_layer(e));
     }
     if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) {

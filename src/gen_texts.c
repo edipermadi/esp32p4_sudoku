@@ -191,6 +191,8 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     switch (g->variant) {
     case VAR_KILLER:
     case VAR_SUMLESS:
+    case VAR_PRODUCT:
+    case VAR_REGIONS:
         sudoku_cages_text(g, cages, cages_len);
         break;
     case VAR_QUAD:
@@ -717,31 +719,36 @@ bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len)
     return true;
 }
 
-/* (documented in generator.h) */
-bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out)
+/**
+ * @brief Reads cages as text, "number:cell,cell,...;..." (sudoku_geom_killer_text()'s form)
+ * @param[in] text  the cages
+ * @param[in] max  the largest number allowed (a sum: 45; a product: 3024)
+ * @param[out] cage_of  gets each cell's cage (CAGE_NONE: none)
+ * @param[out] nums  gets each cage's number (CAGES_MAX of them)
+ * @param[out] n  gets how many cages
+ * @return false if the text isn't that
+ */
+static bool read_cages(const char *text, long max, uint8_t cage_of[81], uint16_t *nums, int *n)
 {
-    uint8_t cage_of[81], sums[CAGES_MAX];
-    memset(cage_of, CAGE_NONE, sizeof(cage_of));
-    int n = 0;
+    memset(cage_of, CAGE_NONE, 81);
+    *n = 0;
     const char *p = text;
     while (p && *p) {
-        if (n >= CAGES_MAX) {
+        if (*n >= CAGES_MAX) {
             return false;
         }
         char *end;
         long sum = strtol(p, &end, 10);
-        if (end == p || *end != ':' || sum < 0 || sum > 45) {     /* (0: Sumless Killer's) */
+        if (end == p || *end != ':' || sum < 0 || sum > max) {     /* (0: Sumless Killer's, Extra Regions') */
             return false;
         }
         p = end + 1;
-        int cells = 0;
         for (;;) {
             long c = strtol(p, &end, 10);
             if (end == p || c < 0 || c > 80 || cage_of[c] != CAGE_NONE) {
                 return false;
             }
-            cage_of[c] = (uint8_t)n;
-            cells++;
+            cage_of[c] = (uint8_t)*n;
             p = end;
             if (*p == ',') {
                 p++;
@@ -749,14 +756,48 @@ bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out)
             }
             break;
         }
-        sums[n++] = (uint8_t)sum;
+        nums[(*n)++] = (uint16_t)sum;
         if (*p == ';') {
             p++;
         } else if (*p) {
             return false;
         }
     }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t cage_of[81], sums[CAGES_MAX];
+    uint16_t nums[CAGES_MAX];
+    int n;
+    if (!read_cages(text, 45, cage_of, nums, &n)) {
+        return false;
+    }
+    for (int k = 0; k < n; k++) {
+        sums[k] = (uint8_t)nums[k];
+    }
     return gen_geom_killer(cage_of, sums, n, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_product_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t cage_of[81];
+    uint16_t nums[CAGES_MAX];
+    int n;
+    return read_cages(text, 60480, cage_of, nums, &n) && gen_geom_product(cage_of, nums, n, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_regions_text(const char *text, sudoku_geom_t *out)
+{
+    if (!sudoku_geom_killer_text(text, out) || out->variant != VAR_SUMLESS) {
+        return false;                               /* (every number 0) */
+    }
+    out->variant = VAR_REGIONS;
+    return true;
 }
 
 /* (documented in generator.h) */
@@ -768,7 +809,8 @@ bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len)
     }
     buf[0] = 0;
     for (int k = 0; k < g->ncages; k++) {
-        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d:", k ? ";" : "", g->cage_sum[k]);
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d:", k ? ";" : "",
+                         g->variant == VAR_PRODUCT ? g->cage_prod[k] : g->cage_sum[k]);
         if (w < 0 || w >= len - pos) {
             return false;
         }

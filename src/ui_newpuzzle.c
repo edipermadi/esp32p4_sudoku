@@ -78,6 +78,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {11, 405, 1186, 590},   /* Diagonal Consecutive (2026-11-23) */
     {12, 100, 156, 1806},   /* 10 Lines (its rule in bit shifts, 2026-11-23: Expert was 5321) */
     {6, 86, 214, 198},      /* Girandola */
+    {19, 126, 447, 288},   /* 159 Sudoku (2026-11-23) */
+    {23, 86, 3988, 3988},  /* Product Killer (no Expert: Hard's) */
+    {23, 197, 425, 271},   /* Extra Regions */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -154,7 +157,8 @@ static void gen_poll_cb(lv_timer_t *t)
     gen_bar = NULL;                                 /* (went with the box) */
     uint16_t id;
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
-    const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_SUMLESS || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ? gen_cages : NULL;
+    const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_SUMLESS || gen_var_req == VAR_PRODUCT ||
+                        gen_var_req == VAR_REGIONS || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = is_stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,

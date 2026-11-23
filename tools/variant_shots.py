@@ -29,7 +29,8 @@ PAGES = ["classic", "x-sudoku", "mini-6x6", "hyper", "jigsaw", "killer", "anti-k
          "zipper-lines", "frame", "between-lines", "entropic-lines", "modular-lines", "center-dot",
          "outside-sudoku", "rossini", "diagonal-non-consecutive", "dutch-whispers", "parity-lines", "slow-thermo",
          "fortress", "argyle", "nabner", "numbered-rooms", "sum-skyscrapers",
-         "lockout-lines", "sumless-killer", "double-arrow", "diagonal-consecutive", "10-lines", "girandola"]
+         "lockout-lines", "sumless-killer", "double-arrow", "diagonal-consecutive", "10-lines", "girandola",
+         "159-sudoku", "product-killer", "extra-regions"]
 
 
 def read_png(path):

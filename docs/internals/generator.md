@@ -37,7 +37,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 
 | Fields | Variants |
 |---|---|
-| `cage_*` | Killer cages (their cells are also peers); Sumless Killer's have sum 0 |
+| `cage_*` | Killer cages (their cells are also peers); Sumless Killer's and Extra Regions' have sum 0; Product Killer's have sum 0 and `cage_prod` |
 | `consec` | Consecutive bars; with `consec_on` and no bars: Non-Consecutive |
 | `edge_kind`, `edge` | Kropki dots, XV marks, Greater-Than signs, on each cell's right and lower edge; Fortress' grey-white sides as signs (`EDGE_FORT`, not drawn: `parity` says which cells are grey, `PARITY_FORT`) |
 | `quad_*` | Quadruple circles |
@@ -100,7 +100,7 @@ The exact search says *whether* a puzzle has one solution but not *how hard* it 
 
 | Level | Rule |
 |---|---|
-| **Easy** | tier 1, and at least `gen_easy_min_clues()` givens (36 for Classic; fewer where the variant's clues carry information, e.g. Killer 8, Kropki 14, Diagonal Consecutive 22, Sandwich 24, Sumless Killer 26) |
+| **Easy** | tier 1, and at least `gen_easy_min_clues()` givens (36 for Classic; fewer where the variant's clues carry information, e.g. Killer 8, Kropki 14, Diagonal Consecutive 22, Sandwich 24, Sumless Killer and Extra Regions 26, 159 Sudoku 30) |
 | **Medium** | tier 1, fewer givens |
 | **Hard** | tier 2 |
 | **Expert** | tier 3: needs more than pairs (triples, X-Wing, Swordfish, XY-Wing, or trial and error) |

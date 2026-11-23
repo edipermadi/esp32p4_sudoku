@@ -51,7 +51,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "slow-thermo": "Slow", "fortress": "Fortress", "argyle": "Argyle", "nabner": "Nabner",
          "numbered-rooms": "Numbered", "sum-skyscrapers": "Sum", "lockout-lines": "Lockout",
          "sumless-killer": "Sumless", "double-arrow": "Double", "diagonal-consecutive": "Diagonal C",
-         "10-lines": "10", "girandola": "Girandola"}
+         "10-lines": "10", "girandola": "Girandola", "159-sudoku": "159", "product-killer": "Product",
+         "extra-regions": "Extra"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -231,6 +232,40 @@ def rule_words(d, vals, c, v, r):
                 w, at, "%d or more" % w if same else "above %d" % w)
         return "it comes before the %d in %s on its thermometer, so it's %s" % (
             w, at, "%d or less" % w if same else "below %d" % w)
+    if rule == "cage" and d["cages"][r["cage"]].get("prod"):   # Product Killer: the digits multiply to it
+        cage = d["cages"][r["cage"]]
+        p = cage["prod"]
+        filled = [vals[x] for x in cage["cells"] if vals[x]]
+        empty = [x for x in cage["cells"] if not vals[x] and x != c]
+        has = " (with %s already in it)" % listing(map(str, filled)) if filled else ""
+        left = p
+        for x in filled:
+            left //= x
+        if v in filled:
+            return "the cage of %d%s has a %d already" % (p, has, v)
+        if left % v:
+            return "the cage of %d%s leaves %d to make, and %d doesn't go into it" % (p, has, left, v) if filled \
+                else "the cage's digits multiply to %d, and %d doesn't go into it" % (p, v)
+        if not empty:
+            return "the cage of %d%s needs %d there" % (p, has, left)
+        other = "cell" if len(empty) == 1 else "%d cells" % len(empty)
+        return "in the cage of %d%s, a %d would leave %d for its other %s, which different digits can't make" % (
+            p, has, v, left // v, other)
+    if rule == "159":                                       # 159 Sudoku: a row's columns 1, 5, 9
+        row, col = c // 9, c % 9
+        line = [vals[row * 9 + j] for j in range(9)]
+        if col % 4 == 0:
+            k = col + 1
+            if k in line and line.index(k) != v - 1:
+                return "it's column %d of its row, the column of the row's %d, and that %d is in column %d: it's %d" % (
+                    col + 1, k, k, line.index(k) + 1, line.index(k) + 1)
+            t = line[v - 1] if v - 1 != col else None
+            if t:
+                return "it's column %d of its row: a %d would put the row's %d in column %d, which holds %d" % (
+                    col + 1, v, k, v, t)
+        if v in (1, 5, 9) and line[v - 1] and v - 1 != col:
+            return "column %d of its row says the row's %d is in column %d" % (v, v, line[v - 1])
+        return "its row's columns 1, 5 and 9 leave no room for %s here" % a_n(v)
     if rule == "cage":
         cage = d["cages"][r["cage"]]
         filled = [vals[x] for x in cage["cells"] if vals[x]]
@@ -615,6 +650,8 @@ def step_text(d, vals, s):
                 out.append("%s: the %d in %s is on the same argyle line." % (where, v, rc(by)))
             elif via == "the same cage":
                 out.append("%s: the %d in %s is in the same cage." % (where, v, rc(by)))
+            elif via == "the same region":
+                out.append("%s: the %d in %s is in the same shaded region." % (where, v, rc(by)))
             elif via == "a touching cell":
                 out.append("%s: %s the %d in %s at a corner." % (where, "touches" if len(cells) == 1 else "touch",
                                                                     v, rc(by)))
@@ -635,6 +672,8 @@ def step_text(d, vals, s):
             extra.append("Not %d: the %d in %s is on the same argyle line." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] == "the same cage":
             extra.append("Not %d: the %d in %s is in the same cage." % (r["digit"], r["digit"], rc(r["by"])))
+        elif r["via"] == "the same region":
+            extra.append("Not %d: the %d in %s is in the same shaded region." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] == "a touching cell":
             extra.append("Not %d: the %d in %s touches it at a corner." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] in ("even", "odd"):
@@ -802,6 +841,8 @@ def make_drawer(d, fonts):
             if row == 0:
                 g.line([x - 1, y, x + CELL + 1, y], fill=LINE, width=THICK)
         for k, cage in enumerate(d["cages"]):               # dashed cages, their sums at the top left
+            if d["variant"] == "Extra Regions":
+                continue                                    # (shaded instead: the tint)
             for c in cage["cells"]:
                 x, y = xy(c)
                 m = 4
@@ -812,8 +853,8 @@ def make_drawer(d, fonts):
                     if cage_of.get(o) != k:
                         dashed(g, a, b)
             x, y = xy(cage["cells"][0])
-            if cage["sum"]:                                 # (Sumless Killer: none)
-                g.text((x + 3, y + 1), str(cage["sum"]), font=tiny, fill=GIVEN_FG)
+            if cage["sum"] or cage.get("prod"):             # (Sumless Killer: none)
+                g.text((x + 3, y + 1), str(cage.get("prod") or cage["sum"]), font=tiny, fill=GIVEN_FG)
         for c in cells:                                     # odd rings, the digits, the step's marks
             x, y = xy(c)
             if d["parity"][c] == 2:

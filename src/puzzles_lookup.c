@@ -229,6 +229,12 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if ((v == VAR_KILLER || v == VAR_SUMLESS) && buf && sudoku_geom_killer_text(cages, buf)) {
         return buf;
     }
+    if (v == VAR_PRODUCT && buf && sudoku_geom_product_text(cages, buf)) {
+        return buf;
+    }
+    if (v == VAR_REGIONS && buf && sudoku_geom_regions_text(cages, buf)) {
+        return buf;
+    }
     if (v == VAR_QUAD && buf && sudoku_geom_quad_text(cages, buf)) {
         return buf;    /* (its circles are in cages) */
     }

@@ -39,6 +39,8 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
         break;
     case VAR_KILLER:
     case VAR_SUMLESS:
+    case VAR_PRODUCT:
+    case VAR_REGIONS:
         key = sudoku_cages_text(G, extra, sizeof(extra)) ? "cages" : NULL;
         break;
     case VAR_QUAD:
@@ -126,6 +128,8 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
         break;
     case VAR_KILLER:
     case VAR_SUMLESS:
+    case VAR_PRODUCT:
+    case VAR_REGIONS:
         if (sudoku_cages_text(G, extra, sizeof(extra))) {
             cages = extra;
         }

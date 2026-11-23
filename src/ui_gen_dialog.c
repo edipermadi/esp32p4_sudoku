@@ -30,8 +30,8 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
  * a missing mark says something, and the less familiar kinds, later. */
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
-        VAR_KIDS, VAR_MINI, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_DISJOINT,
-        VAR_JIGSAW, VAR_ARGYLE, GEN_CAT_END
+        VAR_KIDS, VAR_MINI, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_REGIONS,
+        VAR_DISJOINT, VAR_JIGSAW, VAR_159, VAR_ARGYLE, GEN_CAT_END
     },
     {
         VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
@@ -42,8 +42,8 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
         VAR_REGIONSUM, VAR_ZIPPER, VAR_NABNER, VAR_BETWEEN, VAR_LOCKOUT, VAR_TEN, VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
     },
     {
-        VAR_KILLER, VAR_FRAME, VAR_OUTSIDE, VAR_SKY, VAR_LK, VAR_SANDWICH, VAR_ROSSINI, VAR_XSUM, VAR_SKYSUM, VAR_NROOMS,
-        VAR_SUMLESS, GEN_CAT_END
+        VAR_KILLER, VAR_FRAME, VAR_OUTSIDE, VAR_SKY, VAR_LK, VAR_PRODUCT, VAR_SANDWICH, VAR_ROSSINI, VAR_XSUM,
+        VAR_SKYSUM, VAR_NROOMS, VAR_SUMLESS, GEN_CAT_END
     },
 };
 /** @brief each variant's button text (shorter than variant_name() where four across need it) */
@@ -61,6 +61,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_ARGYLE] = "Argyle", [VAR_NABNER] = "Nabner", [VAR_NROOMS] = "Numbered", [VAR_SKYSUM] = "Sum Sky",
     [VAR_LOCKOUT] = "Lockout", [VAR_SUMLESS] = "Sumless", [VAR_DARROW] = "Double Arrow",
     [VAR_DIAGCONSEC] = "Diagonal C.", [VAR_TEN] = "10 Lines", [VAR_GIRANDOLA] = "Girandola",
+    [VAR_159] = "159 Sudoku", [VAR_PRODUCT] = "Product", [VAR_REGIONS] = "Extra Regions",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -116,6 +117,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_DIAGCONSEC] = "9x9 with corner marks: marked corner neighbours are 1 apart, unmarked ones aren't.",
     [VAR_TEN] = "9x9 with green lines: each splits into runs of cells that add up to 10.",
     [VAR_GIRANDOLA] = "9x9, and the nine tinted pinwheel cells also hold 1-9 once each.",
+    [VAR_159] = "9x9: in each row, the digits in columns 1, 5 and 9 say where its 1, 5 and 9 are.",
+    [VAR_PRODUCT] = "9x9 with cages (dashed): a cage's digits multiply to its number, none repeated. Up to Hard.",
+    [VAR_REGIONS] = "9x9 with a few shaded regions: no digit repeats in a region.",
     [VAR_SLOW] = "9x9 with thermometers: the digits rise from the bulb, or stay the same where they may.",
     [VAR_FORTRESS] = "9x9: each grey cell holds a bigger digit than every white cell side by side with it.",
     [VAR_ARGYLE] = "9x9, and no digit repeats along any of the eight diagonal lines of the argyle pattern.",
@@ -127,7 +131,7 @@ static void gen_levels_update(void)
 {
     for (int lv = 0; lv < GEN_LEVELS; lv++) {
         if (gen_lvl_btn[lv]) {
-            lv_obj_set_state(gen_lvl_btn[lv], LV_STATE_DISABLED, gen_pick_var == VAR_KIDS && lv >= GEN_HARD);
+            lv_obj_set_state(gen_lvl_btn[lv], LV_STATE_DISABLED, lv > (int)sudoku_top_level(gen_pick_var));
         }
     }
 }

@@ -29,6 +29,7 @@ static const uint8_t PIC_GROUPS[] = {0, 1, 2, 3, 4, 0xFF};  /**< Entropic 2 9 4 
 static const uint8_t PIC_SLOW[] = {0, 1, 6, 7, 0xFF};       /**< 2 4, then 4 again across the boxes' corner, 7 */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 static const uint8_t PIC_SUMLESS[] = {0, 1, 2, 5, 0xFE, 0xFF};   /**< a cage over the box border, no sum */
+static const uint8_t PIC_PROD[] = {12, 0, 1, 0xFE, 70, 2, 3, 6, 0xFE, 0xFF};   /**< 3 x 4 = 12, and an empty 70 */
 static const uint8_t PIC_DMARKS[] = {0, DMARK_DR, 0xFF};   /**< 3 and 4 corner to corner: a mark; 8 and 4: none */
 static const uint8_t PIC_TEN[] = {0, 1, 2, 5, 4, 0xFF};    /**< 3 7 | 1 5 4: two runs of 10 */
 
@@ -119,6 +120,9 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
         3, 2, 0, 0, "3.8" ".42", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, 0, NULL, NULL, 0, 0, NULL, PIC_DMARKS
     },
     [VAR_TEN] = {3, 2, 0, 0, "371" "945", NULL, NULL, NULL, NULL, NULL, PIC_TEN, NULL, -1, 0, NULL, NULL, LINE_TEN},
+    [VAR_159] = {9, 1, 0, 0, "321465798", "100010001", NULL, NULL, NULL, NULL, NULL, NULL, -1},
+    [VAR_PRODUCT] = {4, 2, 0, 0, "34.." "....", NULL, NULL, NULL, NULL, NULL, NULL, PIC_PROD, -1},
+    [VAR_REGIONS] = {4, 2, 2, 2, "..8." "....", "0110" "0100", NULL, NULL, NULL, NULL, NULL, NULL, -1},
     [VAR_GIRANDOLA] = {
         9, 9, 3, 3, "4.......7" "....2...." "........." "........." ".9..5..1." "........." "........."
         "....8...." "3.......6",
@@ -240,6 +244,14 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "digits are 1 apart (3 and 4); where no mark joins them, they aren't (8 and 4).",
     [VAR_TEN] = "Classic rules, and each green line splits into runs of cells next to each other along it that "
     "each add up to 10: 3 + 7, then 1 + 5 + 4. Where it splits isn't shown.",
+    [VAR_159] = "Classic rules, and in each row the digit in column 1 says which column holds the row's 1, the "
+    "digit in column 5 where its 5 is, and the digit in column 9 where its 9 is (those columns are tinted). Here "
+    "the 3 in column 1 puts the 1 in column 3, the 6 in column 5 puts the 5 in column 6, and the 8 in column 9 "
+    "puts the 9 in column 8.",
+    [VAR_PRODUCT] = "Classic rules, plus cages (dashed outlines): the digits in a cage multiply to the number in its "
+    "corner, and no digit repeats in a cage. Here 3 x 4 = 12, and the three empty cells make 70: 2, 5 and 7.",
+    [VAR_REGIONS] = "Classic rules, plus a few shaded regions: no digit repeats in a region. A region reaches over "
+    "box borders, so the 8 here rules out 8 in the region's other cells, even in the next box.",
     [VAR_GIRANDOLA] = "Classic rules, and the nine tinted cells in a pinwheel pattern, one in each box, also hold "
     "1 to 9, each once.",
     [VAR_SLOW] = "Classic rules, and along each thermometer the digits rise from the round bulb or stay the same: "

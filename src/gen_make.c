@@ -91,9 +91,18 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
 /* ---------------------------------------------------------------- generating (all variants) */
 
 /* (documented in generator.h) */
+gen_level_t sudoku_top_level(int variant)
+{
+    return variant == VAR_KIDS ? GEN_MEDIUM : variant == VAR_PRODUCT ? GEN_HARD : GEN_EXPERT;
+}
+
+/* (documented in generator.h) */
 bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t givens[81], sudoku_geom_t *board,
                      gen_level_t *got_level)
 {
+    if (variant == VAR_PRODUCT && level > sudoku_top_level(variant)) {
+        level = sudoku_top_level(variant);        /* (Product Killer: no Expert; Kids 4x4 stays as it was) */
+    }
     static sudoku_geom_t *jig;                      /* a board made with its puzzle, being tried (PSRAM) */
     const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
@@ -105,13 +114,14 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
     const bool ends = variant == VAR_LOCKOUT || variant == VAR_DARROW || variant == VAR_TEN;
     const bool sumless = variant == VAR_SUMLESS, dcons = variant == VAR_DIAGCONSEC;
+    const bool prodk = variant == VAR_PRODUCT, xregions = variant == VAR_REGIONS;
     const bool grp = variant == VAR_ENTROPIC || variant == VAR_MODULAR;
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool fort = variant == VAR_FORTRESS;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
-                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons;
+                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -144,6 +154,17 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         } else if (killer) {                        /* a grid, then cages drawn over it */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!gen_killer_cages(full, level >= GEN_HARD ? 5 : 3, &rng, jig)) {
+                continue;
+            }
+        } else if (prodk) {                         /* a grid, then cages and their products */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            if (!gen_product_cages(full, level >= GEN_HARD ? 5 : 3, &rng, jig)) {
+                continue;
+            }
+        } else if (xregions) {                      /* a grid, then a few regions with different digits */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            *jig = *sudoku_geom(VAR_CLASSIC);       /* (its boxes, for the regions to reach over) */
+            if (!gen_extra_regions(full, level >= GEN_HARD ? 6 : 5, &rng, jig)) {
                 continue;
             }
         } else if (sumless) {                       /* a grid, then cages without sums */
