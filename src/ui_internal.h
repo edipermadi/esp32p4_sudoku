@@ -1423,6 +1423,24 @@ bool saver_attractor_start(lv_obj_t *parent);
 /** @brief The strange attractor screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_attractor_stop(void);
 /**
+ * @brief The boids screen saver starts (ui_saver_boids.c): a flock with fading trails on the savers'
+ *        picture, 25 frames a second.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (nothing shown)
+ */
+bool saver_boids_start(lv_obj_t *parent);
+/** @brief The boids screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_boids_stop(void);
+/**
+ * @brief The Lissajous screen saver starts (ui_saver_lissajous.c): a turning figure and its beam on the
+ *        savers' picture, 25 frames a second.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (nothing shown)
+ */
+bool saver_lissajous_start(lv_obj_t *parent);
+/** @brief The Lissajous screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_lissajous_stop(void);
+/**
  * @brief The savers' picture (ui_saver_pic.c): a full-screen black RGB565 image on the cover, in PSRAM.
  * @param[in] parent  the screen saver's cover
  * @return its pixels (SCR_W per row) to paint into, or NULL if there was no memory for it
@@ -1444,6 +1462,42 @@ void saver_pic_flush(int32_t y0, int32_t y1);
 void saver_pic_redraw(int32_t x0, int32_t y0, int32_t x1, int32_t y1);
 /** @brief The savers' picture goes: the image first, then its memory. */
 void saver_pic_stop(void);
+/**
+ * @brief A colour between two (for the savers' fades).
+ * @param[in] a  from, 0xRRGGBB
+ * @param[in] b  to, 0xRRGGBB
+ * @param[in] u  how far, 0 (a) .. 255 (b)
+ * @return the colour, RGB565
+ */
+uint16_t saver_pic_mix(uint32_t a, uint32_t b, int u);
+/** @brief A frame of the pen begins: nothing changed yet. */
+void saver_pen_begin(void);
+/**
+ * @brief The pen: a pixel of the picture set (off the screen: nothing).
+ * @param[in] x  px
+ * @param[in] y  px
+ * @param[in] c  the colour (RGB565)
+ */
+void saver_pen_put(int x, int y, uint16_t c);
+/**
+ * @brief The pen: a square.
+ * @param[in] x  its top left, px
+ * @param[in] y  px
+ * @param[in] size  its side, px
+ * @param[in] c  the colour (RGB565)
+ */
+void saver_pen_square(int x, int y, int size, uint16_t c);
+/**
+ * @brief The pen: a 2 px wide line.
+ * @param[in] x0  from, px
+ * @param[in] y0  px
+ * @param[in] x1  to, px
+ * @param[in] y1  px
+ * @param[in] c  the colour (RGB565)
+ */
+void saver_pen_line(int x0, int y0, int x1, int y1, uint16_t c);
+/** @brief A frame of the pen ends: what it changed is flushed from the cache and redrawn, tile by tile. */
+void saver_pen_end(void);
 /**
  * @brief The analog clock screen saver starts (ui_saver_analog.c): a dim face and hands, moved each
  *        minute, updated each second.

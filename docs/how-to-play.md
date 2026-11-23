@@ -88,7 +88,7 @@ Who plays, and when.
 |---|---|
 | Hide the clock                  | **Settings → Show timer**                        |
 | Lock the screen on its timeout  | **Settings → Display → Lock screen** (Swipe or PIN) |
-| A dim digital or analog clock, the Game of Life, digital rain or strange attractors when the screen is off | **Settings → Display → Screen saver** |
+| A dim digital or analog clock, the Game of Life, digital rain, strange attractors, a flock of boids or Lissajous figures when the screen is off | **Settings → Display → Screen saver** |
 | Accent colour                   | **Settings → Accent colour**                     |
 | Bigger digits on the board      | **Settings → Display → Digit size** → Large      |
 | Hints that only point the way   | **Settings → Game → Hints** → Nudge only          |

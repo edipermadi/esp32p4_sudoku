@@ -24,7 +24,7 @@ static void night_bright_cb(lv_event_t *e);
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0}; /**< Screen off choices, in minutes (0 = never) */
 /** The Screen saver dropdown's choices in order (store_saver_t), as its options list them */
 static const uint8_t SAVER_ORDER[SAVER_MODE_COUNT] = {SAVER_MODE_DARK, SAVER_MODE_CLOCK, SAVER_MODE_ANALOG, SAVER_MODE_LIFE,
-                                                      SAVER_MODE_RAIN, SAVER_MODE_ATTRACTOR
+                                                      SAVER_MODE_RAIN, SAVER_MODE_ATTRACTOR, SAVER_MODE_BOIDS, SAVER_MODE_LISSAJOUS
                                                      };
 /** The accent colours, as dropdown options */
 static const char *const ACCENT_NAMES = "Blue\nTeal\nGreen\nPurple\nPink";
@@ -124,7 +124,7 @@ static void sleep_dd_cb(lv_event_t *e)
 }
 
 /**
- * @brief Screen saver: Dark, Digital clock, Analog clock, Life, Rain or Attractor, saved (used by the next screen timeout).
+ * @brief Screen saver: Dark, Digital clock, Analog clock, Life, Rain, Attractor, Boids or Lissajous, saved (used by the next screen timeout).
  * @param[in] e  the LVGL event (its target is the dropdown)
  */
 static void saver_dd_cb(lv_event_t *e)
@@ -256,7 +256,7 @@ void settings_tab_display(lv_obj_t *pane)
     while (saver_sel < SAVER_MODE_COUNT - 1 && SAVER_ORDER[saver_sel] != store_saver_mode()) {
         saver_sel++;
     }
-    settings_dropdown(r, "Dark\nDigital clock\nAnalog clock\nLife\nRain\nAttractor", saver_sel, 200, saver_dd_cb);
+    settings_dropdown(r, "Dark\nDigital clock\nAnalog clock\nLife\nRain\nAttractor\nBoids\nLissajous", saver_sel, 200, saver_dd_cb);
 
     r = settings_row(col, "Night mode", "Dark and dimmer at night (needs the clock: Wi-Fi)");
     settings_switch(r, is_store_night_mode(), night_sw_cb);

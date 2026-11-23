@@ -11,6 +11,7 @@
  * non-zero status. The "golden" values pin what a seed produces, so a change to the
  * generator that would change the daily puzzles (made from the date) shows up here.
  */
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +32,8 @@
 #include "life_core.h"
 #include "rain_core.h"
 #include "attractor_core.h"
+#include "boids_core.h"
+#include "lissajous_core.h"
 
 static int s_checks, s_failed;
 
@@ -1574,6 +1577,138 @@ static void test_attractor(void)
     CHECK(!attr_counts() && attr_plot(10, NULL, 0) == 0);
 }
 
+/* Boids (the screen saver): the birds stay on the field at their speeds, the flock lines up (their
+ * headings agree far more than at the random start) and gathers (nearer neighbours), each trail follows
+ * its bird, and the same seed gives the same flight */
+static float boids_order(void)
+{
+    float sx = 0, sy = 0;
+    for (int i = 0; i < BOIDS_N; i++) {
+        float vx, vy;
+        boids_vel(i, &vx, &vy);
+        float v = sqrtf(vx * vx + vy * vy);
+        sx += vx / v;
+        sy += vy / v;
+    }
+    return sqrtf(sx * sx + sy * sy) / BOIDS_N;      /* 0: every way, 1: all one way */
+}
+
+static float boids_near(void)
+{
+    float sum = 0;
+    for (int i = 0; i < BOIDS_N; i++) {
+        float x, y, best = 1e9f;
+        boids_at(i, 0, &x, &y);
+        for (int j = 0; j < BOIDS_N; j++) {
+            float a, b;
+            boids_at(j, 0, &a, &b);
+            float d = (a - x) * (a - x) + (b - y) * (b - y);
+            if (j != i && d < best) {
+                best = d;
+            }
+        }
+        sum += sqrtf(best);
+    }
+    return sum / BOIDS_N;                           /* the mean distance to the nearest bird */
+}
+
+static void test_boids(void)
+{
+    CHECK(boids_start(3));
+    float order0 = boids_order(), near0 = boids_near();
+    bool in = true, speed = true, trail = true;
+    for (int s = 0; s < 1500; s++) {
+        boids_step();
+        for (int i = 0; i < BOIDS_N; i++) {
+            float x, y, px, py, vx, vy;
+            boids_at(i, 0, &x, &y);
+            boids_at(i, 1, &px, &py);
+            boids_vel(i, &vx, &vy);
+            float v = sqrtf(vx * vx + vy * vy);
+            in &= x >= 0 && y >= 0 && x <= BOIDS_W - 1 && y <= BOIDS_W - 1;
+            speed &= v >= BOIDS_SPEED_MIN - 0.01f && v <= BOIDS_SPEED_MAX + 0.01f;
+            trail &= fabsf(x - px) <= BOIDS_SPEED_MAX + 0.01f && fabsf(y - py) <= BOIDS_SPEED_MAX + 0.01f;
+        }
+    }
+    CHECK(in && speed && trail);
+    float order1 = boids_order(), near1 = boids_near();
+    CHECKF(order1 > order0 + 0.2f, "boids: line up (%.2f -> %.2f)", order0, order1);
+    CHECKF(near1 < near0, "boids: gather (%.1f -> %.1f px)", near0, near1);
+    float a[2];                                     /* the same seed, the same flight */
+    for (int k = 0; k < 2; k++) {
+        CHECK(boids_start(11));
+        for (int s = 0; s < 200; s++) {
+            boids_step();
+        }
+        float y;
+        boids_at(7, 0, &a[k], &y);
+    }
+    CHECK(a[0] == a[1]);
+    boids_free();
+    boids_step();                                   /* (no flock: nothing) */
+}
+
+/* Lissajous (the screen saver): the figure stays on the screen and closes on itself, its phase drifts,
+ * after LISS_HOLD steps it has shrunk to the middle and comes back with another ratio, the beam runs on
+ * the figure, and the same seed gives the same figures */
+static void test_lissajous(void)
+{
+    liss_start(8);
+    int a0, b0, changes = 0;
+    liss_ratio(&a0, &b0);
+    bool in = true, closed = true, beam_on = true, small_at_change = true;
+    int x0, y0, prev_x0 = -1;
+    bool moved = false;
+    for (int s = 0; s < LISS_HOLD * 4; s++) {
+        float before = liss_size();
+        liss_step();
+        int a, b;
+        liss_ratio(&a, &b);
+        if (a != a0 || b != b0) {
+            changes++;
+            small_at_change &= before < 0.01f && liss_size() < 0.01f;
+            a0 = a;
+            b0 = b;
+        }
+        int n = liss_segs();
+        in &= n > 0 && n <= LISS_SEGS_MAX;
+        for (int i = 0; i <= n; i++) {
+            int x, y;
+            liss_point(i, &x, &y);
+            in &= x >= 0 && y >= 0 && x < LISS_W && y < LISS_W;
+        }
+        int xe, ye;
+        liss_point(0, &x0, &y0);
+        liss_point(n, &xe, &ye);
+        closed &= abs(x0 - xe) <= 1 && abs(y0 - ye) <= 1;
+        if (prev_x0 >= 0 && x0 != prev_x0 && liss_size() > 0.99f) {
+            moved = true;
+        }
+        prev_x0 = x0;
+        int bx, by;                                 /* the beam: near some point of the figure */
+        liss_beam(0, &bx, &by);
+        int best = 1 << 30;
+        for (int i = 0; i <= n; i++) {
+            int x, y;
+            liss_point(i, &x, &y);
+            int d = (x - bx) * (x - bx) + (y - by) * (y - by);
+            best = d < best ? d : best;
+        }
+        beam_on &= best <= 15 * 15;
+    }
+    CHECK(in && closed && beam_on && moved);
+    CHECKF(changes >= 3 && small_at_change, "lissajous: %d changes, shrunk at them %d", changes, small_at_change);
+    int r[2][2];                                    /* the same seed, the same figures */
+    for (int k = 0; k < 2; k++) {
+        liss_start(21);
+        for (int s = 0; s < LISS_HOLD + 50; s++) {
+            liss_step();
+        }
+        liss_point(17, &r[k][0], &r[k][1]);
+    }
+    CHECK(r[0][0] == r[1][0] && r[0][1] == r[1][1]);
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -1585,7 +1720,8 @@ int main(int argc, char **argv)
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"life (screen saver)", test_life},   {"rain (screen saver)", test_rain},
-        {"attractor (screen saver)", test_attractor},
+        {"attractor (screen saver)", test_attractor}, {"boids (screen saver)", test_boids},
+        {"lissajous (screen saver)", test_lissajous},
     };
     sudoku_geom_init();
     int failed_tests = 0;

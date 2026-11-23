@@ -1,8 +1,13 @@
 /**
  * @file ui_saver_pic.c
  * @ingroup ui_sudoku
- * @brief The screen savers' picture (Life, Rain): a full-screen RGB565 image in PSRAM the saver paints
- *        into, flushed from the CPU's cache before it is redrawn (LVGL's PPA draw unit reads it by DMA).
+ * @brief The screen savers' picture (Life, Rain, Attractor, Boids, Lissajous): a full-screen RGB565
+ *        image in PSRAM the saver paints into, flushed from the CPU's cache before it is redrawn (LVGL's
+ *        PPA draw unit reads it by DMA); and a pen for drawing on it that redraws only what it touched.
+ *
+ * The pen cuts the screen into PEN_TILES_X x PEN_TILES_Y tiles (30, within LVGL's 32 areas); a frame
+ * (saver_pen_begin() .. saver_pen_end()) redraws in each tile just the box its changed pixels fill, so
+ * drawing bunched in one place redraws little.
  */
 #include "ui_internal.h"
 #include "esp_cache.h"
@@ -10,10 +15,16 @@
 
 #define PIC_ROW_BYTES   (SCR_W * 2)             /**< a row of the picture, bytes */
 #define PIC_BYTES       (SCR_W * SCR_W * 2)     /**< the picture, bytes */
+#define PEN_TILES_X     6                       /**< the pen's tiles across */
+#define PEN_TILES_Y     5                       /**< down */
+#define PEN_TILES       (PEN_TILES_X * PEN_TILES_Y) /**< tiles */
+#define PEN_TILE_W      (SCR_W / PEN_TILES_X)   /**< a tile's width, px */
+#define PEN_TILE_H      (SCR_W / PEN_TILES_Y)   /**< a tile's height, px */
 
 static uint16_t *pc_buf;                  /**< the picture (RGB565, 64-byte aligned, PSRAM) */
 static lv_image_dsc_t pc_dsc;             /**< pc_buf as an image */
 static lv_obj_t *pc_img;                  /**< the image on the saver's cover */
+static int pc_box[PEN_TILES][4];          /**< each tile's changed box this frame: x0, y0, x1, y1 (x1 < 0: none) */
 
 /* (documented in ui_internal.h) */
 uint16_t *saver_pic_start(lv_obj_t *parent)
@@ -59,6 +70,97 @@ void saver_pic_redraw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
     if (pc_img) {
         lv_area_t a = {x0, y0, x1, y1};
         lv_obj_invalidate_area(pc_img, &a);
+    }
+}
+
+/* (documented in ui_internal.h) */
+uint16_t saver_pic_mix(uint32_t a, uint32_t b, int u)
+{
+    lv_color_t p = lv_color_hex(a), q = lv_color_hex(b);
+    u = u < 0 ? 0 : u > 255 ? 255 : u;
+    return lv_color_to_u16(lv_color_make((uint8_t)(p.red + (q.red - p.red) * u / 255),
+                                         (uint8_t)(p.green + (q.green - p.green) * u / 255),
+                                         (uint8_t)(p.blue + (q.blue - p.blue) * u / 255)));
+}
+
+/* (documented in ui_internal.h) */
+void saver_pen_begin(void)
+{
+    for (int k = 0; k < PEN_TILES; k++) {
+        pc_box[k][2] = -1;
+    }
+}
+
+/* (documented in ui_internal.h) */
+void saver_pen_put(int x, int y, uint16_t c)
+{
+    if (!pc_buf || (unsigned)x >= SCR_W || (unsigned)y >= SCR_W) {
+        return;
+    }
+    pc_buf[y * SCR_W + x] = c;
+    int *b = pc_box[(y / PEN_TILE_H) * PEN_TILES_X + x / PEN_TILE_W];
+    if (b[2] < 0) {
+        b[0] = b[2] = x;
+        b[1] = b[3] = y;
+        return;
+    }
+    b[0] = LV_MIN(b[0], x);
+    b[1] = LV_MIN(b[1], y);
+    b[2] = LV_MAX(b[2], x);
+    b[3] = LV_MAX(b[3], y);
+}
+
+/* (documented in ui_internal.h) */
+void saver_pen_square(int x, int y, int size, uint16_t c)
+{
+    for (int dy = 0; dy < size; dy++) {
+        for (int dx = 0; dx < size; dx++) {
+            saver_pen_put(x + dx, y + dy, c);
+        }
+    }
+}
+
+/* (documented in ui_internal.h) */
+void saver_pen_line(int x0, int y0, int x1, int y1, uint16_t c)
+{
+    int dx = x1 > x0 ? x1 - x0 : x0 - x1, sx = x0 < x1 ? 1 : -1;
+    int dy = -(y1 > y0 ? y1 - y0 : y0 - y1), sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;
+    for (;;) {                                      /* (Bresenham, a 2 x 2 square a step) */
+        saver_pen_square(x0, y0, 2, c);
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+        int e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+/* (documented in ui_internal.h) */
+void saver_pen_end(void)
+{
+    int y0 = SCR_W, y1 = -1;
+    for (int k = 0; k < PEN_TILES; k++) {
+        if (pc_box[k][2] >= 0) {
+            y0 = LV_MIN(y0, pc_box[k][1]);
+            y1 = LV_MAX(y1, pc_box[k][3]);
+        }
+    }
+    if (y1 < 0) {
+        return;
+    }
+    saver_pic_flush(y0, y1);
+    for (int k = 0; k < PEN_TILES; k++) {
+        if (pc_box[k][2] >= 0) {
+            saver_pic_redraw(pc_box[k][0], pc_box[k][1], pc_box[k][2], pc_box[k][3]);
+        }
     }
 }
 

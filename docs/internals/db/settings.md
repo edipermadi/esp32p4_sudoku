@@ -21,7 +21,7 @@ The board's settings, as key-value pairs: one set for the board, not per player.
 | `brightness`, `volume`, `night_brightness` | percent (brightness 10–100) |
 | `screen_off_minutes` | 0 = never |
 | `assist` | Mistake check: 0 Off, 1 Rules, 2 Solution |
-| `saver_clock` | Screen saver: 0 Dark, 1 Digital clock, 2 Life, 3 Analog clock, 4 Rain, 5 Attractor (named from when it was the clock or not) |
+| `saver_clock` | Screen saver: 0 Dark, 1 Digital clock, 2 Life, 3 Analog clock, 4 Rain, 5 Attractor, 6 Boids, 7 Lissajous (named from when it was the clock or not) |
 | `accent` | 0 Blue … 4 Pink |
 | `rules_seen` | a bit per variant: its rules card was shown |
 | `lock_mode`, `lock_pin` | the lock screen: 0 Off, 1 Swipe, 2 PIN; the PIN |
