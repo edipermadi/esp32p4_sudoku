@@ -17,6 +17,10 @@ The home screen, Settings and its tabs, how the board looks and sounds, Gibberli
 | ![The Lissajous screen saver](screenshots/saver-lissajous.png) | ![The double pendulum screen saver](screenshots/saver-pendulum.png) | ![The Langton's ant screen saver](screenshots/saver-ant.png) |
 | **Screen saver: Brian's Brain** | | |
 | ![The Brian's Brain screen saver](screenshots/saver-brain.png) | | |
+| **Screen saver: Cyclic spirals** | **Screen saver: Rock paper scissors** | **Screen saver: Excitable medium** |
+| ![The cyclic spirals screen saver](screenshots/saver-cyclic.png) | ![The rock paper scissors screen saver](screenshots/saver-rps.png) | ![The excitable medium screen saver](screenshots/saver-excitable.png) |
+| **Screen saver: Forest fire** | | |
+| ![The forest fire screen saver](screenshots/saver-forest.png) | | |
 
 ## Features
 
@@ -41,12 +45,12 @@ The home screen, Settings and its tabs, how the board looks and sounds, Gibberli
   - The other cellular automata, each its own choice, on the same 120 × 120 grid of dots, 10 generations a second, each starting again from a new random start after 900 generations (90 seconds), or sooner if it dies out:
     - **Cyclic spirals** (8 states; a cell moves on to the next state when at least 5 of the 48 cells within 3 of it are already there): random noise organises itself into big turning spirals, in a wheel of colours.
     - **Rock paper scissors** (3 states; 3 of the 8 neighbours beat a cell): turbulent spiral waves of three colours chasing each other.
-    - **Excitable medium** (Greenberg-Hastings: a resting cell is excited by an excited neighbour, then goes through 8 refractory states back to rest): yellow wavefronts with a tail from gold to deep blue, and spirals.
+    - **Excitable medium** (Greenberg-Hastings: a resting cell is excited by an excited neighbour, or now and then by itself, a spark; then it goes through 10 refractory states back to rest): each spark sends out a yellow ring with a tail from gold through red, pink and purple to deep blue; rings meet and annihilate, like ripples from raindrops.
     - **Day & Night** (B3678/S34678): blobs of day and night that grow, merge and dissolve.
     - **Seeds** (B2/S: every live cell dies at once): it explodes from a small square in the middle into ever-spreading chaos.
     - **Maze** (B3/S12345): a maze grows out of a small square in the middle.
     - **Star Wars** (Generations S345/B2/C4): busy little ships with tails.
-    - **Forest fire** (trees grow at random on bare ground, lightning strikes now and then, fire spreads to the trees next to it): green forest, waves of yellow fire, red embers.
+    - **Forest fire** (trees grow back quickly on bare ground, lightning strikes rarely, fire spreads to the trees next to it): a dense green forest, a ring of yellow fire spreading out from each strike, red embers behind it.
 
     Life-like ones are blue with yellow newborns and dead cells fading through deep blue. Game of Life, Brian's Brain, Langton's ant and these all run on one engine (`automata_core.c`).
 - **Lock screen**: **Settings → Display → Lock screen** (Off, Swipe or PIN). The lock button on the home screen (left of the power button) locks at once: the screen goes dark and comes back locked at the next tap (with the setting Off, it locks with a swipe). When the setting is on, the screen also comes back from its timeout locked: a lock icon, the time, the date and who is playing, and either "Swipe up to unlock" (the time follows the finger; swipe far enough) or a 4-digit PIN on a keypad. Choosing PIN asks for the PIN twice; **Lock PIN → Change** sets a new one. After 5 wrong PINs the keypad waits 30 seconds. It is meant to keep little fingers out of a game, not to secure anything: the PIN is kept as plain text in `sudoku.db` (`settings.lock_pin`, with `lock_mode` 0 Off, 1 Swipe, 2 PIN), and pressing **RESET** starts the board unlocked (the lock only comes with a timeout), which is also the way back in with a forgotten PIN.

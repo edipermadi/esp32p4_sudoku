@@ -10,8 +10,9 @@
 
 #define RANGE_MAX       3                     /**< a neighbourhood's range at most */
 #define NB_MAX          ((2 * RANGE_MAX + 1) * (2 * RANGE_MAX + 1) - 1)   /**< neighbours at most */
-#define FOREST_GROW     200                   /**< ground grows a tree one generation in this */
-#define FOREST_STRIKE   40000                 /**< a tree is struck by lightning one generation in this */
+#define FOREST_GROW     50                    /**< ground grows a tree one generation in this */
+#define FOREST_STRIKE   200000                /**< a tree is struck by lightning one generation in this */
+#define EXCITE_SPARK    30000                 /**< a resting cell of the excitable medium sparks one generation in this */
 
 /** @brief A rule. */
 typedef struct {
@@ -38,7 +39,7 @@ static const rule_t RULES[AUTO_R_COUNT] = {
     [AUTO_R_ANT] = {"Langton's ant  RL", AUTO_TURMITE, 2, 0, 0, 0, 0, 0, 0, 40, 60000, false, 0, "RL", 24},
     [AUTO_R_CYCLIC] = {"Cyclic spirals  R3/T5/C8", AUTO_CYCLIC, 8, 3, 5, 0, 0, 0, 0, 100, 900, false, 0, NULL, 0},
     [AUTO_R_RPS] = {"Rock, paper, scissors  R1/T3/C3", AUTO_CYCLIC, 3, 1, 3, 0, 0, 0, 0, 100, 900, false, 0, NULL, 0},
-    [AUTO_R_EXCITABLE] = {"Excitable medium", AUTO_EXCITABLE, 10, 1, 1, 0, 0, 0, 0, 100, 900, false, 0, NULL, 0},
+    [AUTO_R_EXCITABLE] = {"Excitable medium", AUTO_EXCITABLE, 12, 1, 1, 0, 0, 1, 0, 100, 900, false, 0, NULL, 0},
     [AUTO_R_DAY_NIGHT] = {"Day & Night  B3678/S34678", AUTO_GENERATIONS, 2, 1, 0, 0x01C8, 0x01D8, 50, 0, 100, 900, false, 0, NULL, 0},
     [AUTO_R_SEEDS] = {"Seeds  B2/S", AUTO_GENERATIONS, 2, 1, 0, 0x0004, 0x0000, 40, 8, 100, 900, false, 0, NULL, 0},
     [AUTO_R_MAZE] = {"Maze  B3/S12345", AUTO_GENERATIONS, 2, 1, 0, 0x0008, 0x003E, 35, 16, 100, 900, false, 0, NULL, 0},
@@ -265,7 +266,7 @@ static uint8_t next_state(int x, int y)
         if (st) {
             return (uint8_t)((st + 1) % r->states);
         }
-        return count(x, y, 1) >= r->threshold ? 1 : 0;
+        return count(x, y, 1) >= r->threshold || rnd() % EXCITE_SPARK == 0 ? 1 : 0;   /* (or a spark) */
     case AUTO_FOREST:
         if (st == 2) {
             return 0;                               /* burnt out */

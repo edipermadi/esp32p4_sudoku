@@ -25,7 +25,8 @@ extern "C" {
  *        - Cyclic rules: a cell in state s moves on to s+1 (mod states) when at least a threshold of its
  *          neighbours within a range are in s+1; random noise turns into spirals.
  *        - An excitable medium (Greenberg-Hastings): a resting cell (0) is excited (1) when enough
- *          neighbours are; an excited one goes through refractory states back to rest.
+ *          neighbours are, or now and then by itself (a spark); an excited one goes through refractory
+ *          states back to rest. Each spark sends out a ring; rings meet and annihilate.
  *        - Forest fire: trees grow on empty ground at random, lightning strikes now and then, fire spreads
  *          to the trees next to it, and burnt ground is empty again.
  *        - Langton's ant: an ant on the board turns by the state of its cell (a letter of the rule, L or
