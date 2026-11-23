@@ -1,11 +1,13 @@
 /**
  * @file ui_saver.c
  * @ingroup ui_sudoku
- * @brief The screen saver: after the screen timeout without a touch the game pauses; then a dim clock
- *        (digital, or analog: ui_saver_analog.c) moves about, the Game of Life (ui_saver_life.c) digital rain (ui_saver_rain.c) , a strange attractor (ui_saver_attractor.c) , a flock of boids (ui_saver_boids.c) , a Lissajous figure (ui_saver_lissajous.c) , a double pendulum (ui_saver_pendulum.c) or Langton's ant (ui_saver_ant.c) runs
- *        until a touch, at full speed, or (Dark)
- *        the screen goes black and the board saves power. The next tap only wakes it. The lock screen,
- *        if on, waits under it.
+ * @brief The screen saver: after the screen timeout without a touch the game pauses, and then what was
+ *        chosen shows at full speed: a dim clock (digital, or analog: ui_saver_analog.c) moving about,
+ *        the Game of Life (ui_saver_life.c), digital rain (ui_saver_rain.c), a strange attractor
+ *        (ui_saver_attractor.c), a flock of boids (ui_saver_boids.c), a Lissajous figure
+ *        (ui_saver_lissajous.c), double pendulums (ui_saver_pendulum.c) or Langton's ant
+ *        (ui_saver_ant.c). After "Screen saver for" minutes (or at once, for Dark) the screen goes black
+ *        and the board saves power. The next tap only wakes it. The lock screen, if on, waits under it.
  */
 #include "ui_internal.h"
 
@@ -18,6 +20,8 @@ static lv_obj_t *sv_time;                 /**< its time */
 static lv_obj_t *sv_date;                 /**< its date */
 static lv_timer_t *sv_timer;              /**< the clock, each second */
 static uint32_t sv_moved;                 /**< when it last moved */
+static lv_timer_t *sv_dark_timer;         /**< each second while a saver shows: is it time for dark? */
+static uint32_t sv_since;                 /**< when the saver came up */
 
 /**
  * @brief Each second: the clock's time and date, somewhere else each minute (no burn-in).
@@ -47,15 +51,67 @@ static void saver_clock_tick(lv_timer_t *t)
     }
 }
 
-/** @brief Stops the dim clock or Life. */
+/** @brief The dim digital clock starts on the cover. */
+static void saver_clock_start(void)
+{
+    sv_clock = lv_obj_create(s_saver);
+    lv_obj_remove_style_all(sv_clock);
+    lv_obj_set_size(sv_clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(sv_clock, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(sv_clock, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_clickable(sv_clock, false);
+    sv_time = make_label(sv_clock, &font_timer_36, lv_color_hex(0x9AA0AA));   /* (dim by its grey text) */
+    sv_date = make_label(sv_clock, &lv_font_montserrat_20, lv_color_hex(0x6B7280));
+    saver_clock_tick(NULL);
+    sv_timer = lv_timer_create(saver_clock_tick, 1000, NULL);
+}
+
+/**
+ * @brief The chosen saver starts on the cover.
+ * @param[in] mode  store_saver_t
+ * @return false for Dark, or if it couldn't start (no memory): dark then
+ */
+static bool saver_show_start(uint8_t mode)
+{
+    switch (mode) {
+    case SAVER_MODE_CLOCK:
+        saver_clock_start();
+        return true;
+    case SAVER_MODE_ANALOG:
+        saver_analog_start(s_saver);
+        return true;
+    case SAVER_MODE_LIFE:
+        return saver_life_start(s_saver);
+    case SAVER_MODE_RAIN:
+        return saver_rain_start(s_saver);
+    case SAVER_MODE_ATTRACTOR:
+        return saver_attractor_start(s_saver);
+    case SAVER_MODE_BOIDS:
+        return saver_boids_start(s_saver);
+    case SAVER_MODE_LISSAJOUS:
+        return saver_lissajous_start(s_saver);
+    case SAVER_MODE_PENDULUM:
+        return saver_pendulum_start(s_saver);
+    case SAVER_MODE_ANT:
+        return saver_ant_start(s_saver);
+    default:
+        return false;
+    }
+}
+
+/** @brief Stops whichever saver shows (its pictures go now, before their memory; its objects too). */
 static void saver_show_stop(void)
 {
     if (sv_timer) {
         lv_timer_delete(sv_timer);
     }
     sv_timer = NULL;
-    sv_clock = NULL;                                /* (a child of s_saver: goes with it) */
-    saver_life_stop();                              /* (its picture goes now, before its memory) */
+    if (sv_dark_timer) {
+        lv_timer_delete(sv_dark_timer);
+    }
+    sv_dark_timer = NULL;
+    sv_clock = NULL;
+    saver_life_stop();
     saver_analog_stop();
     saver_rain_stop();
     saver_attractor_stop();
@@ -63,6 +119,25 @@ static void saver_show_stop(void)
     saver_lissajous_stop();
     saver_pendulum_stop();
     saver_ant_stop();
+    if (s_saver) {
+        lv_obj_clean(s_saver);                      /* (the clocks' objects: the cover stays, black) */
+    }
+}
+
+/**
+ * @brief Each second while a saver shows: after "Screen saver for" minutes, the saver goes and the
+ *        screen goes dark, saving power.
+ * @param[in] t  the timer
+ */
+static void saver_dark_tick(lv_timer_t *t)
+{
+    uint8_t min = store_saver_minutes();
+    if (!s_saver || !min || lv_tick_elaps(sv_since) < min * 60u * 1000u) {
+        return;
+    }
+    saver_show_stop();                              /* (this timer too) */
+    lv_refr_now(NULL);                              /* panel shows black before the light goes off */
+    bsp_power_save(true);                           /* light off, panel asleep, CPU slower */
 }
 
 /**
@@ -85,9 +160,9 @@ static void saver_wake_cb(lv_event_t *e)
 }
 
 /**
- * @brief The screen off: the game paused, the lock screen (if on) under a black cover, then the dim
- *        clock or Life (if chosen) until a touch, at full speed; or dark, saving power.
- * @param[in] lock_now  the lock button on Home: locked even with the lock Off, and no clock or Life
+ * @brief The screen off: the game paused, the lock screen (if on) under a black cover, then the chosen
+ *        saver at full speed (for "Screen saver for" minutes); or dark at once, saving power.
+ * @param[in] lock_now  the lock button on Home: locked even with the lock Off, and dark at once
  */
 static void saver_sleep(bool lock_now)
 {
@@ -104,61 +179,11 @@ static void saver_sleep(bool lock_now)
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESS_LOST, NULL);
-    uint8_t mode = lock_now ? SAVER_MODE_DARK : store_saver_mode();   /* (not for "lock now") */
-    if (mode == SAVER_MODE_LIFE && saver_life_start(s_saver)) {
+    if (!lock_now && saver_show_start(store_saver_mode())) {
         lv_refr_now(NULL);
         bsp_display_brightness_set(effective_brightness());   /* (low PWM levels show nothing on this panel) */
-        return;
-    }
-    if (mode == SAVER_MODE_ANT && saver_ant_start(s_saver)) {
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());
-        return;
-    }
-    if (mode == SAVER_MODE_PENDULUM && saver_pendulum_start(s_saver)) {
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());
-        return;
-    }
-    if (mode == SAVER_MODE_LISSAJOUS && saver_lissajous_start(s_saver)) {
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());
-        return;
-    }
-    if (mode == SAVER_MODE_BOIDS && saver_boids_start(s_saver)) {
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());
-        return;
-    }
-    if (mode == SAVER_MODE_ATTRACTOR && saver_attractor_start(s_saver)) {
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());
-        return;
-    }
-    if (mode == SAVER_MODE_RAIN && saver_rain_start(s_saver)) {
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());
-        return;
-    }
-    if (mode == SAVER_MODE_ANALOG) {
-        saver_analog_start(s_saver);
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());
-        return;
-    }
-    if (mode == SAVER_MODE_CLOCK) {                 /* dim clock first */
-        sv_clock = lv_obj_create(s_saver);
-        lv_obj_remove_style_all(sv_clock);
-        lv_obj_set_size(sv_clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(sv_clock, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(sv_clock, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_clickable(sv_clock, false);
-        sv_time = make_label(sv_clock, &font_timer_36, lv_color_hex(0x9AA0AA));
-        sv_date = make_label(sv_clock, &lv_font_montserrat_20, lv_color_hex(0x6B7280));
-        saver_clock_tick(NULL);
-        sv_timer = lv_timer_create(saver_clock_tick, 1000, NULL);
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());   /* (dim by its grey text: low PWM shows nothing) */
+        sv_since = lv_tick_get();
+        sv_dark_timer = lv_timer_create(saver_dark_tick, 1000, NULL);
         return;
     }
     lv_refr_now(NULL);                  /* panel shows black before the light goes off */

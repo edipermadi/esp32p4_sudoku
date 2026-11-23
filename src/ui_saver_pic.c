@@ -25,6 +25,8 @@
 static uint16_t *pc_buf;                  /**< the picture (RGB565, 64-byte aligned, PSRAM) */
 static lv_image_dsc_t pc_dsc;             /**< pc_buf as an image */
 static lv_obj_t *pc_img;                  /**< the image on the saver's cover */
+static void widen(int t, int x0, int y0, int x1, int y1);
+
 static int pc_box[PEN_TILES][4];          /**< each tile's changed box this frame: x0, y0, x1, y1 (x1 < 0: none) */
 
 /* (documented in ui_internal.h) */
@@ -99,24 +101,51 @@ void saver_pen_put(int x, int y, uint16_t c)
         return;
     }
     pc_buf[y * SCR_W + x] = c;
-    int *b = pc_box[(y / PEN_TILE_H) * PEN_TILES_X + x / PEN_TILE_W];
+    widen((y / PEN_TILE_H) * PEN_TILES_X + x / PEN_TILE_W, x, y, x, y);
+}
+
+/**
+ * @brief Widens a tile's changed box to take in a rectangle (inside the tile).
+ * @param[in] t  the tile
+ * @param[in] x0  left, px
+ * @param[in] y0  top, px
+ * @param[in] x1  right, px (included)
+ * @param[in] y1  bottom, px (included)
+ */
+static void widen(int t, int x0, int y0, int x1, int y1)
+{
+    int *b = pc_box[t];
     if (b[2] < 0) {
-        b[0] = b[2] = x;
-        b[1] = b[3] = y;
+        b[0] = x0;
+        b[1] = y0;
+        b[2] = x1;
+        b[3] = y1;
         return;
     }
-    b[0] = LV_MIN(b[0], x);
-    b[1] = LV_MIN(b[1], y);
-    b[2] = LV_MAX(b[2], x);
-    b[3] = LV_MAX(b[3], y);
+    b[0] = LV_MIN(b[0], x0);
+    b[1] = LV_MIN(b[1], y0);
+    b[2] = LV_MAX(b[2], x1);
+    b[3] = LV_MAX(b[3], y1);
 }
 
 /* (documented in ui_internal.h) */
 void saver_pen_square(int x, int y, int size, uint16_t c)
 {
-    for (int dy = 0; dy < size; dy++) {
-        for (int dx = 0; dx < size; dx++) {
-            saver_pen_put(x + dx, y + dy, c);
+    int x0 = LV_MAX(x, 0), y0 = LV_MAX(y, 0);
+    int x1 = LV_MIN(x + size - 1, SCR_W - 1), y1 = LV_MIN(y + size - 1, SCR_W - 1);
+    if (!pc_buf || x1 < x0 || y1 < y0) {
+        return;
+    }
+    for (int yy = y0; yy <= y1; yy++) {             /* (row by row, not pixel by pixel: it is drawn a lot) */
+        uint16_t *p = pc_buf + yy * SCR_W;
+        for (int xx = x0; xx <= x1; xx++) {
+            p[xx] = c;
+        }
+    }
+    for (int ty = y0 / PEN_TILE_H; ty <= y1 / PEN_TILE_H; ty++) {   /* (the tiles it lies on: 1 to 4) */
+        for (int tx = x0 / PEN_TILE_W; tx <= x1 / PEN_TILE_W; tx++) {
+            widen(ty * PEN_TILES_X + tx, LV_MAX(x0, tx * PEN_TILE_W), LV_MAX(y0, ty * PEN_TILE_H),
+                  LV_MIN(x1, (tx + 1) * PEN_TILE_W - 1), LV_MIN(y1, (ty + 1) * PEN_TILE_H - 1));
         }
     }
 }

@@ -1579,9 +1579,10 @@ static void test_attractor(void)
     CHECK(!attr_counts() && attr_plot(10, NULL, 0) == 0);
 }
 
-/* Boids (the screen saver): the birds stay on the field at their speeds, the flock lines up (their
- * headings agree far more than at the random start) and gathers (nearer neighbours), each trail follows
- * its bird, and the same seed gives the same flight */
+/* Boids (the screen saver): birds and hawks stay on the field at their speeds, the flock lines up (their
+ * headings agree more than at the random start) and gathers, neighbours come to share a colour (far
+ * more than at the random start), the birds keep away from the hawks, each trail follows its bird, and
+ * the same seed gives the same flight */
 static float boids_order(void)
 {
     float sx = 0, sy = 0;
@@ -1595,10 +1596,10 @@ static float boids_order(void)
     return sqrtf(sx * sx + sy * sy) / BOIDS_N;      /* 0: every way, 1: all one way */
 }
 
-static float boids_near(void)
+static float boids_near(int from, int to)
 {
     float sum = 0;
-    for (int i = 0; i < BOIDS_N; i++) {
+    for (int i = from; i < to; i++) {
         float x, y, best = 1e9f;
         boids_at(i, 0, &x, &y);
         for (int j = 0; j < BOIDS_N; j++) {
@@ -1611,31 +1612,63 @@ static float boids_near(void)
         }
         sum += sqrtf(best);
     }
-    return sum / BOIDS_N;                           /* the mean distance to the nearest bird */
+    return sum / (to - from);                       /* the mean distance to the nearest bird */
+}
+
+static float boids_same(void)
+{
+    int pairs = 0, same = 0;
+    for (int i = 0; i < BOIDS_N; i++) {
+        for (int j = i + 1; j < BOIDS_N; j++) {
+            float a, b, c, d;
+            boids_at(i, 0, &a, &b);
+            boids_at(j, 0, &c, &d);
+            if ((a - c) * (a - c) + (b - d) * (b - d) < BOIDS_SEE * BOIDS_SEE) {
+                pairs++;
+                same += boids_colour(i, NULL, NULL) == boids_colour(j, NULL, NULL);
+            }
+        }
+    }
+    return pairs ? (float)same / pairs : 0;         /* neighbours of one colour, of all neighbours */
 }
 
 static void test_boids(void)
 {
     CHECK(boids_start(3));
-    float order0 = boids_order(), near0 = boids_near();
-    bool in = true, speed = true, trail = true;
+    float order0 = boids_order(), near0 = boids_near(0, BOIDS_N), same0 = boids_same();
+    bool in = true, speed = true, trail = true, colours = true;
+    float hawk_gap = 0;
+    int samples = 0;
     for (int s = 0; s < 1500; s++) {
         boids_step();
-        for (int i = 0; i < BOIDS_N; i++) {
+        for (int i = 0; i < BOIDS_ALL; i++) {
             float x, y, px, py, vx, vy;
             boids_at(i, 0, &x, &y);
             boids_at(i, 1, &px, &py);
             boids_vel(i, &vx, &vy);
             float v = sqrtf(vx * vx + vy * vy);
             in &= x >= 0 && y >= 0 && x <= BOIDS_W - 1 && y <= BOIDS_W - 1;
-            speed &= v >= BOIDS_SPEED_MIN - 0.01f && v <= BOIDS_SPEED_MAX + 0.01f;
-            trail &= fabsf(x - px) <= BOIDS_SPEED_MAX + 0.01f && fabsf(y - py) <= BOIDS_SPEED_MAX + 0.01f;
+            speed &= i < BOIDS_N ? v >= BOIDS_SPEED_MIN - 0.01f && v <= BOIDS_SPEED_FLEE + 0.01f
+                     : fabsf(v - BOIDS_SPEED_HAWK) < 0.01f;
+            trail &= fabsf(x - px) <= BOIDS_SPEED_FLEE + 0.01f && fabsf(y - py) <= BOIDS_SPEED_FLEE + 0.01f;
+            if (i < BOIDS_N) {
+                int before, since, c = boids_colour(i, &before, &since);
+                colours &= c >= 0 && c < BOIDS_COLOURS && before >= 0 && before < BOIDS_COLOURS &&
+                           (since == 65535 || before != c);
+            }
+        }
+        if (s >= 500 && s % 10 == 0) {
+            hawk_gap += boids_near(BOIDS_N, BOIDS_ALL);
+            samples++;
         }
     }
-    CHECK(in && speed && trail);
-    float order1 = boids_order(), near1 = boids_near();
-    CHECKF(order1 > order0 + 0.2f, "boids: line up (%.2f -> %.2f)", order0, order1);
+    CHECK(in && speed && trail && colours);
+    float order1 = boids_order(), near1 = boids_near(0, BOIDS_N), same1 = boids_same();
+    CHECKF(order1 > order0 + 0.1f, "boids: line up (%.2f -> %.2f)", order0, order1);
     CHECKF(near1 < near0, "boids: gather (%.1f -> %.1f px)", near0, near1);
+    CHECKF(same1 > 0.6f && same1 > same0 + 0.2f, "boids: neighbours share colours (%.2f -> %.2f)", same0, same1);
+    hawk_gap /= samples;
+    CHECKF(hawk_gap > near1 * 1.5f, "boids: kept away from the hawks (%.1f px, birds %.1f apart)", hawk_gap, near1);
     float a[2];                                     /* the same seed, the same flight */
     for (int k = 0; k < 2; k++) {
         CHECK(boids_start(11));
@@ -1711,39 +1744,51 @@ static void test_lissajous(void)
     CHECK(r[0][0] == r[1][0] && r[0][1] == r[1][1]);
 }
 
-/* Pendulum (the screen saver): its energy stays put (RK4, no friction) over minutes, both bobs stay on the
- * screen, the trail is continuous, two starts a millionth of a radian apart end far apart (chaos), it
- * starts again after PEND_RUN frames, and the same seed gives the same swing */
+/* Pendulum (the screen saver): each pendulum's energy stays put (RK4, no friction) over minutes, the bobs
+ * stay on the screen, the trails are continuous and their speeds 0..1, the pendulums started a hair apart
+ * swing as one at first and far apart later (chaos), they start again after PEND_RUN frames, and the
+ * same seed gives the same swing */
 static void test_pendulum(void)
 {
     CHECK(pend_start(4));
-    float e0 = pend_energy(), worst = 0;
-    bool in = true, smooth = true;
+    float e0[PEND_N], worst = 0;
+    for (int k = 0; k < PEND_N; k++) {
+        e0[k] = pend_energy(k);
+    }
+    bool in = true, smooth = true, speeds = true;
     for (int f = 0; f < PEND_RUN - 1; f++) {
         CHECK(!pend_step());
-        float e = pend_energy(), d = fabsf(e - e0) / fabsf(e0);
-        worst = d > worst ? d : worst;
-        float x1, y1, x2, y2;
-        pend_bobs(&x1, &y1, &x2, &y2);
-        in &= x1 >= 0 && y1 >= 0 && x2 >= 0 && y2 >= 0 && x1 < PEND_W && y1 < PEND_W && x2 < PEND_W && y2 < PEND_W;
-        float ax, ay, bx, by;
-        pend_trail(0, &ax, &ay);
-        pend_trail(1, &bx, &by);
-        smooth &= fabsf(ax - bx) < 60 && fabsf(ay - by) < 60;
+        for (int k = 0; k < PEND_N; k++) {
+            float d = fabsf(pend_energy(k) - e0[k]) / fabsf(e0[k]);
+            worst = d > worst ? d : worst;
+            float x1, y1, x2, y2;
+            pend_bobs(k, &x1, &y1, &x2, &y2);
+            in &= x1 >= 0 && y1 >= 0 && x2 >= 0 && y2 >= 0 && x1 < PEND_W && y1 < PEND_W && x2 < PEND_W && y2 < PEND_W;
+            float ax, ay, af, bx, by, bf;
+            pend_trail(k, 0, &ax, &ay, &af);
+            pend_trail(k, 1, &bx, &by, &bf);
+            smooth &= fabsf(ax - bx) < 60 && fabsf(ay - by) < 60;
+            speeds &= af >= 0 && af <= 1;
+        }
     }
     CHECKF(worst < 0.01f, "pendulum: energy drifts %.4f", worst);
-    CHECK(in && smooth && pend_trail_len() == PEND_TRAIL);
-    CHECK(pend_step() && pend_trail_len() == 1);    /* a new start, its trail forgotten */
-    float a[2][2];
-    for (int k = 0; k < 2; k++) {                   /* chaos: a millionth apart, then far apart */
-        pend_set(2.5f + k * 1e-6f, 1.0f);
-        for (int f = 0; f < 750; f++) {             /* (30 s) */
-            pend_step();
-        }
-        pend_angles(&a[k][0], &a[k][1]);
+    CHECK(in && smooth && speeds && pend_trail_len() == PEND_TRAIL);
+    CHECK(pend_step() && pend_trail_len() == 1);    /* a new start, the trails forgotten */
+    pend_set(2.5f, 1.0f);
+    float a[PEND_N][2];
+    for (int f = 0; f < 25; f++) {                  /* (1 s: still as one) */
+        pend_step();
     }
+    pend_angles(0, &a[0][0], &a[0][1]);
+    pend_angles(1, &a[1][0], &a[1][1]);
+    CHECKF(fabsf(a[0][1] - a[1][1]) < 0.01f, "pendulum: as one at first (%.4f)", fabsf(a[0][1] - a[1][1]));
+    for (int f = 0; f < 750; f++) {                 /* (30 s more) */
+        pend_step();
+    }
+    pend_angles(0, &a[0][0], &a[0][1]);
+    pend_angles(1, &a[1][0], &a[1][1]);
     CHECKF(fabsf(a[0][1] - a[1][1]) > 0.3f || fabsf(a[0][0] - a[1][0]) > 0.3f,
-           "pendulum: chaotic (%.3f vs %.3f)", a[0][1], a[1][1]);
+           "pendulum: apart later (%.3f vs %.3f)", a[0][1], a[1][1]);
     float b[2];                                     /* the same seed, the same swing */
     for (int k = 0; k < 2; k++) {
         CHECK(pend_start(9));
@@ -1751,7 +1796,7 @@ static void test_pendulum(void)
             pend_step();
         }
         float y;
-        pend_angles(&b[k], &y);
+        pend_angles(2, &b[k], &y);
     }
     CHECK(b[0] == b[1]);
     pend_free();

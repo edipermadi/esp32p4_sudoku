@@ -2,8 +2,8 @@
  * @file ui_saver_attractor.c
  * @ingroup ui_sudoku
  * @brief The strange attractor screen saver: a Clifford or de Jong attractor (attractor_core.c) drawn
- *        point by point in a vacuum fluorescent display's blue-green, each new point a white-hot spark
- *        for a frame, the shape glowing brighter where it is denser; once drawn the screen clears and
+ *        point by point in 3Blue1Brown's colours, each new point a white spark for a frame, the shape
+ *        going from deep blue through blue, green and yellow to white where it is denser; once drawn the screen clears and
  *        the next one is drawn from nothing.
  *
  * The points come slowly at first (ATTR_START_POINTS a frame), then more each frame up to
@@ -32,10 +32,10 @@ static lv_timer_t *at_timer;              /**< a frame each ATTR_FRAME_MS */
 static int at_frame;                      /**< frames since this attractor began */
 static float at_points;                   /**< points to plot this frame (growing) */
 
-/** @brief The colours: unlit, then dim teal up through the VFD blue-green to white-hot, on a log scale. */
+/** @brief The colours (3Blue1Brown's): black, then deep blue, blue, green, yellow and white, on a log scale. */
 static void make_palette(void)
 {
-    static const uint32_t STOPS[] = {0x000000, 0x0A3A30, 0x1F9278, 0x3CF0C8, 0xC4FFF2};
+    static const uint32_t STOPS[] = {0x000000, SV_BLUE_E, SV_BLUE, SV_GREEN, SV_YELLOW, 0xFFFFFF};
     const int n = sizeof(STOPS) / sizeof(STOPS[0]) - 1;
     at_pal[0] = 0;
     for (int c = 1; c <= ATTR_MAX; c++) {

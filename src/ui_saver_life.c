@@ -1,8 +1,8 @@
 /**
  * @file ui_saver_life.c
  * @ingroup ui_sudoku
- * @brief The Game of Life screen saver: LIFE_N x LIFE_N cells (life_core.c), each a round dot of a
- *        vacuum fluorescent display's blue-green on black, the unlit dots faintly there as on a real one.
+ * @brief The Game of Life screen saver: LIFE_N x LIFE_N cells (life_core.c), each a round dot in
+ *        3Blue1Brown's colours on black (blue alive, yellow just born), the unlit dots faintly there.
  *
  * The picture is the savers' full-screen image (ui_saver_pic.c); each generation repaints only the dots
  * whose glow changed, flushes those rows from the cache and redraws them.
@@ -18,18 +18,18 @@ static uint8_t *lf_shown;                 /**< each cell's glow as drawn (0xFF: 
 static lv_timer_t *lf_timer;              /**< a generation each LIFE_STEP_MS */
 
 /**
- * @brief The colour of each glow, RGB565: a VFD's blue-green phosphor, white-hot when just born, an
- *        afterglow when dead, and the unlit dot barely there.
+ * @brief The colour of each glow, RGB565 (3Blue1Brown's palette): blue alive, yellow just born, fading
+ *        through deep blue when dead, and the unlit dot barely there.
  * @param[in] g  a life_glow_t
  * @return the colour
  */
 static uint16_t glow_color(uint8_t g)
 {
     static const uint32_t HEX[LIFE_GLOW_COUNT] = {
-        0x041411,                                   /* unlit */
-        0x072620, 0x0D4237, 0x16705D, 0x24A98C,     /* fading out */
-        0x3CF0C8,                                   /* alive */
-        0xC4FFF2,                                   /* just born */
+        0x0C1417,                                   /* unlit */
+        0x0B2A33, 0x124A5A, SV_BLUE_E, SV_BLUE_D,   /* fading out, through deep blue */
+        SV_BLUE,                                    /* alive */
+        SV_YELLOW,                                  /* just born */
     };
     return lv_color_to_u16(lv_color_hex(HEX[g < LIFE_GLOW_COUNT ? g : 0]));
 }

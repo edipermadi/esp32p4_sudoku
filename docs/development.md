@@ -171,7 +171,7 @@ src/ui_sudoku.c         the UI's start-up: the card and sudoku.db read, the sett
 src/ui_notice.c         notices: a banner for a while, or one that stays while something runs (a file from the computer)
 src/ui_saver.c          the screen saver: the dim clock, dark, power saving, the waking tap
 src/ui_saver_analog.c   the analog clock screen saver: an LVGL scale as the face, the hands each second
-src/ui_saver_life.c     the Game of Life screen saver: the VFD-style dots, repainted as their glow changes
+src/ui_saver_life.c     the Game of Life screen saver: round dots, repainted as their glow changes
 src/ui_saver_rain.c     the digital rain screen saver: digit tiles drawn once, the changed cells copied
 src/ui_saver_pic.c      the savers' full-screen picture in PSRAM: flushed from the cache, redrawn in parts; the pen (lines, redraw by tiles)
 src/ui_saver_attractor.c the strange attractor screen saver: points plotted, their pixels repainted

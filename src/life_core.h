@@ -16,7 +16,7 @@ extern "C" {
  * @ingroup ui_sudoku
  * @brief Conway's Game of Life on a LIFE_N x LIFE_N board whose edges wrap around (a torus), with each
  *        cell's glow: a cell just born glows hottest, a living one steady, and a dead one fades out over
- *        a few generations, like the phosphor of a vacuum fluorescent display. When the board settles
+ *        a few generations, like a phosphor's afterglow. When the board settles
  *        (the same pattern again within LIFE_PERIOD_MAX generations), or after LIFE_GEN_MAX generations,
  *        it is seeded again; the old cells fade out under the new ones.
  * @{

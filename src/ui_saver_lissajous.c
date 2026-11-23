@@ -1,9 +1,8 @@
 /**
  * @file ui_saver_lissajous.c
  * @ingroup ui_sudoku
- * @brief The Lissajous screen saver: an oscilloscope's figure (lissajous_core.c) in a vacuum fluorescent
- *        display's blue-green on black, turning as its phase drifts, a white-hot beam running along it
- *        with a short fading tail; every so often it shrinks away and grows back with another ratio.
+ * @brief The Lissajous screen saver: an oscilloscope's figure (lissajous_core.c) in 3Blue1Brown's blue
+ *        on black, turning as its phase drifts, a yellow dot tracing it with a tail fading into the blue; every so often it shrinks away and grows back with another ratio.
  *
  * Each frame the last frame's figure and beam are painted black and the new ones drawn with the savers'
  * pen (ui_saver_pic.c), which redraws only what changed.
@@ -13,8 +12,8 @@
 
 #define LJ_FRAME_MS     40                      /**< a frame each, ms (25 a second) */
 #define LJ_TAIL         40                      /**< the beam's places drawn, a segment apart (its tail) */
-#define LJ_CURVE        0x2CC09E                /**< the figure */
-#define LJ_BEAM         0xC4FFF2                /**< the beam: white-hot */
+#define LJ_CURVE        SV_BLUE                 /**< the figure: 3Blue1Brown's blue */
+#define LJ_BEAM         SV_YELLOW               /**< the dot tracing it: yellow */
 
 static uint16_t *lj_buf;                  /**< the picture (saver_pic_start(); drawn on with the pen) */
 static int16_t (*lj_was)[2];              /**< the figure's points as last drawn, px (x, y) */

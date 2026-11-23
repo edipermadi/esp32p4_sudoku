@@ -16,12 +16,15 @@ static void cvd_sw_cb(lv_event_t *e);
 static void bright_sl_cb(lv_event_t *e);
 static void sleep_dd_cb(lv_event_t *e);
 static void saver_dd_cb(lv_event_t *e);
+static void saver_min_dd_cb(lv_event_t *e);
 static void night_sw_cb(lv_event_t *e);
 static void night_hours_cb(lv_event_t *e);
 static void night_bright_cb(lv_event_t *e);
 
 /* "Screen off" dropdown choices, in minutes (0 = never) */
 static const uint8_t SLEEP_MIN[] = {1, 2, 5, 10, 15, 30, 0}; /**< Screen off choices, in minutes (0 = never) */
+/** "Screen saver for" dropdown choices, in minutes (0 = until a touch) */
+static const uint8_t SAVER_MIN[] = {10, 20, 30, 0};
 /** The Screen saver dropdown's choices in order (store_saver_t), as its options list them */
 static const uint8_t SAVER_ORDER[SAVER_MODE_COUNT] = {SAVER_MODE_DARK, SAVER_MODE_CLOCK, SAVER_MODE_ANALOG, SAVER_MODE_LIFE,
                                                       SAVER_MODE_RAIN, SAVER_MODE_ATTRACTOR, SAVER_MODE_BOIDS, SAVER_MODE_LISSAJOUS,
@@ -122,6 +125,18 @@ static void sleep_dd_cb(lv_event_t *e)
     }
     s_sleep_min = SLEEP_MIN[sel];
     store_set_screen_timeout_min(s_sleep_min);
+}
+
+/**
+ * @brief Screen saver for: 10, 20 or 30 minutes, or until a touch, saved (used by the next screen saver).
+ * @param[in] e  the LVGL event (its target is the dropdown)
+ */
+static void saver_min_dd_cb(lv_event_t *e)
+{
+    uint32_t sel = lv_dropdown_get_selected(lv_event_get_target_obj(e));
+    if (sel < sizeof(SAVER_MIN)) {
+        store_set_saver_minutes(SAVER_MIN[sel]);
+    }
 }
 
 /**
@@ -252,12 +267,19 @@ void settings_tab_display(lv_obj_t *pane)
     lv_obj_align(st_pin_btn, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_state(st_pin_btn, LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
 
-    r = settings_row(col, "Screen saver", "Until a touch; Dark saves power");
+    r = settings_row(col, "Screen saver", "Dark saves power");
     uint32_t saver_sel = 0;
     while (saver_sel < SAVER_MODE_COUNT - 1 && SAVER_ORDER[saver_sel] != store_saver_mode()) {
         saver_sel++;
     }
     settings_dropdown(r, "Dark\nDigital clock\nAnalog clock\nLife\nRain\nAttractor\nBoids\nLissajous\nPendulum\nLangton's ant", saver_sel, 200, saver_dd_cb);
+
+    r = settings_row(col, "Screen saver for", "Then dark, saving power (not for Dark)");
+    uint32_t min_sel = 0;
+    while (min_sel < sizeof(SAVER_MIN) - 1 && SAVER_MIN[min_sel] != store_saver_minutes()) {
+        min_sel++;
+    }
+    settings_dropdown(r, "10 min\n20 min\n30 min\nNever", min_sel, 150, saver_min_dd_cb);
 
     r = settings_row(col, "Night mode", "Dark and dimmer at night (needs the clock: Wi-Fi)");
     settings_switch(r, is_store_night_mode(), night_sw_cb);

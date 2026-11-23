@@ -1,7 +1,7 @@
 /**
  * @file pendulum_core.c
  * @ingroup pendulum_core
- * @brief A double pendulum for the screen saver, without LVGL (drawn by ui_saver_pendulum.c).
+ * @brief Double pendulums for the screen saver, without LVGL (drawn by ui_saver_pendulum.c).
  *
  * Equal masses m and rods L (both 1), gravity G: with the angles a1, a2 from straight down and their
  * speeds w1, w2, and d = a1 - a2, D = 3 - cos 2d,
@@ -14,16 +14,21 @@
 
 #define G               9.81f                 /**< gravity (rods of length 1) */
 
-/** @brief The swing's state: the angles and their speeds. */
+/** @brief A pendulum's state: the angles and their speeds. */
 typedef struct {
     float a1, a2, w1, w2;                 /**< radians from straight down, and radians a second */
 } pend_t;
 
-static pend_t s;                          /**< the swing */
-static float (*s_trail)[2];               /**< the lower bob's places, a ring (NULL: none) */
-static int s_head;                        /**< the newest place in the ring */
+/** @brief A trail's place: where the lower bob was, and how fast it went there. */
+typedef struct {
+    float x, y, fast;                     /**< px, px, 0..1 */
+} place_t;
+
+static pend_t s_p[PEND_N];                /**< the pendulums */
+static place_t (*s_trail)[PEND_TRAIL];    /**< each lower bob's places, a ring (NULL: none) */
+static int s_head;                        /**< the newest place in the rings */
 static int s_len;                         /**< places kept, 0..PEND_TRAIL */
-static int s_frame;                       /**< frames since it started */
+static int s_frame;                       /**< frames since they started */
 static uint32_t s_rng = 1;                /**< xorshift32 state (never 0) */
 
 /**
@@ -52,7 +57,7 @@ static float rnd_f(float lo, float hi)
 }
 
 /**
- * @brief How the state changes: the angles' speeds and accelerations.
+ * @brief How a state changes: the angles' speeds and accelerations.
  * @param[in] p  the state
  * @return its rate of change (a1', a2', w1', w2' in the fields a1, a2, w1, w2)
  */
@@ -81,40 +86,58 @@ static pend_t add(const pend_t *p, const pend_t *k, float h)
     return r;
 }
 
-/** @brief One Runge-Kutta (RK4) step of PEND_DT. */
-static void rk4(void)
+/**
+ * @brief One Runge-Kutta (RK4) step of PEND_DT.
+ * @param[in,out] s  the pendulum
+ */
+static void rk4(pend_t *s)
 {
     const float h = PEND_DT;
-    pend_t k1 = deriv(&s);
-    pend_t t = add(&s, &k1, h / 2);
+    pend_t k1 = deriv(s);
+    pend_t t = add(s, &k1, h / 2);
     pend_t k2 = deriv(&t);
-    t = add(&s, &k2, h / 2);
+    t = add(s, &k2, h / 2);
     pend_t k3 = deriv(&t);
-    t = add(&s, &k3, h);
+    t = add(s, &k3, h);
     pend_t k4 = deriv(&t);
-    s.a1 += h / 6 * (k1.a1 + 2 * k2.a1 + 2 * k3.a1 + k4.a1);
-    s.a2 += h / 6 * (k1.a2 + 2 * k2.a2 + 2 * k3.a2 + k4.a2);
-    s.w1 += h / 6 * (k1.w1 + 2 * k2.w1 + 2 * k3.w1 + k4.w1);
-    s.w2 += h / 6 * (k1.w2 + 2 * k2.w2 + 2 * k3.w2 + k4.w2);
+    s->a1 += h / 6 * (k1.a1 + 2 * k2.a1 + 2 * k3.a1 + k4.a1);
+    s->a2 += h / 6 * (k1.a2 + 2 * k2.a2 + 2 * k3.a2 + k4.a2);
+    s->w1 += h / 6 * (k1.w1 + 2 * k2.w1 + 2 * k3.w1 + k4.w1);
+    s->w2 += h / 6 * (k1.w2 + 2 * k2.w2 + 2 * k3.w2 + k4.w2);
 }
 
 /* (documented in pendulum_core.h) */
-void pend_bobs(float *x1, float *y1, float *x2, float *y2)
+void pend_bobs(int k, float *x1, float *y1, float *x2, float *y2)
 {
-    *x1 = PEND_W / 2 + PEND_ARM * sinf(s.a1);
-    *y1 = PEND_W / 2 + PEND_ARM * cosf(s.a1);
-    *x2 = *x1 + PEND_ARM * sinf(s.a2);
-    *y2 = *y1 + PEND_ARM * cosf(s.a2);
+    const pend_t *s = &s_p[k];
+    *x1 = PEND_W / 2.0f + PEND_ARM * sinf(s->a1);
+    *y1 = PEND_W / 2.0f + PEND_ARM * cosf(s->a1);
+    *x2 = *x1 + PEND_ARM * sinf(s->a2);
+    *y2 = *y1 + PEND_ARM * cosf(s->a2);
 }
 
-/** @brief The lower bob's place now added to the trail. */
+/**
+ * @brief How fast a lower bob goes.
+ * @param[in] s  the pendulum
+ * @return 0 (still) .. 1 (PEND_FAST or more)
+ */
+static float bob_fast(const pend_t *s)
+{
+    float vx = s->w1 * cosf(s->a1) + s->w2 * cosf(s->a2), vy = s->w1 * sinf(s->a1) + s->w2 * sinf(s->a2);
+    float v = sqrtf(vx * vx + vy * vy) / PEND_FAST;
+    return v > 1 ? 1 : v;
+}
+
+/** @brief Every lower bob's place now added to its trail. */
 static void keep(void)
 {
-    float x1, y1, x2, y2;
-    pend_bobs(&x1, &y1, &x2, &y2);
     s_head = (s_head + 1) % PEND_TRAIL;
-    s_trail[s_head][0] = x2;
-    s_trail[s_head][1] = y2;
+    for (int k = 0; k < PEND_N; k++) {
+        float x1, y1;
+        place_t *p = &s_trail[k][s_head];
+        pend_bobs(k, &x1, &y1, &p->x, &p->y);
+        p->fast = bob_fast(&s_p[k]);
+    }
     if (s_len < PEND_TRAIL) {
         s_len++;
     }
@@ -123,9 +146,11 @@ static void keep(void)
 /* (documented in pendulum_core.h) */
 void pend_set(float a1, float a2)
 {
-    s.a1 = a1;
-    s.a2 = a2;
-    s.w1 = s.w2 = 0;
+    for (int k = 0; k < PEND_N; k++) {
+        s_p[k].a1 = a1 + k * PEND_NUDGE;
+        s_p[k].a2 = a2;
+        s_p[k].w1 = s_p[k].w2 = 0;
+    }
     s_len = 0;
     s_frame = 0;
     if (s_trail) {
@@ -133,9 +158,7 @@ void pend_set(float a1, float a2)
     }
 }
 
-/**
- * @brief A random high start: the upper rod well up (90 to 170 degrees either way), the lower anywhere.
- */
+/** @brief A random high start: the upper rods well up (90 to 170 degrees either way), the lower anywhere. */
 static void pend_random(void)
 {
     float a1 = rnd_f(1.57f, 2.97f) * (rnd() & 1 ? 1.0f : -1.0f);
@@ -146,7 +169,7 @@ static void pend_random(void)
 bool pend_start(uint32_t seed)
 {
     if (!s_trail) {
-        s_trail = malloc(PEND_TRAIL * sizeof(*s_trail));
+        s_trail = malloc(PEND_N * sizeof(*s_trail));
         if (!s_trail) {
             return false;
         }
@@ -175,7 +198,9 @@ bool pend_step(void)
         return true;
     }
     for (int i = 1; i <= PEND_SUBSTEPS; i++) {
-        rk4();
+        for (int k = 0; k < PEND_N; k++) {
+            rk4(&s_p[k]);
+        }
         if (i % (PEND_SUBSTEPS / PEND_PER_FRAME) == 0) {
             keep();
         }
@@ -190,25 +215,27 @@ int pend_trail_len(void)
 }
 
 /* (documented in pendulum_core.h) */
-void pend_trail(int age, float *x, float *y)
+void pend_trail(int k, int age, float *x, float *y, float *fast)
 {
-    int i = ((s_head - age) % PEND_TRAIL + PEND_TRAIL) % PEND_TRAIL;
-    *x = s_trail[i][0];
-    *y = s_trail[i][1];
+    const place_t *p = &s_trail[k][((s_head - age) % PEND_TRAIL + PEND_TRAIL) % PEND_TRAIL];
+    *x = p->x;
+    *y = p->y;
+    *fast = p->fast;
 }
 
 /* (documented in pendulum_core.h) */
-float pend_energy(void)
+float pend_energy(int k)
 {
-    float cd = cosf(s.a1 - s.a2);
-    float kin = s.w1 * s.w1 + 0.5f * s.w2 * s.w2 + s.w1 * s.w2 * cd;    /* (m = L = 1) */
-    float pot = -G * (2 * cosf(s.a1) + cosf(s.a2));
+    const pend_t *s = &s_p[k];
+    float cd = cosf(s->a1 - s->a2);
+    float kin = s->w1 * s->w1 + 0.5f * s->w2 * s->w2 + s->w1 * s->w2 * cd;    /* (m = L = 1) */
+    float pot = -G * (2 * cosf(s->a1) + cosf(s->a2));
     return kin + pot;
 }
 
 /* (documented in pendulum_core.h) */
-void pend_angles(float *a1, float *a2)
+void pend_angles(int k, float *a1, float *a2)
 {
-    *a1 = s.a1;
-    *a2 = s.a2;
+    *a1 = s_p[k].a1;
+    *a2 = s_p[k].a2;
 }

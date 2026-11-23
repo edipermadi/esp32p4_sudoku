@@ -18,7 +18,7 @@ extern "C" {
  *        1 to 9. A trail's head is the brightest (RAIN_HEAD), the digits behind it dimmer the further
  *        back, and now and then a digit in a trail changes. Each column falls at its own speed with its
  *        own trail length, and once its trail has left the bottom it starts again from the top after a
- *        random pause.
+ *        random pause, in one of RAIN_COLOURS colours.
  * @{
  */
 
@@ -33,6 +33,7 @@ extern "C" {
 #define RAIN_SPEED_MAX  230                   /**< at most */
 #define RAIN_PAUSE_MAX  40                    /**< steps at most between a trail leaving and the next */
 #define RAIN_FLICKER    3                     /**< digits in trails changed each step, at most */
+#define RAIN_COLOURS    6                     /**< colours a column may fall in (picked as it starts again) */
 
 /**
  * @brief A new rain: every column paused for a random while (so they don't start together). Its
@@ -53,6 +54,12 @@ void rain_step(void);
  * @return its level, 0 (unlit) .. RAIN_HEAD
  */
 uint8_t rain_cell(int col, int row, uint8_t *digit);
+/**
+ * @brief A column's colour (it keeps it while its trail is on the screen).
+ * @param[in] col  column, 0..RAIN_COLS-1
+ * @return 0..RAIN_COLOURS-1
+ */
+uint8_t rain_colour(int col);
 /**
  * @brief Where a column's head is (for the tests).
  * @param[in] col  column, 0..RAIN_COLS-1

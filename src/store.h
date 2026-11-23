@@ -153,6 +153,7 @@ typedef struct {
     uint8_t lock_mode;                        /**< store_lock_t: the lock screen after a screen timeout */
     char lock_pin[8];                         /**< 4 digits (PIN mode), "" = none set */
     uint8_t saver;                            /**< store_saver_t: what shows before the screen goes dark */
+    uint8_t saver_min;                        /**< minutes the screen saver shows, then dark (0 = until a touch) */
     bool cvd;                                 /**< colour-blind friendly colours (Okabe-Ito) */
     bool no_notes;                            /**< new games start in the no-notes challenge */
     bool left_hand;                           /**< the game's number pad on the left of the board */
@@ -357,14 +358,14 @@ void store_set_lock_pin(const char *pin);
 typedef enum {
     SAVER_MODE_DARK = 0,                    /**< nothing: dark at once, saving power */
     SAVER_MODE_CLOCK = 1,                   /**< a dim clock moving about */
-    SAVER_MODE_LIFE = 2,                    /**< Conway's Game of Life in a VFD's colours */
+    SAVER_MODE_LIFE = 2,                    /**< Conway's Game of Life in 3Blue1Brown's colours */
     SAVER_MODE_ANALOG = 3,                  /**< an analog clock moving about */
-    SAVER_MODE_RAIN = 4,                    /**< digital rain of the digits 1 to 9, in a VFD's colours */
-    SAVER_MODE_ATTRACTOR = 5,               /**< strange attractors building up, in a VFD's colours */
-    SAVER_MODE_BOIDS = 6,                   /**< a flock of boids with fading trails, in a VFD's colours */
-    SAVER_MODE_LISSAJOUS = 7,               /**< turning Lissajous figures, in a VFD's colours */
-    SAVER_MODE_PENDULUM = 8,                /**< a chaotic double pendulum with a fading trail, VFD colours */
-    SAVER_MODE_ANT = 9,                     /**< Langton's ant on a grid of dots, in a VFD's colours */
+    SAVER_MODE_RAIN = 4,                    /**< digital rain of the digits 1 to 9, in 3Blue1Brown's colours */
+    SAVER_MODE_ATTRACTOR = 5,               /**< strange attractors building up, in 3Blue1Brown's colours */
+    SAVER_MODE_BOIDS = 6,                   /**< a flock of boids with fading trails, in 3Blue1Brown's colours */
+    SAVER_MODE_LISSAJOUS = 7,               /**< turning Lissajous figures, in 3Blue1Brown's colours */
+    SAVER_MODE_PENDULUM = 8,                /**< a chaotic double pendulum with fading trails, 3b1b colours */
+    SAVER_MODE_ANT = 9,                     /**< Langton's ant on a grid of dots, in 3Blue1Brown's colours */
     SAVER_MODE_COUNT                        /**< how many */
 } store_saver_t;
 /**
@@ -377,6 +378,17 @@ uint8_t store_saver_mode(void);
  * @param[in] mode  store_saver_t
  */
 void store_set_saver_mode(uint8_t mode);
+/**
+ * @brief How long the screen saver (other than Dark) shows before the screen goes dark and the board
+ *        saves power (Settings > Display > Screen saver for).
+ * @return minutes, 0 = until a touch
+ */
+uint8_t store_saver_minutes(void);
+/**
+ * @brief Sets it.
+ * @param[in] min  minutes, 0 = until a touch
+ */
+void store_set_saver_minutes(uint8_t min);
 /**
  * @brief Colour-blind friendly colours (Okabe-Ito) are on.
  * @return true if so

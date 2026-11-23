@@ -1458,6 +1458,28 @@ void saver_pendulum_stop(void);
 bool saver_ant_start(lv_obj_t *parent);
 /** @brief The Langton's ant screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_ant_stop(void);
+/*
+ * The screen savers' colours: 3Blue1Brown's (Manim's) palette on black. A colour's _E shade is its
+ * deepest, _A its palest; the plain name is the one the videos use most.
+ */
+#define SV_BLUE_E       0x1C758A    /**< blue, deepest */
+#define SV_BLUE_D       0x29ABCA    /**< blue, deep */
+#define SV_BLUE         0x58C4DD    /**< blue: 3Blue1Brown's own */
+#define SV_BLUE_A       0xC7E9F1    /**< blue, palest */
+#define SV_TEAL         0x5CD0B3    /**< teal */
+#define SV_GREEN_E      0x699C52    /**< green, deepest */
+#define SV_GREEN        0x83C167    /**< green */
+#define SV_GREEN_A      0xC9E2AE    /**< green, palest */
+#define SV_YELLOW_E     0xE8C11C    /**< yellow, deepest */
+#define SV_YELLOW       0xFFFF00    /**< yellow */
+#define SV_YELLOW_A     0xFFF1B6    /**< yellow, palest */
+#define SV_GOLD         0xF0AC5F    /**< gold */
+#define SV_RED_E        0xCF5044    /**< red, deepest */
+#define SV_RED          0xFC6255    /**< red */
+#define SV_RED_A        0xF7A1A3    /**< red, palest */
+#define SV_PINK         0xD147BD    /**< pink */
+#define SV_GREY         0x888888    /**< grey */
+
 /**
  * @brief The savers' picture (ui_saver_pic.c): a full-screen black RGB565 image on the cover, in PSRAM.
  * @param[in] parent  the screen saver's cover

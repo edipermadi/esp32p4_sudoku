@@ -12,6 +12,7 @@ typedef struct {
     int32_t head;                         /**< the head's row, 1/256 rows (negative: not in yet) */
     int16_t speed;                        /**< rows a step, 1/256 */
     uint8_t trail;                        /**< the trail's length, cells (the head included) */
+    uint8_t colour;                       /**< its colour, 0..RAIN_COLOURS-1 */
 } rain_col_t;
 
 static rain_col_t *s_col;                 /**< the columns (NULL: no rain) */
@@ -54,13 +55,14 @@ static uint8_t rnd_digit(void)
 }
 
 /**
- * @brief A column starts again: a new speed and trail, its head above the top after a random pause.
+ * @brief A column starts again: a new speed, trail and colour, its head above the top after a random pause.
  * @param[in] c  the column
  */
 static void col_restart(rain_col_t *c)
 {
     c->speed = (int16_t)rnd_in(RAIN_SPEED_MIN, RAIN_SPEED_MAX);
     c->trail = (uint8_t)rnd_in(RAIN_TRAIL_MIN, RAIN_TRAIL_MAX);
+    c->colour = (uint8_t)rnd_in(0, RAIN_COLOURS - 1);
     c->head = -(int32_t)rnd_in(1, RAIN_PAUSE_MAX) * c->speed;   /* (the pause, in steps) */
 }
 
@@ -156,6 +158,12 @@ uint8_t rain_cell(int col, int row, uint8_t *digit)
         *digit = s_digit[i];
     }
     return s_level[i];
+}
+
+/* (documented in rain_core.h) */
+uint8_t rain_colour(int col)
+{
+    return s_col ? s_col[col].colour : 0;
 }
 
 /* (documented in rain_core.h) */

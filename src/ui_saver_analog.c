@@ -17,7 +17,7 @@
 #define AN_C_TICK       0x5A606B                /**< the ticks */
 #define AN_C_TEXT       0x7A808B                /**< the numbers */
 #define AN_C_HAND       0x9AA0AA                /**< the hour and minute hands */
-#define AN_C_SEC        0x8A4A3A                /**< the second hand: a dim red */
+#define AN_C_SEC        SV_RED_E                /**< the second hand: 3Blue1Brown's red, deep */
 #define AN_C_DATE       0x6B7280                /**< the date */
 
 static lv_obj_t *an_box;                  /**< the clock: face, hands, date (moves each minute) */

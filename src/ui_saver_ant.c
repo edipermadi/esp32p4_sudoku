@@ -1,9 +1,9 @@
 /**
  * @file ui_saver_ant.c
  * @ingroup ui_sudoku
- * @brief The Langton's ant screen saver: the ant (ant_core.c) walking a grid of round dots in a vacuum
- *        fluorescent display's blue-green, the unlit dots faintly there, each state of a cell a brighter
- *        dot, the ant white-hot.
+ * @brief The Langton's ant screen saver: the ant (ant_core.c) walking a grid of round dots in 3Blue1Brown's
+ *        colours, the unlit dots faintly there, each state of a cell a dot further along blue, teal,
+ *        green and yellow, the ant yellow.
  *
  * Each frame the ant takes AN_STEPS steps; the dots they changed are drawn with the savers' pen
  * (ui_saver_pic.c), which redraws only what changed.
@@ -14,10 +14,12 @@
 #define AN_FRAME_MS     40                      /**< a frame each, ms (25 a second) */
 #define AN_STEPS        24                      /**< steps a frame (600 a second) */
 #define AN_PX           (SCR_W / ANT_N)         /**< a cell's size, px (6) */
-#define AN_UNLIT        0x041411                /**< state 0: the dot barely there */
-#define AN_DIM          0x16705D                /**< the first lit state (rules with more states) */
-#define AN_LIT          0x3CF0C8                /**< the last state */
-#define AN_ANT          0xFFFFFF                /**< the ant */
+#define AN_UNLIT        0x0C1417                /**< state 0: the dot barely there */
+#define AN_LIT          SV_BLUE                 /**< the lit state (two-state rules) */
+#define AN_ANT          SV_YELLOW               /**< the ant */
+
+/** @brief The lit states' colours, first to last (rules with more states): a 3Blue1Brown ramp. */
+static const uint32_t AN_RAMP[] = {SV_BLUE_E, SV_BLUE, SV_TEAL, SV_GREEN, SV_YELLOW};
 
 static uint16_t *an_buf;                  /**< the picture (saver_pic_start(); drawn on with the pen) */
 static uint16_t an_col[ANT_STATES_MAX];   /**< each state's colour, RGB565 */
@@ -25,13 +27,20 @@ static uint16_t an_ant;                   /**< AN_ANT, RGB565 */
 static int an_was;                        /**< the cell the ant was drawn on (-1: none) */
 static lv_timer_t *an_timer;              /**< a frame each AN_FRAME_MS */
 
-/** @brief The states' colours for the rule running: unlit, then dim to bright. */
+/** @brief The states' colours for the rule running: unlit, then along AN_RAMP (blue for two states). */
 static void make_colors(void)
 {
+    const int steps = sizeof(AN_RAMP) / sizeof(AN_RAMP[0]) - 1;
     int n = ant_states();
     an_col[0] = lv_color_to_u16(lv_color_hex(AN_UNLIT));
     for (int k = 1; k < n; k++) {
-        an_col[k] = n == 2 ? lv_color_to_u16(lv_color_hex(AN_LIT)) : saver_pic_mix(AN_DIM, AN_LIT, (k - 1) * 255 / (n - 2));
+        if (n == 2) {
+            an_col[k] = lv_color_to_u16(lv_color_hex(AN_LIT));
+            continue;
+        }
+        int u = (k - 1) * steps * 255 / (n - 2), seg = u / 255;     /* (where along the ramp) */
+        seg = seg >= steps ? steps - 1 : seg;
+        an_col[k] = saver_pic_mix(AN_RAMP[seg], AN_RAMP[seg + 1], u - seg * 255);
     }
     an_ant = lv_color_to_u16(lv_color_hex(AN_ANT));
 }

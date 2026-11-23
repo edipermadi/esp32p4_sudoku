@@ -1,8 +1,8 @@
 /**
  * @file ui_saver_rain.c
  * @ingroup ui_sudoku
- * @brief The digital rain screen saver: falling trails of the digits 1 to 9 (rain_core.c) in a vacuum
- *        fluorescent display's blue-green on black, each trail's head white-hot.
+ * @brief The digital rain screen saver: falling trails of the digits 1 to 9 (rain_core.c) on black, each
+ *        column in one of 3Blue1Brown's colours, its head nearly white.
  *
  * The digits are drawn once, at the start, into tiles of each brightness (a canvas, then its pixels read
  * as coverage); each step copies the tiles of the cells that changed into the savers' picture
@@ -17,23 +17,29 @@
 #define RAIN_STEP_MS    50                      /**< a step each, ms (20 a second) */
 
 static uint16_t *rn_buf;                  /**< the picture (saver_pic_start()) */
-static uint16_t *rn_tiles;                /**< the tiles: [level-1][digit-1][RAIN_TILE], RGB565 */
-static uint8_t *rn_shown;                 /**< each cell as drawn: level << 4 | digit (0xFF: not yet) */
+static uint16_t *rn_tiles;                /**< the tiles: [colour][level-1][digit-1][RAIN_TILE], RGB565 */
+static uint16_t *rn_shown;                /**< each cell as drawn: colour << 8 | level << 4 | digit (0: unlit) */
 static lv_timer_t *rn_timer;              /**< a step each RAIN_STEP_MS */
 
+/** @brief The columns' colours (3Blue1Brown's), as rain_colour() numbers them. */
+static const uint32_t RN_HUE[RAIN_COLOURS] = {SV_BLUE, SV_TEAL, SV_GREEN, SV_YELLOW, SV_GOLD, SV_PINK};
+
 /**
- * @brief The colour of each level: the VFD blue-green, dimmer down the trail, the head white-hot.
+ * @brief The colour of a level in a column's colour: dimmer down the trail, the head nearly white.
+ * @param[in] colour  0..RAIN_COLOURS-1
  * @param[in] level  1..RAIN_HEAD
  * @return the colour
  */
-static lv_color_t level_color(int level)
+static lv_color_t level_color(int colour, int level)
 {
-    static const uint32_t HEX[RAIN_LEVELS] = {
-        0x000000,                                   /* (unlit: not drawn as a tile) */
-        0x06221C, 0x0B3D33, 0x146B59, 0x1F9278, 0x2CC09E, 0x3CF0C8,   /* the trail, dim to bright */
-        0xC4FFF2,                                   /* the head */
-    };
-    return lv_color_hex(HEX[level]);
+    static const uint8_t BRIGHT[RAIN_HEAD] = {28, 56, 97, 148, 204, 255};   /* the trail, dim to bright */
+    lv_color_t c = lv_color_hex(RN_HUE[colour]);
+    if (level >= RAIN_HEAD) {                       /* the head: 70 % of the way to white */
+        return lv_color_make((uint8_t)(c.red + (255 - c.red) * 7 / 10), (uint8_t)(c.green + (255 - c.green) * 7 / 10),
+                             (uint8_t)(c.blue + (255 - c.blue) * 7 / 10));
+    }
+    uint32_t k = BRIGHT[level - 1];
+    return lv_color_make((uint8_t)(c.red * k / 255), (uint8_t)(c.green * k / 255), (uint8_t)(c.blue * k / 255));
 }
 
 /**
@@ -45,7 +51,7 @@ static bool make_tiles(void)
     static const char *const DIGITS[9] = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
     const int32_t w = 9 * RAIN_PX;
     uint16_t *glyphs = heap_caps_aligned_alloc(64, (size_t)w * RAIN_PX * 2, MALLOC_CAP_SPIRAM);   /* (a canvas) */
-    rn_tiles = malloc((size_t)RAIN_HEAD * 9 * RAIN_TILE * 2);
+    rn_tiles = malloc((size_t)RAIN_COLOURS * RAIN_HEAD * 9 * RAIN_TILE * 2);   /* (about 435 KB, PSRAM) */
     if (!glyphs || !rn_tiles) {
         free(glyphs);
         return false;
@@ -70,10 +76,10 @@ static bool make_tiles(void)
     }
     lv_canvas_finish_layer(cv, &layer);
     lv_obj_delete(cv);
-    for (int lv = 1; lv <= RAIN_HEAD; lv++) {
-        lv_color_t c = level_color(lv);
+    for (int k = 0; k < RAIN_COLOURS * RAIN_HEAD; k++) {
+        lv_color_t c = level_color(k / RAIN_HEAD, k % RAIN_HEAD + 1);
         for (int d = 0; d < 9; d++) {
-            uint16_t *t = rn_tiles + ((lv - 1) * 9 + d) * RAIN_TILE;
+            uint16_t *t = rn_tiles + (k * 9 + d) * RAIN_TILE;
             for (int y = 0; y < RAIN_PX; y++) {
                 for (int x = 0; x < RAIN_PX; x++) {
                     uint16_t g = glyphs[y * w + d * RAIN_PX + x];
@@ -90,7 +96,7 @@ static bool make_tiles(void)
 }
 
 /**
- * @brief Paints a cell: its digit's tile at its level, or black when unlit.
+ * @brief Paints a cell: its digit's tile at its level in its column's colour, or black when unlit.
  * @param[in] col  column
  * @param[in] row  row
  * @param[in] level  0..RAIN_HEAD
@@ -99,7 +105,8 @@ static bool make_tiles(void)
 static void paint_cell(int col, int row, uint8_t level, uint8_t digit)
 {
     uint16_t *p = rn_buf + (row * RAIN_PX) * SCR_W + col * RAIN_PX;
-    const uint16_t *t = level ? rn_tiles + ((level - 1) * 9 + (digit - 1)) * RAIN_TILE : NULL;
+    int k = rain_colour(col) * RAIN_HEAD + level - 1;
+    const uint16_t *t = level ? rn_tiles + (k * 9 + (digit - 1)) * RAIN_TILE : NULL;
     for (int y = 0; y < RAIN_PX; y++, p += SCR_W) {
         if (t) {
             memcpy(p, t + y * RAIN_PX, RAIN_PX * 2);
@@ -122,8 +129,8 @@ static void rain_paint(void)
         span1[c] = -1;
         for (int r = 0; r < RAIN_ROWS; r++) {
             uint8_t d, lv = rain_cell(c, r, &d);
-            uint8_t key = lv ? (uint8_t)(lv << 4 | d) : 0;
-            uint8_t *s = &rn_shown[r * RAIN_COLS + c];
+            uint16_t key = lv ? (uint16_t)(rain_colour(c) << 8 | lv << 4 | d) : 0;
+            uint16_t *s = &rn_shown[r * RAIN_COLS + c];
             if (*s != key) {
                 *s = key;
                 paint_cell(c, r, lv, d);
@@ -159,13 +166,13 @@ static void rain_tick(lv_timer_t *t)
 bool saver_rain_start(lv_obj_t *parent)
 {
     if (!rn_shown) {
-        rn_shown = malloc(RAIN_CELLS);
+        rn_shown = malloc(RAIN_CELLS * sizeof(*rn_shown));
     }
     if (!rn_shown || !make_tiles() || !rain_start(esp_random()) || !(rn_buf = saver_pic_start(parent))) {
         saver_rain_stop();
         return false;
     }
-    memset(rn_shown, 0, RAIN_CELLS);                /* all unlit, as the black picture is */
+    memset(rn_shown, 0, RAIN_CELLS * sizeof(*rn_shown));   /* all unlit, as the black picture is */
     rain_paint();
     rn_timer = lv_timer_create(rain_tick, RAIN_STEP_MS, NULL);
     return true;
