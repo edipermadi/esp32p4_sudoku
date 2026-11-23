@@ -29,13 +29,12 @@
 #include "share_core.h"
 #include "daily_core.h"
 #include "import_parse.h"
-#include "life_core.h"
 #include "rain_core.h"
 #include "attractor_core.h"
 #include "boids_core.h"
 #include "lissajous_core.h"
 #include "pendulum_core.h"
-#include "ant_core.h"
+#include "automata_core.h"
 
 static int s_checks, s_failed;
 
@@ -1380,72 +1379,6 @@ static void test_learn(void)
     }
 }
 
-/* Life (the screen saver): a blinker turns and settles the board (a new seed), a block stays put, a glider
- * crosses the wrapped edge, the glows (born, alive, fading out) and the same seed the same board */
-static void test_life(void)
-{
-    CHECK(life_clear());
-    life_set(10, 10, true);                         /* a blinker: 3 across */
-    life_set(11, 10, true);
-    life_set(12, 10, true);
-    CHECK(life_glow(11, 10) == LIFE_GLOW_BORN && life_population() == 3);
-    CHECK(!life_step());
-    CHECK(is_life_alive(11, 9) && is_life_alive(11, 10) && is_life_alive(11, 11) && !is_life_alive(10, 10));
-    CHECK(life_glow(11, 10) == LIFE_GLOW_ALIVE && life_glow(11, 9) == LIFE_GLOW_BORN && life_glow(10, 10) == LIFE_GLOW_FADE4);
-    CHECK(!life_step());                            /* back across: not yet seen twice in the history */
-    CHECK(life_glow(10, 10) == LIFE_GLOW_BORN && life_glow(11, 9) == LIFE_GLOW_FADE4);
-    CHECK(life_step());                             /* down again: a repeat, so a new seed */
-    CHECK(life_generation() == 0);
-    int pop = life_population();
-    CHECKF(pop > LIFE_CELLS * (LIFE_DENSITY - 5) / 100 && pop < LIFE_CELLS * (LIFE_DENSITY + 5) / 100, "seed: %d alive", pop);
-
-    CHECK(life_clear());                            /* a dead cell fades: FADE4 .. OFF, a generation each */
-    life_set(50, 50, true);
-    life_set(51, 50, true);
-    life_set(50, 51, true);
-    life_set(51, 51, true);                         /* a block, and a lone cell that dies */
-    life_set(5, 5, true);
-    life_step();
-    CHECK(life_glow(5, 5) == LIFE_GLOW_FADE4 && life_glow(50, 50) == LIFE_GLOW_ALIVE && life_population() == 4);
-    CHECK(life_step());                             /* the block alone, twice: settled */
-
-    CHECK(life_clear());                            /* a glider (heading down-right) across the corner */
-    const int gx[] = {1, 2, 0, 1, 2}, gy[] = {0, 1, 2, 2, 2};
-    for (int k = 0; k < 5; k++) {
-        life_set((LIFE_N - 3 + gx[k]) % LIFE_N, (LIFE_N - 3 + gy[k]) % LIFE_N, true);
-    }
-    for (int g = 0; g < 4 * 6; g++) {               /* 6 cells down and right */
-        CHECKF(!life_step(), "glider: settled at generation %d", g + 1);
-    }
-    for (int k = 0; k < 5; k++) {
-        CHECKF(is_life_alive((LIFE_N + 3 + gx[k]) % LIFE_N, (LIFE_N + 3 + gy[k]) % LIFE_N), "glider cell %d", k);
-    }
-    CHECK(life_population() == 5);
-    CHECK(life_glow(LIFE_N - 2, LIFE_N - 3) == LIFE_GLOW_OFF);   /* where it started: faded out */
-
-    uint8_t a[64];                                  /* the same seed, the same board */
-    CHECK(life_seed(1234));
-    for (int i = 0; i < 64; i++) {
-        a[i] = is_life_alive(i, 7);
-    }
-    life_step();
-    CHECK(life_seed(1234));
-    bool same = true;
-    for (int i = 0; i < 64; i++) {
-        same &= a[i] == is_life_alive(i, 7);
-    }
-    CHECK(same);
-    for (int g = 0; g < LIFE_GEN_MAX + 1; g++) {    /* never older than LIFE_GEN_MAX */
-        life_step();
-        CHECKF(life_generation() < LIFE_GEN_MAX, "generation %u", (unsigned)life_generation());
-        if (life_generation() >= LIFE_GEN_MAX) {
-            break;
-        }
-    }
-    life_free();
-    CHECK(life_population() == 0 && life_glow(0, 0) == LIFE_GLOW_OFF && !life_step());
-}
-
 /* Rain (the screen saver): the columns start staggered and fall, a trail is the head (the brightest) and
  * dimmer cells behind it, every digit is 1..9, a column comes round again, the same seed the same rain */
 static void test_rain(void)
@@ -1803,69 +1736,191 @@ static void test_pendulum(void)
     CHECK(!pend_step());
 }
 
-/* Langton's ant (the screen saver): the classic rule builds its highway (after about 10,000 steps, 2 cells
- * on a diagonal every 104 steps), a step changes one cell by one state, a new run comes after ANT_RUN
- * steps, and the same seed gives the same runs */
-static void test_ant(void)
+/* Automata (the screen savers): Game of Life (a blinker, its settling, a glider across the wrapped corner,
+ * a dead cell fading), Brian's Brain (a pair fires the four cells beside it, three are too many, across
+ * the edges), Langton's ant (its highway), the other rules' own steps on small patterns, every rule running
+ * with its states and keys in range, the cyclic rules keep moving, a run starts again after its length,
+ * a rule that dies out starts again, and the same seed gives the same runs */
+static void test_automata(void)
 {
-    CHECK(ant_start(1));
-    ant_set_rule("RL");
-    int ch;
-    bool one = true;
-    for (int s = 0; s < 10400; s++) {
-        int x, y;
-        ant_pos(&x, &y);
-        uint8_t before = ant_cell(x, y);
-        CHECK(!ant_step(&ch));
-        one &= ch == y * ANT_N + x && ant_cell(x, y) == (before + 1) % 2;
+    CHECK(auto_start(1, AUTO_R_LIFE));              /* Life: a blinker turns, then has settled */
+    auto_clear();
+    auto_set(10, 10, 1);
+    auto_set(11, 10, 1);
+    auto_set(12, 10, 1);
+    CHECK(!auto_step());
+    CHECK(auto_state(11, 9) == 1 && auto_state(11, 11) == 1 && auto_state(10, 10) == 0);
+    CHECK(auto_key(11, 9) == AUTO_FADE && auto_key(11, 10) == AUTO_FADE + 1 && auto_key(10, 10) == AUTO_FADE - 1);
+    CHECK(!auto_step() && auto_state(10, 10) == 1);
+    CHECK(auto_step() && auto_generation() == 0);   /* the same board again: settled, a new start */
+    auto_clear();                                   /* a glider (down-right) across the corner, and a lone cell */
+    const int gx[] = {1, 2, 0, 1, 2}, gy[] = {0, 1, 2, 2, 2};
+    for (int k = 0; k < 5; k++) {
+        auto_set((AUTO_N - 3 + gx[k]) % AUTO_N, (AUTO_N - 3 + gy[k]) % AUTO_N, 1);
     }
-    CHECK(one);
+    auto_set(60, 60, 1);
+    for (int g = 0; g < 4 * 6; g++) {               /* 6 cells down and right */
+        CHECKF(!auto_step(), "life: glider settled at %d", g);
+        if (g < AUTO_FADE) {
+            CHECK(auto_key(60, 60) == AUTO_FADE - 1 - g);   /* the lone cell fading out */
+        }
+    }
+    bool glider = true;
+    for (int k = 0; k < 5; k++) {
+        glider &= auto_state((AUTO_N + 3 + gx[k]) % AUTO_N, (AUTO_N + 3 + gy[k]) % AUTO_N) == 1;
+    }
+    CHECK(glider);
+
+    auto_set_rule(AUTO_R_BRAIN);                    /* Brian's Brain */
+    auto_clear();
+    for (int k = 0; k < 6; k++) {                   /* (pairs far apart: enough firing not to be too quiet) */
+        auto_set(60 + k * 9, 100, 1);
+        auto_set(61 + k * 9, 100, 1);
+    }
+    auto_set(10, 10, 1);                            /* a pair: the four cells beside both fire */
+    auto_set(11, 10, 1);
+    auto_set(30, 30, 1);                            /* three in a row: above and below the middle see three */
+    auto_set(31, 30, 1);
+    auto_set(32, 30, 1);
+    auto_set(AUTO_N - 1, 50, 1);                    /* a pair across the left and right edges */
+    auto_set(0, 50, 1);
+    CHECK(!auto_step());
+    CHECK(auto_state(10, 9) == 1 && auto_state(11, 9) == 1 && auto_state(10, 11) == 1 && auto_state(11, 11) == 1);
+    CHECK(auto_state(9, 9) == 0 && auto_state(10, 10) == 2 && auto_key(10, 9) == AUTO_FADE);   /* firing: just born */
+    CHECK(auto_state(31, 29) == 0 && auto_state(31, 31) == 0);
+    CHECK(auto_state(AUTO_N - 1, 49) == 1 && auto_state(0, 49) == 1);
+    CHECK(!auto_step() && auto_state(10, 10) == 0 && auto_key(10, 10) == AUTO_FADE - 1);
+    auto_clear();
+    auto_set(5, 5, 1);                              /* nearly nothing firing: too quiet, a new start */
+    CHECK(auto_step());
+
+    auto_set_rule(AUTO_R_ANT);                      /* Langton's ant: chaos, then its highway */
+    auto_clear();
+    while (auto_generation() < 10400) {
+        CHECK(!auto_step());
+    }
     int px, py, dx0 = 0, dy0 = 0;
     bool highway = true;
-    ant_pos(&px, &py);
-    for (int k = 0; k < 10; k++) {
-        for (int s = 0; s < 104; s++) {
-            ant_step(&ch);
+    auto_ant(&px, &py);
+    CHECK(auto_key(px, py) == AUTO_KEY_ANT);
+    for (int k = 0; k < 5; k++) {
+        for (int g = 0; g < 13; g++) {              /* (312 steps: three of the highway's 104) */
+            auto_step();
         }
         int x, y;
-        ant_pos(&x, &y);
-        int dx = (x - px + ANT_N + ANT_N / 2) % ANT_N - ANT_N / 2, dy = (y - py + ANT_N + ANT_N / 2) % ANT_N - ANT_N / 2;
+        auto_ant(&x, &y);
+        int dx = (x - px + AUTO_N + AUTO_N / 2) % AUTO_N - AUTO_N / 2, dy = (y - py + AUTO_N + AUTO_N / 2) % AUTO_N - AUTO_N / 2;
         if (k == 0) {
             dx0 = dx;
             dy0 = dy;
         }
-        highway &= dx == dx0 && dy == dy0 && abs(dx) == 2 && abs(dy) == 2;
+        highway &= dx == dx0 && dy == dy0 && abs(dx) == 6 && abs(dy) == 6;
         px = x;
         py = y;
     }
-    CHECKF(highway, "ant: the highway (%d, %d a period)", dx0, dy0);
-    ant_set_rule("LLRR");
-    for (int s = 0; s < 5000; s++) {                /* a four-state rule: states 0..3, one more a step */
-        int x, y;
-        ant_pos(&x, &y);
-        uint8_t before = ant_cell(x, y);
-        ant_step(&ch);
-        one &= ant_cell(x, y) == (before + 1) % 4;
+    CHECKF(highway, "ant: the highway (%d, %d)", dx0, dy0);
+
+    auto_set_rule(AUTO_R_DAY_NIGHT);                /* Day & Night: born with 3 */
+    auto_clear();
+    auto_set(10, 10, 1);
+    auto_set(11, 10, 1);
+    auto_set(12, 10, 1);
+    auto_set(70, 70, 1);
+    CHECK(!auto_step());
+    CHECK(auto_state(11, 9) == 1 && auto_state(11, 11) == 1 && auto_state(10, 10) == 0 && auto_state(70, 70) == 0);
+
+    auto_set_rule(AUTO_R_SEEDS);                    /* Seeds: every live cell dies at once */
+    auto_clear();
+    auto_set(40, 40, 1);
+    auto_set(41, 40, 1);
+    CHECK(!auto_step());
+    CHECK(auto_state(40, 40) == 0 && auto_state(40, 39) == 1 && auto_state(41, 41) == 1);
+    auto_clear();
+    CHECK(auto_step() && auto_rule() == AUTO_R_SEEDS);   /* nothing alive: a new start */
+
+    auto_set_rule(AUTO_R_STAR_WARS);                /* Star Wars: a lone cell dies through 2, 3, then 0 */
+    auto_clear();
+    auto_set(50, 50, 1);
+    for (int k = 0; k < 4; k++) {
+        auto_set(90 + k % 2, 90 + k / 2, 1);        /* (a block: stays alive) */
     }
-    CHECK(one && ant_states() == 4);
-    uint32_t n = 0;
-    while (!ant_step(&ch)) {                        /* a new run after ANT_RUN steps */
+    auto_step();
+    CHECK(auto_state(50, 50) == 2);
+    auto_step();
+    CHECK(auto_state(50, 50) == 3);
+    auto_step();
+    CHECK(auto_state(50, 50) == 0);
+
+    auto_set_rule(AUTO_R_RPS);                      /* rock, paper, scissors: 3 neighbours a state on, not 2 */
+    auto_clear();
+    auto_set(20, 20, 1);
+    auto_set(21, 20, 1);
+    auto_set(22, 20, 1);
+    auto_step();
+    CHECK(auto_state(21, 21) == 1 && auto_state(20, 21) == 0);
+
+    auto_set_rule(AUTO_R_EXCITABLE);                /* excitable: rest -> excited by a neighbour, then on round */
+    auto_clear();
+    auto_set(30, 30, 1);
+    auto_step();
+    CHECK(auto_state(31, 31) == 1 && auto_state(30, 30) == 2);
+    for (int g = 0; g < auto_states() - 2; g++) {
+        auto_step();
+    }
+    CHECK(auto_state(30, 30) == 0);
+
+    auto_set_rule(AUTO_R_FOREST);                   /* forest: fire spreads to the trees next to it, burns out */
+    auto_clear();
+    auto_set(60, 60, 2);
+    auto_set(61, 60, 1);
+    auto_set(62, 60, 1);
+    auto_step();
+    CHECK(auto_state(60, 60) == 0 && auto_state(61, 60) == 2 && auto_state(62, 60) == 1);
+    auto_step();
+    CHECK(auto_state(61, 60) == 0 && auto_state(62, 60) == 2);
+
+    bool in = true;                                 /* every rule runs, states and keys in range */
+    float moving[2] = {0, 0};
+    static uint8_t before[AUTO_CELLS];
+    for (int r = 0; r < AUTO_R_COUNT; r++) {
+        auto_set_rule(r);
+        for (int g = 0; g < 300; g++) {
+            auto_step();
+        }
+        for (int i = 0; i < AUTO_CELLS; i++) {
+            before[i] = (uint8_t)auto_state(i % AUTO_N, i / AUTO_N);
+        }
+        auto_step();
+        int changed = 0;
+        for (int i = 0; i < AUTO_CELLS; i++) {
+            int x = i % AUTO_N, y = i / AUTO_N, st = auto_state(x, y), k = auto_key(x, y);
+            in &= st >= 0 && st < auto_states() && k >= 0 && k < AUTO_KEYS && auto_step_ms() > 0;
+            changed += st != before[i];
+        }
+        if (r == AUTO_R_RPS || r == AUTO_R_CYCLIC) {
+            moving[r == AUTO_R_CYCLIC] = (float)changed / AUTO_CELLS;
+        }
+    }
+    CHECK(in);
+    CHECKF(moving[0] > 0.1f && moving[1] > 0.05f, "automata: cyclic rules keep moving (%.2f, %.2f)", moving[0], moving[1]);
+
+    auto_set_rule(AUTO_R_CYCLIC);                   /* a run starts again after its length, the same rule */
+    int n = 0;
+    while (!auto_step() && n < 1000) {
         n++;
     }
-    CHECK(n == ANT_RUN - 5000 && ch == -1 && ant_steps() == 0);
-    const char *r[2];                               /* the same seed, the same runs */
-    int pos[2][2];
+    CHECK(n == 900 && auto_rule() == AUTO_R_CYCLIC && auto_generation() == 0);
+    int st[2];                                      /* the same seed, the same runs */
     for (int k = 0; k < 2; k++) {
-        CHECK(ant_start(77));
-        for (int s = 0; s < 3000; s++) {
-            ant_step(&ch);
+        CHECK(auto_start(33, AUTO_R_STAR_WARS));
+        for (int g = 0; g < 50; g++) {
+            auto_step();
         }
-        r[k] = ant_rule();
-        ant_pos(&pos[k][0], &pos[k][1]);
+        st[k] = auto_state(17, 23) * 100 + auto_key(40, 41);
     }
-    CHECK(r[0] == r[1] && pos[0][0] == pos[1][0] && pos[0][1] == pos[1][1]);
-    ant_free();
-    CHECK(!ant_step(&ch) && ch == -1);
+    CHECK(st[0] == st[1]);
+    auto_free();
+    CHECK(!auto_step() && auto_state(0, 0) == 0);
 }
 
 int main(int argc, char **argv)
@@ -1878,10 +1933,10 @@ int main(int argc, char **argv)
         {"rules check", test_conflicts},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
-        {"life (screen saver)", test_life},   {"rain (screen saver)", test_rain},
+        {"rain (screen saver)", test_rain},
         {"attractor (screen saver)", test_attractor}, {"boids (screen saver)", test_boids},
         {"lissajous (screen saver)", test_lissajous}, {"pendulum (screen saver)", test_pendulum},
-        {"ant (screen saver)", test_ant},
+        {"automata (screen saver)", test_automata},
     };
     sudoku_geom_init();
     int failed_tests = 0;

@@ -1,10 +1,9 @@
 /**
  * @file ui_saver_pic.c
  * @ingroup ui_sudoku
- * @brief The screen savers' picture (Life, Rain, Attractor, Boids, Lissajous, Pendulum, Langton's ant):
- *        a full-screen RGB565 image in PSRAM the saver paints into, flushed from the CPU's cache before it
- *        is redrawn (LVGL's PPA draw unit reads it by DMA); and a pen for drawing on it that redraws only
- *        what it touched.
+ * @brief The animated screen savers' picture: a full-screen RGB565 image in PSRAM the saver paints into,
+ *        flushed from the CPU's cache before it is redrawn (LVGL's PPA draw unit reads it by DMA); and a
+ *        pen for drawing on it (pixels, squares, lines, round dots) that redraws only what it touched.
  *
  * The pen cuts the screen into PEN_TILES_X x PEN_TILES_Y tiles (30, within LVGL's 32 areas); a frame
  * (saver_pen_begin() .. saver_pen_end()) redraws in each tile just the box its changed pixels fill, so
@@ -146,6 +145,18 @@ void saver_pen_square(int x, int y, int size, uint16_t c)
         for (int tx = x0 / PEN_TILE_W; tx <= x1 / PEN_TILE_W; tx++) {
             widen(ty * PEN_TILES_X + tx, LV_MAX(x0, tx * PEN_TILE_W), LV_MAX(y0, ty * PEN_TILE_H),
                   LV_MIN(x1, (tx + 1) * PEN_TILE_W - 1), LV_MIN(y1, (ty + 1) * PEN_TILE_H - 1));
+        }
+    }
+}
+
+/* (documented in ui_internal.h) */
+void saver_pen_dot(int col, int row, int px, uint16_t c)
+{
+    int x0 = col * px, y0 = row * px, n = px - 1;   /* (the last column and row: the black gap) */
+    for (int r = 0; r < n; r++) {
+        int edge = r == 0 || r == n - 1;            /* (the top and bottom rows: corners off, round) */
+        for (int k = edge; k < n - edge; k++) {
+            saver_pen_put(x0 + k, y0 + r, c);
         }
     }
 }

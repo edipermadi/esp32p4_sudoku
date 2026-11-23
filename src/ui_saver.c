@@ -3,13 +3,15 @@
  * @ingroup ui_sudoku
  * @brief The screen saver: after the screen timeout without a touch the game pauses, and then what was
  *        chosen shows at full speed: a dim clock (digital, or analog: ui_saver_analog.c) moving about,
- *        the Game of Life (ui_saver_life.c), digital rain (ui_saver_rain.c), a strange attractor
- *        (ui_saver_attractor.c), a flock of boids (ui_saver_boids.c), a Lissajous figure
- *        (ui_saver_lissajous.c), double pendulums (ui_saver_pendulum.c) or Langton's ant
- *        (ui_saver_ant.c). After "Screen saver for" minutes (or at once, for Dark) the screen goes black
- *        and the board saves power. The next tap only wakes it. The lock screen, if on, waits under it.
+ *        digital rain (ui_saver_rain.c), a strange attractor (ui_saver_attractor.c), a flock of boids
+ *        (ui_saver_boids.c), a Lissajous figure (ui_saver_lissajous.c), double pendulums
+ *        (ui_saver_pendulum.c), or a cellular automaton (ui_saver_automata.c: Game of Life, Brian's
+ *        Brain, Langton's ant and eight more). After "Screen saver for" minutes (or at once, for Dark) the
+ *        screen goes black and the board saves power. The next tap only wakes it. The lock screen, if
+ *        on, waits under it.
  */
 #include "ui_internal.h"
+#include "automata_core.h"
 
 static void saver_sleep(bool lock_now);
 static void saver_show_stop(void);
@@ -81,7 +83,7 @@ static bool saver_show_start(uint8_t mode)
         saver_analog_start(s_saver);
         return true;
     case SAVER_MODE_LIFE:
-        return saver_life_start(s_saver);
+        return saver_automata_start(s_saver, AUTO_R_LIFE);
     case SAVER_MODE_RAIN:
         return saver_rain_start(s_saver);
     case SAVER_MODE_ATTRACTOR:
@@ -93,7 +95,25 @@ static bool saver_show_start(uint8_t mode)
     case SAVER_MODE_PENDULUM:
         return saver_pendulum_start(s_saver);
     case SAVER_MODE_ANT:
-        return saver_ant_start(s_saver);
+        return saver_automata_start(s_saver, AUTO_R_ANT);
+    case SAVER_MODE_BRAIN:
+        return saver_automata_start(s_saver, AUTO_R_BRAIN);
+    case SAVER_MODE_CYCLIC:
+        return saver_automata_start(s_saver, AUTO_R_CYCLIC);
+    case SAVER_MODE_RPS:
+        return saver_automata_start(s_saver, AUTO_R_RPS);
+    case SAVER_MODE_EXCITABLE:
+        return saver_automata_start(s_saver, AUTO_R_EXCITABLE);
+    case SAVER_MODE_DAY_NIGHT:
+        return saver_automata_start(s_saver, AUTO_R_DAY_NIGHT);
+    case SAVER_MODE_SEEDS:
+        return saver_automata_start(s_saver, AUTO_R_SEEDS);
+    case SAVER_MODE_MAZE:
+        return saver_automata_start(s_saver, AUTO_R_MAZE);
+    case SAVER_MODE_STAR_WARS:
+        return saver_automata_start(s_saver, AUTO_R_STAR_WARS);
+    case SAVER_MODE_FOREST:
+        return saver_automata_start(s_saver, AUTO_R_FOREST);
     default:
         return false;
     }
@@ -111,14 +131,13 @@ static void saver_show_stop(void)
     }
     sv_dark_timer = NULL;
     sv_clock = NULL;
-    saver_life_stop();
     saver_analog_stop();
     saver_rain_stop();
     saver_attractor_stop();
     saver_boids_stop();
     saver_lissajous_stop();
     saver_pendulum_stop();
-    saver_ant_stop();
+    saver_automata_stop();
     if (s_saver) {
         lv_obj_clean(s_saver);                      /* (the clocks' objects: the cover stays, black) */
     }

@@ -1396,15 +1396,6 @@ void lock_dd_cb(lv_event_t *e);
 void pin_change_cb(lv_event_t *e);
 void lock_now_cb(lv_event_t *e);
 /**
- * @brief The Game of Life screen saver starts (ui_saver_life.c): a full-screen picture on the cover,
- *        a generation each 125 ms.
- * @param[in] parent  the screen saver's cover
- * @return false if there was no memory for it (nothing shown)
- */
-bool saver_life_start(lv_obj_t *parent);
-/** @brief The Game of Life screen saver stops: its picture and memory go (nothing if it isn't on). */
-void saver_life_stop(void);
-/**
  * @brief The digital rain screen saver starts (ui_saver_rain.c): falling digits on the savers' picture,
  *        a step each 50 ms.
  * @param[in] parent  the screen saver's cover
@@ -1450,14 +1441,15 @@ bool saver_pendulum_start(lv_obj_t *parent);
 /** @brief The double pendulum screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_pendulum_stop(void);
 /**
- * @brief The Langton's ant screen saver starts (ui_saver_ant.c): the ant walking a grid of dots on the
- *        savers' picture, 600 steps a second.
+ * @brief A cellular automaton screen saver starts (ui_saver_automata.c: Game of Life, Brian's Brain,
+ *        Langton's ant and the rest): its rule on a grid of dots on the savers' picture.
  * @param[in] parent  the screen saver's cover
+ * @param[in] rule  auto_rule_t (automata_core.h)
  * @return false if there was no memory for it (nothing shown)
  */
-bool saver_ant_start(lv_obj_t *parent);
-/** @brief The Langton's ant screen saver stops: its picture and memory go (nothing if it isn't on). */
-void saver_ant_stop(void);
+bool saver_automata_start(lv_obj_t *parent, int rule);
+/** @brief The cellular automaton screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_automata_stop(void);
 /*
  * The screen savers' colours: 3Blue1Brown's (Manim's) palette on black. A colour's _E shade is its
  * deepest, _A its palest; the plain name is the one the videos use most.
@@ -1527,6 +1519,15 @@ void saver_pen_put(int x, int y, uint16_t c);
  * @param[in] c  the colour (RGB565)
  */
 void saver_pen_square(int x, int y, int size, uint16_t c);
+/**
+ * @brief The pen: a round dot of a grid of cells (px - 1 square with the corners off, a 1 px black gap
+ *        to the next), as Life, Langton's ant and Brian's Brain draw their cells.
+ * @param[in] col  the cell's column
+ * @param[in] row  its row
+ * @param[in] px  a cell's size, px
+ * @param[in] c  the colour (RGB565)
+ */
+void saver_pen_dot(int col, int row, int px, uint16_t c);
 /**
  * @brief The pen: a line.
  * @param[in] x0  from, px

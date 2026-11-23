@@ -354,18 +354,27 @@ const char *store_lock_pin(void);
 void store_set_lock_pin(const char *pin);
 
 /** @brief Screen saver (Settings > Display): what shows at the screen timeout until a touch; Dark saves
- * power instead (sudoku.db's setting saver_clock: 0 to 9). */
+ * power instead (sudoku.db's setting saver_clock: 0 to 18). */
 typedef enum {
     SAVER_MODE_DARK = 0,                    /**< nothing: dark at once, saving power */
     SAVER_MODE_CLOCK = 1,                   /**< a dim clock moving about */
-    SAVER_MODE_LIFE = 2,                    /**< Conway's Game of Life in 3Blue1Brown's colours */
+    SAVER_MODE_LIFE = 2,                    /**< Conway's Game of Life (the automata: in 3Blue1Brown's colours) */
     SAVER_MODE_ANALOG = 3,                  /**< an analog clock moving about */
     SAVER_MODE_RAIN = 4,                    /**< digital rain of the digits 1 to 9, in 3Blue1Brown's colours */
     SAVER_MODE_ATTRACTOR = 5,               /**< strange attractors building up, in 3Blue1Brown's colours */
     SAVER_MODE_BOIDS = 6,                   /**< a flock of boids with fading trails, in 3Blue1Brown's colours */
     SAVER_MODE_LISSAJOUS = 7,               /**< turning Lissajous figures, in 3Blue1Brown's colours */
     SAVER_MODE_PENDULUM = 8,                /**< a chaotic double pendulum with fading trails, 3b1b colours */
-    SAVER_MODE_ANT = 9,                     /**< Langton's ant on a grid of dots, in 3Blue1Brown's colours */
+    SAVER_MODE_ANT = 9,                     /**< Langton's ant */
+    SAVER_MODE_BRAIN = 10,                  /**< Brian's Brain */
+    SAVER_MODE_CYCLIC = 11,                 /**< cyclic spirals (once all the automata in turn) */
+    SAVER_MODE_RPS = 12,                    /**< rock, paper, scissors */
+    SAVER_MODE_EXCITABLE = 13,              /**< an excitable medium */
+    SAVER_MODE_DAY_NIGHT = 14,              /**< Day & Night */
+    SAVER_MODE_SEEDS = 15,                  /**< Seeds */
+    SAVER_MODE_MAZE = 16,                   /**< Maze */
+    SAVER_MODE_STAR_WARS = 17,              /**< Star Wars */
+    SAVER_MODE_FOREST = 18,                 /**< forest fire */
     SAVER_MODE_COUNT                        /**< how many */
 } store_saver_t;
 /**

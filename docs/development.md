@@ -171,21 +171,21 @@ src/ui_sudoku.c         the UI's start-up: the card and sudoku.db read, the sett
 src/ui_notice.c         notices: a banner for a while, or one that stays while something runs (a file from the computer)
 src/ui_saver.c          the screen saver: the dim clock, dark, power saving, the waking tap
 src/ui_saver_analog.c   the analog clock screen saver: an LVGL scale as the face, the hands each second
-src/ui_saver_life.c     the Game of Life screen saver: round dots, repainted as their glow changes
 src/ui_saver_rain.c     the digital rain screen saver: digit tiles drawn once, the changed cells copied
 src/ui_saver_pic.c      the savers' full-screen picture in PSRAM: flushed from the cache, redrawn in parts; the pen (lines, redraw by tiles)
 src/ui_saver_attractor.c the strange attractor screen saver: points plotted, their pixels repainted
 src/ui_saver_boids.c    the boids screen saver: trails erased and drawn, only the changed tiles redrawn
 src/ui_saver_lissajous.c the Lissajous screen saver: the figure and its beam erased and drawn with the pen
 src/ui_saver_pendulum.c the double pendulum screen saver: its trail, rods and bobs erased and drawn with the pen
-src/ui_saver_ant.c      the Langton's ant screen saver: the dots the ant changed drawn with the pen
-src/ant_core.c          Langton's ant without LVGL: the rules (RL and longer), the steps, new runs
+src/ui_saver_automata.c the cellular automata screen savers (Game of Life, Brian's Brain, Langton's ant and the
+                        rest): each rule's colours, the dots whose key changed drawn with the pen
+src/automata_core.c     cellular automata without LVGL: Generations (Life-like), cyclic, excitable, forest-fire
+                        and Langton's ant rules; restarts when one dies out, settles or grows quiet
 src/pendulum_core.c     a double pendulum without LVGL: the equations of motion stepped with RK4, the trail
 src/lissajous_core.c    Lissajous figures without LVGL: the ratios, the drifting phase, shrinking between ratios, the beam
 src/boids_core.c        a flock of boids without LVGL: separation, alignment, cohesion, the edges, trails
 src/attractor_core.c    strange attractors without LVGL: the formulas, random sets that spread, the counts
 src/rain_core.c         digital rain without LVGL: the columns, their speeds and trails, the flicker
-src/life_core.c         the Game of Life without LVGL: the rules on a wrapped 120 x 120 board, the glows, reseeding
 src/ui_lock.c           the lock screen (Swipe or PIN) and the keypad it shares
 src/ui_pin_setup.c      Settings' PIN setup: a new PIN typed twice
 src/lock_core.c         the lock's PIN without LVGL: right or wrong, tries, the wait, setting a new one
