@@ -48,53 +48,16 @@ Only **r1c5** is left: **r1c5 = 8**. In a Classic grid r1c3 and r1c8 would have 
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py jigsaw: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 43 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 43 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/jigsaw-walkthrough/step-00.png)
 
-1. [the 4 in region 1](jigsaw/step-01.md)
-2. [the 5 in region 1](jigsaw/step-02.md)
-3. [the 3 in region 2](jigsaw/step-03.md)
-4. [the 9 in region 2](jigsaw/step-04.md)
-5. [the 4 in region 2](jigsaw/step-05.md)
-6. [the 8 in region 2](jigsaw/step-06.md)
-7. [the 9 in region 3](jigsaw/step-07.md)
-8. [the 4 in region 3](jigsaw/step-08.md)
-9. [the 2 in region 5](jigsaw/step-09.md)
-10. [the 4 in region 5](jigsaw/step-10.md)
-11. [the 7 in region 5](jigsaw/step-11.md)
-12. [the 7 in region 2](jigsaw/step-12.md)
-13. [the 6 in region 2](jigsaw/step-13.md)
-14. [the 5 in region 2](jigsaw/step-14.md)
-15. [the 7 in region 3](jigsaw/step-15.md)
-16. [the 5 in region 5](jigsaw/step-16.md)
-17. [the 5 in region 3](jigsaw/step-17.md)
-18. [the 6 in region 3](jigsaw/step-18.md)
-19. [the 1 in region 6](jigsaw/step-19.md)
-20. [the 7 in region 6](jigsaw/step-20.md)
-21. [the 7 in region 4](jigsaw/step-21.md)
-22. [the 5 in region 4](jigsaw/step-22.md)
-23. [the 9 in region 4](jigsaw/step-23.md)
-24. [the 8 in region 4](jigsaw/step-24.md)
-25. [the 8 in region 6](jigsaw/step-25.md)
-26. [the 2 in region 7](jigsaw/step-26.md)
-27. [the 9 in region 7](jigsaw/step-27.md)
-28. [the 6 in region 7](jigsaw/step-28.md)
-29. [the 8 in region 7](jigsaw/step-29.md)
-30. [the 7 in region 7](jigsaw/step-30.md)
-31. [the 1 in region 8](jigsaw/step-31.md)
-32. [the 2 in region 8](jigsaw/step-32.md)
-33. [the 3 in region 8](jigsaw/step-33.md)
-34. [the 5 in region 8](jigsaw/step-34.md)
-35. [the 6 in region 8](jigsaw/step-35.md)
-36. [the 8 in region 8](jigsaw/step-36.md)
-37. [the 2 in region 9](jigsaw/step-37.md)
-38. [the 3 in region 9](jigsaw/step-38.md)
-39. [the 4 in region 9](jigsaw/step-39.md)
-40. [the 5 in region 9](jigsaw/step-40.md)
-41. [the 6 in region 9](jigsaw/step-41.md)
-42. [the 7 in region 9](jigsaw/step-42.md)
-43. [the 8 in region 9](jigsaw/step-43.md)
+| [1](jigsaw/step-01.md) | [2](jigsaw/step-02.md) | [3](jigsaw/step-03.md) | [4](jigsaw/step-04.md) | [5](jigsaw/step-05.md) | [6](jigsaw/step-06.md) | [7](jigsaw/step-07.md) | [8](jigsaw/step-08.md) | [9](jigsaw/step-09.md) | [10](jigsaw/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](jigsaw/step-11.md) | [12](jigsaw/step-12.md) | [13](jigsaw/step-13.md) | [14](jigsaw/step-14.md) | [15](jigsaw/step-15.md) | [16](jigsaw/step-16.md) | [17](jigsaw/step-17.md) | [18](jigsaw/step-18.md) | [19](jigsaw/step-19.md) | [20](jigsaw/step-20.md) |
+| [21](jigsaw/step-21.md) | [22](jigsaw/step-22.md) | [23](jigsaw/step-23.md) | [24](jigsaw/step-24.md) | [25](jigsaw/step-25.md) | [26](jigsaw/step-26.md) | [27](jigsaw/step-27.md) | [28](jigsaw/step-28.md) | [29](jigsaw/step-29.md) | [30](jigsaw/step-30.md) |
+| [31](jigsaw/step-31.md) | [32](jigsaw/step-32.md) | [33](jigsaw/step-33.md) | [34](jigsaw/step-34.md) | [35](jigsaw/step-35.md) | [36](jigsaw/step-36.md) | [37](jigsaw/step-37.md) | [38](jigsaw/step-38.md) | [39](jigsaw/step-39.md) | [40](jigsaw/step-40.md) |
+| [41](jigsaw/step-41.md) | [42](jigsaw/step-42.md) | [43](jigsaw/step-43.md) |  |  |  |  |  |  |  |
 
 Solved.
 

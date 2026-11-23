@@ -37,30 +37,13 @@ Box 2 then has two cells left, r1c5 and r2c4, for 4 and 5; row 1 already has a 5
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py mini-6x6: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 20 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 20 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/mini-6x6-walkthrough/step-00.png)
 
-1. [the 2 in box 1](mini-6x6/step-01.md)
-2. [the 1 in box 2](mini-6x6/step-02.md)
-3. [the 2 in box 2](mini-6x6/step-03.md)
-4. [the 4 in box 2](mini-6x6/step-04.md)
-5. [the 5 in box 2](mini-6x6/step-05.md)
-6. [the 4 in box 3](mini-6x6/step-06.md)
-7. [the 5 in box 3](mini-6x6/step-07.md)
-8. [the 6 in box 3](mini-6x6/step-08.md)
-9. [the 6 in box 1](mini-6x6/step-09.md)
-10. [the 4 in box 1](mini-6x6/step-10.md)
-11. [the 1 in box 4](mini-6x6/step-11.md)
-12. [the 3 in box 4](mini-6x6/step-12.md)
-13. [the 6 in box 4](mini-6x6/step-13.md)
-14. [the 1 in box 5](mini-6x6/step-14.md)
-15. [the 3 in box 5](mini-6x6/step-15.md)
-16. [the 4 in box 5](mini-6x6/step-16.md)
-17. [the 5 in box 5](mini-6x6/step-17.md)
-18. [the 2 in box 6](mini-6x6/step-18.md)
-19. [the 4 in box 6](mini-6x6/step-19.md)
-20. [the 5 in box 6](mini-6x6/step-20.md)
+| [1](mini-6x6/step-01.md) | [2](mini-6x6/step-02.md) | [3](mini-6x6/step-03.md) | [4](mini-6x6/step-04.md) | [5](mini-6x6/step-05.md) | [6](mini-6x6/step-06.md) | [7](mini-6x6/step-07.md) | [8](mini-6x6/step-08.md) | [9](mini-6x6/step-09.md) | [10](mini-6x6/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](mini-6x6/step-11.md) | [12](mini-6x6/step-12.md) | [13](mini-6x6/step-13.md) | [14](mini-6x6/step-14.md) | [15](mini-6x6/step-15.md) | [16](mini-6x6/step-16.md) | [17](mini-6x6/step-17.md) | [18](mini-6x6/step-18.md) | [19](mini-6x6/step-19.md) | [20](mini-6x6/step-20.md) |
 
 Solved.
 

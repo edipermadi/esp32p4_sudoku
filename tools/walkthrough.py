@@ -1138,7 +1138,7 @@ def walk(page, fonts):
           % page, "",
           "The whole puzzle, from the start to the last cell: %d steps, each one a single (one place left for a "
           "digit, or one digit left for a cell)%s. Each step has a page of its own, with **Previous** and **Next**: "
-          "pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, "
+          "pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, "
           "column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and "
           "the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue."
           % (n, order), "",
@@ -1154,6 +1154,7 @@ def walk(page, fonts):
         nxt = "[Step %d →](step-%02d.md)" % (i + 1, i + 1) if i < n else back
         return "**Step %d of %d** · %s · %s · %s" % (i, n, prev, back, nxt)
 
+    links = []                                              # the steps, as their numbers linked: 1 | 2 | 3 ...
     for i, s in enumerate(d["steps"], 1):
         text = step_text(d, vals, s)                        # (the reasons read the grid before the step)
         vals[s["cell"]] = s["digit"]
@@ -1161,7 +1162,7 @@ def walk(page, fonts):
         draw(vals, s, os.path.join(img_dir, name))
         title = ("the %d in %s" % (s["digit"], unit_words(s["unit_name"])) if s["kind"] == "hidden"
                  else rc(s["cell"]))
-        md.append("%d. [%s](%s/step-%02d.md)" % (i, title, page, i))
+        links.append("[%d](%s/step-%02d.md)" % (i, page, i))
         body = ["# %s, step %d: %s" % (d["variant"], i, title), "", nav(i), "", text, "",
                 "![Step %d](../../screenshots/variants/%s/%s)" % (i, rel, name), ""]
         if i == n:
@@ -1170,6 +1171,10 @@ def walk(page, fonts):
         with open(os.path.join(step_dir, "step-%02d.md" % i), "w") as f:
             f.write("<!-- Written by tools/walkthrough.py %s: edit the script, not this page. -->\n" % page +
                     "\n".join(body))
+    # the steps' numbers linked, ten to a row (the first ten as the table's header: Markdown needs one)
+    rows = [links[k:k + 10] + [""] * (10 - len(links[k:k + 10])) for k in range(0, len(links), 10)]
+    md += ["| " + " | ".join(rows[0]) + " |", "|" + ":-:|" * 10]
+    md += ["| " + " | ".join(r) + " |" for r in rows[1:]]
     md += ["", "Solved.", "", "<!-- /walkthrough -->"]
     text = open(path).read()
     if "<!-- walkthrough -->" not in text:

@@ -22,6 +22,7 @@ The log: one row per puzzle finished, never changed afterwards. Everything histo
 | `hints` | INTEGER | no | cells filled with Fill (the solution's digit); 0 by default |
 | `moves` | BLOB | yes | the move log: 6 bytes per move (below); NULL: not recorded (older solves) |
 | `flags` | INTEGER | no | `GAME_FLAG_*` (`src/store.h`): bit *k* (0–15) = a hint showed technique *k*; bit 20 = the no-notes challenge; 0 by default |
+| `canon` | INTEGER | yes | the puzzle's canonical hash (`src/canon_core.h`): the same for the puzzle turned, mirrored or with its digits renumbered; NULL for a variant without one (digits that matter, or a layout of its own) |
 
 ## The move log
 
@@ -49,14 +50,15 @@ The achievements read them: **Gone fishing** is `flags & 3072`, **On a wing** `f
 - Primary key `id`.
 - `solves_puzzle` on `(puzzle)`: the variant and daily filters, records.
 - `solves_player` on `(player_id, puzzle)`: a player's history, charts, achievements.
+- `solves_canon` on `(player_id, canon)`: "solved before under another name", asked each time a puzzle is started.
 
 ## Written
 
-Once, when a puzzle is solved (`sdb_do_solve()` in `src/stats_db_solves.c`), in **one transaction** with the `puzzle_stats` upsert, so the two never disagree. The game in progress's moves and flags come along; its `saved_game` row is deleted after. Time attack runs log each puzzle here too. Learn's practice games are never logged.
+Once, when a puzzle is solved (`sdb_do_solve()` in `src/stats_db_solves.c`; `canon` from the puzzle: a built-in one's from the table in flash, `src/puzzles_canon.c`; others worked out from their givens in `generated`), in **one transaction** with the `puzzle_stats` upsert, so the two never disagree. The game in progress's moves and flags come along; its `saved_game` row is deleted after. Time attack runs log each puzzle here too. Learn's practice games are never logged.
 
 ## Read
 
-Statistics (the chart, per level), Mistake insights (the last 300 move logs), History (a day's games), Gameplays and Replay, the Daily and Weekly leaderboards, head-to-head, Records, achievements, the CSV export (`export/solves.csv`).
+Starting a puzzle (`canon`: has the player solved it before under another id? `stats_db_solved_twin()`), Statistics (the chart, per level), Mistake insights (the last 300 move logs), History (a day's games), Gameplays and Replay, the Daily and Weekly leaderboards, head-to-head, Records, achievements, the CSV export (`export/solves.csv`).
 
 ## Deleted
 
@@ -64,7 +66,7 @@ Only with its player. A solve is never edited.
 
 ## History
 
-`started_at`, `hints`, `moves` and `flags` were added later (`ALTER TABLE ... ADD COLUMN`; defaults 0 or NULL keep old rows valid), and `solved_at` was renamed `finished_at`. Before players existed it had no `player_id`: the upgrade copies it into a new table, every row player 1's.
+`started_at`, `hints`, `moves`, `flags` and `canon` (user_version 12, 2026-11-23: filled in for every older solve at the upgrade, `sdb_canon_backfill()`) were added later (`ALTER TABLE ... ADD COLUMN`; defaults 0 or NULL keep old rows valid), and `solved_at` was renamed `finished_at`. Before players existed it had no `player_id`: the upgrade copies it into a new table, every row player 1's.
 
 ## Example queries
 

@@ -57,6 +57,7 @@ dkms.conf
 # PC-side test binary (make -C tests)
 tests/sudoku_tests
 tests/variant_examples
+tests/gen_canon
 
 # make: the firmware build, release files and Pages site
 /build/

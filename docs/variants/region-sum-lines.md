@@ -43,59 +43,16 @@ The digits in one part are in one box, so they never repeat; digits in different
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py region-sum-lines: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/region-sum-lines-walkthrough/step-00.png)
 
-1. [the 5 in box 4](region-sum-lines/step-01.md)
-2. [the 4 in box 5](region-sum-lines/step-02.md)
-3. [the 5 in box 5](region-sum-lines/step-03.md)
-4. [the 3 in box 5](region-sum-lines/step-04.md)
-5. [the 8 in box 6](region-sum-lines/step-05.md)
-6. [the 7 in box 7](region-sum-lines/step-06.md)
-7. [the 8 in box 7](region-sum-lines/step-07.md)
-8. [the 5 in box 7](region-sum-lines/step-08.md)
-9. [the 9 in box 7](region-sum-lines/step-09.md)
-10. [the 1 in box 7](region-sum-lines/step-10.md)
-11. [the 1 in box 4](region-sum-lines/step-11.md)
-12. [the 1 in box 1](region-sum-lines/step-12.md)
-13. [the 9 in box 4](region-sum-lines/step-13.md)
-14. [the 4 in box 1](region-sum-lines/step-14.md)
-15. [the 5 in box 1](region-sum-lines/step-15.md)
-16. [the 9 in box 1](region-sum-lines/step-16.md)
-17. [the 4 in box 2](region-sum-lines/step-17.md)
-18. [the 1 in box 2](region-sum-lines/step-18.md)
-19. [the 5 in box 2](region-sum-lines/step-19.md)
-20. [the 6 in box 7](region-sum-lines/step-20.md)
-21. [the 7 in box 8](region-sum-lines/step-21.md)
-22. [the 4 in box 9](region-sum-lines/step-22.md)
-23. [the 4 in box 8](region-sum-lines/step-23.md)
-24. [the 5 in box 9](region-sum-lines/step-24.md)
-25. [the 8 in box 9](region-sum-lines/step-25.md)
-26. [the 8 in box 3](region-sum-lines/step-26.md)
-27. [the 8 in box 2](region-sum-lines/step-27.md)
-28. [the 8 in box 5](region-sum-lines/step-28.md)
-29. [the 2 in box 5](region-sum-lines/step-29.md)
-30. [the 2 in box 2](region-sum-lines/step-30.md)
-31. [the 2 in box 1](region-sum-lines/step-31.md)
-32. [the 3 in box 2](region-sum-lines/step-32.md)
-33. [the 3 in box 1](region-sum-lines/step-33.md)
-34. [the 6 in box 1](region-sum-lines/step-34.md)
-35. [the 6 in box 3](region-sum-lines/step-35.md)
-36. [the 2 in box 8](region-sum-lines/step-36.md)
-37. [the 3 in box 8](region-sum-lines/step-37.md)
-38. [the 3 in box 9](region-sum-lines/step-38.md)
-39. [the 3 in box 3](region-sum-lines/step-39.md)
-40. [the 1 in box 3](region-sum-lines/step-40.md)
-41. [the 6 in box 6](region-sum-lines/step-41.md)
-42. [the 7 in box 6](region-sum-lines/step-42.md)
-43. [the 7 in box 3](region-sum-lines/step-43.md)
-44. [the 9 in box 3](region-sum-lines/step-44.md)
-45. [the 6 in box 9](region-sum-lines/step-45.md)
-46. [the 6 in box 8](region-sum-lines/step-46.md)
-47. [the 1 in box 8](region-sum-lines/step-47.md)
-48. [the 1 in box 9](region-sum-lines/step-48.md)
-49. [the 9 in box 9](region-sum-lines/step-49.md)
+| [1](region-sum-lines/step-01.md) | [2](region-sum-lines/step-02.md) | [3](region-sum-lines/step-03.md) | [4](region-sum-lines/step-04.md) | [5](region-sum-lines/step-05.md) | [6](region-sum-lines/step-06.md) | [7](region-sum-lines/step-07.md) | [8](region-sum-lines/step-08.md) | [9](region-sum-lines/step-09.md) | [10](region-sum-lines/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](region-sum-lines/step-11.md) | [12](region-sum-lines/step-12.md) | [13](region-sum-lines/step-13.md) | [14](region-sum-lines/step-14.md) | [15](region-sum-lines/step-15.md) | [16](region-sum-lines/step-16.md) | [17](region-sum-lines/step-17.md) | [18](region-sum-lines/step-18.md) | [19](region-sum-lines/step-19.md) | [20](region-sum-lines/step-20.md) |
+| [21](region-sum-lines/step-21.md) | [22](region-sum-lines/step-22.md) | [23](region-sum-lines/step-23.md) | [24](region-sum-lines/step-24.md) | [25](region-sum-lines/step-25.md) | [26](region-sum-lines/step-26.md) | [27](region-sum-lines/step-27.md) | [28](region-sum-lines/step-28.md) | [29](region-sum-lines/step-29.md) | [30](region-sum-lines/step-30.md) |
+| [31](region-sum-lines/step-31.md) | [32](region-sum-lines/step-32.md) | [33](region-sum-lines/step-33.md) | [34](region-sum-lines/step-34.md) | [35](region-sum-lines/step-35.md) | [36](region-sum-lines/step-36.md) | [37](region-sum-lines/step-37.md) | [38](region-sum-lines/step-38.md) | [39](region-sum-lines/step-39.md) | [40](region-sum-lines/step-40.md) |
+| [41](region-sum-lines/step-41.md) | [42](region-sum-lines/step-42.md) | [43](region-sum-lines/step-43.md) | [44](region-sum-lines/step-44.md) | [45](region-sum-lines/step-45.md) | [46](region-sum-lines/step-46.md) | [47](region-sum-lines/step-47.md) | [48](region-sum-lines/step-48.md) | [49](region-sum-lines/step-49.md) |  |
 
 Solved.
 

@@ -31,7 +31,7 @@ static const char SQL_SOLVE_UPSERT[] =
 /** A solve's row in solves. */
 static const char SQL_SOLVE_INSERT[] =
     "INSERT INTO solves(player_id, puzzle, level, number, seconds, mistakes, finished_at, started_at, hints, moves,"
-    " flags) VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10, ?11)";
+    " flags, canon) VALUES(?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?9, ?10, ?11, ?12)";
 
 /* (documented in stats_db_internal.h) */
 void sdb_merge_legacy(const stats_arrays_t *a)
@@ -117,6 +117,12 @@ void sdb_do_solve(const cmd_t *c)
         sqlite3_bind_null(s_solve_insert, 10);
     }
     sqlite3_bind_int64(s_solve_insert, 11, c->flags);
+    const uint64_t canon = sdb_puzzle_canon(c->puzzle);   /* (turned, mirrored or renumbered: the same) */
+    if (canon) {
+        sqlite3_bind_int64(s_solve_insert, 12, (int64_t)canon);
+    } else {
+        sqlite3_bind_null(s_solve_insert, 12);
+    }
     bool ok = sdb_step_done(s_solve_insert, "insert solve");
     sdb_bind_puzzle(s_solve_upsert, c->puzzle);
     sqlite3_bind_int64(s_solve_upsert, 4, c->seconds ? c->seconds : 1);

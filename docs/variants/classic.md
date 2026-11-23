@@ -31,53 +31,16 @@ The puzzle in the screenshot is **variant-examples #1**, a Classic Easy puzzle. 
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py classic: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 43 steps, each one a single (one place left for a digit, or one digit left for a cell). Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 43 steps, each one a single (one place left for a digit, or one digit left for a cell). Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/classic-walkthrough/step-00.png)
 
-1. [the 2 in box 1](classic/step-01.md)
-2. [the 1 in box 3](classic/step-02.md)
-3. [the 1 in box 1](classic/step-03.md)
-4. [the 7 in box 1](classic/step-04.md)
-5. [the 4 in box 3](classic/step-05.md)
-6. [the 1 in box 5](classic/step-06.md)
-7. [the 3 in box 6](classic/step-07.md)
-8. [the 9 in box 6](classic/step-08.md)
-9. [the 9 in box 4](classic/step-09.md)
-10. [the 9 in box 1](classic/step-10.md)
-11. [the 9 in box 2](classic/step-11.md)
-12. [the 5 in box 6](classic/step-12.md)
-13. [the 5 in box 4](classic/step-13.md)
-14. [the 5 in box 1](classic/step-14.md)
-15. [the 5 in box 2](classic/step-15.md)
-16. [the 7 in box 2](classic/step-16.md)
-17. [the 8 in box 6](classic/step-17.md)
-18. [the 1 in box 8](classic/step-18.md)
-19. [the 2 in box 8](classic/step-19.md)
-20. [the 4 in box 8](classic/step-20.md)
-21. [the 4 in box 2](classic/step-21.md)
-22. [the 1 in box 9](classic/step-22.md)
-23. [the 2 in box 9](classic/step-23.md)
-24. [the 4 in box 9](classic/step-24.md)
-25. [the 5 in box 9](classic/step-25.md)
-26. [the 7 in box 9](classic/step-26.md)
-27. [the 7 in box 8](classic/step-27.md)
-28. [the 3 in box 8](classic/step-28.md)
-29. [the 3 in box 2](classic/step-29.md)
-30. [the 3 in box 1](classic/step-30.md)
-31. [the 6 in box 1](classic/step-31.md)
-32. [the 8 in box 1](classic/step-32.md)
-33. [the 8 in box 2](classic/step-33.md)
-34. [the 6 in box 2](classic/step-34.md)
-35. [the 6 in box 4](classic/step-35.md)
-36. [the 8 in box 4](classic/step-36.md)
-37. [the 3 in box 7](classic/step-37.md)
-38. [the 8 in box 7](classic/step-38.md)
-39. [the 6 in box 8](classic/step-39.md)
-40. [the 8 in box 8](classic/step-40.md)
-41. [the 6 in box 9](classic/step-41.md)
-42. [the 8 in box 9](classic/step-42.md)
-43. [the 9 in box 9](classic/step-43.md)
+| [1](classic/step-01.md) | [2](classic/step-02.md) | [3](classic/step-03.md) | [4](classic/step-04.md) | [5](classic/step-05.md) | [6](classic/step-06.md) | [7](classic/step-07.md) | [8](classic/step-08.md) | [9](classic/step-09.md) | [10](classic/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](classic/step-11.md) | [12](classic/step-12.md) | [13](classic/step-13.md) | [14](classic/step-14.md) | [15](classic/step-15.md) | [16](classic/step-16.md) | [17](classic/step-17.md) | [18](classic/step-18.md) | [19](classic/step-19.md) | [20](classic/step-20.md) |
+| [21](classic/step-21.md) | [22](classic/step-22.md) | [23](classic/step-23.md) | [24](classic/step-24.md) | [25](classic/step-25.md) | [26](classic/step-26.md) | [27](classic/step-27.md) | [28](classic/step-28.md) | [29](classic/step-29.md) | [30](classic/step-30.md) |
+| [31](classic/step-31.md) | [32](classic/step-32.md) | [33](classic/step-33.md) | [34](classic/step-34.md) | [35](classic/step-35.md) | [36](classic/step-36.md) | [37](classic/step-37.md) | [38](classic/step-38.md) | [39](classic/step-39.md) | [40](classic/step-40.md) |
+| [41](classic/step-41.md) | [42](classic/step-42.md) | [43](classic/step-43.md) |  |  |  |  |  |  |  |
 
 Solved.
 

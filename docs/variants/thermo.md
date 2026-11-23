@@ -45,63 +45,17 @@ Only **r7c6** is left: **r7c6 = 3**. It's the bulb of the second thermometer, an
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py thermo: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 53 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 53 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/thermo-walkthrough/step-00.png)
 
-1. [the 3 in box 4](thermo/step-01.md)
-2. [the 7 in box 5](thermo/step-02.md)
-3. [the 2 in box 5](thermo/step-03.md)
-4. [the 2 in box 4](thermo/step-04.md)
-5. [the 8 in box 5](thermo/step-05.md)
-6. [the 8 in box 2](thermo/step-06.md)
-7. [the 2 in box 6](thermo/step-07.md)
-8. [the 3 in box 6](thermo/step-08.md)
-9. [the 3 in box 3](thermo/step-09.md)
-10. [the 3 in box 2](thermo/step-10.md)
-11. [the 2 in box 2](thermo/step-11.md)
-12. [the 6 in box 2](thermo/step-12.md)
-13. [the 3 in box 8](thermo/step-13.md)
-14. [the 7 in box 8](thermo/step-14.md)
-15. [the 2 in box 9](thermo/step-15.md)
-16. [the 2 in box 8](thermo/step-16.md)
-17. [the 1 in box 8](thermo/step-17.md)
-18. [the 1 in box 7](thermo/step-18.md)
-19. [the 4 in box 9](thermo/step-19.md)
-20. [the 4 in box 6](thermo/step-20.md)
-21. [the 4 in box 4](thermo/step-21.md)
-22. [the 4 in box 1](thermo/step-22.md)
-23. [the 8 in box 1](thermo/step-23.md)
-24. [the 8 in row 5](thermo/step-24.md)
-25. [the 9 in box 4](thermo/step-25.md)
-26. [the 9 in box 6](thermo/step-26.md)
-27. [the 8 in box 7](thermo/step-27.md)
-28. [the 5 in box 7](thermo/step-28.md)
-29. [the 5 in box 4](thermo/step-29.md)
-30. [the 6 in box 4](thermo/step-30.md)
-31. [the 6 in box 6](thermo/step-31.md)
-32. [the 7 in box 7](thermo/step-32.md)
-33. [the 6 in box 7](thermo/step-33.md)
-34. [the 9 in box 7](thermo/step-34.md)
-35. [the 9 in box 8](thermo/step-35.md)
-36. [the 6 in box 8](thermo/step-36.md)
-37. [the 5 in box 9](thermo/step-37.md)
-38. [the 5 in box 3](thermo/step-38.md)
-39. [the 6 in box 9](thermo/step-39.md)
-40. [the 6 in box 3](thermo/step-40.md)
-41. [the 6 in box 1](thermo/step-41.md)
-42. [the 9 in box 1](thermo/step-42.md)
-43. [the 9 in box 3](thermo/step-43.md)
-44. [the 9 in box 2](thermo/step-44.md)
-45. [the 1 in box 2](thermo/step-45.md)
-46. [the 1 in box 3](thermo/step-46.md)
-47. [the 1 in box 1](thermo/step-47.md)
-48. [the 7 in box 1](thermo/step-48.md)
-49. [the 7 in box 3](thermo/step-49.md)
-50. [the 1 in box 6](thermo/step-50.md)
-51. [the 8 in box 6](thermo/step-51.md)
-52. [the 7 in box 9](thermo/step-52.md)
-53. [the 8 in box 9](thermo/step-53.md)
+| [1](thermo/step-01.md) | [2](thermo/step-02.md) | [3](thermo/step-03.md) | [4](thermo/step-04.md) | [5](thermo/step-05.md) | [6](thermo/step-06.md) | [7](thermo/step-07.md) | [8](thermo/step-08.md) | [9](thermo/step-09.md) | [10](thermo/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](thermo/step-11.md) | [12](thermo/step-12.md) | [13](thermo/step-13.md) | [14](thermo/step-14.md) | [15](thermo/step-15.md) | [16](thermo/step-16.md) | [17](thermo/step-17.md) | [18](thermo/step-18.md) | [19](thermo/step-19.md) | [20](thermo/step-20.md) |
+| [21](thermo/step-21.md) | [22](thermo/step-22.md) | [23](thermo/step-23.md) | [24](thermo/step-24.md) | [25](thermo/step-25.md) | [26](thermo/step-26.md) | [27](thermo/step-27.md) | [28](thermo/step-28.md) | [29](thermo/step-29.md) | [30](thermo/step-30.md) |
+| [31](thermo/step-31.md) | [32](thermo/step-32.md) | [33](thermo/step-33.md) | [34](thermo/step-34.md) | [35](thermo/step-35.md) | [36](thermo/step-36.md) | [37](thermo/step-37.md) | [38](thermo/step-38.md) | [39](thermo/step-39.md) | [40](thermo/step-40.md) |
+| [41](thermo/step-41.md) | [42](thermo/step-42.md) | [43](thermo/step-43.md) | [44](thermo/step-44.md) | [45](thermo/step-45.md) | [46](thermo/step-46.md) | [47](thermo/step-47.md) | [48](thermo/step-48.md) | [49](thermo/step-49.md) | [50](thermo/step-50.md) |
+| [51](thermo/step-51.md) | [52](thermo/step-52.md) | [53](thermo/step-53.md) |  |  |  |  |  |  |  |
 
 Solved.
 

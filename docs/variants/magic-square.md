@@ -37,60 +37,16 @@ There's only one magic square of the digits 1 to 9, turned or flipped (the Lo Sh
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py magic-square: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 50 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 50 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/magic-square-walkthrough/step-00.png)
 
-1. [the 3 in box 1](magic-square/step-01.md)
-2. [the 3 in box 3](magic-square/step-02.md)
-3. [the 9 in box 3](magic-square/step-03.md)
-4. [the 9 in box 1](magic-square/step-04.md)
-5. [the 8 in box 1](magic-square/step-05.md)
-6. [the 4 in box 4](magic-square/step-06.md)
-7. [the 4 in box 1](magic-square/step-07.md)
-8. [the 4 in box 2](magic-square/step-08.md)
-9. [the 2 in box 5](magic-square/step-09.md)
-10. [the 2 in box 4](magic-square/step-10.md)
-11. [the 3 in box 5](magic-square/step-11.md)
-12. [the 7 in box 5](magic-square/step-12.md)
-13. [the 8 in box 5](magic-square/step-13.md)
-14. [the 8 in box 2](magic-square/step-14.md)
-15. [the 2 in box 2](magic-square/step-15.md)
-16. [the 6 in box 2](magic-square/step-16.md)
-17. [the 6 in box 1](magic-square/step-17.md)
-18. [the 5 in box 2](magic-square/step-18.md)
-19. [the 7 in box 2](magic-square/step-19.md)
-20. [the 7 in box 1](magic-square/step-20.md)
-21. [the 2 in box 1](magic-square/step-21.md)
-22. [the 1 in box 1](magic-square/step-22.md)
-23. [the 1 in box 2](magic-square/step-23.md)
-24. [the 2 in box 3](magic-square/step-24.md)
-25. [the 7 in box 3](magic-square/step-25.md)
-26. [the 6 in box 4](magic-square/step-26.md)
-27. [the 5 in box 4](magic-square/step-27.md)
-28. [the 6 in box 6](magic-square/step-28.md)
-29. [the 9 in box 6](magic-square/step-29.md)
-30. [the 1 in box 7](magic-square/step-30.md)
-31. [the 6 in box 7](magic-square/step-31.md)
-32. [the 1 in box 8](magic-square/step-32.md)
-33. [the 5 in box 8](magic-square/step-33.md)
-34. [the 5 in box 7](magic-square/step-34.md)
-35. [the 2 in box 7](magic-square/step-35.md)
-36. [the 8 in box 8](magic-square/step-36.md)
-37. [the 9 in box 8](magic-square/step-37.md)
-38. [the 1 in box 9](magic-square/step-38.md)
-39. [the 3 in box 9](magic-square/step-39.md)
-40. [the 3 in box 8](magic-square/step-40.md)
-41. [the 6 in box 8](magic-square/step-41.md)
-42. [the 7 in box 8](magic-square/step-42.md)
-43. [the 4 in box 9](magic-square/step-43.md)
-44. [the 2 in box 9](magic-square/step-44.md)
-45. [the 2 in box 6](magic-square/step-45.md)
-46. [the 5 in box 6](magic-square/step-46.md)
-47. [the 5 in box 9](magic-square/step-47.md)
-48. [the 6 in box 9](magic-square/step-48.md)
-49. [the 7 in box 9](magic-square/step-49.md)
-50. [the 8 in box 9](magic-square/step-50.md)
+| [1](magic-square/step-01.md) | [2](magic-square/step-02.md) | [3](magic-square/step-03.md) | [4](magic-square/step-04.md) | [5](magic-square/step-05.md) | [6](magic-square/step-06.md) | [7](magic-square/step-07.md) | [8](magic-square/step-08.md) | [9](magic-square/step-09.md) | [10](magic-square/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](magic-square/step-11.md) | [12](magic-square/step-12.md) | [13](magic-square/step-13.md) | [14](magic-square/step-14.md) | [15](magic-square/step-15.md) | [16](magic-square/step-16.md) | [17](magic-square/step-17.md) | [18](magic-square/step-18.md) | [19](magic-square/step-19.md) | [20](magic-square/step-20.md) |
+| [21](magic-square/step-21.md) | [22](magic-square/step-22.md) | [23](magic-square/step-23.md) | [24](magic-square/step-24.md) | [25](magic-square/step-25.md) | [26](magic-square/step-26.md) | [27](magic-square/step-27.md) | [28](magic-square/step-28.md) | [29](magic-square/step-29.md) | [30](magic-square/step-30.md) |
+| [31](magic-square/step-31.md) | [32](magic-square/step-32.md) | [33](magic-square/step-33.md) | [34](magic-square/step-34.md) | [35](magic-square/step-35.md) | [36](magic-square/step-36.md) | [37](magic-square/step-37.md) | [38](magic-square/step-38.md) | [39](magic-square/step-39.md) | [40](magic-square/step-40.md) |
+| [41](magic-square/step-41.md) | [42](magic-square/step-42.md) | [43](magic-square/step-43.md) | [44](magic-square/step-44.md) | [45](magic-square/step-45.md) | [46](magic-square/step-46.md) | [47](magic-square/step-47.md) | [48](magic-square/step-48.md) | [49](magic-square/step-49.md) | [50](magic-square/step-50.md) |
 
 Solved.
 

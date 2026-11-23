@@ -38,60 +38,16 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py skyscraper: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 50 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 50 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/skyscraper-walkthrough/step-00.png)
 
-1. [the 7 in box 1](skyscraper/step-01.md)
-2. [the 9 in box 1](skyscraper/step-02.md)
-3. [the 2 in box 1](skyscraper/step-03.md)
-4. [the 4 in box 1](skyscraper/step-04.md)
-5. [the 8 in box 2](skyscraper/step-05.md)
-6. [the 6 in box 2](skyscraper/step-06.md)
-7. [the 9 in box 2](skyscraper/step-07.md)
-8. [the 1 in box 3](skyscraper/step-08.md)
-9. [the 6 in box 3](skyscraper/step-09.md)
-10. [the 4 in box 3](skyscraper/step-10.md)
-11. [the 3 in box 3](skyscraper/step-11.md)
-12. [the 8 in box 3](skyscraper/step-12.md)
-13. [the 6 in box 5](skyscraper/step-13.md)
-14. [the 2 in box 5](skyscraper/step-14.md)
-15. [the 8 in box 5](skyscraper/step-15.md)
-16. [the 3 in box 5](skyscraper/step-16.md)
-17. [the 9 in box 5](skyscraper/step-17.md)
-18. [the 5 in box 6](skyscraper/step-18.md)
-19. [the 7 in box 6](skyscraper/step-19.md)
-20. [the 7 in box 5](skyscraper/step-20.md)
-21. [the 8 in box 7](skyscraper/step-21.md)
-22. [the 8 in box 1](skyscraper/step-22.md)
-23. [the 5 in box 7](skyscraper/step-23.md)
-24. [the 2 in box 7](skyscraper/step-24.md)
-25. [the 3 in box 7](skyscraper/step-25.md)
-26. [the 3 in box 1](skyscraper/step-26.md)
-27. [the 6 in box 1](skyscraper/step-27.md)
-28. [the 3 in box 4](skyscraper/step-28.md)
-29. [the 6 in box 4](skyscraper/step-29.md)
-30. [the 2 in box 4](skyscraper/step-30.md)
-31. [the 4 in box 4](skyscraper/step-31.md)
-32. [the 1 in box 4](skyscraper/step-32.md)
-33. [the 9 in box 4](skyscraper/step-33.md)
-34. [the 1 in box 5](skyscraper/step-34.md)
-35. [the 4 in box 5](skyscraper/step-35.md)
-36. [the 1 in box 6](skyscraper/step-36.md)
-37. [the 4 in box 6](skyscraper/step-37.md)
-38. [the 2 in box 6](skyscraper/step-38.md)
-39. [the 9 in box 6](skyscraper/step-39.md)
-40. [the 9 in box 7](skyscraper/step-40.md)
-41. [the 5 in box 8](skyscraper/step-41.md)
-42. [the 7 in box 8](skyscraper/step-42.md)
-43. [the 3 in box 8](skyscraper/step-43.md)
-44. [the 1 in box 9](skyscraper/step-44.md)
-45. [the 2 in box 9](skyscraper/step-45.md)
-46. [the 3 in box 9](skyscraper/step-46.md)
-47. [the 4 in box 9](skyscraper/step-47.md)
-48. [the 5 in box 9](skyscraper/step-48.md)
-49. [the 8 in box 9](skyscraper/step-49.md)
-50. [the 9 in box 9](skyscraper/step-50.md)
+| [1](skyscraper/step-01.md) | [2](skyscraper/step-02.md) | [3](skyscraper/step-03.md) | [4](skyscraper/step-04.md) | [5](skyscraper/step-05.md) | [6](skyscraper/step-06.md) | [7](skyscraper/step-07.md) | [8](skyscraper/step-08.md) | [9](skyscraper/step-09.md) | [10](skyscraper/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](skyscraper/step-11.md) | [12](skyscraper/step-12.md) | [13](skyscraper/step-13.md) | [14](skyscraper/step-14.md) | [15](skyscraper/step-15.md) | [16](skyscraper/step-16.md) | [17](skyscraper/step-17.md) | [18](skyscraper/step-18.md) | [19](skyscraper/step-19.md) | [20](skyscraper/step-20.md) |
+| [21](skyscraper/step-21.md) | [22](skyscraper/step-22.md) | [23](skyscraper/step-23.md) | [24](skyscraper/step-24.md) | [25](skyscraper/step-25.md) | [26](skyscraper/step-26.md) | [27](skyscraper/step-27.md) | [28](skyscraper/step-28.md) | [29](skyscraper/step-29.md) | [30](skyscraper/step-30.md) |
+| [31](skyscraper/step-31.md) | [32](skyscraper/step-32.md) | [33](skyscraper/step-33.md) | [34](skyscraper/step-34.md) | [35](skyscraper/step-35.md) | [36](skyscraper/step-36.md) | [37](skyscraper/step-37.md) | [38](skyscraper/step-38.md) | [39](skyscraper/step-39.md) | [40](skyscraper/step-40.md) |
+| [41](skyscraper/step-41.md) | [42](skyscraper/step-42.md) | [43](skyscraper/step-43.md) | [44](skyscraper/step-44.md) | [45](skyscraper/step-45.md) | [46](skyscraper/step-46.md) | [47](skyscraper/step-47.md) | [48](skyscraper/step-48.md) | [49](skyscraper/step-49.md) | [50](skyscraper/step-50.md) |
 
 Solved.
 

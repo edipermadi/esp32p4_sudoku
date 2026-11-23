@@ -179,7 +179,7 @@ In short here; each name links to the table's own page.
 
 ### Per player: history and progress
 
-**[`solves`](db/solves.md)**: the log, one row per finished puzzle, never changed afterwards. It records time, mistakes and Fill uses (`hints`), when the puzzle was started and finished, the full move log (`moves`, which Replay and MP4 export read) and `flags` (the no-notes challenge and which hint techniques were shown). Everything historic is computed from here: charts, streaks, records, the daily calendar and most achievements.
+**[`solves`](db/solves.md)**: the log, one row per finished puzzle, never changed afterwards. It records time, mistakes and Fill uses (`hints`), when the puzzle was started and finished, the full move log (`moves`, which Replay and MP4 export read) `flags` (the no-notes challenge and which hint techniques were shown) and `canon` (the puzzle's canonical hash: the same for it turned, mirrored or renumbered, so a puzzle met again under another name is recognised). Everything historic is computed from here: charts, streaks, records, the daily calendar and most achievements.
 
 **[`puzzle_stats`](db/puzzle_stats.md)**: a summary of `solves`, one row per player and puzzle: best time, fewest mistakes and number of solves. It exists so the puzzle list and the home screen don't need to scan the log. At start-up the current player's rows are loaded into RAM, the "copy" the UI reads. It is updated in the **same transaction** as the `solves` insert, with an upsert (`MIN` for the bests, `+1` for the count), so the two never disagree.
 
@@ -230,6 +230,7 @@ The same four fields make up a `.sdx` line (`src/sdx.c`), so sharing, importing 
 |---|---|---|
 | `solves_puzzle` | `solves(puzzle)` | variant and daily filters, records |
 | `solves_player` | `solves(player_id, puzzle)` | a player's history, charts, achievements |
+| `solves_canon` | `solves(player_id, canon)` | "solved before under another name" when a puzzle is started |
 | `puzzle_stats_level` | `puzzle_stats(player_id, level, number)` | the per-collection rows on Statistics |
 | [`level_stats`](db/level_stats.md) (view) | `puzzle_stats` ⨝ `players` | per player and level: solved, solves, fastest, average, mistakes; for `sqlite3` users |
 
@@ -281,7 +282,7 @@ Since SQLite doesn't enforce the links, the firmware deletes in a fixed order, e
 
 The tables are created with `CREATE TABLE IF NOT EXISTS`, so an older database keeps its old tables. `upgrade_schema()` then brings it up to date:
 
-- **New columns** are added with `ALTER TABLE ... ADD COLUMN` when `has_column()` doesn't find them. Defaults mean old rows stay valid: `hints` 0, `flags` 0, `moves` NULL ("not recorded").
+- **New columns** are added with `ALTER TABLE ... ADD COLUMN` when `has_column()` doesn't find them. Defaults mean old rows stay valid: `hints` 0, `flags` 0, `moves` NULL ("not recorded"). `solves.canon` (user_version 12) is filled in for the older solves right after it's added (`sdb_canon_backfill()`), from their puzzles' givens.
 - **Key changes** (adding `player_id`; one saved game per player becoming five) rename the old table to `*_v3` / `*_v8`, create the new one, copy the rows across and drop the old one, all in one transaction.
 - **Numbers that are already stored never change meaning:** variants, `TECH_*` bits, achievement keys and Learn techniques are only ever added at the end.
 

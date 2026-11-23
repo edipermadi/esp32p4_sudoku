@@ -36,64 +36,17 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py extra-regions: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 54 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 54 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/extra-regions-walkthrough/step-00.png)
 
-1. [the 2 in box 1](extra-regions/step-01.md)
-2. [the 9 in box 4](extra-regions/step-02.md)
-3. [the 7 in box 4](extra-regions/step-03.md)
-4. [the 4 in box 5](extra-regions/step-04.md)
-5. [the 3 in box 5](extra-regions/step-05.md)
-6. [the 6 in box 5](extra-regions/step-06.md)
-7. [the 5 in box 5](extra-regions/step-07.md)
-8. [the 7 in box 6](extra-regions/step-08.md)
-9. [the 8 in box 6](extra-regions/step-09.md)
-10. [the 9 in box 7](extra-regions/step-10.md)
-11. [the 9 in box 9](extra-regions/step-11.md)
-12. [the 2 in box 9](extra-regions/step-12.md)
-13. [the 2 in box 8](extra-regions/step-13.md)
-14. [the 5 in row 4](extra-regions/step-14.md)
-15. [the 3 in row 6](extra-regions/step-15.md)
-16. [the 7 in column 5](extra-regions/step-16.md)
-17. [the 7 in box 3](extra-regions/step-17.md)
-18. [the 8 in column 5](extra-regions/step-18.md)
-19. [the 3 in column 7](extra-regions/step-19.md)
-20. [r1c4](extra-regions/step-20.md)
-21. [the 5 in row 2](extra-regions/step-21.md)
-22. [r2c8](extra-regions/step-22.md)
-23. [the 4 in box 2](extra-regions/step-23.md)
-24. [the 4 in box 1](extra-regions/step-24.md)
-25. [the 4 in box 9](extra-regions/step-25.md)
-26. [the 4 in box 6](extra-regions/step-26.md)
-27. [the 5 in box 6](extra-regions/step-27.md)
-28. [the 5 in box 3](extra-regions/step-28.md)
-29. [the 1 in box 9](extra-regions/step-29.md)
-30. [the 9 in row 1](extra-regions/step-30.md)
-31. [the 9 in box 3](extra-regions/step-31.md)
-32. [the 9 in box 1](extra-regions/step-32.md)
-33. [the 3 in box 1](extra-regions/step-33.md)
-34. [the 8 in box 1](extra-regions/step-34.md)
-35. [the 6 in box 1](extra-regions/step-35.md)
-36. [the 8 in box 2](extra-regions/step-36.md)
-37. [the 6 in box 2](extra-regions/step-37.md)
-38. [the 1 in box 2](extra-regions/step-38.md)
-39. [the 1 in box 3](extra-regions/step-39.md)
-40. [the 3 in box 4](extra-regions/step-40.md)
-41. [the 6 in box 4](extra-regions/step-41.md)
-42. [the 3 in box 7](extra-regions/step-42.md)
-43. [the 8 in box 7](extra-regions/step-43.md)
-44. [the 1 in box 8](extra-regions/step-44.md)
-45. [the 1 in box 7](extra-regions/step-45.md)
-46. [the 6 in box 7](extra-regions/step-46.md)
-47. [the 7 in box 7](extra-regions/step-47.md)
-48. [the 5 in box 8](extra-regions/step-48.md)
-49. [the 6 in box 8](extra-regions/step-49.md)
-50. [the 3 in box 8](extra-regions/step-50.md)
-51. [the 7 in box 8](extra-regions/step-51.md)
-52. [the 3 in box 9](extra-regions/step-52.md)
-53. [the 5 in box 9](extra-regions/step-53.md)
-54. [the 8 in box 9](extra-regions/step-54.md)
+| [1](extra-regions/step-01.md) | [2](extra-regions/step-02.md) | [3](extra-regions/step-03.md) | [4](extra-regions/step-04.md) | [5](extra-regions/step-05.md) | [6](extra-regions/step-06.md) | [7](extra-regions/step-07.md) | [8](extra-regions/step-08.md) | [9](extra-regions/step-09.md) | [10](extra-regions/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](extra-regions/step-11.md) | [12](extra-regions/step-12.md) | [13](extra-regions/step-13.md) | [14](extra-regions/step-14.md) | [15](extra-regions/step-15.md) | [16](extra-regions/step-16.md) | [17](extra-regions/step-17.md) | [18](extra-regions/step-18.md) | [19](extra-regions/step-19.md) | [20](extra-regions/step-20.md) |
+| [21](extra-regions/step-21.md) | [22](extra-regions/step-22.md) | [23](extra-regions/step-23.md) | [24](extra-regions/step-24.md) | [25](extra-regions/step-25.md) | [26](extra-regions/step-26.md) | [27](extra-regions/step-27.md) | [28](extra-regions/step-28.md) | [29](extra-regions/step-29.md) | [30](extra-regions/step-30.md) |
+| [31](extra-regions/step-31.md) | [32](extra-regions/step-32.md) | [33](extra-regions/step-33.md) | [34](extra-regions/step-34.md) | [35](extra-regions/step-35.md) | [36](extra-regions/step-36.md) | [37](extra-regions/step-37.md) | [38](extra-regions/step-38.md) | [39](extra-regions/step-39.md) | [40](extra-regions/step-40.md) |
+| [41](extra-regions/step-41.md) | [42](extra-regions/step-42.md) | [43](extra-regions/step-43.md) | [44](extra-regions/step-44.md) | [45](extra-regions/step-45.md) | [46](extra-regions/step-46.md) | [47](extra-regions/step-47.md) | [48](extra-regions/step-48.md) | [49](extra-regions/step-49.md) | [50](extra-regions/step-50.md) |
+| [51](extra-regions/step-51.md) | [52](extra-regions/step-52.md) | [53](extra-regions/step-53.md) | [54](extra-regions/step-54.md) |  |  |  |  |  |  |
 
 Solved.
 

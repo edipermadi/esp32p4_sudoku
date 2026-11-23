@@ -42,62 +42,17 @@ As with [Entropic Lines](entropic-lines.md), **cells three apart on a line are i
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py modular-lines: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 52 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 52 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/modular-lines-walkthrough/step-00.png)
 
-1. [the 9 in box 1](modular-lines/step-01.md)
-2. [the 9 in box 3](modular-lines/step-02.md)
-3. [the 9 in box 5](modular-lines/step-03.md)
-4. [the 3 in box 5](modular-lines/step-04.md)
-5. [the 9 in box 4](modular-lines/step-05.md)
-6. [the 5 in box 5](modular-lines/step-06.md)
-7. [the 2 in box 5](modular-lines/step-07.md)
-8. [the 8 in box 5](modular-lines/step-08.md)
-9. [the 1 in box 5](modular-lines/step-09.md)
-10. [the 1 in box 4](modular-lines/step-10.md)
-11. [the 1 in box 1](modular-lines/step-11.md)
-12. [the 3 in box 1](modular-lines/step-12.md)
-13. [the 6 in box 1](modular-lines/step-13.md)
-14. [the 6 in box 2](modular-lines/step-14.md)
-15. [the 6 in box 4](modular-lines/step-15.md)
-16. [the 5 in box 4](modular-lines/step-16.md)
-17. [the 4 in box 4](modular-lines/step-17.md)
-18. [the 2 in box 6](modular-lines/step-18.md)
-19. [the 2 in box 3](modular-lines/step-19.md)
-20. [the 4 in box 6](modular-lines/step-20.md)
-21. [the 5 in box 6](modular-lines/step-21.md)
-22. [the 5 in box 3](modular-lines/step-22.md)
-23. [the 1 in box 3](modular-lines/step-23.md)
-24. [the 1 in box 2](modular-lines/step-24.md)
-25. [the 7 in box 2](modular-lines/step-25.md)
-26. [the 7 in box 3](modular-lines/step-26.md)
-27. [the 4 in box 3](modular-lines/step-27.md)
-28. [the 4 in box 2](modular-lines/step-28.md)
-29. [the 3 in box 3](modular-lines/step-29.md)
-30. [the 8 in box 3](modular-lines/step-30.md)
-31. [the 6 in box 6](modular-lines/step-31.md)
-32. [the 8 in box 6](modular-lines/step-32.md)
-33. [the 2 in box 7](modular-lines/step-33.md)
-34. [the 5 in box 7](modular-lines/step-34.md)
-35. [the 3 in box 7](modular-lines/step-35.md)
-36. [the 6 in box 7](modular-lines/step-36.md)
-37. [the 8 in box 7](modular-lines/step-37.md)
-38. [the 9 in box 7](modular-lines/step-38.md)
-39. [the 1 in box 8](modular-lines/step-39.md)
-40. [the 2 in box 8](modular-lines/step-40.md)
-41. [the 3 in box 8](modular-lines/step-41.md)
-42. [the 3 in box 2](modular-lines/step-42.md)
-43. [the 8 in box 2](modular-lines/step-43.md)
-44. [the 7 in box 8](modular-lines/step-44.md)
-45. [the 7 in box 7](modular-lines/step-45.md)
-46. [the 4 in box 7](modular-lines/step-46.md)
-47. [the 4 in box 8](modular-lines/step-47.md)
-48. [the 8 in box 8](modular-lines/step-48.md)
-49. [the 1 in box 9](modular-lines/step-49.md)
-50. [the 4 in box 9](modular-lines/step-50.md)
-51. [the 6 in box 9](modular-lines/step-51.md)
-52. [the 8 in box 9](modular-lines/step-52.md)
+| [1](modular-lines/step-01.md) | [2](modular-lines/step-02.md) | [3](modular-lines/step-03.md) | [4](modular-lines/step-04.md) | [5](modular-lines/step-05.md) | [6](modular-lines/step-06.md) | [7](modular-lines/step-07.md) | [8](modular-lines/step-08.md) | [9](modular-lines/step-09.md) | [10](modular-lines/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](modular-lines/step-11.md) | [12](modular-lines/step-12.md) | [13](modular-lines/step-13.md) | [14](modular-lines/step-14.md) | [15](modular-lines/step-15.md) | [16](modular-lines/step-16.md) | [17](modular-lines/step-17.md) | [18](modular-lines/step-18.md) | [19](modular-lines/step-19.md) | [20](modular-lines/step-20.md) |
+| [21](modular-lines/step-21.md) | [22](modular-lines/step-22.md) | [23](modular-lines/step-23.md) | [24](modular-lines/step-24.md) | [25](modular-lines/step-25.md) | [26](modular-lines/step-26.md) | [27](modular-lines/step-27.md) | [28](modular-lines/step-28.md) | [29](modular-lines/step-29.md) | [30](modular-lines/step-30.md) |
+| [31](modular-lines/step-31.md) | [32](modular-lines/step-32.md) | [33](modular-lines/step-33.md) | [34](modular-lines/step-34.md) | [35](modular-lines/step-35.md) | [36](modular-lines/step-36.md) | [37](modular-lines/step-37.md) | [38](modular-lines/step-38.md) | [39](modular-lines/step-39.md) | [40](modular-lines/step-40.md) |
+| [41](modular-lines/step-41.md) | [42](modular-lines/step-42.md) | [43](modular-lines/step-43.md) | [44](modular-lines/step-44.md) | [45](modular-lines/step-45.md) | [46](modular-lines/step-46.md) | [47](modular-lines/step-47.md) | [48](modular-lines/step-48.md) | [49](modular-lines/step-49.md) | [50](modular-lines/step-50.md) |
+| [51](modular-lines/step-51.md) | [52](modular-lines/step-52.md) |  |  |  |  |  |  |  |  |
 
 Solved.
 

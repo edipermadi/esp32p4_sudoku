@@ -50,81 +50,19 @@ The same cages give two more digits at once: **r5c7 = 5** and **r4c8 = 7**. Kill
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py killer: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 71 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 71 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/killer-walkthrough/step-00.png)
 
-1. [the 3 in box 3](killer/step-01.md)
-2. [the 3 in box 6](killer/step-02.md)
-3. [the 1 in box 6](killer/step-03.md)
-4. [the 2 in box 6](killer/step-04.md)
-5. [the 2 in box 3](killer/step-05.md)
-6. [the 4 in box 6](killer/step-06.md)
-7. [the 5 in box 6](killer/step-07.md)
-8. [the 6 in box 6](killer/step-08.md)
-9. [the 7 in box 6](killer/step-09.md)
-10. [the 3 in box 7](killer/step-10.md)
-11. [the 9 in row 6](killer/step-11.md)
-12. [the 7 in row 6](killer/step-12.md)
-13. [the 4 in row 5](killer/step-13.md)
-14. [the 7 in box 5](killer/step-14.md)
-15. [the 8 in box 5](killer/step-15.md)
-16. [the 2 in row 5](killer/step-16.md)
-17. [the 6 in row 5](killer/step-17.md)
-18. [r2c7](killer/step-18.md)
-19. [r2c8](killer/step-19.md)
-20. [r3c6](killer/step-20.md)
-21. [the 2 in box 1](killer/step-21.md)
-22. [the 2 in box 5](killer/step-22.md)
-23. [the 1 in box 2](killer/step-23.md)
-24. [the 3 in box 5](killer/step-24.md)
-25. [the 2 in box 8](killer/step-25.md)
-26. [the 2 in box 9](killer/step-26.md)
-27. [the 1 in row 7](killer/step-27.md)
-28. [the 1 in row 9](killer/step-28.md)
-29. [the 3 in box 8](killer/step-29.md)
-30. [the 3 in box 2](killer/step-30.md)
-31. [the 8 in column 4](killer/step-31.md)
-32. [the 6 in column 4](killer/step-32.md)
-33. [the 9 in column 4](killer/step-33.md)
-34. [the 7 in column 4](killer/step-34.md)
-35. [the 7 in column 7](killer/step-35.md)
-36. [the 9 in column 7](killer/step-36.md)
-37. [the 9 in box 8](killer/step-37.md)
-38. [the 5 in row 7](killer/step-38.md)
-39. [the 4 in row 7](killer/step-39.md)
-40. [the 4 in box 2](killer/step-40.md)
-41. [the 7 in box 2](killer/step-41.md)
-42. [the 6 in row 7](killer/step-42.md)
-43. [the 8 in row 7](killer/step-43.md)
-44. [r1c1](killer/step-44.md)
-45. [r3c3](killer/step-45.md)
-46. [the 5 in box 4](killer/step-46.md)
-47. [the 6 in box 4](killer/step-47.md)
-48. [the 7 in box 1](killer/step-48.md)
-49. [the 9 in box 1](killer/step-49.md)
-50. [the 4 in box 1](killer/step-50.md)
-51. [the 6 in box 1](killer/step-51.md)
-52. [the 1 in box 1](killer/step-52.md)
-53. [the 6 in box 2](killer/step-53.md)
-54. [the 5 in box 2](killer/step-54.md)
-55. [the 7 in box 3](killer/step-55.md)
-56. [the 6 in box 3](killer/step-56.md)
-57. [the 9 in box 3](killer/step-57.md)
-58. [the 5 in box 3](killer/step-58.md)
-59. [the 4 in box 4](killer/step-59.md)
-60. [the 9 in box 4](killer/step-60.md)
-61. [the 8 in box 4](killer/step-61.md)
-62. [the 1 in box 7](killer/step-62.md)
-63. [the 4 in box 7](killer/step-63.md)
-64. [the 7 in box 7](killer/step-64.md)
-65. [the 8 in box 7](killer/step-65.md)
-66. [the 9 in box 7](killer/step-66.md)
-67. [the 8 in box 8](killer/step-67.md)
-68. [the 5 in box 8](killer/step-68.md)
-69. [the 4 in box 9](killer/step-69.md)
-70. [the 5 in box 9](killer/step-70.md)
-71. [the 6 in box 9](killer/step-71.md)
+| [1](killer/step-01.md) | [2](killer/step-02.md) | [3](killer/step-03.md) | [4](killer/step-04.md) | [5](killer/step-05.md) | [6](killer/step-06.md) | [7](killer/step-07.md) | [8](killer/step-08.md) | [9](killer/step-09.md) | [10](killer/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](killer/step-11.md) | [12](killer/step-12.md) | [13](killer/step-13.md) | [14](killer/step-14.md) | [15](killer/step-15.md) | [16](killer/step-16.md) | [17](killer/step-17.md) | [18](killer/step-18.md) | [19](killer/step-19.md) | [20](killer/step-20.md) |
+| [21](killer/step-21.md) | [22](killer/step-22.md) | [23](killer/step-23.md) | [24](killer/step-24.md) | [25](killer/step-25.md) | [26](killer/step-26.md) | [27](killer/step-27.md) | [28](killer/step-28.md) | [29](killer/step-29.md) | [30](killer/step-30.md) |
+| [31](killer/step-31.md) | [32](killer/step-32.md) | [33](killer/step-33.md) | [34](killer/step-34.md) | [35](killer/step-35.md) | [36](killer/step-36.md) | [37](killer/step-37.md) | [38](killer/step-38.md) | [39](killer/step-39.md) | [40](killer/step-40.md) |
+| [41](killer/step-41.md) | [42](killer/step-42.md) | [43](killer/step-43.md) | [44](killer/step-44.md) | [45](killer/step-45.md) | [46](killer/step-46.md) | [47](killer/step-47.md) | [48](killer/step-48.md) | [49](killer/step-49.md) | [50](killer/step-50.md) |
+| [51](killer/step-51.md) | [52](killer/step-52.md) | [53](killer/step-53.md) | [54](killer/step-54.md) | [55](killer/step-55.md) | [56](killer/step-56.md) | [57](killer/step-57.md) | [58](killer/step-58.md) | [59](killer/step-59.md) | [60](killer/step-60.md) |
+| [61](killer/step-61.md) | [62](killer/step-62.md) | [63](killer/step-63.md) | [64](killer/step-64.md) | [65](killer/step-65.md) | [66](killer/step-66.md) | [67](killer/step-67.md) | [68](killer/step-68.md) | [69](killer/step-69.md) | [70](killer/step-70.md) |
+| [71](killer/step-71.md) |  |  |  |  |  |  |  |  |  |
 
 Solved.
 

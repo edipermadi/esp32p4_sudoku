@@ -205,6 +205,8 @@ src/ui_newpuzzle.c      New puzzle's generator: the task, its progress, the benc
 src/ui_gen_dialog.c     the New puzzle dialog: variants in four tabs, the levels
 src/ui_enter_puzzle.c   Enter a puzzle: typed in, checked for one solution, graded, saved
 src/daily_core.c        the daily puzzle without LVGL: today's variant and level, its seed, its name
+src/canon_core.c        a puzzle's canonical hash: the same turned, mirrored or renumbered ("solved before")
+src/puzzles_canon.c     the built-in puzzles' canonical hashes, worked out once (generated: make -C tests canon)
 src/ui_learn.c          Learn: the lessons in tabs, the search for a lesson's puzzle (on the worker core), the practice game
 src/learn_core.c        Learn's lessons without LVGL: the ten techniques and a variant rule each, and the search for a position to practise one
 src/ui_list.c           Puzzles: the screen, tabs, collection column, panel, grid of numbers, the ⋮ menu (ui_list_part.h)
@@ -283,7 +285,7 @@ src/store_game.cpp      RAM copy of the game in progress and its move log
 src/stats_db.c          sudoku.db on the microSD card: the worker task, opening, the calls the parts share
 src/stats_db_*.c        its parts, one per subject: schema, prefs, players, games, solves, kinds, generated,
                         daily, rank, achievements, import, saved, history, weekly, insights, replay, records,
-                        export, small, sql
+                        export, small, sql, canon (solves' canonical hashes)
                         (stats_db_internal.h lists them; the game uses stats_db.h)
 src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
@@ -335,6 +337,7 @@ src/avatars.c           the players' avatars: their groups (generated); the pixe
 src/avatar_store.c      the avatars from their own flash partition, and installing avatars.bin from the card
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port
 tools/gen_puzzles.py    regenerates src/puzzles_data.c from tools/opensudoku/
+tools/gen_canon.c       regenerates src/puzzles_canon.c from the built-in puzzles (make -C tests canon)
 tools/gen_avatars.py    regenerates extras/avatars.bin and src/avatars.c / .h from Noto Color Emoji (Pillow with raqm)
 tools/avatars_order.txt the avatars' order (sudoku.db keeps their numbers: only add at the end)
 tools/devctl.py         screenshots (PNG) and touches over the serial port
@@ -345,7 +348,7 @@ tests/                  PC-side tests: make -C tests (see Tests)
 tools/opensudoku/       the downloaded .opensudoku collections
 ```
 
-To change the embedded puzzles, edit `COLLECTIONS` in `tools/gen_puzzles.py` and run `python3 tools/gen_puzzles.py`.
+To change the embedded puzzles, edit `COLLECTIONS` in `tools/gen_puzzles.py` and run `python3 tools/gen_puzzles.py`, then `make -C tests canon`: it works out their canonical hashes once and writes `src/puzzles_canon.c` (the PC tests fail on a stale table).
 
 To regenerate the avatars (a newer Noto Color Emoji, or a different size), run `python3 tools/gen_avatars.py --keep tools/avatars_order.txt`: it needs Pillow with raqm, `NotoColorEmoji.ttf` and Unicode's `emoji-test.txt` (Debian: `fonts-noto-color-emoji`, `unicode-data`), and `--keep` keeps the numbers players already have (new emoji go at the end). It writes `extras/avatars.bin` (the pixels) and a small `src/avatars.c`; `AVATAR_CRC` in `src/avatars.h` changes with the pixels, so boards ignore an older set in flash and need the new `avatars.bin` installed (see [Building](building.md)).
 

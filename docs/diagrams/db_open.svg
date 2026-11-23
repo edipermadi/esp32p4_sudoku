@@ -170,7 +170,7 @@
 <title>post</title>
 <path fill="#eef3fb" stroke="#5b7db1" d="M740.11,-643.25C740.11,-643.25 561.11,-643.25 561.11,-643.25 555.11,-643.25 549.11,-637.25 549.11,-631.25 549.11,-631.25 549.11,-619.25 549.11,-619.25 549.11,-613.25 555.11,-607.25 561.11,-607.25 561.11,-607.25 740.11,-607.25 740.11,-607.25 746.11,-607.25 752.11,-613.25 752.11,-619.25 752.11,-619.25 752.11,-631.25 752.11,-631.25 752.11,-637.25 746.11,-643.25 740.11,-643.25"/>
 <text text-anchor="middle" x="650.61" y="-628.45" font-family="Helvetica,sans-Serif" font-size="11.00">Indexes and the level_stats view</text>
-<text text-anchor="middle" x="650.61" y="-616.45" font-family="Helvetica,sans-Serif" font-size="11.00">recreated; user_version = 11</text>
+<text text-anchor="middle" x="650.61" y="-616.45" font-family="Helvetica,sans-Serif" font-size="11.00">recreated; user_version = 12</text>
 </g>
 <!-- up&#45;&gt;post -->
 <g id="edge13" class="edge">

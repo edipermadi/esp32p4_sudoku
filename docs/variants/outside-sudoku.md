@@ -39,59 +39,16 @@ Since a row holds each digit once, a clue's digits are **nowhere else in that ro
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py outside-sudoku: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/outside-sudoku-walkthrough/step-00.png)
 
-1. [the 5 in box 1](outside-sudoku/step-01.md)
-2. [the 3 in box 1](outside-sudoku/step-02.md)
-3. [the 9 in box 1](outside-sudoku/step-03.md)
-4. [the 1 in box 2](outside-sudoku/step-04.md)
-5. [the 1 in box 1](outside-sudoku/step-05.md)
-6. [the 4 in box 1](outside-sudoku/step-06.md)
-7. [the 6 in box 1](outside-sudoku/step-07.md)
-8. [the 2 in box 1](outside-sudoku/step-08.md)
-9. [the 7 in box 1](outside-sudoku/step-09.md)
-10. [the 2 in box 2](outside-sudoku/step-10.md)
-11. [the 6 in box 2](outside-sudoku/step-11.md)
-12. [the 8 in box 2](outside-sudoku/step-12.md)
-13. [the 2 in box 3](outside-sudoku/step-13.md)
-14. [the 7 in box 3](outside-sudoku/step-14.md)
-15. [the 8 in box 3](outside-sudoku/step-15.md)
-16. [the 3 in box 4](outside-sudoku/step-16.md)
-17. [the 6 in box 4](outside-sudoku/step-17.md)
-18. [the 7 in box 4](outside-sudoku/step-18.md)
-19. [the 2 in box 4](outside-sudoku/step-19.md)
-20. [the 8 in box 4](outside-sudoku/step-20.md)
-21. [the 9 in box 4](outside-sudoku/step-21.md)
-22. [the 6 in box 5](outside-sudoku/step-22.md)
-23. [the 8 in box 5](outside-sudoku/step-23.md)
-24. [the 8 in box 6](outside-sudoku/step-24.md)
-25. [the 2 in box 7](outside-sudoku/step-25.md)
-26. [the 4 in box 7](outside-sudoku/step-26.md)
-27. [the 6 in box 7](outside-sudoku/step-27.md)
-28. [the 3 in box 9](outside-sudoku/step-28.md)
-29. [the 6 in box 9](outside-sudoku/step-29.md)
-30. [the 8 in box 9](outside-sudoku/step-30.md)
-31. [the 9 in row 4](outside-sudoku/step-31.md)
-32. [the 2 in box 5](outside-sudoku/step-32.md)
-33. [the 7 in box 5](outside-sudoku/step-33.md)
-34. [the 1 in box 5](outside-sudoku/step-34.md)
-35. [the 5 in box 5](outside-sudoku/step-35.md)
-36. [the 2 in box 6](outside-sudoku/step-36.md)
-37. [the 7 in box 6](outside-sudoku/step-37.md)
-38. [the 1 in box 8](outside-sudoku/step-38.md)
-39. [the 5 in box 8](outside-sudoku/step-39.md)
-40. [the 7 in box 8](outside-sudoku/step-40.md)
-41. [the 9 in box 8](outside-sudoku/step-41.md)
-42. [the 2 in box 9](outside-sudoku/step-42.md)
-43. [the 4 in box 9](outside-sudoku/step-43.md)
-44. [the 4 in box 6](outside-sudoku/step-44.md)
-45. [the 9 in box 6](outside-sudoku/step-45.md)
-46. [the 5 in box 6](outside-sudoku/step-46.md)
-47. [the 5 in box 9](outside-sudoku/step-47.md)
-48. [the 7 in box 9](outside-sudoku/step-48.md)
-49. [the 9 in box 9](outside-sudoku/step-49.md)
+| [1](outside-sudoku/step-01.md) | [2](outside-sudoku/step-02.md) | [3](outside-sudoku/step-03.md) | [4](outside-sudoku/step-04.md) | [5](outside-sudoku/step-05.md) | [6](outside-sudoku/step-06.md) | [7](outside-sudoku/step-07.md) | [8](outside-sudoku/step-08.md) | [9](outside-sudoku/step-09.md) | [10](outside-sudoku/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](outside-sudoku/step-11.md) | [12](outside-sudoku/step-12.md) | [13](outside-sudoku/step-13.md) | [14](outside-sudoku/step-14.md) | [15](outside-sudoku/step-15.md) | [16](outside-sudoku/step-16.md) | [17](outside-sudoku/step-17.md) | [18](outside-sudoku/step-18.md) | [19](outside-sudoku/step-19.md) | [20](outside-sudoku/step-20.md) |
+| [21](outside-sudoku/step-21.md) | [22](outside-sudoku/step-22.md) | [23](outside-sudoku/step-23.md) | [24](outside-sudoku/step-24.md) | [25](outside-sudoku/step-25.md) | [26](outside-sudoku/step-26.md) | [27](outside-sudoku/step-27.md) | [28](outside-sudoku/step-28.md) | [29](outside-sudoku/step-29.md) | [30](outside-sudoku/step-30.md) |
+| [31](outside-sudoku/step-31.md) | [32](outside-sudoku/step-32.md) | [33](outside-sudoku/step-33.md) | [34](outside-sudoku/step-34.md) | [35](outside-sudoku/step-35.md) | [36](outside-sudoku/step-36.md) | [37](outside-sudoku/step-37.md) | [38](outside-sudoku/step-38.md) | [39](outside-sudoku/step-39.md) | [40](outside-sudoku/step-40.md) |
+| [41](outside-sudoku/step-41.md) | [42](outside-sudoku/step-42.md) | [43](outside-sudoku/step-43.md) | [44](outside-sudoku/step-44.md) | [45](outside-sudoku/step-45.md) | [46](outside-sudoku/step-46.md) | [47](outside-sudoku/step-47.md) | [48](outside-sudoku/step-48.md) | [49](outside-sudoku/step-49.md) |  |
 
 Solved.
 

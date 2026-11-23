@@ -37,61 +37,17 @@ The pattern is the same each time: the Classic rules narrow a cell to two or thr
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py even-odd: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/even-odd-walkthrough/step-00.png)
 
-1. [the 3 in box 1](even-odd/step-01.md)
-2. [the 4 in box 4](even-odd/step-02.md)
-3. [the 5 in box 4](even-odd/step-03.md)
-4. [the 8 in box 4](even-odd/step-04.md)
-5. [the 2 in box 5](even-odd/step-05.md)
-6. [the 5 in box 5](even-odd/step-06.md)
-7. [the 4 in box 5](even-odd/step-07.md)
-8. [the 6 in box 5](even-odd/step-08.md)
-9. [the 3 in box 5](even-odd/step-09.md)
-10. [the 6 in box 6](even-odd/step-10.md)
-11. [the 3 in box 6](even-odd/step-11.md)
-12. [the 9 in box 6](even-odd/step-12.md)
-13. [the 6 in box 7](even-odd/step-13.md)
-14. [the 7 in box 7](even-odd/step-14.md)
-15. [the 1 in box 7](even-odd/step-15.md)
-16. [the 2 in box 7](even-odd/step-16.md)
-17. [the 5 in box 7](even-odd/step-17.md)
-18. [the 4 in box 7](even-odd/step-18.md)
-19. [the 9 in box 7](even-odd/step-19.md)
-20. [the 3 in box 8](even-odd/step-20.md)
-21. [the 5 in box 8](even-odd/step-21.md)
-22. [the 2 in box 9](even-odd/step-22.md)
-23. [the 1 in box 9](even-odd/step-23.md)
-24. [the 4 in box 9](even-odd/step-24.md)
-25. [the 4 in box 8](even-odd/step-25.md)
-26. [the 4 in box 2](even-odd/step-26.md)
-27. [the 4 in box 1](even-odd/step-27.md)
-28. [the 6 in box 1](even-odd/step-28.md)
-29. [the 6 in box 2](even-odd/step-29.md)
-30. [the 6 in box 3](even-odd/step-30.md)
-31. [the 2 in box 3](even-odd/step-31.md)
-32. [the 2 in box 1](even-odd/step-32.md)
-33. [the 8 in box 1](even-odd/step-33.md)
-34. [the 5 in box 1](even-odd/step-34.md)
-35. [the 5 in box 3](even-odd/step-35.md)
-36. [the 3 in box 3](even-odd/step-36.md)
-37. [the 3 in box 2](even-odd/step-37.md)
-38. [the 1 in box 2](even-odd/step-38.md)
-39. [the 7 in box 3](even-odd/step-39.md)
-40. [the 7 in box 2](even-odd/step-40.md)
-41. [the 8 in box 2](even-odd/step-41.md)
-42. [the 8 in box 3](even-odd/step-42.md)
-43. [the 9 in box 3](even-odd/step-43.md)
-44. [the 7 in box 5](even-odd/step-44.md)
-45. [the 1 in box 5](even-odd/step-45.md)
-46. [the 1 in box 8](even-odd/step-46.md)
-47. [the 7 in box 8](even-odd/step-47.md)
-48. [the 8 in box 8](even-odd/step-48.md)
-49. [the 3 in box 9](even-odd/step-49.md)
-50. [the 8 in box 9](even-odd/step-50.md)
-51. [the 9 in box 9](even-odd/step-51.md)
+| [1](even-odd/step-01.md) | [2](even-odd/step-02.md) | [3](even-odd/step-03.md) | [4](even-odd/step-04.md) | [5](even-odd/step-05.md) | [6](even-odd/step-06.md) | [7](even-odd/step-07.md) | [8](even-odd/step-08.md) | [9](even-odd/step-09.md) | [10](even-odd/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](even-odd/step-11.md) | [12](even-odd/step-12.md) | [13](even-odd/step-13.md) | [14](even-odd/step-14.md) | [15](even-odd/step-15.md) | [16](even-odd/step-16.md) | [17](even-odd/step-17.md) | [18](even-odd/step-18.md) | [19](even-odd/step-19.md) | [20](even-odd/step-20.md) |
+| [21](even-odd/step-21.md) | [22](even-odd/step-22.md) | [23](even-odd/step-23.md) | [24](even-odd/step-24.md) | [25](even-odd/step-25.md) | [26](even-odd/step-26.md) | [27](even-odd/step-27.md) | [28](even-odd/step-28.md) | [29](even-odd/step-29.md) | [30](even-odd/step-30.md) |
+| [31](even-odd/step-31.md) | [32](even-odd/step-32.md) | [33](even-odd/step-33.md) | [34](even-odd/step-34.md) | [35](even-odd/step-35.md) | [36](even-odd/step-36.md) | [37](even-odd/step-37.md) | [38](even-odd/step-38.md) | [39](even-odd/step-39.md) | [40](even-odd/step-40.md) |
+| [41](even-odd/step-41.md) | [42](even-odd/step-42.md) | [43](even-odd/step-43.md) | [44](even-odd/step-44.md) | [45](even-odd/step-45.md) | [46](even-odd/step-46.md) | [47](even-odd/step-47.md) | [48](even-odd/step-48.md) | [49](even-odd/step-49.md) | [50](even-odd/step-50.md) |
+| [51](even-odd/step-51.md) |  |  |  |  |  |  |  |  |  |
 
 Solved.
 

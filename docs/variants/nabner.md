@@ -36,62 +36,17 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py nabner: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 52 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 52 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/nabner-walkthrough/step-00.png)
 
-1. [the 5 in box 1](nabner/step-01.md)
-2. [the 3 in box 1](nabner/step-02.md)
-3. [the 7 in box 2](nabner/step-03.md)
-4. [the 7 in box 4](nabner/step-04.md)
-5. [the 2 in box 4](nabner/step-05.md)
-6. [the 2 in box 1](nabner/step-06.md)
-7. [the 6 in box 1](nabner/step-07.md)
-8. [the 4 in box 4](nabner/step-08.md)
-9. [the 1 in box 4](nabner/step-09.md)
-10. [the 4 in box 5](nabner/step-10.md)
-11. [the 3 in box 5](nabner/step-11.md)
-12. [the 3 in box 2](nabner/step-12.md)
-13. [the 2 in box 2](nabner/step-13.md)
-14. [the 2 in box 5](nabner/step-14.md)
-15. [the 6 in box 5](nabner/step-15.md)
-16. [the 6 in box 2](nabner/step-16.md)
-17. [the 8 in box 5](nabner/step-17.md)
-18. [the 1 in box 5](nabner/step-18.md)
-19. [the 5 in box 6](nabner/step-19.md)
-20. [the 3 in box 6](nabner/step-20.md)
-21. [the 3 in box 3](nabner/step-21.md)
-22. [the 7 in box 6](nabner/step-22.md)
-23. [the 7 in box 3](nabner/step-23.md)
-24. [the 4 in box 3](nabner/step-24.md)
-25. [the 6 in box 3](nabner/step-25.md)
-26. [the 9 in box 3](nabner/step-26.md)
-27. [the 9 in box 2](nabner/step-27.md)
-28. [the 4 in box 2](nabner/step-28.md)
-29. [the 1 in box 2](nabner/step-29.md)
-30. [the 1 in box 1](nabner/step-30.md)
-31. [the 8 in box 1](nabner/step-31.md)
-32. [the 8 in box 3](nabner/step-32.md)
-33. [the 8 in box 6](nabner/step-33.md)
-34. [the 5 in box 7](nabner/step-34.md)
-35. [the 4 in box 8](nabner/step-35.md)
-36. [the 3 in box 8](nabner/step-36.md)
-37. [the 9 in box 8](nabner/step-37.md)
-38. [the 6 in box 8](nabner/step-38.md)
-39. [the 3 in box 9](nabner/step-39.md)
-40. [the 1 in box 9](nabner/step-40.md)
-41. [the 1 in box 7](nabner/step-41.md)
-42. [the 2 in box 7](nabner/step-42.md)
-43. [the 1 in box 8](nabner/step-43.md)
-44. [the 2 in box 8](nabner/step-44.md)
-45. [the 8 in box 8](nabner/step-45.md)
-46. [the 8 in box 7](nabner/step-46.md)
-47. [the 7 in box 7](nabner/step-47.md)
-48. [the 4 in box 7](nabner/step-48.md)
-49. [the 4 in box 9](nabner/step-49.md)
-50. [the 6 in box 9](nabner/step-50.md)
-51. [the 7 in box 9](nabner/step-51.md)
-52. [the 9 in box 9](nabner/step-52.md)
+| [1](nabner/step-01.md) | [2](nabner/step-02.md) | [3](nabner/step-03.md) | [4](nabner/step-04.md) | [5](nabner/step-05.md) | [6](nabner/step-06.md) | [7](nabner/step-07.md) | [8](nabner/step-08.md) | [9](nabner/step-09.md) | [10](nabner/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](nabner/step-11.md) | [12](nabner/step-12.md) | [13](nabner/step-13.md) | [14](nabner/step-14.md) | [15](nabner/step-15.md) | [16](nabner/step-16.md) | [17](nabner/step-17.md) | [18](nabner/step-18.md) | [19](nabner/step-19.md) | [20](nabner/step-20.md) |
+| [21](nabner/step-21.md) | [22](nabner/step-22.md) | [23](nabner/step-23.md) | [24](nabner/step-24.md) | [25](nabner/step-25.md) | [26](nabner/step-26.md) | [27](nabner/step-27.md) | [28](nabner/step-28.md) | [29](nabner/step-29.md) | [30](nabner/step-30.md) |
+| [31](nabner/step-31.md) | [32](nabner/step-32.md) | [33](nabner/step-33.md) | [34](nabner/step-34.md) | [35](nabner/step-35.md) | [36](nabner/step-36.md) | [37](nabner/step-37.md) | [38](nabner/step-38.md) | [39](nabner/step-39.md) | [40](nabner/step-40.md) |
+| [41](nabner/step-41.md) | [42](nabner/step-42.md) | [43](nabner/step-43.md) | [44](nabner/step-44.md) | [45](nabner/step-45.md) | [46](nabner/step-46.md) | [47](nabner/step-47.md) | [48](nabner/step-48.md) | [49](nabner/step-49.md) | [50](nabner/step-50.md) |
+| [51](nabner/step-51.md) | [52](nabner/step-52.md) |  |  |  |  |  |  |  |  |
 
 Solved.
 

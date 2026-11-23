@@ -46,61 +46,17 @@ Only **r6c3** is left: **r6c3 = 9**.
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py german-whispers: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/german-whispers-walkthrough/step-00.png)
 
-1. [the 8 in box 2](german-whispers/step-01.md)
-2. [the 3 in box 3](german-whispers/step-02.md)
-3. [the 9 in box 3](german-whispers/step-03.md)
-4. [the 9 in box 4](german-whispers/step-04.md)
-5. [the 9 in box 1](german-whispers/step-05.md)
-6. [the 3 in box 6](german-whispers/step-06.md)
-7. [the 7 in box 6](german-whispers/step-07.md)
-8. [the 2 in box 6](german-whispers/step-08.md)
-9. [the 2 in box 4](german-whispers/step-09.md)
-10. [the 8 in box 6](german-whispers/step-10.md)
-11. [the 4 in box 3](german-whispers/step-11.md)
-12. [the 4 in box 2](german-whispers/step-12.md)
-13. [the 6 in box 2](german-whispers/step-13.md)
-14. [the 5 in box 2](german-whispers/step-14.md)
-15. [the 7 in box 2](german-whispers/step-15.md)
-16. [the 1 in box 2](german-whispers/step-16.md)
-17. [the 5 in box 3](german-whispers/step-17.md)
-18. [the 5 in box 1](german-whispers/step-18.md)
-19. [the 1 in box 1](german-whispers/step-19.md)
-20. [the 2 in box 3](german-whispers/step-20.md)
-21. [the 1 in box 3](german-whispers/step-21.md)
-22. [the 6 in box 3](german-whispers/step-22.md)
-23. [the 7 in box 3](german-whispers/step-23.md)
-24. [the 9 in box 7](german-whispers/step-24.md)
-25. [the 8 in box 8](german-whispers/step-25.md)
-26. [the 2 in box 9](german-whispers/step-26.md)
-27. [the 1 in box 9](german-whispers/step-27.md)
-28. [the 5 in box 9](german-whispers/step-28.md)
-29. [the 5 in box 8](german-whispers/step-29.md)
-30. [the 5 in box 7](german-whispers/step-30.md)
-31. [the 5 in box 4](german-whispers/step-31.md)
-32. [the 7 in box 4](german-whispers/step-32.md)
-33. [the 2 in box 7](german-whispers/step-33.md)
-34. [the 3 in box 7](german-whispers/step-34.md)
-35. [the 2 in box 8](german-whispers/step-35.md)
-36. [the 2 in box 5](german-whispers/step-36.md)
-37. [the 7 in box 5](german-whispers/step-37.md)
-38. [the 1 in box 5](german-whispers/step-38.md)
-39. [the 1 in box 8](german-whispers/step-39.md)
-40. [the 1 in box 7](german-whispers/step-40.md)
-41. [the 3 in box 8](german-whispers/step-41.md)
-42. [the 7 in box 8](german-whispers/step-42.md)
-43. [the 7 in box 7](german-whispers/step-43.md)
-44. [the 7 in box 1](german-whispers/step-44.md)
-45. [the 8 in box 1](german-whispers/step-45.md)
-46. [the 6 in box 1](german-whispers/step-46.md)
-47. [the 6 in box 7](german-whispers/step-47.md)
-48. [the 8 in box 7](german-whispers/step-48.md)
-49. [the 6 in box 9](german-whispers/step-49.md)
-50. [the 7 in box 9](german-whispers/step-50.md)
-51. [the 8 in box 9](german-whispers/step-51.md)
+| [1](german-whispers/step-01.md) | [2](german-whispers/step-02.md) | [3](german-whispers/step-03.md) | [4](german-whispers/step-04.md) | [5](german-whispers/step-05.md) | [6](german-whispers/step-06.md) | [7](german-whispers/step-07.md) | [8](german-whispers/step-08.md) | [9](german-whispers/step-09.md) | [10](german-whispers/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](german-whispers/step-11.md) | [12](german-whispers/step-12.md) | [13](german-whispers/step-13.md) | [14](german-whispers/step-14.md) | [15](german-whispers/step-15.md) | [16](german-whispers/step-16.md) | [17](german-whispers/step-17.md) | [18](german-whispers/step-18.md) | [19](german-whispers/step-19.md) | [20](german-whispers/step-20.md) |
+| [21](german-whispers/step-21.md) | [22](german-whispers/step-22.md) | [23](german-whispers/step-23.md) | [24](german-whispers/step-24.md) | [25](german-whispers/step-25.md) | [26](german-whispers/step-26.md) | [27](german-whispers/step-27.md) | [28](german-whispers/step-28.md) | [29](german-whispers/step-29.md) | [30](german-whispers/step-30.md) |
+| [31](german-whispers/step-31.md) | [32](german-whispers/step-32.md) | [33](german-whispers/step-33.md) | [34](german-whispers/step-34.md) | [35](german-whispers/step-35.md) | [36](german-whispers/step-36.md) | [37](german-whispers/step-37.md) | [38](german-whispers/step-38.md) | [39](german-whispers/step-39.md) | [40](german-whispers/step-40.md) |
+| [41](german-whispers/step-41.md) | [42](german-whispers/step-42.md) | [43](german-whispers/step-43.md) | [44](german-whispers/step-44.md) | [45](german-whispers/step-45.md) | [46](german-whispers/step-46.md) | [47](german-whispers/step-47.md) | [48](german-whispers/step-48.md) | [49](german-whispers/step-49.md) | [50](german-whispers/step-50.md) |
+| [51](german-whispers/step-51.md) |  |  |  |  |  |  |  |  |  |
 
 Solved.
 

@@ -40,62 +40,17 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py dutch-whispers: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 52 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 52 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/dutch-whispers-walkthrough/step-00.png)
 
-1. [the 1 in box 2](dutch-whispers/step-01.md)
-2. [the 5 in box 2](dutch-whispers/step-02.md)
-3. [the 4 in box 2](dutch-whispers/step-03.md)
-4. [the 7 in box 3](dutch-whispers/step-04.md)
-5. [the 6 in box 3](dutch-whispers/step-05.md)
-6. [the 9 in box 3](dutch-whispers/step-06.md)
-7. [the 9 in box 1](dutch-whispers/step-07.md)
-8. [the 5 in box 6](dutch-whispers/step-08.md)
-9. [the 1 in box 9](dutch-whispers/step-09.md)
-10. [the 9 in row 5](dutch-whispers/step-10.md)
-11. [the 7 in row 9](dutch-whispers/step-11.md)
-12. [the 4 in box 8](dutch-whispers/step-12.md)
-13. [the 4 in box 7](dutch-whispers/step-13.md)
-14. [the 4 in row 4](dutch-whispers/step-14.md)
-15. [the 2 in box 2](dutch-whispers/step-15.md)
-16. [the 3 in box 2](dutch-whispers/step-16.md)
-17. [the 3 in box 1](dutch-whispers/step-17.md)
-18. [the 1 in box 1](dutch-whispers/step-18.md)
-19. [the 8 in box 2](dutch-whispers/step-19.md)
-20. [the 3 in box 3](dutch-whispers/step-20.md)
-21. [the 1 in box 4](dutch-whispers/step-21.md)
-22. [the 6 in box 4](dutch-whispers/step-22.md)
-23. [the 5 in box 4](dutch-whispers/step-23.md)
-24. [the 3 in box 4](dutch-whispers/step-24.md)
-25. [the 3 in box 5](dutch-whispers/step-25.md)
-26. [the 9 in box 5](dutch-whispers/step-26.md)
-27. [the 2 in box 5](dutch-whispers/step-27.md)
-28. [the 8 in box 5](dutch-whispers/step-28.md)
-29. [the 8 in box 6](dutch-whispers/step-29.md)
-30. [the 8 in box 3](dutch-whispers/step-30.md)
-31. [the 9 in box 6](dutch-whispers/step-31.md)
-32. [the 1 in box 7](dutch-whispers/step-32.md)
-33. [the 3 in box 7](dutch-whispers/step-33.md)
-34. [the 5 in box 7](dutch-whispers/step-34.md)
-35. [the 6 in box 7](dutch-whispers/step-35.md)
-36. [the 7 in box 7](dutch-whispers/step-36.md)
-37. [the 7 in box 1](dutch-whispers/step-37.md)
-38. [the 8 in box 1](dutch-whispers/step-38.md)
-39. [the 8 in box 7](dutch-whispers/step-39.md)
-40. [the 2 in box 8](dutch-whispers/step-40.md)
-41. [the 3 in box 8](dutch-whispers/step-41.md)
-42. [the 6 in box 8](dutch-whispers/step-42.md)
-43. [the 7 in box 8](dutch-whispers/step-43.md)
-44. [the 8 in box 8](dutch-whispers/step-44.md)
-45. [the 3 in box 9](dutch-whispers/step-45.md)
-46. [the 2 in box 9](dutch-whispers/step-46.md)
-47. [the 2 in box 3](dutch-whispers/step-47.md)
-48. [the 4 in box 3](dutch-whispers/step-48.md)
-49. [the 2 in box 6](dutch-whispers/step-49.md)
-50. [the 4 in box 6](dutch-whispers/step-50.md)
-51. [the 6 in box 6](dutch-whispers/step-51.md)
-52. [the 6 in box 9](dutch-whispers/step-52.md)
+| [1](dutch-whispers/step-01.md) | [2](dutch-whispers/step-02.md) | [3](dutch-whispers/step-03.md) | [4](dutch-whispers/step-04.md) | [5](dutch-whispers/step-05.md) | [6](dutch-whispers/step-06.md) | [7](dutch-whispers/step-07.md) | [8](dutch-whispers/step-08.md) | [9](dutch-whispers/step-09.md) | [10](dutch-whispers/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](dutch-whispers/step-11.md) | [12](dutch-whispers/step-12.md) | [13](dutch-whispers/step-13.md) | [14](dutch-whispers/step-14.md) | [15](dutch-whispers/step-15.md) | [16](dutch-whispers/step-16.md) | [17](dutch-whispers/step-17.md) | [18](dutch-whispers/step-18.md) | [19](dutch-whispers/step-19.md) | [20](dutch-whispers/step-20.md) |
+| [21](dutch-whispers/step-21.md) | [22](dutch-whispers/step-22.md) | [23](dutch-whispers/step-23.md) | [24](dutch-whispers/step-24.md) | [25](dutch-whispers/step-25.md) | [26](dutch-whispers/step-26.md) | [27](dutch-whispers/step-27.md) | [28](dutch-whispers/step-28.md) | [29](dutch-whispers/step-29.md) | [30](dutch-whispers/step-30.md) |
+| [31](dutch-whispers/step-31.md) | [32](dutch-whispers/step-32.md) | [33](dutch-whispers/step-33.md) | [34](dutch-whispers/step-34.md) | [35](dutch-whispers/step-35.md) | [36](dutch-whispers/step-36.md) | [37](dutch-whispers/step-37.md) | [38](dutch-whispers/step-38.md) | [39](dutch-whispers/step-39.md) | [40](dutch-whispers/step-40.md) |
+| [41](dutch-whispers/step-41.md) | [42](dutch-whispers/step-42.md) | [43](dutch-whispers/step-43.md) | [44](dutch-whispers/step-44.md) | [45](dutch-whispers/step-45.md) | [46](dutch-whispers/step-46.md) | [47](dutch-whispers/step-47.md) | [48](dutch-whispers/step-48.md) | [49](dutch-whispers/step-49.md) | [50](dutch-whispers/step-50.md) |
+| [51](dutch-whispers/step-51.md) | [52](dutch-whispers/step-52.md) |  |  |  |  |  |  |  |  |
 
 Solved.
 

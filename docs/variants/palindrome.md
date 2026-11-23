@@ -42,60 +42,16 @@ Two cells that mirror each other hold the same digit, so they never share a row,
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py palindrome: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 50 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 50 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/palindrome-walkthrough/step-00.png)
 
-1. [the 3 in box 1](palindrome/step-01.md)
-2. [the 9 in box 2](palindrome/step-02.md)
-3. [the 9 in box 3](palindrome/step-03.md)
-4. [the 9 in box 4](palindrome/step-04.md)
-5. [the 6 in box 5](palindrome/step-05.md)
-6. [the 5 in box 5](palindrome/step-06.md)
-7. [the 3 in box 6](palindrome/step-07.md)
-8. [the 8 in box 6](palindrome/step-08.md)
-9. [the 1 in box 6](palindrome/step-09.md)
-10. [the 1 in box 4](palindrome/step-10.md)
-11. [the 7 in box 6](palindrome/step-11.md)
-12. [the 3 in box 7](palindrome/step-12.md)
-13. [the 4 in box 7](palindrome/step-13.md)
-14. [the 9 in box 7](palindrome/step-14.md)
-15. [the 9 in box 8](palindrome/step-15.md)
-16. [the 2 in box 8](palindrome/step-16.md)
-17. [the 2 in box 2](palindrome/step-17.md)
-18. [the 4 in box 9](palindrome/step-18.md)
-19. [the 4 in box 3](palindrome/step-19.md)
-20. [the 1 in box 9](palindrome/step-20.md)
-21. [the 1 in box 3](palindrome/step-21.md)
-22. [the 6 in box 3](palindrome/step-22.md)
-23. [the 2 in box 3](palindrome/step-23.md)
-24. [the 2 in box 1](palindrome/step-24.md)
-25. [the 7 in box 3](palindrome/step-25.md)
-26. [the 5 in box 3](palindrome/step-26.md)
-27. [the 8 in box 3](palindrome/step-27.md)
-28. [the 2 in box 7](palindrome/step-28.md)
-29. [the 2 in box 9](palindrome/step-29.md)
-30. [the 7 in box 9](palindrome/step-30.md)
-31. [the 7 in box 8](palindrome/step-31.md)
-32. [the 7 in box 7](palindrome/step-32.md)
-33. [the 7 in box 1](palindrome/step-33.md)
-34. [the 1 in box 1](palindrome/step-34.md)
-35. [the 5 in box 1](palindrome/step-35.md)
-36. [the 8 in box 1](palindrome/step-36.md)
-37. [the 1 in box 2](palindrome/step-37.md)
-38. [the 5 in box 2](palindrome/step-38.md)
-39. [the 6 in box 2](palindrome/step-39.md)
-40. [the 8 in box 2](palindrome/step-40.md)
-41. [the 7 in box 4](palindrome/step-41.md)
-42. [the 5 in box 4](palindrome/step-42.md)
-43. [the 5 in box 7](palindrome/step-43.md)
-44. [the 6 in box 7](palindrome/step-44.md)
-45. [the 8 in box 7](palindrome/step-45.md)
-46. [the 1 in box 8](palindrome/step-46.md)
-47. [the 5 in box 8](palindrome/step-47.md)
-48. [the 6 in box 8](palindrome/step-48.md)
-49. [the 6 in box 9](palindrome/step-49.md)
-50. [the 9 in box 9](palindrome/step-50.md)
+| [1](palindrome/step-01.md) | [2](palindrome/step-02.md) | [3](palindrome/step-03.md) | [4](palindrome/step-04.md) | [5](palindrome/step-05.md) | [6](palindrome/step-06.md) | [7](palindrome/step-07.md) | [8](palindrome/step-08.md) | [9](palindrome/step-09.md) | [10](palindrome/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](palindrome/step-11.md) | [12](palindrome/step-12.md) | [13](palindrome/step-13.md) | [14](palindrome/step-14.md) | [15](palindrome/step-15.md) | [16](palindrome/step-16.md) | [17](palindrome/step-17.md) | [18](palindrome/step-18.md) | [19](palindrome/step-19.md) | [20](palindrome/step-20.md) |
+| [21](palindrome/step-21.md) | [22](palindrome/step-22.md) | [23](palindrome/step-23.md) | [24](palindrome/step-24.md) | [25](palindrome/step-25.md) | [26](palindrome/step-26.md) | [27](palindrome/step-27.md) | [28](palindrome/step-28.md) | [29](palindrome/step-29.md) | [30](palindrome/step-30.md) |
+| [31](palindrome/step-31.md) | [32](palindrome/step-32.md) | [33](palindrome/step-33.md) | [34](palindrome/step-34.md) | [35](palindrome/step-35.md) | [36](palindrome/step-36.md) | [37](palindrome/step-37.md) | [38](palindrome/step-38.md) | [39](palindrome/step-39.md) | [40](palindrome/step-40.md) |
+| [41](palindrome/step-41.md) | [42](palindrome/step-42.md) | [43](palindrome/step-43.md) | [44](palindrome/step-44.md) | [45](palindrome/step-45.md) | [46](palindrome/step-46.md) | [47](palindrome/step-47.md) | [48](palindrome/step-48.md) | [49](palindrome/step-49.md) | [50](palindrome/step-50.md) |
 
 Solved.
 

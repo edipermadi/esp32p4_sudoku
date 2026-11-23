@@ -14,7 +14,7 @@ digraph db_open {
     err   [shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="Error: the game runs\nwithout a database"];
     schema[label="CREATE TABLE IF NOT EXISTS (every table)"];
     up    [label="upgrade_schema(): a column added for each one\nmissing; tables rebuilt for players (_v3)\nor five games (_v8), in one transaction"];
-    post  [label="Indexes and the level_stats view\nrecreated; user_version = 11"];
+    post  [label="Indexes and the level_stats view\nrecreated; user_version = 12"];
     who   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="settings.current_player\nis a player?"];
     first [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Any player?"];
     minp  [label="The lowest id"];

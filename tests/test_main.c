@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include "generator.h"
 #include "gen_bits.h"
+#include "canon_core.h"
 #include "learn_core.h"
 #include "puzzles.h"
 #include "sdx.h"
@@ -525,6 +526,85 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
 }
 
 /* ---------------------------------------------------------------- tests */
+
+/* canon_core: the symmetry table against every board's peers, the hash the same turned, mirrored and
+ * renumbered, and different for a different puzzle */
+static void test_canon(void)
+{
+    for (int v = 0; v < VAR_COUNT; v++) {
+        const uint8_t sym = canon_symmetries(v);
+        if (!sym) {
+            continue;
+        }
+        const sudoku_geom_t *g = sudoku_geom(v);
+        uint8_t real = 0;                           /* the turns that map the board's peers onto themselves */
+        for (int t = 0; t < 8; t++) {
+            bool ok = true;
+            for (int a = 0; a < 81 && ok; a++) {
+                for (int b = 0; b < 81 && ok; b++) {
+                    if (a == b || a % 9 >= g->n || a / 9 >= g->n || b % 9 >= g->n || b / 9 >= g->n) {
+                        continue;
+                    }
+                    ok = is_sudoku_geom_peer(g, a, b) ==
+                         is_sudoku_geom_peer(g, canon_cell(t, g->n, a), canon_cell(t, g->n, b));
+                }
+            }
+            real |= ok ? (uint8_t)(1u << t) : 0;
+        }
+        CHECKF(sym == real, "%s: canon_symmetries 0x%02x, the board's 0x%02x", variant_name(v), sym, real);
+        uint8_t giv[81] = {0}, sol[81];
+        gen_level_t got;
+        static sudoku_geom_t board;
+        if (!sudoku_generate(v, GEN_EASY, 4242u + (uint32_t)v, giv, &board, &got)) {
+            continue;
+        }
+        const uint64_t h = canon_hash(v, giv);
+        uint32_t rng = 99u + (uint32_t)v;
+        for (int t = 0; t < 8; t++) {               /* every allowed turn, renumbered at random: the same */
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            uint8_t perm[10] = {0}, tr[81] = {0};
+            for (int d = 1; d <= g->n; d++) {
+                perm[d] = (uint8_t)d;
+            }
+            for (int d = g->n; d > 1; d--) {
+                rng = rng * 1103515245u + 12345u;
+                const int j = 1 + (int)(rng >> 16) % d;
+                const uint8_t x = perm[d];
+                perm[d] = perm[j];
+                perm[j] = x;
+            }
+            for (int c = 0; c < 81; c++) {
+                if (c % 9 < g->n && c / 9 < g->n) {
+                    tr[canon_cell(t, g->n, c)] = perm[giv[c]];
+                }
+            }
+            CHECKF(canon_hash(v, tr) == h, "%s: turn %d renumbered: another hash", variant_name(v), t);
+        }
+        CHECK(sudoku_solve(&board, giv, sol));     /* one more given: another puzzle, another hash */
+        for (int c = 0; c < 81; c++) {
+            if (!giv[c] && c % 9 < g->n && c / 9 < g->n) {
+                giv[c] = sol[c];
+                break;
+            }
+        }
+        CHECKF(canon_hash(v, giv) != h, "%s: a given more, the same hash", variant_name(v));
+    }
+    CHECK(canon_hash(VAR_SANDWICH, (const uint8_t[81]) {0}) == 0);   /* (no hash: its clues aren't in the givens) */
+    int dup = 0;                                     /* the built-in puzzles: how many are turned copies */
+    static uint64_t seen[PUZZLE_COUNT];
+    for (int i = 0; i < PUZZLE_COUNT; i++) {
+        uint8_t cells[81];
+        puzzle_load((uint16_t)i, cells);
+        seen[i] = canon_hash(VAR_CLASSIC, cells);
+        CHECKF(puzzle_canon((uint16_t)i) == seen[i], "puzzle %d: puzzles_canon.c stale (make -C tests canon)", i);
+        for (int j = 0; j < i; j++) {
+            dup += seen[j] == seen[i];
+        }
+    }
+    printf("    (built-in puzzles that are another one turned, mirrored or renumbered: %d)\n", dup);
+}
 
 /* gen_bits.h's tables: each entry as the builtins say */
 static void test_bits(void)
@@ -1279,7 +1359,7 @@ static void test_learn(void)
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
-        {"bit tables", test_bits},           {"geometry", test_geometry},         {"built-in puzzles", test_builtin},
+        {"bit tables", test_bits},           {"canonical hash", test_canon},           {"geometry", test_geometry},         {"built-in puzzles", test_builtin},
         {"generator", test_generate},        {"determinism (golden)", test_determinism},
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},

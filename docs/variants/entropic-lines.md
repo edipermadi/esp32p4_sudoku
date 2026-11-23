@@ -42,61 +42,17 @@ It follows that **cells three apart on a line are in the same group**: on 2, 9, 
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py entropic-lines: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/entropic-lines-walkthrough/step-00.png)
 
-1. [the 2 in box 2](entropic-lines/step-01.md)
-2. [the 9 in box 2](entropic-lines/step-02.md)
-3. [the 6 in box 2](entropic-lines/step-03.md)
-4. [the 6 in box 4](entropic-lines/step-04.md)
-5. [the 7 in box 4](entropic-lines/step-05.md)
-6. [the 3 in box 4](entropic-lines/step-06.md)
-7. [the 2 in box 4](entropic-lines/step-07.md)
-8. [the 4 in box 4](entropic-lines/step-08.md)
-9. [the 8 in box 4](entropic-lines/step-09.md)
-10. [the 8 in box 1](entropic-lines/step-10.md)
-11. [the 9 in box 1](entropic-lines/step-11.md)
-12. [the 8 in box 5](entropic-lines/step-12.md)
-13. [the 6 in box 3](entropic-lines/step-13.md)
-14. [the 6 in box 1](entropic-lines/step-14.md)
-15. [the 3 in box 1](entropic-lines/step-15.md)
-16. [the 3 in box 2](entropic-lines/step-16.md)
-17. [the 8 in box 2](entropic-lines/step-17.md)
-18. [the 4 in box 2](entropic-lines/step-18.md)
-19. [the 5 in box 2](entropic-lines/step-19.md)
-20. [the 4 in box 3](entropic-lines/step-20.md)
-21. [the 8 in box 3](entropic-lines/step-21.md)
-22. [the 7 in box 3](entropic-lines/step-22.md)
-23. [the 4 in box 5](entropic-lines/step-23.md)
-24. [the 5 in box 5](entropic-lines/step-24.md)
-25. [the 2 in box 6](entropic-lines/step-25.md)
-26. [the 1 in box 6](entropic-lines/step-26.md)
-27. [the 4 in box 6](entropic-lines/step-27.md)
-28. [the 3 in box 6](entropic-lines/step-28.md)
-29. [the 5 in box 6](entropic-lines/step-29.md)
-30. [the 5 in box 3](entropic-lines/step-30.md)
-31. [the 9 in box 6](entropic-lines/step-31.md)
-32. [the 5 in box 7](entropic-lines/step-32.md)
-33. [the 2 in box 7](entropic-lines/step-33.md)
-34. [the 6 in box 7](entropic-lines/step-34.md)
-35. [the 3 in box 7](entropic-lines/step-35.md)
-36. [the 9 in box 7](entropic-lines/step-36.md)
-37. [the 2 in box 8](entropic-lines/step-37.md)
-38. [the 3 in box 8](entropic-lines/step-38.md)
-39. [the 4 in box 8](entropic-lines/step-39.md)
-40. [the 1 in box 8](entropic-lines/step-40.md)
-41. [the 1 in box 7](entropic-lines/step-41.md)
-42. [the 7 in box 7](entropic-lines/step-42.md)
-43. [the 5 in box 8](entropic-lines/step-43.md)
-44. [the 7 in box 8](entropic-lines/step-44.md)
-45. [the 8 in box 8](entropic-lines/step-45.md)
-46. [the 1 in box 9](entropic-lines/step-46.md)
-47. [the 1 in box 3](entropic-lines/step-47.md)
-48. [the 3 in box 3](entropic-lines/step-48.md)
-49. [the 3 in box 9](entropic-lines/step-49.md)
-50. [the 7 in box 9](entropic-lines/step-50.md)
-51. [the 9 in box 9](entropic-lines/step-51.md)
+| [1](entropic-lines/step-01.md) | [2](entropic-lines/step-02.md) | [3](entropic-lines/step-03.md) | [4](entropic-lines/step-04.md) | [5](entropic-lines/step-05.md) | [6](entropic-lines/step-06.md) | [7](entropic-lines/step-07.md) | [8](entropic-lines/step-08.md) | [9](entropic-lines/step-09.md) | [10](entropic-lines/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](entropic-lines/step-11.md) | [12](entropic-lines/step-12.md) | [13](entropic-lines/step-13.md) | [14](entropic-lines/step-14.md) | [15](entropic-lines/step-15.md) | [16](entropic-lines/step-16.md) | [17](entropic-lines/step-17.md) | [18](entropic-lines/step-18.md) | [19](entropic-lines/step-19.md) | [20](entropic-lines/step-20.md) |
+| [21](entropic-lines/step-21.md) | [22](entropic-lines/step-22.md) | [23](entropic-lines/step-23.md) | [24](entropic-lines/step-24.md) | [25](entropic-lines/step-25.md) | [26](entropic-lines/step-26.md) | [27](entropic-lines/step-27.md) | [28](entropic-lines/step-28.md) | [29](entropic-lines/step-29.md) | [30](entropic-lines/step-30.md) |
+| [31](entropic-lines/step-31.md) | [32](entropic-lines/step-32.md) | [33](entropic-lines/step-33.md) | [34](entropic-lines/step-34.md) | [35](entropic-lines/step-35.md) | [36](entropic-lines/step-36.md) | [37](entropic-lines/step-37.md) | [38](entropic-lines/step-38.md) | [39](entropic-lines/step-39.md) | [40](entropic-lines/step-40.md) |
+| [41](entropic-lines/step-41.md) | [42](entropic-lines/step-42.md) | [43](entropic-lines/step-43.md) | [44](entropic-lines/step-44.md) | [45](entropic-lines/step-45.md) | [46](entropic-lines/step-46.md) | [47](entropic-lines/step-47.md) | [48](entropic-lines/step-48.md) | [49](entropic-lines/step-49.md) | [50](entropic-lines/step-50.md) |
+| [51](entropic-lines/step-51.md) |  |  |  |  |  |  |  |  |  |
 
 Solved.
 

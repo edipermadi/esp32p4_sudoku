@@ -431,6 +431,30 @@ void reset_game(void)
     refresh_board();
 }
 
+/**
+ * @brief A fresh puzzle the player has solved before under another name (turned, mirrored or renumbered: the
+ * same canonical hash, canon_core.h): a notice saying which and when.
+ * @param[in] id  the puzzle
+ */
+static void twin_notice(uint16_t id)
+{
+    stats_twin_t t;
+    if (!is_stats_db_ready() || !stats_db_solved_twin(id, &t)) {
+        return;
+    }
+    char name[40], when[24] = "", text[160];
+    puzzle_name(t.puzzle, name, sizeof(name));
+    if (t.finished_at > 0) {
+        const time_t tt = (time_t)t.finished_at;
+        struct tm tm;
+        localtime_r(&tt, &tm);
+        strftime(when, sizeof(when), " on %d %b %Y", &tm);
+    }
+    snprintf(text, sizeof(text), "You've solved this puzzle before, as %s%s: the same one turned, mirrored or "
+             "renumbered.", name, when);
+    sudoku_ui_notice(text, 6000);
+}
+
 /* (documented in ui_internal.h) */
 void start_game(uint16_t id, bool resume)
 {
@@ -498,6 +522,9 @@ void start_game(uint16_t id, bool resume)
     lv_screen_load(screen_game());
     rules_first_time();
     tour_maybe();
+    if (!resume) {
+        twin_notice(id);
+    }
 }
 
 /* ---- accessors: the other UI files reach this file's state through these */

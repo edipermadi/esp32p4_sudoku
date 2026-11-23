@@ -114,6 +114,7 @@ typedef enum {
     CMD_LOAD_GAME,              /**< load an unfinished game (waited for) */
     CMD_RECORDS,                /**< the personal records */
     CMD_PRANK,                  /**< head-to-head on a puzzle (waited for) */
+    CMD_TWIN,                   /**< the same puzzle solved before under another name (waited for) */
     CMD_EXPORT,                 /**< CSV export */
     CMD_WEEK,                   /**< a weekly challenge */
     CMD_PLAYER_COLOR,           /**< set a player's colour */
@@ -202,6 +203,7 @@ typedef struct {
     uint16_t puzzle;             /**< CMD_LOAD_GAME: which one */
     saved_game_t game;           /**< CMD_LOAD_GAME result */
     stats_h2h_t h2h;             /**< CMD_PRANK result */
+    stats_twin_t twin;           /**< CMD_TWIN result */
     int nimports;                /**< CMD_LIST_IMPORTS result */
     stats_import_t imports[STATS_MAX_IMPORTS];   /**< CMD_LIST_IMPORTS result */
     int count;                   /**< CMD_SOLVED_IN: puzzle .. puzzle + count - 1 */
@@ -541,6 +543,20 @@ bool sdb_gen_source_of(int gid, char name[STATS_IMPORT_NAME], int *number);
  * @param[in] day  'YYYY-MM-DD'
  */
 void sdb_do_board(const char *day);
+/**
+ * @brief A puzzle's canonical hash (canon_core.h): a built-in one's from flash, one made on the board or
+ *        imported from the generated table.
+ * @param[in] puzzle  the puzzle id
+ * @return the hash, 0 if it has none (a variant without one, or not in sudoku.db)
+ */
+uint64_t sdb_puzzle_canon(int puzzle);
+/**
+ * @brief The solves without a canonical hash (made before solves.canon) get theirs (the upgrade).
+ * @return false on an error
+ */
+bool sdb_canon_backfill(void);
+/** @brief CMD_TWIN: the latest solve of s_gen.puzzle under another name (stats_db_solved_twin()). */
+void sdb_do_twin(void);
 /** @brief CMD_PRANK: head-to-head on s_gen.puzzle (stats_db_puzzle_rank()). */
 void sdb_do_puzzle_rank(void);
 /** @brief CMD_RANK: the current player's place on s_gen.day's leaderboard. */

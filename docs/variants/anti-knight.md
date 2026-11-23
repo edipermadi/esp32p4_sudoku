@@ -50,59 +50,16 @@ Only **r9c5** is left: **r9c5 = 5**.
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py anti-knight: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/anti-knight-walkthrough/step-00.png)
 
-1. [the 3 in box 2](anti-knight/step-01.md)
-2. [the 8 in box 2](anti-knight/step-02.md)
-3. [the 2 in box 3](anti-knight/step-03.md)
-4. [the 2 in box 5](anti-knight/step-04.md)
-5. [the 2 in box 7](anti-knight/step-05.md)
-6. [the 5 in box 8](anti-knight/step-06.md)
-7. [the 5 in box 2](anti-knight/step-07.md)
-8. [the 7 in box 2](anti-knight/step-08.md)
-9. [the 1 in box 2](anti-knight/step-09.md)
-10. [the 5 in box 3](anti-knight/step-10.md)
-11. [the 5 in box 1](anti-knight/step-11.md)
-12. [the 7 in box 1](anti-knight/step-12.md)
-13. [the 7 in box 4](anti-knight/step-13.md)
-14. [the 5 in box 5](anti-knight/step-14.md)
-15. [the 1 in box 5](anti-knight/step-15.md)
-16. [the 1 in box 4](anti-knight/step-16.md)
-17. [the 1 in box 1](anti-knight/step-17.md)
-18. [the 4 in box 1](anti-knight/step-18.md)
-19. [the 8 in box 1](anti-knight/step-19.md)
-20. [the 4 in box 4](anti-knight/step-20.md)
-21. [the 3 in box 4](anti-knight/step-21.md)
-22. [the 8 in box 4](anti-knight/step-22.md)
-23. [the 5 in box 6](anti-knight/step-23.md)
-24. [the 7 in box 6](anti-knight/step-24.md)
-25. [the 1 in box 8](anti-knight/step-25.md)
-26. [the 3 in box 8](anti-knight/step-26.md)
-27. [the 3 in box 7](anti-knight/step-27.md)
-28. [the 7 in box 8](anti-knight/step-28.md)
-29. [the 6 in box 8](anti-knight/step-29.md)
-30. [the 6 in box 7](anti-knight/step-30.md)
-31. [the 6 in box 1](anti-knight/step-31.md)
-32. [the 9 in box 1](anti-knight/step-32.md)
-33. [the 6 in box 4](anti-knight/step-33.md)
-34. [the 9 in box 4](anti-knight/step-34.md)
-35. [the 9 in box 6](anti-knight/step-35.md)
-36. [the 9 in box 7](anti-knight/step-36.md)
-37. [the 1 in box 9](anti-knight/step-37.md)
-38. [the 3 in box 9](anti-knight/step-38.md)
-39. [the 3 in box 6](anti-knight/step-39.md)
-40. [the 4 in box 6](anti-knight/step-40.md)
-41. [the 4 in box 9](anti-knight/step-41.md)
-42. [the 6 in box 9](anti-knight/step-42.md)
-43. [the 6 in box 6](anti-knight/step-43.md)
-44. [the 6 in box 3](anti-knight/step-44.md)
-45. [the 8 in box 3](anti-knight/step-45.md)
-46. [the 8 in box 6](anti-knight/step-46.md)
-47. [the 7 in box 9](anti-knight/step-47.md)
-48. [the 8 in box 9](anti-knight/step-48.md)
-49. [the 9 in box 9](anti-knight/step-49.md)
+| [1](anti-knight/step-01.md) | [2](anti-knight/step-02.md) | [3](anti-knight/step-03.md) | [4](anti-knight/step-04.md) | [5](anti-knight/step-05.md) | [6](anti-knight/step-06.md) | [7](anti-knight/step-07.md) | [8](anti-knight/step-08.md) | [9](anti-knight/step-09.md) | [10](anti-knight/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](anti-knight/step-11.md) | [12](anti-knight/step-12.md) | [13](anti-knight/step-13.md) | [14](anti-knight/step-14.md) | [15](anti-knight/step-15.md) | [16](anti-knight/step-16.md) | [17](anti-knight/step-17.md) | [18](anti-knight/step-18.md) | [19](anti-knight/step-19.md) | [20](anti-knight/step-20.md) |
+| [21](anti-knight/step-21.md) | [22](anti-knight/step-22.md) | [23](anti-knight/step-23.md) | [24](anti-knight/step-24.md) | [25](anti-knight/step-25.md) | [26](anti-knight/step-26.md) | [27](anti-knight/step-27.md) | [28](anti-knight/step-28.md) | [29](anti-knight/step-29.md) | [30](anti-knight/step-30.md) |
+| [31](anti-knight/step-31.md) | [32](anti-knight/step-32.md) | [33](anti-knight/step-33.md) | [34](anti-knight/step-34.md) | [35](anti-knight/step-35.md) | [36](anti-knight/step-36.md) | [37](anti-knight/step-37.md) | [38](anti-knight/step-38.md) | [39](anti-knight/step-39.md) | [40](anti-knight/step-40.md) |
+| [41](anti-knight/step-41.md) | [42](anti-knight/step-42.md) | [43](anti-knight/step-43.md) | [44](anti-knight/step-44.md) | [45](anti-knight/step-45.md) | [46](anti-knight/step-46.md) | [47](anti-knight/step-47.md) | [48](anti-knight/step-48.md) | [49](anti-knight/step-49.md) |  |
 
 Solved.
 

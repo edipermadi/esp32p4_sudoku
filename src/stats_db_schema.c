@@ -4,7 +4,7 @@
  */
 #include "stats_db_internal.h"
 
-/* table layouts (user_version 11), shared by SCHEMA and the upgrade below */
+/* table layouts (user_version 12), shared by SCHEMA and the upgrade below */
 /** players' layout */
 #define T_PLAYERS \
     "players("                                                                  \
@@ -28,7 +28,8 @@
     "  started_at INTEGER,"                 /* when it was opened (or restarted) */ \
     "  hints INTEGER NOT NULL DEFAULT 0,"   /* cells filled with Fill (the solution) */ \
     "  moves BLOB,"                         /* move log (moves.h); NULL = not recorded */ \
-    "  flags INTEGER NOT NULL DEFAULT 0)"   /* GAME_FLAG_* (store.h): no-notes challenge, techniques hinted */
+    "  flags INTEGER NOT NULL DEFAULT 0,"   /* GAME_FLAG_* (store.h): no-notes challenge, techniques hinted */ \
+    "  canon INTEGER)"                      /* the puzzle's canonical hash (canon_core.h); NULL = its variant has none */
 
 /** puzzle_stats' layout */
 #define T_PUZZLE_STATS \
@@ -135,6 +136,7 @@ static const char SCHEMA[] =
 static const char SCHEMA_POST[] =
     "CREATE INDEX IF NOT EXISTS solves_puzzle ON solves(puzzle);"
     "CREATE INDEX IF NOT EXISTS solves_player ON solves(player_id, puzzle);"
+    "CREATE INDEX IF NOT EXISTS solves_canon ON solves(player_id, canon);"
     "DROP INDEX IF EXISTS puzzle_stats_level;"
     "CREATE INDEX puzzle_stats_level ON puzzle_stats(player_id, level, number);"
     "DROP VIEW IF EXISTS level_stats;"
@@ -146,7 +148,7 @@ static const char SCHEMA_POST[] =
     "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
     "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
     "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
-    "PRAGMA user_version = 11;";
+    "PRAGMA user_version = 12;";
 
 /**
  * @brief Whether a table has a column.
@@ -249,6 +251,9 @@ static bool upgrade_schema(void)
     }
     if (!has_column("saved_game", "flags")) {
         ok &= sdb_exec("ALTER TABLE saved_game ADD COLUMN flags INTEGER NOT NULL DEFAULT 0");
+    }
+    if (!has_column("solves", "canon")) {           /* (version 12) the puzzles' canonical hashes, the old ones filled in */
+        ok &= sdb_exec("ALTER TABLE solves ADD COLUMN canon INTEGER") && sdb_canon_backfill();
     }
 
     bool old_solves = !has_column("solves", "player_id");

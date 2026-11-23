@@ -332,6 +332,9 @@ static void worker(void *arg)
         case CMD_PRANK:
             sdb_do_puzzle_rank();
             break;
+        case CMD_TWIN:
+            sdb_do_twin();
+            break;
         case CMD_EXPORT:
             sdb_do_export();
             break;

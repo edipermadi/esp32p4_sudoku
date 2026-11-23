@@ -49,77 +49,18 @@ Only **r1c2** is left: **r1c2 = 1**. Notice that r1c2 (1) and r1c3 (3) have no d
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py kropki: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 67 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 67 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/kropki-walkthrough/step-00.png)
 
-1. [the 1 in box 1](kropki/step-01.md)
-2. [the 5 in box 3](kropki/step-02.md)
-3. [the 7 in box 9](kropki/step-03.md)
-4. [the 3 in row 9](kropki/step-04.md)
-5. [the 5 in row 9](kropki/step-05.md)
-6. [the 6 in column 9](kropki/step-06.md)
-7. [the 8 in box 9](kropki/step-07.md)
-8. [the 1 in box 9](kropki/step-08.md)
-9. [the 2 in box 9](kropki/step-09.md)
-10. [the 2 in box 8](kropki/step-10.md)
-11. [the 7 in box 8](kropki/step-11.md)
-12. [the 6 in box 8](kropki/step-12.md)
-13. [the 8 in box 8](kropki/step-13.md)
-14. [the 4 in box 9](kropki/step-14.md)
-15. [the 9 in box 9](kropki/step-15.md)
-16. [the 8 in row 2](kropki/step-16.md)
-17. [the 4 in row 8](kropki/step-17.md)
-18. [the 4 in box 1](kropki/step-18.md)
-19. [the 4 in box 2](kropki/step-19.md)
-20. [the 2 in box 2](kropki/step-20.md)
-21. [the 2 in box 1](kropki/step-21.md)
-22. [the 6 in box 1](kropki/step-22.md)
-23. [the 3 in box 1](kropki/step-23.md)
-24. [the 8 in box 1](kropki/step-24.md)
-25. [the 9 in box 1](kropki/step-25.md)
-26. [the 5 in box 2](kropki/step-26.md)
-27. [the 6 in box 2](kropki/step-27.md)
-28. [the 1 in box 2](kropki/step-28.md)
-29. [the 3 in box 2](kropki/step-29.md)
-30. [the 7 in box 2](kropki/step-30.md)
-31. [the 2 in box 3](kropki/step-31.md)
-32. [the 4 in box 3](kropki/step-32.md)
-33. [the 1 in box 3](kropki/step-33.md)
-34. [the 9 in box 3](kropki/step-34.md)
-35. [the 3 in box 3](kropki/step-35.md)
-36. [the 3 in box 4](kropki/step-36.md)
-37. [the 4 in box 4](kropki/step-37.md)
-38. [the 5 in box 5](kropki/step-38.md)
-39. [the 7 in box 5](kropki/step-39.md)
-40. [the 9 in box 5](kropki/step-40.md)
-41. [the 2 in box 6](kropki/step-41.md)
-42. [the 1 in box 6](kropki/step-42.md)
-43. [the 1 in box 5](kropki/step-43.md)
-44. [the 2 in box 5](kropki/step-44.md)
-45. [the 2 in box 4](kropki/step-45.md)
-46. [the 3 in box 5](kropki/step-46.md)
-47. [the 4 in box 5](kropki/step-47.md)
-48. [the 6 in box 5](kropki/step-48.md)
-49. [the 8 in box 5](kropki/step-49.md)
-50. [the 6 in box 4](kropki/step-50.md)
-51. [the 5 in box 4](kropki/step-51.md)
-52. [the 8 in box 4](kropki/step-52.md)
-53. [the 9 in box 4](kropki/step-53.md)
-54. [the 7 in box 4](kropki/step-54.md)
-55. [the 3 in box 6](kropki/step-55.md)
-56. [the 4 in box 6](kropki/step-56.md)
-57. [the 6 in box 6](kropki/step-57.md)
-58. [the 7 in box 6](kropki/step-58.md)
-59. [the 8 in box 6](kropki/step-59.md)
-60. [the 9 in box 6](kropki/step-60.md)
-61. [the 5 in box 7](kropki/step-61.md)
-62. [the 6 in box 7](kropki/step-62.md)
-63. [the 8 in box 7](kropki/step-63.md)
-64. [the 9 in box 7](kropki/step-64.md)
-65. [the 1 in box 8](kropki/step-65.md)
-66. [the 3 in box 8](kropki/step-66.md)
-67. [the 4 in box 8](kropki/step-67.md)
+| [1](kropki/step-01.md) | [2](kropki/step-02.md) | [3](kropki/step-03.md) | [4](kropki/step-04.md) | [5](kropki/step-05.md) | [6](kropki/step-06.md) | [7](kropki/step-07.md) | [8](kropki/step-08.md) | [9](kropki/step-09.md) | [10](kropki/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](kropki/step-11.md) | [12](kropki/step-12.md) | [13](kropki/step-13.md) | [14](kropki/step-14.md) | [15](kropki/step-15.md) | [16](kropki/step-16.md) | [17](kropki/step-17.md) | [18](kropki/step-18.md) | [19](kropki/step-19.md) | [20](kropki/step-20.md) |
+| [21](kropki/step-21.md) | [22](kropki/step-22.md) | [23](kropki/step-23.md) | [24](kropki/step-24.md) | [25](kropki/step-25.md) | [26](kropki/step-26.md) | [27](kropki/step-27.md) | [28](kropki/step-28.md) | [29](kropki/step-29.md) | [30](kropki/step-30.md) |
+| [31](kropki/step-31.md) | [32](kropki/step-32.md) | [33](kropki/step-33.md) | [34](kropki/step-34.md) | [35](kropki/step-35.md) | [36](kropki/step-36.md) | [37](kropki/step-37.md) | [38](kropki/step-38.md) | [39](kropki/step-39.md) | [40](kropki/step-40.md) |
+| [41](kropki/step-41.md) | [42](kropki/step-42.md) | [43](kropki/step-43.md) | [44](kropki/step-44.md) | [45](kropki/step-45.md) | [46](kropki/step-46.md) | [47](kropki/step-47.md) | [48](kropki/step-48.md) | [49](kropki/step-49.md) | [50](kropki/step-50.md) |
+| [51](kropki/step-51.md) | [52](kropki/step-52.md) | [53](kropki/step-53.md) | [54](kropki/step-54.md) | [55](kropki/step-55.md) | [56](kropki/step-56.md) | [57](kropki/step-57.md) | [58](kropki/step-58.md) | [59](kropki/step-59.md) | [60](kropki/step-60.md) |
+| [61](kropki/step-61.md) | [62](kropki/step-62.md) | [63](kropki/step-63.md) | [64](kropki/step-64.md) | [65](kropki/step-65.md) | [66](kropki/step-66.md) | [67](kropki/step-67.md) |  |  |  |
 
 Solved.
 

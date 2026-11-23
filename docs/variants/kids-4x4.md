@@ -37,16 +37,12 @@ The bottom half goes the same way: row 3 needs 2 and 4, row 4 needs 2.
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py kids-4x4: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 6 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 6 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/kids-4x4-walkthrough/step-00.png)
 
-1. [the 3 in box 1](kids-4x4/step-01.md)
-2. [the 1 in box 2](kids-4x4/step-02.md)
-3. [the 4 in box 2](kids-4x4/step-03.md)
-4. [the 2 in box 3](kids-4x4/step-04.md)
-5. [the 4 in box 3](kids-4x4/step-05.md)
-6. [the 2 in box 4](kids-4x4/step-06.md)
+| [1](kids-4x4/step-01.md) | [2](kids-4x4/step-02.md) | [3](kids-4x4/step-03.md) | [4](kids-4x4/step-04.md) | [5](kids-4x4/step-05.md) | [6](kids-4x4/step-06.md) |  |  |  |  |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 
 Solved.
 

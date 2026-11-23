@@ -37,61 +37,17 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py rossini: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/rossini-walkthrough/step-00.png)
 
-1. [the 1 in box 1](rossini/step-01.md)
-2. [the 9 in box 1](rossini/step-02.md)
-3. [the 1 in box 3](rossini/step-03.md)
-4. [the 4 in box 3](rossini/step-04.md)
-5. [the 9 in box 4](rossini/step-05.md)
-6. [the 1 in box 5](rossini/step-06.md)
-7. [the 9 in box 5](rossini/step-07.md)
-8. [the 8 in box 5](rossini/step-08.md)
-9. [the 3 in box 6](rossini/step-09.md)
-10. [the 9 in box 6](rossini/step-10.md)
-11. [the 8 in box 6](rossini/step-11.md)
-12. [the 8 in box 4](rossini/step-12.md)
-13. [the 6 in box 4](rossini/step-13.md)
-14. [the 6 in box 1](rossini/step-14.md)
-15. [the 7 in box 1](rossini/step-15.md)
-16. [the 3 in box 1](rossini/step-16.md)
-17. [the 2 in box 1](rossini/step-17.md)
-18. [the 5 in box 1](rossini/step-18.md)
-19. [the 8 in box 1](rossini/step-19.md)
-20. [the 3 in box 2](rossini/step-20.md)
-21. [the 4 in box 2](rossini/step-21.md)
-22. [the 2 in box 2](rossini/step-22.md)
-23. [the 5 in box 2](rossini/step-23.md)
-24. [the 7 in box 2](rossini/step-24.md)
-25. [the 8 in box 2](rossini/step-25.md)
-26. [the 6 in box 2](rossini/step-26.md)
-27. [the 9 in box 2](rossini/step-27.md)
-28. [the 5 in box 4](rossini/step-28.md)
-29. [the 2 in box 4](rossini/step-29.md)
-30. [the 7 in box 4](rossini/step-30.md)
-31. [the 2 in box 6](rossini/step-31.md)
-32. [the 5 in box 6](rossini/step-32.md)
-33. [the 7 in box 6](rossini/step-33.md)
-34. [the 3 in box 7](rossini/step-34.md)
-35. [the 8 in box 7](rossini/step-35.md)
-36. [the 1 in box 8](rossini/step-36.md)
-37. [the 2 in box 8](rossini/step-37.md)
-38. [the 3 in box 8](rossini/step-38.md)
-39. [the 6 in box 8](rossini/step-39.md)
-40. [the 7 in box 8](rossini/step-40.md)
-41. [the 1 in box 9](rossini/step-41.md)
-42. [the 2 in box 9](rossini/step-42.md)
-43. [the 5 in box 9](rossini/step-43.md)
-44. [the 6 in box 9](rossini/step-44.md)
-45. [the 4 in box 9](rossini/step-45.md)
-46. [the 4 in box 8](rossini/step-46.md)
-47. [the 8 in box 8](rossini/step-47.md)
-48. [the 9 in box 8](rossini/step-48.md)
-49. [the 7 in box 9](rossini/step-49.md)
-50. [the 8 in box 9](rossini/step-50.md)
-51. [the 9 in box 9](rossini/step-51.md)
+| [1](rossini/step-01.md) | [2](rossini/step-02.md) | [3](rossini/step-03.md) | [4](rossini/step-04.md) | [5](rossini/step-05.md) | [6](rossini/step-06.md) | [7](rossini/step-07.md) | [8](rossini/step-08.md) | [9](rossini/step-09.md) | [10](rossini/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](rossini/step-11.md) | [12](rossini/step-12.md) | [13](rossini/step-13.md) | [14](rossini/step-14.md) | [15](rossini/step-15.md) | [16](rossini/step-16.md) | [17](rossini/step-17.md) | [18](rossini/step-18.md) | [19](rossini/step-19.md) | [20](rossini/step-20.md) |
+| [21](rossini/step-21.md) | [22](rossini/step-22.md) | [23](rossini/step-23.md) | [24](rossini/step-24.md) | [25](rossini/step-25.md) | [26](rossini/step-26.md) | [27](rossini/step-27.md) | [28](rossini/step-28.md) | [29](rossini/step-29.md) | [30](rossini/step-30.md) |
+| [31](rossini/step-31.md) | [32](rossini/step-32.md) | [33](rossini/step-33.md) | [34](rossini/step-34.md) | [35](rossini/step-35.md) | [36](rossini/step-36.md) | [37](rossini/step-37.md) | [38](rossini/step-38.md) | [39](rossini/step-39.md) | [40](rossini/step-40.md) |
+| [41](rossini/step-41.md) | [42](rossini/step-42.md) | [43](rossini/step-43.md) | [44](rossini/step-44.md) | [45](rossini/step-45.md) | [46](rossini/step-46.md) | [47](rossini/step-47.md) | [48](rossini/step-48.md) | [49](rossini/step-49.md) | [50](rossini/step-50.md) |
+| [51](rossini/step-51.md) |  |  |  |  |  |  |  |  |  |
 
 Solved.
 

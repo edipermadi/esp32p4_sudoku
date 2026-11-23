@@ -36,61 +36,17 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py pill-arrows: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/pill-arrows-walkthrough/step-00.png)
 
-1. [the 5 in box 2](pill-arrows/step-01.md)
-2. [the 5 in box 3](pill-arrows/step-02.md)
-3. [the 5 in box 4](pill-arrows/step-03.md)
-4. [the 5 in box 1](pill-arrows/step-04.md)
-5. [the 1 in box 5](pill-arrows/step-05.md)
-6. [the 6 in box 8](pill-arrows/step-06.md)
-7. [the 9 in column 4](pill-arrows/step-07.md)
-8. [the 9 in row 5](pill-arrows/step-08.md)
-9. [the 2 in column 4](pill-arrows/step-09.md)
-10. [the 8 in column 7](pill-arrows/step-10.md)
-11. [the 1 in column 7](pill-arrows/step-11.md)
-12. [the 9 in column 7](pill-arrows/step-12.md)
-13. [the 9 in column 6](pill-arrows/step-13.md)
-14. [the 9 in box 3](pill-arrows/step-14.md)
-15. [the 8 in box 3](pill-arrows/step-15.md)
-16. [the 8 in box 1](pill-arrows/step-16.md)
-17. [the 4 in box 3](pill-arrows/step-17.md)
-18. [the 4 in box 1](pill-arrows/step-18.md)
-19. [the 1 in box 1](pill-arrows/step-19.md)
-20. [the 2 in box 1](pill-arrows/step-20.md)
-21. [the 3 in box 1](pill-arrows/step-21.md)
-22. [the 3 in box 2](pill-arrows/step-22.md)
-23. [the 2 in box 2](pill-arrows/step-23.md)
-24. [the 1 in box 3](pill-arrows/step-24.md)
-25. [the 2 in box 3](pill-arrows/step-25.md)
-26. [the 3 in box 3](pill-arrows/step-26.md)
-27. [the 8 in box 5](pill-arrows/step-27.md)
-28. [the 8 in box 4](pill-arrows/step-28.md)
-29. [the 7 in box 5](pill-arrows/step-29.md)
-30. [the 1 in box 7](pill-arrows/step-30.md)
-31. [the 3 in box 7](pill-arrows/step-31.md)
-32. [the 8 in box 7](pill-arrows/step-32.md)
-33. [the 2 in box 8](pill-arrows/step-33.md)
-34. [the 4 in box 8](pill-arrows/step-34.md)
-35. [the 4 in box 7](pill-arrows/step-35.md)
-36. [the 9 in box 8](pill-arrows/step-36.md)
-37. [the 4 in box 9](pill-arrows/step-37.md)
-38. [the 2 in box 9](pill-arrows/step-38.md)
-39. [the 7 in box 9](pill-arrows/step-39.md)
-40. [the 7 in box 6](pill-arrows/step-40.md)
-41. [the 7 in box 4](pill-arrows/step-41.md)
-42. [the 1 in box 4](pill-arrows/step-42.md)
-43. [the 2 in box 4](pill-arrows/step-43.md)
-44. [the 9 in box 4](pill-arrows/step-44.md)
-45. [the 1 in box 6](pill-arrows/step-45.md)
-46. [the 2 in box 6](pill-arrows/step-46.md)
-47. [the 3 in box 6](pill-arrows/step-47.md)
-48. [the 2 in box 7](pill-arrows/step-48.md)
-49. [the 7 in box 7](pill-arrows/step-49.md)
-50. [the 9 in box 7](pill-arrows/step-50.md)
-51. [the 3 in box 9](pill-arrows/step-51.md)
+| [1](pill-arrows/step-01.md) | [2](pill-arrows/step-02.md) | [3](pill-arrows/step-03.md) | [4](pill-arrows/step-04.md) | [5](pill-arrows/step-05.md) | [6](pill-arrows/step-06.md) | [7](pill-arrows/step-07.md) | [8](pill-arrows/step-08.md) | [9](pill-arrows/step-09.md) | [10](pill-arrows/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](pill-arrows/step-11.md) | [12](pill-arrows/step-12.md) | [13](pill-arrows/step-13.md) | [14](pill-arrows/step-14.md) | [15](pill-arrows/step-15.md) | [16](pill-arrows/step-16.md) | [17](pill-arrows/step-17.md) | [18](pill-arrows/step-18.md) | [19](pill-arrows/step-19.md) | [20](pill-arrows/step-20.md) |
+| [21](pill-arrows/step-21.md) | [22](pill-arrows/step-22.md) | [23](pill-arrows/step-23.md) | [24](pill-arrows/step-24.md) | [25](pill-arrows/step-25.md) | [26](pill-arrows/step-26.md) | [27](pill-arrows/step-27.md) | [28](pill-arrows/step-28.md) | [29](pill-arrows/step-29.md) | [30](pill-arrows/step-30.md) |
+| [31](pill-arrows/step-31.md) | [32](pill-arrows/step-32.md) | [33](pill-arrows/step-33.md) | [34](pill-arrows/step-34.md) | [35](pill-arrows/step-35.md) | [36](pill-arrows/step-36.md) | [37](pill-arrows/step-37.md) | [38](pill-arrows/step-38.md) | [39](pill-arrows/step-39.md) | [40](pill-arrows/step-40.md) |
+| [41](pill-arrows/step-41.md) | [42](pill-arrows/step-42.md) | [43](pill-arrows/step-43.md) | [44](pill-arrows/step-44.md) | [45](pill-arrows/step-45.md) | [46](pill-arrows/step-46.md) | [47](pill-arrows/step-47.md) | [48](pill-arrows/step-48.md) | [49](pill-arrows/step-49.md) | [50](pill-arrows/step-50.md) |
+| [51](pill-arrows/step-51.md) |  |  |  |  |  |  |  |  |  |
 
 Solved.
 

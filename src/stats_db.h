@@ -710,6 +710,22 @@ typedef struct {
  */
 bool stats_db_puzzle_rank(uint16_t puzzle, stats_h2h_t *out);
 
+/** @brief An earlier solve of the same puzzle under another name (stats_db_solved_twin()). */
+typedef struct {
+    bool found;                          /**< there is one */
+    uint16_t puzzle;                     /**< the puzzle solved then (another id) */
+    int64_t finished_at;                 /**< when, Unix time UTC; 0 = unknown */
+} stats_twin_t;
+/**
+ * @brief Has the current player solved this puzzle before under another name: another puzzle with the same
+ *        givens turned, mirrored or renumbered (the same canonical hash, canon_core.h)? The latest such
+ *        solve. Waits for the database.
+ * @param[in] puzzle  the puzzle id
+ * @param[out] out     gets the solve
+ * @return true if there is one (false too without a database, or for a variant without a hash)
+ */
+bool stats_db_solved_twin(uint16_t puzzle, stats_twin_t *out);
+
 /* ---------------------------------------------------------------- daily leaderboard */
 /** @brief A player's row on a daily puzzle's leaderboard: their best solve of it. */
 typedef struct {

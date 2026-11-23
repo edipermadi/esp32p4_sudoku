@@ -41,59 +41,16 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py arrow: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 49 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick its number below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/arrow-walkthrough/step-00.png)
 
-1. [the 4 in box 1](arrow/step-01.md)
-2. [the 7 in box 2](arrow/step-02.md)
-3. [the 1 in box 3](arrow/step-03.md)
-4. [the 3 in box 3](arrow/step-04.md)
-5. [the 7 in box 3](arrow/step-05.md)
-6. [the 9 in box 3](arrow/step-06.md)
-7. [the 7 in box 5](arrow/step-07.md)
-8. [the 2 in box 5](arrow/step-08.md)
-9. [the 9 in box 7](arrow/step-09.md)
-10. [the 1 in box 7](arrow/step-10.md)
-11. [the 8 in box 7](arrow/step-11.md)
-12. [the 6 in box 7](arrow/step-12.md)
-13. [the 6 in box 4](arrow/step-13.md)
-14. [the 2 in box 9](arrow/step-14.md)
-15. [the 2 in box 8](arrow/step-15.md)
-16. [the 8 in box 8](arrow/step-16.md)
-17. [the 1 in box 9](arrow/step-17.md)
-18. [the 1 in box 8](arrow/step-18.md)
-19. [the 3 in box 9](arrow/step-19.md)
-20. [the 4 in box 9](arrow/step-20.md)
-21. [the 4 in box 6](arrow/step-21.md)
-22. [the 8 in box 6](arrow/step-22.md)
-23. [the 5 in box 9](arrow/step-23.md)
-24. [the 5 in box 6](arrow/step-24.md)
-25. [the 5 in box 4](arrow/step-25.md)
-26. [the 5 in box 1](arrow/step-26.md)
-27. [the 9 in box 1](arrow/step-27.md)
-28. [the 8 in box 1](arrow/step-28.md)
-29. [the 3 in box 1](arrow/step-29.md)
-30. [the 5 in box 2](arrow/step-30.md)
-31. [the 8 in box 2](arrow/step-31.md)
-32. [the 8 in box 5](arrow/step-32.md)
-33. [the 8 in box 4](arrow/step-33.md)
-34. [the 1 in box 4](arrow/step-34.md)
-35. [the 4 in box 5](arrow/step-35.md)
-36. [the 9 in box 5](arrow/step-36.md)
-37. [the 1 in box 5](arrow/step-37.md)
-38. [the 1 in box 2](arrow/step-38.md)
-39. [the 3 in box 5](arrow/step-39.md)
-40. [the 3 in box 2](arrow/step-40.md)
-41. [the 4 in box 2](arrow/step-41.md)
-42. [the 1 in box 6](arrow/step-42.md)
-43. [the 3 in box 6](arrow/step-43.md)
-44. [the 3 in box 4](arrow/step-44.md)
-45. [the 9 in box 4](arrow/step-45.md)
-46. [the 9 in box 6](arrow/step-46.md)
-47. [the 3 in box 8](arrow/step-47.md)
-48. [the 4 in box 8](arrow/step-48.md)
-49. [the 5 in box 8](arrow/step-49.md)
+| [1](arrow/step-01.md) | [2](arrow/step-02.md) | [3](arrow/step-03.md) | [4](arrow/step-04.md) | [5](arrow/step-05.md) | [6](arrow/step-06.md) | [7](arrow/step-07.md) | [8](arrow/step-08.md) | [9](arrow/step-09.md) | [10](arrow/step-10.md) |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| [11](arrow/step-11.md) | [12](arrow/step-12.md) | [13](arrow/step-13.md) | [14](arrow/step-14.md) | [15](arrow/step-15.md) | [16](arrow/step-16.md) | [17](arrow/step-17.md) | [18](arrow/step-18.md) | [19](arrow/step-19.md) | [20](arrow/step-20.md) |
+| [21](arrow/step-21.md) | [22](arrow/step-22.md) | [23](arrow/step-23.md) | [24](arrow/step-24.md) | [25](arrow/step-25.md) | [26](arrow/step-26.md) | [27](arrow/step-27.md) | [28](arrow/step-28.md) | [29](arrow/step-29.md) | [30](arrow/step-30.md) |
+| [31](arrow/step-31.md) | [32](arrow/step-32.md) | [33](arrow/step-33.md) | [34](arrow/step-34.md) | [35](arrow/step-35.md) | [36](arrow/step-36.md) | [37](arrow/step-37.md) | [38](arrow/step-38.md) | [39](arrow/step-39.md) | [40](arrow/step-40.md) |
+| [41](arrow/step-41.md) | [42](arrow/step-42.md) | [43](arrow/step-43.md) | [44](arrow/step-44.md) | [45](arrow/step-45.md) | [46](arrow/step-46.md) | [47](arrow/step-47.md) | [48](arrow/step-48.md) | [49](arrow/step-49.md) |  |
 
 Solved.
 
