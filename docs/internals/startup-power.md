@@ -20,12 +20,12 @@ What happens from power-on to the Home screen, and back down: the screen saver, 
 7. **The speaker** (`sfx_init()`) and its task.
 8. **The UI** (`sudoku_ui_start()`):
    1. the undo buffers, the generator's tables and the puzzle cache, in PSRAM;
-   2. the **splash screen** (`extras/splashscreen.png`, decoded once), drawn at once; its loading bar moves with each step below;
+   2. the **start-up screen**: a loading bar and a line saying what's going on, both moving on with each step below (drawn at once: LVGL's loop isn't running yet);
    3. **the card**: probed (`sd_probe_card()`); if there is one, the `stats_db` task opens `sudoku.db`: creates or upgrades the tables, merges any old NVS statistics once, selects the current player, loads the cache and checks every player's achievements (quietly). The UI waits up to 4 s for it, in 40 ms steps, then takes the settings and the current player's statistics into RAM;
    4. **USB**: the drive is set up empty (lent only on Connect); it also tells the board when a computer is plugged in;
    5. **Wi-Fi** (`wifi_mgr_start()`): reconnects to the saved network if Wi-Fi was left on; NTP sets the clock once connected;
    6. sound, Gibberlink, volume, brightness, the time zone, the screen timeout and the collection last shown, from the settings;
-   7. **every screen built** (`apply_theme()`), the splash freed;
+   7. **every screen built** (`apply_theme()`, the line naming each one), the start-up screen deleted;
    8. **the UI's timers**: the game clock (200 ms), the screen saver and Home's clock (1 s), night mode (20 s), the database poll (100 ms).
 9. `loop()` starts: LVGL, devctl, Gibberlink's commands, the avatar install, each pass. It waits 1–20 ms between passes (50 ms while the screen is dark).
 

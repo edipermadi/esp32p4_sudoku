@@ -90,29 +90,21 @@ esp_err_t sudoku_ui_start(void)
     lv_sysmon_hide_performance(NULL);
 #endif
 
-    /* the splash screen while the card and sudoku.db are read and the screens built (two seconds or
-     * so); just text if the picture can't be decoded */
+    /* the start-up screen while the card and sudoku.db are read and the screens built (two seconds or
+     * so): a loading bar and what's going on */
     lv_obj_t *boot = lv_screen_active();
     lv_obj_set_style_bg_color(boot, lv_color_hex(ui_palette_dark()->bg), 0);
     lv_obj_set_style_bg_opa(boot, LV_OPA_COVER, 0);
-    lv_obj_t *splash = splash_show(boot);
-    const bool picture = splash != NULL;
-    if (!picture) {
-        splash = lv_label_create(boot);
-        lv_label_set_text(splash, "Sudoku\n\nStarting...");
-        lv_obj_set_style_text_align(splash, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_font(splash, &lv_font_montserrat_28, 0);
-        lv_obj_set_style_text_color(splash, lv_color_hex(ui_palette_dark()->text), 0);
-        lv_obj_center(splash);
-    }
-    lv_refr_now(NULL);
+    splash_show(boot);
 
     /* The settings and the game in progress live in sudoku.db, so the card
      * comes first. Card setup also has to happen before Wi-Fi starts (they
      * share the SDMMC host, see the microSD section). */
+    splash_status("Reading the microSD card");
     sd_probe_card();
     splash_progress(SPLASH_CARD);
     if (is_sd_present()) {
+        splash_status("Opening sudoku.db");
         char sz[24];
         fmt_gb(sz, sizeof(sz), sd_bytes());
         printf("microSD: \"%s\", %s\n", sd_name(), sz);
@@ -149,6 +141,7 @@ esp_err_t sudoku_ui_start(void)
     if (is_sd_present() && usb_msc_start() != ESP_OK) {   /* empty drive until Connect; tells us a computer is there */
         printf("usb_msc: USB didn't start\n");
     }
+    splash_status("Starting Wi-Fi and sound");
     wifi_mgr_start();               /* reconnects to the saved network if Wi-Fi was left on */
 
     sfx_set_enabled(is_store_sound_enabled());
@@ -162,13 +155,9 @@ esp_err_t sudoku_ui_start(void)
     puzzles_set_coll(store_last_collection());
     puzzles_set_tab(coll_tab(puzzles_coll()));
     ui_set_sleep_min(store_screen_timeout_min());
-    splash_progress(SPLASH_SCREENS_FROM);
+    splash_built(0);                                /* (the bar at SPLASH_SCREENS_FROM: the first screen next) */
     apply_theme(is_store_dark_mode());              /* (the loading bar moves on with each screen: splash_built()) */
-    if (picture) {
-        splash_hide();                              /* (its pixels freed too) */
-    } else {
-        lv_obj_delete(splash);
-    }
+    splash_hide();
 
     game_set_last_tick(lv_tick_get());
     lv_timer_create(tick_cb, 200, NULL);

@@ -9,7 +9,7 @@ digraph startup {
     store [label="Avatars mapped; settings in RAM\n(store_init: defaults, old NVS keys)"];
     host  [label="SD card host set up\n(before Wi-Fi: they share SDMMC)"];
     sfx   [label="Speaker and the sfx task"];
-    splash[label="Splash screen drawn"];
+    splash[label="Start-up screen drawn\n(loading bar, what it's doing)"];
     card  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Card\nfound?"];
     open  [label="stats_db task opens sudoku.db:\ncreate / upgrade tables, select the player,\nload the cache, check achievements"];
     wait  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Open within\n4 s?"];

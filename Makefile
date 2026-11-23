@@ -40,7 +40,7 @@ ESPTOOL ?= $(lastword $(sort $(wildcard $(HOME)/.arduino15/packages/esp32/tools/
 AVATARS_AT = $(shell awk -F, '$$1 ~ /^avatars/ {gsub(/ /, "", $$4); print $$4}' partitions.csv)
 
 SOURCES := $(filter-out \
-	src/avatars.c src/avatars.h src/puzzles_data.c src/puzzles_count.h src/splash_data.c src/splash_data.h, \
+	src/avatars.c src/avatars.h src/puzzles_data.c src/puzzles_count.h, \
 	$(wildcard src/*.c src/*.cpp src/*.h src/bsp/*.c src/bsp/*.cpp src/bsp/*.h)) \
 	src/sqlite/sqlite3_esp.c esp32p4_sudoku.ino \
 	$(wildcard tests/*.c tools/*.c)

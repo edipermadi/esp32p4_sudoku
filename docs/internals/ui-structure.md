@@ -27,7 +27,7 @@ A UI file builds its widgets, handles their events and draws; the decisions (wha
 
 The screens are LVGL screens kept in a registry (`src/ui_screens.c`): `screen_home()`, `screen_list()`, `screen_game()`, `screen_stats()`, `screen_settings()`, `screen_wifi()`, `screen_profile()`, `screen_history()`, `screen_plays()`, `screen_trophy()`, `screen_sysmon()`, `screen_files()`, plus a few built on demand (Replay, Learn, Enter a puzzle). Moving between them is `lv_screen_load()`.
 
-**`apply_theme(dark)`** builds them all: the palette (`palette_build()`: the scheme, the accent, the colour-blind colours), LVGL's theme, then each screen's `build_*()` in turn. It runs at start-up (the splash's loading bar moves with each screen) and whenever the look changes: dark mode, night mode starting or ending, the accent colour, colour-blind colours, a restored `sudoku.db`. Because every screen is rebuilt:
+**`apply_theme(dark)`** builds them all: the palette (`palette_build()`: the scheme, the accent, the colour-blind colours), LVGL's theme, then each screen's `build_*()` in turn. It runs at start-up (the start-up screen's loading bar and its line move on with each screen) and whenever the look changes: dark mode, night mode starting or ending, the accent colour, colour-blind colours, a restored `sudoku.db`. Because every screen is rebuilt:
 
 ![Rebuilding every screen](../diagrams/theme.svg)
 
@@ -68,7 +68,7 @@ A task's result is never pushed into the UI: a timer takes it (see [Tasks and co
 ## Adding a screen
 
 1. `ui_<name>.c` with `build_<name>()` making its screen (`make_screen()`), and its data in a `<name>_core.c` if it has any logic.
-2. A registry entry in `ui_screens.c` (`screen_<name>()`, and its setter if built elsewhere), and a call in `apply_theme()`'s list, with a `splash_built()` step.
+2. A registry entry in `ui_screens.c` (`screen_<name>()`, and its setter if built elsewhere), and a call in `apply_theme()`'s list, with a `splash_built()` step and a row in `SPLASH_BUILD` (`src/ui_splash.c`: its name under the loading bar, and its time).
 3. Its button: Home's menu (`src/ui_home.c`), a ⋮ menu, or another screen.
 4. Anything it polls: from `sd_poll_cb()` if it is `sudoku.db`'s answer, or its own timer created while it's shown.
 5. A name for devctl's `screen` command (`src/ui_remote.c`), so tests can tell where they are.

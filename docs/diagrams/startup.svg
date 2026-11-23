@@ -82,8 +82,9 @@
 <!-- splash -->
 <g id="node7" class="node">
 <title>splash</title>
-<path fill="#eef3fb" stroke="#5b7db1" d="M265.5,-871C265.5,-871 152.5,-871 152.5,-871 146.5,-871 140.5,-865 140.5,-859 140.5,-859 140.5,-847 140.5,-847 140.5,-841 146.5,-835 152.5,-835 152.5,-835 265.5,-835 265.5,-835 271.5,-835 277.5,-841 277.5,-847 277.5,-847 277.5,-859 277.5,-859 277.5,-865 271.5,-871 265.5,-871"/>
-<text text-anchor="middle" x="209" y="-850.2" font-family="Helvetica,sans-Serif" font-size="11.00">Splash screen drawn</text>
+<path fill="#eef3fb" stroke="#5b7db1" d="M288,-871C288,-871 130,-871 130,-871 124,-871 118,-865 118,-859 118,-859 118,-847 118,-847 118,-841 124,-835 130,-835 130,-835 288,-835 288,-835 294,-835 300,-841 300,-847 300,-847 300,-859 300,-859 300,-865 294,-871 288,-871"/>
+<text text-anchor="middle" x="209" y="-856.2" font-family="Helvetica,sans-Serif" font-size="11.00">Start&#45;up screen drawn</text>
+<text text-anchor="middle" x="209" y="-844.2" font-family="Helvetica,sans-Serif" font-size="11.00">(loading bar, what it&#39;s doing)</text>
 </g>
 <!-- sfx&#45;&gt;splash -->
 <g id="edge6" class="edge">

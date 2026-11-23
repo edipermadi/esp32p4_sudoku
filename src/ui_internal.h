@@ -257,14 +257,14 @@ typedef struct {
 
 /* ------------------------------------------------------------- splash screen (ui_splash.c) */
 /**
- * @brief The start-up splash screen (extras/splashscreen.png) decoded and put on parent, full screen.
+ * @brief The start-up screen put on parent: a loading bar and, under it, what start-up is doing.
  * @param[in] parent  the screen shown at start-up
- * @return the image, or NULL if it couldn't be decoded (no memory, a decoder error)
+ * @return the bar and its text, in one box
  */
 lv_obj_t *splash_show(lv_obj_t *parent);
 /** @name The loading bar's milestones, % (ui_splash.c says where the weights come from)
  *  @{ */
-#define SPLASH_SHOWN        5           /**< the splash screen up */
+#define SPLASH_SHOWN        5           /**< the start-up screen up */
 #define SPLASH_CARD         8           /**< the card looked at */
 #define SPLASH_DB_OPEN      55          /**< sudoku.db open (the bar creeps toward it while it opens) */
 #define SPLASH_SCREENS_FROM 56          /**< the settings applied; the screens fill the rest, to 100 */
@@ -276,13 +276,20 @@ lv_obj_t *splash_show(lv_obj_t *parent);
  */
 void splash_progress(int pct);
 /**
- * @brief apply_theme(): its step-th screen built (1, 2, ...): the loading bar moves on by that screen's
- * share; nothing without the splash screen (a theme change later).
+ * @brief The line under the loading bar: what start-up is doing now ("Opening sudoku.db"), drawn at once;
+ * nothing without the start-up screen.
+ * @param[in] what  the text
+ */
+void splash_status(const char *what);
+/**
+ * @brief apply_theme(): its step-th screen built (0: about to start; 1, 2, ...): the loading bar moves on by
+ * that screen's share and the line under it names the next; nothing without the start-up screen (a theme
+ * change later).
  * @param[in] step  the screens built so far
  */
 void splash_built(int step);
 /**
- * @brief The splash screen deleted and its pixels freed (once the UI is up).
+ * @brief The start-up screen deleted (once the UI is up).
  */
 void splash_hide(void);
 
