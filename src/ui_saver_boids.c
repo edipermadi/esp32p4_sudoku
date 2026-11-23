@@ -40,7 +40,7 @@ static void draw_flock(bool erase)
     for (int k = BOIDS_TRAIL - 2; k >= 0; k--) {
         uint16_t c = erase ? 0 : bd_col[k + 1];
         for (int i = 0; i < BOIDS_N; i++) {
-            saver_pen_line(bd_was[i][k + 1][0], bd_was[i][k + 1][1], bd_was[i][k][0], bd_was[i][k][1], c);
+            saver_pen_line(bd_was[i][k + 1][0], bd_was[i][k + 1][1], bd_was[i][k][0], bd_was[i][k][1], 2, c);
         }
     }
     for (int i = 0; i < BOIDS_N; i++) {

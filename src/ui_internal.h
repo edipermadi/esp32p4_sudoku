@@ -1441,6 +1441,24 @@ bool saver_lissajous_start(lv_obj_t *parent);
 /** @brief The Lissajous screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_lissajous_stop(void);
 /**
+ * @brief The double pendulum screen saver starts (ui_saver_pendulum.c): the pendulum and its fading
+ *        trail on the savers' picture, 25 frames a second.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (nothing shown)
+ */
+bool saver_pendulum_start(lv_obj_t *parent);
+/** @brief The double pendulum screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_pendulum_stop(void);
+/**
+ * @brief The Langton's ant screen saver starts (ui_saver_ant.c): the ant walking a grid of dots on the
+ *        savers' picture, 600 steps a second.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (nothing shown)
+ */
+bool saver_ant_start(lv_obj_t *parent);
+/** @brief The Langton's ant screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_ant_stop(void);
+/**
  * @brief The savers' picture (ui_saver_pic.c): a full-screen black RGB565 image on the cover, in PSRAM.
  * @param[in] parent  the screen saver's cover
  * @return its pixels (SCR_W per row) to paint into, or NULL if there was no memory for it
@@ -1488,14 +1506,15 @@ void saver_pen_put(int x, int y, uint16_t c);
  */
 void saver_pen_square(int x, int y, int size, uint16_t c);
 /**
- * @brief The pen: a 2 px wide line.
+ * @brief The pen: a line.
  * @param[in] x0  from, px
  * @param[in] y0  px
  * @param[in] x1  to, px
  * @param[in] y1  px
+ * @param[in] w  its width, px
  * @param[in] c  the colour (RGB565)
  */
-void saver_pen_line(int x0, int y0, int x1, int y1, uint16_t c);
+void saver_pen_line(int x0, int y0, int x1, int y1, int w, uint16_t c);
 /** @brief A frame of the pen ends: what it changed is flushed from the cache and redrawn, tile by tile. */
 void saver_pen_end(void);
 /**

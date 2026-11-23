@@ -177,6 +177,10 @@ src/ui_saver_pic.c      the savers' full-screen picture in PSRAM: flushed from t
 src/ui_saver_attractor.c the strange attractor screen saver: points plotted, their pixels repainted
 src/ui_saver_boids.c    the boids screen saver: trails erased and drawn, only the changed tiles redrawn
 src/ui_saver_lissajous.c the Lissajous screen saver: the figure and its beam erased and drawn with the pen
+src/ui_saver_pendulum.c the double pendulum screen saver: its trail, rods and bobs erased and drawn with the pen
+src/ui_saver_ant.c      the Langton's ant screen saver: the dots the ant changed drawn with the pen
+src/ant_core.c          Langton's ant without LVGL: the rules (RL and longer), the steps, new runs
+src/pendulum_core.c     a double pendulum without LVGL: the equations of motion stepped with RK4, the trail
 src/lissajous_core.c    Lissajous figures without LVGL: the ratios, the drifting phase, shrinking between ratios, the beam
 src/boids_core.c        a flock of boids without LVGL: separation, alignment, cohesion, the edges, trails
 src/attractor_core.c    strange attractors without LVGL: the formulas, random sets that spread, the counts

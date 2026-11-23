@@ -34,6 +34,8 @@
 #include "attractor_core.h"
 #include "boids_core.h"
 #include "lissajous_core.h"
+#include "pendulum_core.h"
+#include "ant_core.h"
 
 static int s_checks, s_failed;
 
@@ -1709,6 +1711,118 @@ static void test_lissajous(void)
     CHECK(r[0][0] == r[1][0] && r[0][1] == r[1][1]);
 }
 
+/* Pendulum (the screen saver): its energy stays put (RK4, no friction) over minutes, both bobs stay on the
+ * screen, the trail is continuous, two starts a millionth of a radian apart end far apart (chaos), it
+ * starts again after PEND_RUN frames, and the same seed gives the same swing */
+static void test_pendulum(void)
+{
+    CHECK(pend_start(4));
+    float e0 = pend_energy(), worst = 0;
+    bool in = true, smooth = true;
+    for (int f = 0; f < PEND_RUN - 1; f++) {
+        CHECK(!pend_step());
+        float e = pend_energy(), d = fabsf(e - e0) / fabsf(e0);
+        worst = d > worst ? d : worst;
+        float x1, y1, x2, y2;
+        pend_bobs(&x1, &y1, &x2, &y2);
+        in &= x1 >= 0 && y1 >= 0 && x2 >= 0 && y2 >= 0 && x1 < PEND_W && y1 < PEND_W && x2 < PEND_W && y2 < PEND_W;
+        float ax, ay, bx, by;
+        pend_trail(0, &ax, &ay);
+        pend_trail(1, &bx, &by);
+        smooth &= fabsf(ax - bx) < 60 && fabsf(ay - by) < 60;
+    }
+    CHECKF(worst < 0.01f, "pendulum: energy drifts %.4f", worst);
+    CHECK(in && smooth && pend_trail_len() == PEND_TRAIL);
+    CHECK(pend_step() && pend_trail_len() == 1);    /* a new start, its trail forgotten */
+    float a[2][2];
+    for (int k = 0; k < 2; k++) {                   /* chaos: a millionth apart, then far apart */
+        pend_set(2.5f + k * 1e-6f, 1.0f);
+        for (int f = 0; f < 750; f++) {             /* (30 s) */
+            pend_step();
+        }
+        pend_angles(&a[k][0], &a[k][1]);
+    }
+    CHECKF(fabsf(a[0][1] - a[1][1]) > 0.3f || fabsf(a[0][0] - a[1][0]) > 0.3f,
+           "pendulum: chaotic (%.3f vs %.3f)", a[0][1], a[1][1]);
+    float b[2];                                     /* the same seed, the same swing */
+    for (int k = 0; k < 2; k++) {
+        CHECK(pend_start(9));
+        for (int f = 0; f < 100; f++) {
+            pend_step();
+        }
+        float y;
+        pend_angles(&b[k], &y);
+    }
+    CHECK(b[0] == b[1]);
+    pend_free();
+    CHECK(!pend_step());
+}
+
+/* Langton's ant (the screen saver): the classic rule builds its highway (after about 10,000 steps, 2 cells
+ * on a diagonal every 104 steps), a step changes one cell by one state, a new run comes after ANT_RUN
+ * steps, and the same seed gives the same runs */
+static void test_ant(void)
+{
+    CHECK(ant_start(1));
+    ant_set_rule("RL");
+    int ch;
+    bool one = true;
+    for (int s = 0; s < 10400; s++) {
+        int x, y;
+        ant_pos(&x, &y);
+        uint8_t before = ant_cell(x, y);
+        CHECK(!ant_step(&ch));
+        one &= ch == y * ANT_N + x && ant_cell(x, y) == (before + 1) % 2;
+    }
+    CHECK(one);
+    int px, py, dx0 = 0, dy0 = 0;
+    bool highway = true;
+    ant_pos(&px, &py);
+    for (int k = 0; k < 10; k++) {
+        for (int s = 0; s < 104; s++) {
+            ant_step(&ch);
+        }
+        int x, y;
+        ant_pos(&x, &y);
+        int dx = (x - px + ANT_N + ANT_N / 2) % ANT_N - ANT_N / 2, dy = (y - py + ANT_N + ANT_N / 2) % ANT_N - ANT_N / 2;
+        if (k == 0) {
+            dx0 = dx;
+            dy0 = dy;
+        }
+        highway &= dx == dx0 && dy == dy0 && abs(dx) == 2 && abs(dy) == 2;
+        px = x;
+        py = y;
+    }
+    CHECKF(highway, "ant: the highway (%d, %d a period)", dx0, dy0);
+    ant_set_rule("LLRR");
+    for (int s = 0; s < 5000; s++) {                /* a four-state rule: states 0..3, one more a step */
+        int x, y;
+        ant_pos(&x, &y);
+        uint8_t before = ant_cell(x, y);
+        ant_step(&ch);
+        one &= ant_cell(x, y) == (before + 1) % 4;
+    }
+    CHECK(one && ant_states() == 4);
+    uint32_t n = 0;
+    while (!ant_step(&ch)) {                        /* a new run after ANT_RUN steps */
+        n++;
+    }
+    CHECK(n == ANT_RUN - 5000 && ch == -1 && ant_steps() == 0);
+    const char *r[2];                               /* the same seed, the same runs */
+    int pos[2][2];
+    for (int k = 0; k < 2; k++) {
+        CHECK(ant_start(77));
+        for (int s = 0; s < 3000; s++) {
+            ant_step(&ch);
+        }
+        r[k] = ant_rule();
+        ant_pos(&pos[k][0], &pos[k][1]);
+    }
+    CHECK(r[0] == r[1] && pos[0][0] == pos[1][0] && pos[0][1] == pos[1][1]);
+    ant_free();
+    CHECK(!ant_step(&ch) && ch == -1);
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -1721,7 +1835,8 @@ int main(int argc, char **argv)
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"life (screen saver)", test_life},   {"rain (screen saver)", test_rain},
         {"attractor (screen saver)", test_attractor}, {"boids (screen saver)", test_boids},
-        {"lissajous (screen saver)", test_lissajous},
+        {"lissajous (screen saver)", test_lissajous}, {"pendulum (screen saver)", test_pendulum},
+        {"ant (screen saver)", test_ant},
     };
     sudoku_geom_init();
     int failed_tests = 0;

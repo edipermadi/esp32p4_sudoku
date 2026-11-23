@@ -31,10 +31,11 @@ static lv_timer_t *lj_timer;              /**< a frame each LJ_FRAME_MS */
 static void draw(bool erase)
 {
     for (int i = 0; i < lj_was_n; i++) {
-        saver_pen_line(lj_was[i][0], lj_was[i][1], lj_was[i + 1][0], lj_was[i + 1][1], erase ? 0 : lj_curve);
+        saver_pen_line(lj_was[i][0], lj_was[i][1], lj_was[i + 1][0], lj_was[i + 1][1], 2,
+                       erase ? 0 : lj_curve);
     }
     for (int k = LJ_TAIL - 2; k >= 0; k--) {        /* the tail, oldest first, then the spot */
-        saver_pen_line(lj_beam_was[k + 1][0], lj_beam_was[k + 1][1], lj_beam_was[k][0], lj_beam_was[k][1],
+        saver_pen_line(lj_beam_was[k + 1][0], lj_beam_was[k + 1][1], lj_beam_was[k][0], lj_beam_was[k][1], 2,
                        erase ? 0 : lj_tail[k + 1]);
     }
     saver_pen_square(lj_beam_was[0][0] - 2, lj_beam_was[0][1] - 2, 5, erase ? 0 : lj_tail[0]);

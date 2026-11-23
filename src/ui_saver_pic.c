@@ -1,9 +1,10 @@
 /**
  * @file ui_saver_pic.c
  * @ingroup ui_sudoku
- * @brief The screen savers' picture (Life, Rain, Attractor, Boids, Lissajous): a full-screen RGB565
- *        image in PSRAM the saver paints into, flushed from the CPU's cache before it is redrawn (LVGL's
- *        PPA draw unit reads it by DMA); and a pen for drawing on it that redraws only what it touched.
+ * @brief The screen savers' picture (Life, Rain, Attractor, Boids, Lissajous, Pendulum, Langton's ant):
+ *        a full-screen RGB565 image in PSRAM the saver paints into, flushed from the CPU's cache before it
+ *        is redrawn (LVGL's PPA draw unit reads it by DMA); and a pen for drawing on it that redraws only
+ *        what it touched.
  *
  * The pen cuts the screen into PEN_TILES_X x PEN_TILES_Y tiles (30, within LVGL's 32 areas); a frame
  * (saver_pen_begin() .. saver_pen_end()) redraws in each tile just the box its changed pixels fill, so
@@ -121,13 +122,14 @@ void saver_pen_square(int x, int y, int size, uint16_t c)
 }
 
 /* (documented in ui_internal.h) */
-void saver_pen_line(int x0, int y0, int x1, int y1, uint16_t c)
+void saver_pen_line(int x0, int y0, int x1, int y1, int w, uint16_t c)
 {
+    const int o = (w - 1) / 2;                      /* (the square centred on the line) */
     int dx = x1 > x0 ? x1 - x0 : x0 - x1, sx = x0 < x1 ? 1 : -1;
     int dy = -(y1 > y0 ? y1 - y0 : y0 - y1), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
-    for (;;) {                                      /* (Bresenham, a 2 x 2 square a step) */
-        saver_pen_square(x0, y0, 2, c);
+    for (;;) {                                      /* (Bresenham, a w x w square a step) */
+        saver_pen_square(x0 - o, y0 - o, w, c);
         if (x0 == x1 && y0 == y1) {
             break;
         }

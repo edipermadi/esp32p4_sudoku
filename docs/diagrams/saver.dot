@@ -8,6 +8,8 @@ digraph saver {
     pause [label="Game paused (clock stops, board hidden, saved)\nLock screen put under the cover, if on\nBlack cover on the system layer"];
     clk   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Screen saver?\n(the lock button:\nalways Dark)"];
     analog[label="Analog clock (dim greys),\nhands each second, moved each minute,\nCPU at full speed"];
+    ant   [label="Langton's ant (VFD blue-green),\n600 steps a second on 120 x 120 dots,\nnew ant after 60,000 steps"];
+    pend  [label="Double pendulum (VFD blue-green),\nchaotic swing, fading trail, 25 fps,\nnew start every 2 minutes"];
     liss  [label="Lissajous (VFD blue-green),\nturning figure and beam, 25 fps,\nnew ratio every 16 s"];
     boids [label="Boids (VFD blue-green),\na flock with fading trails, 25 fps,\nCPU at full speed"];
     attr  [label="Strange attractor (VFD blue-green),\ndrawn point by point for 2 minutes,\nthen cleared, the next,\nCPU at full speed"];
@@ -31,6 +33,8 @@ digraph saver {
     clk -> attr [label="Attractor"];
     clk -> boids [label="Boids"];
     clk -> liss [label="Lissajous"];
+    clk -> pend [label="Pendulum"];
+    clk -> ant [label="Langton's ant"];
     clk -> life [label="Life"];
     clk -> dark [label="Dark"];
     dim -> tap1;
@@ -39,6 +43,8 @@ digraph saver {
     attr -> tap1;
     boids -> tap1;
     liss -> tap1;
+    pend -> tap1;
+    ant -> tap1;
     life -> tap1;
     tap1 -> wake [label="yes"];
     tap1 -> tap1 [label="no"];
