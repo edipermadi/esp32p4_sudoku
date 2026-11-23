@@ -69,6 +69,17 @@ void list_add_row(int i, uint16_t id, const char *sub, lv_color_t sub_c, lv_even
 int list_fill_starred(void);
 /** @} */
 
+/** @name Search (ui_list_search.c)
+ *  @{ */
+/**
+ * @brief The magnifier next to the tabs: the search box (what was searched last in it).
+ * @param[in] e  the event
+ */
+void list_search_cb(lv_event_t *e);
+/** @brief Fills the rows with the search's results, or says how to search. */
+void list_fill_search(void);
+/** @} */
+
 /* (the collection's actions, Export and Delete: ui_internal.h, for the ⋮ menu) */
 
 /** @} */

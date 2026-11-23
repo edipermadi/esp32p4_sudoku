@@ -24,6 +24,7 @@
 #include "sfx.h"
 #include "bsp/bsp_board.h"
 #include "ui_palette.h"
+#include "ui_ctx_menu.h"
 #include "wifi_mgr.h"
 #include "ui_wifi.h"
 #include "ui_sysmon.h"
@@ -92,6 +93,7 @@ LV_FONT_DECLARE(font_icons_20)    /**< the same at 20 px + Montserrat 20 */
 #define SYMBOL_UNDO     "\xEF\x83\xA2"   /**< FontAwesome U+F0E2 (undo; font_icons_24 only) */
 #define SYMBOL_REDO     "\xEF\x80\x9E"   /**< FontAwesome U+F01E (redo; font_icons_24 only) */
 #define SYMBOL_GRID     "\xEF\x80\x8A"   /**< FontAwesome U+F00A (th, a 3x3 grid): the built-in puzzles (font_icons_24 only) */
+#define SYMBOL_SEARCH   "\xEF\x80\x82"   /**< FontAwesome U+F002 (search, a magnifying glass): Puzzles' search (font_icons_24 only) */
 #define P ui_palette()                  /**< the active palette, short */
 
 /* ------------------------------------------------------------- geometry */
@@ -144,16 +146,7 @@ LV_FONT_DECLARE(font_icons_20)    /**< the same at 20 px + Montserrat 20 */
 #define L_COLLS (PUZZLE_COLLECTION_COUNT + STATS_MAX_IMPORTS + STATS_MAX_SAVED)   /**< built-in, imported, saved */
 
 
-/** @brief A context menu: a card of icon rows under its button (right edges lined up), on the
- * top layer; a tap anywhere else, or on the button again, closes it. An item's cb gets
- * a NULL event. */
-typedef struct {
-    const char *icon;                   /**< its icon */
-    const char *text;                   /**< its text */
-    void (*cb)(lv_event_t *e);          /**< a tap (the event is NULL) */
-    bool disabled;                      /**< shown dimmed, not tappable */
-    bool danger;                        /**< red (Delete) */
-} ctx_item_t;
+/* (the context menus, ctx_item_t and ctx_menu_*(): ui_ctx_menu.h, included above) */
 
 /* ============================================================= persistence */
 
@@ -1051,24 +1044,6 @@ lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color);
  * @param[in] off_c  its icon's colour while off
  */
 void icon_btn_set(lv_obj_t *b, bool on, lv_color_t off_c);
-/**
- * @brief Closes the open context menu.
- */
-void ctx_menu_close(void);
-/**
- * @brief the menu's card, w wide, under btn (any open menu closes first); its content is the caller's
- * @param[in] btn  the menu's button
- * @param[in] w  px
- * @return the card
- */
-lv_obj_t *ctx_card_open(lv_obj_t *btn, int w);
-/**
- * @brief opens btn's menu (or closes it, when it is open)
- * @param[in] btn  the menu's button
- * @param[in] items  the items
- * @param[in] n  how many
- */
-void ctx_menu_toggle(lv_obj_t *btn, const ctx_item_t *items, int n);
 /**
  * @brief Text that wraps to its parent's width, left-aligned (dialogs). Font: NULL
  * = the parent's (inherited, like a label's).

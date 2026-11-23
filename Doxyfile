@@ -49,5 +49,7 @@ GENERATE_LATEX         = NO
 HTML_DYNAMIC_SECTIONS  = YES
 # include graphs (needs Graphviz; set NO without it)
 HAVE_DOT               = YES
+# ui_internal.h includes 51 headers and is included by 57 files: room for their graphs
+DOT_GRAPH_MAX_NODES    = 100
 DOT_IMAGE_FORMAT       = svg
 INTERACTIVE_SVG        = YES

@@ -137,6 +137,21 @@ int ui_nsaved(void);
  */
 void puzzle_name(uint16_t id, char *buf, size_t n);
 /**
+ * @brief A puzzle made on the board or imported: its name from what it's made of, as puzzle_name() gives it
+ * ("Collection #3" imported, "My puzzles #3" typed in, "Daily Hard, 18 Nov", "X-Sudoku Hard #14"), without
+ * looking the puzzle up (the search names hundreds at once).
+ * @param[in] id       the puzzle (PUZZLE_GEN_BASE and up)
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] level    gen_level_t, -1 unknown
+ * @param[in] source   its own source ("My puzzles", "Received"), "" none (imported ones: by id)
+ * @param[in] number   its number in that source
+ * @param[in] day      a daily puzzle's 'YYYY-MM-DD', "" otherwise
+ * @param[out] buf  gets it
+ * @param[in] n    its size
+ */
+void puzzle_name_from(uint16_t id, int variant, int level, const char *source, int number, const char *day, char *buf,
+                      size_t n);
+/**
  * @brief A puzzle made on the board: its givens, variant and level.
  * @param[in] id       the puzzle
  * @param[out] givens   gets the givens (81 cells; may be NULL)

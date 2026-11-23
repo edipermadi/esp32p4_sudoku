@@ -8,6 +8,7 @@
 #include "continue_core.h"
 #include "ui_list_part.h"
 #include "puzzles_core.h"
+#include "puzzles_search.h"
 
 /**
  * @brief A starred row: its puzzle, to play.
@@ -77,6 +78,7 @@ int list_fill_starred(void)
 void list_star_cb(lv_event_t *e)
 {
     puzzles_set_starred(!is_puzzles_starred());
+    puzzles_search_off();                           /* (Starred or All puzzles: the search results go) */
     refresh_list();
     if (!is_puzzles_starred()) {
         list_reveal_coll(LV_ANIM_OFF);

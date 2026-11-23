@@ -115,6 +115,7 @@ typedef enum {
     CMD_RECORDS,                /**< the personal records */
     CMD_PRANK,                  /**< head-to-head on a puzzle (waited for) */
     CMD_TWIN,                   /**< the same puzzle solved before under another name (waited for) */
+    CMD_GEN_ROWS,               /**< every puzzle made on the board or imported, for the search (waited for) */
     CMD_EXPORT,                 /**< CSV export */
     CMD_WEEK,                   /**< a weekly challenge */
     CMD_PLAYER_COLOR,           /**< set a player's colour */
@@ -555,6 +556,8 @@ uint64_t sdb_puzzle_canon(int puzzle);
  * @return false on an error
  */
 bool sdb_canon_backfill(void);
+/** @brief CMD_GEN_ROWS: every generated or imported puzzle's name fields (stats_db_gen_rows()). */
+void sdb_do_gen_rows(void);
 /** @brief CMD_TWIN: the latest solve of s_gen.puzzle under another name (stats_db_solved_twin()). */
 void sdb_do_twin(void);
 /** @brief CMD_PRANK: head-to-head on s_gen.puzzle (stats_db_puzzle_rank()). */

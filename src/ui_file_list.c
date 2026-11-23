@@ -8,12 +8,14 @@
 #include "files_core.h"
 #include "ui_palette.h"
 #include "ui_media_view.h"
+#include "ui_ctx_menu.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
 LV_FONT_DECLARE(font_icons_24)       /* Montserrat 24 + FontAwesome icons, among them the lock */
 #define SYMBOL_LOCK "\xEF\x80\xA3"   /**< FontAwesome U+F023 */
+#define SYMBOL_MORE "\xEF\x85\x82"   /**< FontAwesome U+F142 (ellipsis-v): a row's menu */
 
 static lv_obj_t *s_path_lbl;            /**< the folder shown */
 static lv_obj_t *s_count_lbl;           /**< "12 items", "Reading...", "Deleting..." */
@@ -62,37 +64,61 @@ static void do_restore(int idx)
 }
 
 /* ------------------------------------------------------------- the list */
+static int s_menu_row = -1;             /**< the entry whose ⋮ menu is open (the menu's items get no event) */
+
 /**
- * @brief A row's Rename (not while the folder is read again: the worker is rewriting the entries).
- * @param[in] e  the event (user data: the entry)
+ * @brief A row's menu: Rename (not while the folder is read again: the worker is rewriting the entries).
+ * @param[in] e  the event (NULL: from the menu)
  */
 static void on_rename(lv_event_t *e)
 {
+    (void)e;
     if (!is_files_scanning() && !is_files_purging()) {
-        file_dialog_open((int)(intptr_t)lv_event_get_user_data(e), DLG_RENAME);
+        file_dialog_open(s_menu_row, DLG_RENAME);
     }
 }
 
 /**
- * @brief A row's Delete: into the Recycle bin, or in the bin for good (asks first).
- * @param[in] e  the event (user data: the entry)
+ * @brief A row's menu: Delete, into the Recycle bin, or in the bin for good (asks first).
+ * @param[in] e  the event (NULL: from the menu)
  */
 static void on_delete(lv_event_t *e)
 {
+    (void)e;
     if (!is_files_scanning() && !is_files_purging()) {
-        file_dialog_open((int)(intptr_t)lv_event_get_user_data(e), is_files_in_trash() ? DLG_PURGE : DLG_TRASH);
+        file_dialog_open(s_menu_row, is_files_in_trash() ? DLG_PURGE : DLG_TRASH);
     }
 }
 
 /**
- * @brief A bin item's Restore.
- * @param[in] e  the event (user data: the entry)
+ * @brief A bin item's menu: Restore.
+ * @param[in] e  the event (NULL: from the menu)
  */
 static void on_restore(lv_event_t *e)
 {
+    (void)e;
     if (!is_files_scanning() && !is_files_purging()) {
-        do_restore((int)(intptr_t)lv_event_get_user_data(e));
+        do_restore(s_menu_row);
     }
+}
+
+/**
+ * @brief A row's ⋮: its menu, Rename and Delete (in the Recycle bin: Restore and Delete for good).
+ * @param[in] e  the event (user data: the entry)
+ */
+static void on_row_menu(lv_event_t *e)
+{
+    s_menu_row = (int)(intptr_t)lv_event_get_user_data(e);
+    static const ctx_item_t FILE_ITEMS[] = {
+        {LV_SYMBOL_EDIT, "Rename", on_rename, false, false},
+        {LV_SYMBOL_TRASH, "Delete", on_delete, false, true},
+    };
+    static const ctx_item_t BIN_ITEMS[] = {
+        {LV_SYMBOL_UPLOAD, "Restore", on_restore, false, false},
+        {LV_SYMBOL_TRASH, "Delete for good", on_delete, false, true},
+    };
+    const bool bin = is_files_in_trash();
+    ctx_menu_toggle(lv_event_get_target_obj(e), bin ? BIN_ITEMS : FILE_ITEMS, 2);
 }
 
 /**
@@ -285,12 +311,9 @@ void file_list_show(void)
             lv_obj_set_style_pad_hor(lk, 16, 0);
         } else if (bin) {
             /* (opens on a tap; not renamed or deleted itself) */
-        } else if (trashed) {
-            file_ui_icon_btn(r, LV_SYMBOL_UPLOAD, C_TEXT, on_restore, (void *)(intptr_t)i);   /* Restore */
-            file_ui_icon_btn(r, LV_SYMBOL_TRASH, C_RED, on_delete, (void *)(intptr_t)i);      /* for good */
-        } else {
-            file_ui_icon_btn(r, LV_SYMBOL_EDIT, C_TEXT, on_rename, (void *)(intptr_t)i);
-            file_ui_icon_btn(r, LV_SYMBOL_TRASH, C_RED, on_delete, (void *)(intptr_t)i);
+        } else {                                    /* Rename, Delete (the bin: Restore, Delete for good): its ⋮ menu */
+            lv_obj_t *m = file_ui_icon_btn(r, SYMBOL_MORE, C_TEXT, on_row_menu, (void *)(intptr_t)i);
+            lv_obj_set_style_text_font(lv_obj_get_child(m, 0), &font_icons_24, 0);   /* (⋮: the icon font only) */
         }
     }
 }

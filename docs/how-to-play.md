@@ -31,6 +31,7 @@ The collections and their puzzles, and its ⋮ menu.
 | Type in a puzzle from a book    | **Puzzles → ⋮ → Enter puzzle**, then **Check & play** |
 | Practise a technique            | **Puzzles → ⋮ → Learn**                          |
 | Learn a variant's rule          | **Puzzles → ⋮ → Learn**, then its tab (Grids, Marks, Lines, Clues) |
+| Find a puzzle by name or variant | The magnifier next to the tabs on **Puzzles**, then type words ("killer hard") |
 | Bookmark a puzzle               | **⋮ → Star** in the game; **⋮ → Starred puzzles** on the Puzzles screen lists them |
 | Export or delete a collection   | **Puzzles → ⋮ → Export collection** (saved ones) or **Delete collection** |
 
@@ -115,8 +116,8 @@ The microSD card: puzzle files, exports, backups and firmware updates.
 | Export to a spreadsheet         | **Settings → Export to CSV**, then **USB drive** |
 | Back up / restore `sudoku.db`  | **Settings → USB drive → Connect**; plug into USB OTG |
 | Format the microSD card         | **Settings → microSD card → Format**, confirm    |
-| Rename or delete a file on the card | **Files** on the home screen, then the pencil or the bin on its row |
-| Undo a delete on the card       | **Files → Recycle bin**, then the restore button |
+| Rename or delete a file on the card | **Files** on the home screen, then **⋮** on its row → **Rename** or **Delete** |
+| Undo a delete on the card       | **Files → Recycle bin**, then **⋮** on its row → **Restore** |
 | Update the firmware             | `update.bin` on the card, **Settings → Data → Firmware update** |
 
 ## While you play

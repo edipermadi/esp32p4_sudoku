@@ -19,6 +19,7 @@
 #include "generator.h"
 #include "gen_bits.h"
 #include "canon_core.h"
+#include "search_core.h"
 #include "learn_core.h"
 #include "puzzles.h"
 #include "sdx.h"
@@ -604,6 +605,21 @@ static void test_canon(void)
         }
     }
     printf("    (built-in puzzles that are another one turned, mirrored or renumbered: %d)\n", dup);
+}
+
+/* search_core: every word somewhere, any order, any case */
+static void test_search(void)
+{
+    CHECK(is_search_match("gnome 2 easy", "Gnome 2 Easy #14 Classic"));
+    CHECK(is_search_match("EASY gnome", "Gnome 2 Easy #14 Classic"));
+    CHECK(is_search_match("  killer   hard ", "Killer Hard #12 Killer Hard"));
+    CHECK(is_search_match("#14", "Gnome 2 Easy #14 Classic"));
+    CHECK(is_search_match("x-sud", "X-Sudoku Hard #3 X-Sudoku Hard"));
+    CHECK(!is_search_match("gnome 3", "Gnome 2 Easy #14 Classic"));   /* (every word must be there) */
+    CHECK(!is_search_match("killer expert", "Killer Hard #12 Killer Hard"));
+    CHECK(!is_search_match("", "Gnome 2 Easy #14 Classic"));          /* (no words: nothing) */
+    CHECK(!is_search_match("   ", "Classic"));
+    CHECK(is_search_match("daily", "Daily X-Sudoku Hard, 18 Nov X-Sudoku Hard"));
 }
 
 /* gen_bits.h's tables: each entry as the builtins say */
@@ -1359,7 +1375,7 @@ static void test_learn(void)
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
-        {"bit tables", test_bits},           {"canonical hash", test_canon},           {"geometry", test_geometry},         {"built-in puzzles", test_builtin},
+        {"bit tables", test_bits},           {"canonical hash", test_canon},       {"search", test_search},           {"geometry", test_geometry},         {"built-in puzzles", test_builtin},
         {"generator", test_generate},        {"determinism (golden)", test_determinism},
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},

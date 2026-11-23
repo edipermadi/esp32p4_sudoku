@@ -335,6 +335,9 @@ static void worker(void *arg)
         case CMD_TWIN:
             sdb_do_twin();
             break;
+        case CMD_GEN_ROWS:
+            sdb_do_gen_rows();
+            break;
         case CMD_EXPORT:
             sdb_do_export();
             break;

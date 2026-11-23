@@ -821,6 +821,24 @@ bool stats_db_take_imports_changed(void);
  * @return how many; -1 without a database
  */
 int stats_db_list_imports(stats_import_t *out);
+
+#define STATS_MAX_GEN_ROWS 4000           /**< stats_db_gen_rows(): puzzles made on the board or imported, at most */
+/** @brief A puzzle made on the board or imported, with what its name is made of (stats_db_gen_rows()). */
+typedef struct {
+    uint16_t id;                         /**< its puzzle id (PUZZLE_GEN_BASE + generated.id) */
+    uint8_t variant;                     /**< sudoku_variant_t */
+    int8_t level;                        /**< gen_level_t, -1 unknown */
+    int number;                          /**< its number in its source (imported, typed in); 0 none */
+    char source[STATS_IMPORT_NAME];      /**< its collection (imported) or own source ("My puzzles"); "" none */
+    char day[11];                        /**< a daily puzzle's date, 'YYYY-MM-DD'; "" otherwise */
+} stats_gen_row_t;
+/**
+ * @brief Every puzzle made on the board or imported (newest first, STATS_MAX_GEN_ROWS at most), for the
+ *        Puzzles screen's search. Waits for the database.
+ * @param[out] rows  gets them (the database's buffer: good until the next call)
+ * @return how many, -1 without a database
+ */
+int stats_db_gen_rows(const stats_gen_row_t **rows);
 /**
  * @brief The current player's solved puzzles among ids first .. first + count - 1. Waits for the
  *        database.

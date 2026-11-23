@@ -205,6 +205,8 @@ src/ui_newpuzzle.c      New puzzle's generator: the task, its progress, the benc
 src/ui_gen_dialog.c     the New puzzle dialog: variants in four tabs, the levels
 src/ui_enter_puzzle.c   Enter a puzzle: typed in, checked for one solution, graded, saved
 src/daily_core.c        the daily puzzle without LVGL: today's variant and level, its seed, its name
+src/search_core.c       the Puzzles screen's search: does a puzzle's name, variant or level have every word
+src/puzzles_search.c    the search over every puzzle (built in, generated, imported) and its results
 src/canon_core.c        a puzzle's canonical hash: the same turned, mirrored or renumbered ("solved before")
 src/puzzles_canon.c     the built-in puzzles' canonical hashes, worked out once (generated: make -C tests canon)
 src/ui_learn.c          Learn: the lessons in tabs, the search for a lesson's puzzle (on the worker core), the practice game
@@ -212,6 +214,7 @@ src/learn_core.c        Learn's lessons without LVGL: the ten techniques and a v
 src/ui_list.c           Puzzles: the screen, tabs, collection column, panel, grid of numbers, the ⋮ menu (ui_list_part.h)
 src/ui_list_rows.c      its rows: a saved or imported collection's puzzles
 src/ui_list_starred.c   its Starred: the bookmarks
+src/ui_list_search.c    its search: the magnifier, the box, the results
 src/ui_list_manage.c    its Export and Delete of a collection
 src/ui_home_menu.c      Home's menu layout: a column, a grid, or pages
 src/collections.h       the collections as data (declarations; defined in puzzles_lookup.c)
@@ -285,7 +288,7 @@ src/store_game.cpp      RAM copy of the game in progress and its move log
 src/stats_db.c          sudoku.db on the microSD card: the worker task, opening, the calls the parts share
 src/stats_db_*.c        its parts, one per subject: schema, prefs, players, games, solves, kinds, generated,
                         daily, rank, achievements, import, saved, history, weekly, insights, replay, records,
-                        export, small, sql, canon (solves' canonical hashes)
+                        export, small, sql, canon (solves' canonical hashes), search
                         (stats_db_internal.h lists them; the game uses stats_db.h)
 src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)

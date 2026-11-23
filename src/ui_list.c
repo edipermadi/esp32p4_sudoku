@@ -7,6 +7,7 @@
 #include "ui_internal.h"
 #include "continue_core.h"
 #include "ui_list_part.h"
+#include "puzzles_search.h"
 #include "puzzles_core.h"
 
 static void list_btnm_draw_cb(lv_event_t *e);
@@ -20,6 +21,7 @@ static lv_obj_t *l_coll_btn[L_COLLS];     /**< its rows */
 static lv_obj_t *l_coll_cnt[L_COLLS];     /**< their counts */
 static lv_obj_t *l_coll_name[L_COLLS];    /**< their names */
 static lv_obj_t *l_tab_btn[COLL_TABS];    /**< Built-in, Saved, Imported */
+static lv_obj_t *l_search_btn;            /**< the magnifier after them: search (lit while its results show) */
 static lv_obj_t *l_empty;                 /**< the Saved or Imported tab with nothing in it: what goes there */
 static lv_obj_t *l_list;                  /**< the right pane's rows (ui_list_rows.c) */
 static lv_obj_t *l_name;                  /**< the collection's name */
@@ -75,11 +77,15 @@ void refresh_list(void)
     continue_refresh();
     bool none = !puzzles_settle();                  /* the Saved or Imported tab, with nothing in it */
     const int l_tab = puzzles_tab(), l_coll = puzzles_coll();
-    const bool l_starred = is_puzzles_starred();
+    const bool l_search = is_puzzles_search();
+    const bool l_starred = is_puzzles_starred() || l_search;   /* (search: the right pane as for Starred) */
     for (int i = 0; i < COLL_TABS; i++) {
-        lv_obj_set_state(l_tab_btn[i], LV_STATE_CHECKED, i == l_tab);
-        lv_obj_set_style_text_color(lv_obj_get_child(l_tab_btn[i], 0), i == l_tab ? lv_color_white() : C_TEXT, 0);
+        lv_obj_set_state(l_tab_btn[i], LV_STATE_CHECKED, i == l_tab && !l_search);
+        lv_obj_set_style_text_color(lv_obj_get_child(l_tab_btn[i], 0), i == l_tab && !l_search ? lv_color_white() : C_TEXT,
+                                    0);
     }
+    lv_obj_set_state(l_search_btn, LV_STATE_CHECKED, l_search);
+    lv_obj_set_style_text_color(lv_obj_get_child(l_search_btn, 0), l_search ? lv_color_white() : C_TEXT, 0);
     lv_label_set_text(l_empty, l_tab == COLL_TAB_IMPORTED
                       ? "Nothing imported yet.\n\nPut puzzle files (sdm, sdx or OpenSudoku) in the puzzles folder "
                       "on the card, then Settings > Data > Import puzzles, or import one from Files."   /* (no '.' to break at) */
@@ -170,7 +176,17 @@ void refresh_list(void)
     for (int i = cnt; i < MAX_PER_COLL; i++) {
         lv_buttonmatrix_set_button_ctrl(l_btnm, (uint32_t)i, LV_BUTTONMATRIX_CTRL_DISABLED);
     }
-    if (l_starred) {                                /* its name and count over the collection's */
+    if (l_search) {                                 /* what was searched, and how many match */
+        list_fill_search();
+        lv_label_set_text_fmt(l_name, "Search: %s", puzzles_search_query());
+        const int t = puzzles_search_total();
+        if (t > puzzles_search_count()) {
+            lv_label_set_text_fmt(l_stats, "%d puzzles   -   the first %d shown: add a word to narrow it down", t,
+                                  puzzles_search_count());
+        } else {
+            lv_label_set_text_fmt(l_stats, t == 1 ? "1 puzzle" : "%d puzzles", t);
+        }
+    } else if (l_starred) {                         /* its name and count over the collection's */
         int ns = list_fill_starred();
         lv_label_set_text(l_name, "Starred");
         lv_label_set_text_fmt(l_stats, ns == 1 ? "1 puzzle" : "%d puzzles", puzzles_starred_count());
@@ -215,6 +231,7 @@ static void coll_click_cb(lv_event_t *e)
     int c = (int)(intptr_t)lv_event_get_user_data(e);
     puzzles_set_coll(c);
     puzzles_set_starred(false);
+    puzzles_search_off();
     store_set_last_collection((uint8_t)c);
     refresh_list();
     list_reveal_coll(LV_ANIM_ON);
@@ -227,10 +244,11 @@ static void coll_click_cb(lv_event_t *e)
 static void list_tab_cb(lv_event_t *e)
 {
     int t = (int)(intptr_t)lv_event_get_user_data(e);
-    if (t == puzzles_tab() && !is_puzzles_starred()) {
+    if (t == puzzles_tab() && !is_puzzles_starred() && !is_puzzles_search()) {
         return;
     }
     puzzles_set_starred(false);
+    puzzles_search_off();
     puzzles_set_tab(t);
     lv_obj_scroll_to_y(l_colls, 0, LV_ANIM_OFF);
     refresh_list();                                 /* (takes the tab's last collection) */
@@ -348,6 +366,12 @@ void build_list(void)
         lv_obj_set_style_bg_color(l_tab_btn[i], C_ACCENT, LV_STATE_CHECKED);
         lv_obj_set_style_radius(l_tab_btn[i], 10, 0);
     }
+    /* the search, after the tabs: a box to type a name, a variant or a level in (ui_list_search.c) */
+    l_search_btn = make_btn(screen_list(), 12 + COLL_TABS * (L_TAB_H + gap), L_PANE_Y, L_TAB_H, L_TAB_H, SYMBOL_SEARCH,
+                            &font_icons_24, list_search_cb, NULL);
+    lv_obj_set_style_bg_color(l_search_btn, C_CARD, 0);
+    lv_obj_set_style_bg_color(l_search_btn, C_ACCENT, LV_STATE_CHECKED);
+    lv_obj_set_style_radius(l_search_btn, 10, 0);
     l_colls = make_coll_column(screen_list());
     lv_obj_set_pos(l_colls, 12, L_PANE_Y + L_TAB_H + 8);
     lv_obj_set_size(l_colls, COLL_W, SCR_W - (L_PANE_Y + L_TAB_H + 8) - 12);

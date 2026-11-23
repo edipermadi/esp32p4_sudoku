@@ -431,9 +431,8 @@ void imports_reload(void)
 /* (documented in collections.h) */
 void puzzle_name(uint16_t id, char *buf, size_t n)
 {
-    int num, k = import_of(id, &num);
-    if (k >= 0) {                                   /* imported: "Collection #12" */
-        snprintf(buf, n, "%s #%d", s_imports[k].name, num);
+    if (import_of(id, NULL) >= 0) {
+        puzzle_name_from(id, VAR_CLASSIC, -1, "", 0, "", buf, n);
         return;
     }
     if (puzzle_is_generated(id)) {                  /* (looked up first, so the cache knows its source) */
@@ -441,32 +440,46 @@ void puzzle_name(uint16_t id, char *buf, size_t n)
         if (gen_own_name(id, buf, n)) {
             return;    /* typed in: "My puzzles #3" */
         }
-    }
-    if (puzzle_is_generated(id)) {
         int lv = -1, var = VAR_CLASSIC;
         char day[12] = "";
         gen_lookup_day(id, NULL, &var, &lv, day);
-        if (day[0]) {                                     /* "Daily Hard, 18 Nov" */
-            struct tm tm = {0};
-            char when[16] = "";
-            if (sscanf(day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
-                tm.tm_year -= 1900;
-                tm.tm_mon -= 1;
-                strftime(when, sizeof(when), "%d %b", &tm);
-            }
-            char kind[32];
-            daily_kind_text(var, lv, kind, sizeof(kind));
-            snprintf(buf, n, "Daily %s, %s", kind, when);
-            return;
-        }
-        unsigned num = id >= PUZZLE_GEN_RAM_BASE ? (unsigned)(id - PUZZLE_GEN_RAM_BASE + 1)
-                       : (unsigned)(id - PUZZLE_GEN_BASE);
-        snprintf(buf, n, "%s %s #%u", stats_kind_prefix(stats_kind_of(var, false)),
-                 lv >= 0 && lv < GEN_LEVELS ? gen_level_name(lv) : "", num);
+        puzzle_name_from(id, var, lv, "", 0, day, buf, n);
         return;
     }
     int c = puzzle_collection_of(id);
     snprintf(buf, n, "%s #%u", puzzle_collection(c)->name, (unsigned)(id - puzzle_collection(c)->first + 1));
+}
+
+/* (documented in collections.h) */
+void puzzle_name_from(uint16_t id, int variant, int level, const char *source, int number, const char *day, char *buf,
+                      size_t n)
+{
+    int num, k = import_of(id, &num);
+    if (k >= 0) {                                   /* imported: "Collection #12" */
+        snprintf(buf, n, "%s #%d", s_imports[k].name, num);
+        return;
+    }
+    if (source && source[0]) {                      /* typed in: "My puzzles #3" */
+        snprintf(buf, n, "%s #%d", source, number);
+        return;
+    }
+    if (day && day[0]) {                            /* "Daily Hard, 18 Nov" */
+        struct tm tm = {0};
+        char when[16] = "";
+        if (sscanf(day, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
+            tm.tm_year -= 1900;
+            tm.tm_mon -= 1;
+            strftime(when, sizeof(when), "%d %b", &tm);
+        }
+        char kind[32];
+        daily_kind_text(variant, level, kind, sizeof(kind));
+        snprintf(buf, n, "Daily %s, %s", kind, when);
+        return;
+    }
+    const unsigned gnum = id >= PUZZLE_GEN_RAM_BASE ? (unsigned)(id - PUZZLE_GEN_RAM_BASE + 1)
+                          : (unsigned)(id - PUZZLE_GEN_BASE);
+    snprintf(buf, n, "%s %s #%u", stats_kind_prefix(stats_kind_of(variant, false)),
+             level >= 0 && level < GEN_LEVELS ? gen_level_name(level) : "", gnum);
 }
 
 /* (documented in puzzles_lookup.h) */
