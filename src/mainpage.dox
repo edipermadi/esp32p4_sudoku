@@ -29,7 +29,7 @@
  *   export, backups, a file manager with a Recycle bin, a USB drive mode and firmware updates from
  *   the card.
  * - **System**: a Wi-Fi clock with time zones, light and dark themes, sound effects, a lock screen,
- *   a screen saver (a dim digital or analog clock, or the Game of Life), a system monitor, screenshots to the card, and remote control over the serial port (devctl) or
+ *   a screen saver (a dim digital or analog clock, the Game of Life, digital rain or strange attractors), a system monitor, screenshots to the card, and remote control over the serial port (devctl) or
  *   by sound.
  *
  * @section mp_topics Where to start: the topics
@@ -62,7 +62,7 @@
  *   documentation and testing, driven by `tools/devctl.py`; @ref serial_port is Arduino's Serial
  *   for it, from C.
  * - @ref ui_home_menu : how Home lays out its menu buttons.
- * - @ref ui_sudoku : the UI's start-up, notices, the screen saver (Life: @ref life_core), and what devctl asks of it. Home
+ * - @ref ui_sudoku : the UI's start-up, notices, the screen saver (Life: @ref life_core; Rain: @ref rain_core; Attractor: @ref attractor_core), and what devctl asks of it. Home
  *   is `ui_home.c`; what all the UI files share (the palette, layout, widgets, the game's state) is
  *   in `ui_internal.h` and `ui_common.c`.
  * - @ref media : the picture and video viewer, MP4 files read and written (replay export), and
@@ -110,7 +110,7 @@
  *   the generator, solver and grader (with golden hashes to catch an unintended change), the
  *   built-in puzzles and their canonical hashes, the `.sdx` format, and the plain-C cores
  *   (@ref canon_core, @ref search_core, @ref learn_core, @ref game_core, @ref hint_core,
- *   @ref share_core, @ref daily_core, @ref import_parse, @ref life_core). Anything kept free of LVGL and the card
+ *   @ref share_core, @ref daily_core, @ref import_parse, @ref life_core, @ref rain_core, @ref attractor_core). Anything kept free of LVGL and the card
  *   can be added there.
  * - **On the board**: @ref devctl drives the real UI over USB-UART (touches, screenshots, files,
  *   SQL) from `tools/devctl.py`.

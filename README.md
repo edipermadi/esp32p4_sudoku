@@ -40,7 +40,7 @@ Captured from the board over its serial port (see [Screenshots and remote contro
 - **Players, statistics and trophies**: per-player progress and emoji avatars, a history calendar, charts, achievements, daily and weekly leaderboards.
 - **Replays**: every solve can be played back, or exported as an H.264 MP4 video.
 - **Data on the microSD card** in a SQLite database (`sudoku.db`), with CSV export, one-tap database backups, puzzle import, a file manager with a Recycle bin (the database protected), a picture/video viewer and a puzzle file preview, screenshots, USB drive mode and firmware updates from the card.
-- **Wi-Fi clock**, light and dark mode, a night mode, accent colours, colour-blind friendly colours, lock screen, a screen saver (a dim digital or analog clock, or a VFD-style Game of Life), synthesised sound effects, remote control by sound (Gibberlink / ggwave) and a system monitor with graphs of the last hour.
+- **Wi-Fi clock**, light and dark mode, a night mode, accent colours, colour-blind friendly colours, lock screen, a screen saver (a dim digital or analog clock, or a VFD-style Game of Life, digital rain or strange attractor), synthesised sound effects, remote control by sound (Gibberlink / ggwave) and a system monitor with graphs of the last hour.
 
 ## Documentation
 

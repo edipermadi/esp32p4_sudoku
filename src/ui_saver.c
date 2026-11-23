@@ -2,7 +2,7 @@
  * @file ui_saver.c
  * @ingroup ui_sudoku
  * @brief The screen saver: after the screen timeout without a touch the game pauses; then a dim clock
- *        (digital, or analog: ui_saver_analog.c) moves about or the Game of Life runs (ui_saver_life.c)
+ *        (digital, or analog: ui_saver_analog.c) moves about, the Game of Life (ui_saver_life.c) digital rain (ui_saver_rain.c) or a strange attractor (ui_saver_attractor.c) runs
  *        until a touch, at full speed, or (Dark)
  *        the screen goes black and the board saves power. The next tap only wakes it. The lock screen,
  *        if on, waits under it.
@@ -57,6 +57,8 @@ static void saver_show_stop(void)
     sv_clock = NULL;                                /* (a child of s_saver: goes with it) */
     saver_life_stop();                              /* (its picture goes now, before its memory) */
     saver_analog_stop();
+    saver_rain_stop();
+    saver_attractor_stop();
 }
 
 /**
@@ -102,6 +104,16 @@ static void saver_sleep(bool lock_now)
     if (mode == SAVER_MODE_LIFE && saver_life_start(s_saver)) {
         lv_refr_now(NULL);
         bsp_display_brightness_set(effective_brightness());   /* (low PWM levels show nothing on this panel) */
+        return;
+    }
+    if (mode == SAVER_MODE_ATTRACTOR && saver_attractor_start(s_saver)) {
+        lv_refr_now(NULL);
+        bsp_display_brightness_set(effective_brightness());
+        return;
+    }
+    if (mode == SAVER_MODE_RAIN && saver_rain_start(s_saver)) {
+        lv_refr_now(NULL);
+        bsp_display_brightness_set(effective_brightness());
         return;
     }
     if (mode == SAVER_MODE_ANALOG) {

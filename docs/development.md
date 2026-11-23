@@ -172,6 +172,11 @@ src/ui_notice.c         notices: a banner for a while, or one that stays while s
 src/ui_saver.c          the screen saver: the dim clock, dark, power saving, the waking tap
 src/ui_saver_analog.c   the analog clock screen saver: an LVGL scale as the face, the hands each second
 src/ui_saver_life.c     the Game of Life screen saver: the VFD-style dots, repainted as their glow changes
+src/ui_saver_rain.c     the digital rain screen saver: digit tiles drawn once, the changed cells copied
+src/ui_saver_pic.c      the savers' full-screen picture in PSRAM (Life, Rain): flushed from the cache, redrawn in parts
+src/ui_saver_attractor.c the strange attractor screen saver: points plotted, their pixels repainted
+src/attractor_core.c    strange attractors without LVGL: the formulas, random sets that spread, the counts
+src/rain_core.c         digital rain without LVGL: the columns, their speeds and trails, the flicker
 src/life_core.c         the Game of Life without LVGL: the rules on a wrapped 120 x 120 board, the glows, reseeding
 src/ui_lock.c           the lock screen (Swipe or PIN) and the keypad it shares
 src/ui_pin_setup.c      Settings' PIN setup: a new PIN typed twice

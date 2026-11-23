@@ -1405,6 +1405,46 @@ bool saver_life_start(lv_obj_t *parent);
 /** @brief The Game of Life screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_life_stop(void);
 /**
+ * @brief The digital rain screen saver starts (ui_saver_rain.c): falling digits on the savers' picture,
+ *        a step each 50 ms.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (nothing shown)
+ */
+bool saver_rain_start(lv_obj_t *parent);
+/** @brief The digital rain screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_rain_stop(void);
+/**
+ * @brief The strange attractor screen saver starts (ui_saver_attractor.c): one builds up on the savers'
+ *        picture for a minute, fades, and the next comes.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (nothing shown)
+ */
+bool saver_attractor_start(lv_obj_t *parent);
+/** @brief The strange attractor screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_attractor_stop(void);
+/**
+ * @brief The savers' picture (ui_saver_pic.c): a full-screen black RGB565 image on the cover, in PSRAM.
+ * @param[in] parent  the screen saver's cover
+ * @return its pixels (SCR_W per row) to paint into, or NULL if there was no memory for it
+ */
+uint16_t *saver_pic_start(lv_obj_t *parent);
+/**
+ * @brief Rows of the picture painted: flushed from the CPU's cache, for the DMA that draws it.
+ * @param[in] y0  the first row, px
+ * @param[in] y1  the last row, px (included)
+ */
+void saver_pic_flush(int32_t y0, int32_t y1);
+/**
+ * @brief Part of the picture to redraw (after saver_pic_flush()).
+ * @param[in] x0  left, px
+ * @param[in] y0  top, px
+ * @param[in] x1  right, px (included)
+ * @param[in] y1  bottom, px (included)
+ */
+void saver_pic_redraw(int32_t x0, int32_t y0, int32_t x1, int32_t y1);
+/** @brief The savers' picture goes: the image first, then its memory. */
+void saver_pic_stop(void);
+/**
  * @brief The analog clock screen saver starts (ui_saver_analog.c): a dim face and hands, moved each
  *        minute, updated each second.
  * @param[in] parent  the screen saver's cover

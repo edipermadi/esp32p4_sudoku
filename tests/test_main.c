@@ -29,6 +29,8 @@
 #include "daily_core.h"
 #include "import_parse.h"
 #include "life_core.h"
+#include "rain_core.h"
+#include "attractor_core.h"
 
 static int s_checks, s_failed;
 
@@ -1439,6 +1441,139 @@ static void test_life(void)
     CHECK(life_population() == 0 && life_glow(0, 0) == LIFE_GLOW_OFF && !life_step());
 }
 
+/* Rain (the screen saver): the columns start staggered and fall, a trail is the head (the brightest) and
+ * dimmer cells behind it, every digit is 1..9, a column comes round again, the same seed the same rain */
+static void test_rain(void)
+{
+    CHECK(rain_start(42));
+    int above = 0;
+    for (int c = 0; c < RAIN_COLS; c++) {
+        above += rain_head(c) < 0;
+    }
+    CHECK(above == RAIN_COLS);                      /* nobody in at the start */
+    bool seen_head = false, restarted = false;
+    int32_t last[RAIN_COLS];
+    for (int c = 0; c < RAIN_COLS; c++) {
+        last[c] = rain_head(c);
+    }
+    for (int step = 0; step < 2000; step++) {
+        rain_step();
+        for (int c = 0; c < RAIN_COLS; c++) {
+            int32_t h = rain_head(c);
+            if (h < last[c]) {
+                restarted = true;                   /* (back above the top) */
+            }
+            last[c] = h;
+            int heads = 0, lit = 0, prev = -1;
+            for (int r = 0; r < RAIN_ROWS; r++) {
+                uint8_t d, lv = rain_cell(c, r, &d);
+                CHECKF(d >= 1 && d <= 9, "rain: digit %d", d);
+                CHECKF(lv <= RAIN_HEAD, "rain: level %d", lv);
+                if (lv == RAIN_HEAD) {
+                    heads++;
+                    CHECKF(h >= 0 && (h >> 8) == r, "rain: the head where the column is (%d, %d)", c, r);
+                    CHECKF(prev < 0 || prev < RAIN_HEAD, "rain: brighter towards the head (%d)", c);
+                }
+                if (lv) {
+                    CHECKF(prev <= lv || prev == 0, "rain: a trail brightens down to its head (%d, %d)", c, r);
+                    lit++;
+                }
+                prev = lv;
+            }
+            CHECKF(heads <= 1 && lit <= RAIN_TRAIL_MAX, "rain: one trail a column (%d)", c);
+            seen_head |= heads == 1;
+        }
+    }
+    CHECK(seen_head && restarted);
+    uint8_t a[RAIN_COLS], b;                        /* the same seed, the same rain */
+    CHECK(rain_start(7));
+    for (int s = 0; s < 100; s++) {
+        rain_step();
+    }
+    for (int c = 0; c < RAIN_COLS; c++) {
+        rain_cell(c, 10, &a[c]);
+    }
+    CHECK(rain_start(7));
+    for (int s = 0; s < 100; s++) {
+        rain_step();
+    }
+    bool same = true;
+    for (int c = 0; c < RAIN_COLS; c++) {
+        rain_cell(c, 10, &b);
+        same &= a[c] == b;
+    }
+    CHECK(same);
+    rain_free();
+    CHECK(rain_cell(0, 0, NULL) == 0);
+    rain_step();                                    /* (no rain: nothing) */
+}
+
+/* Attractor (the screen saver): every one found spreads over much of its box and stays inside it, every
+ * point plotted is listed for drawing, the counts stop at ATTR_MAX, and the same seed gives the same
+ * shape */
+static void test_attractor(void)
+{
+    static uint32_t dirty[50000];
+    CHECK(attr_start(99));
+    int kinds[ATTR_KINDS] = {0};
+    for (int a = 0; a < 12; a++) {
+        if (a) {
+            attr_next();
+        }
+        kinds[attr_kind()]++;
+        int n = attr_plot(50000, dirty, 50000);
+        int x0, y0, x1, y1;
+        attr_box(&x0, &y0, &x1, &y1);
+        CHECKF(x0 >= 0 && y0 >= 0 && x1 < ATTR_W && y1 < ATTR_W && x1 > x0 && y1 > y0, "attractor %d: box", a);
+        CHECKF(x1 - x0 > ATTR_W / 3 || y1 - y0 > ATTR_W / 3, "attractor %d: fills the screen (%dx%d)", a, x1 - x0, y1 - y0);
+        CHECKF(n > 45000, "attractor %d: nearly every point on the grid (%d)", a, n);
+        const uint8_t *c = attr_counts();
+        int lit = 0, outside = 0;
+        for (int y = 0; y < ATTR_W; y++) {
+            for (int x = 0; x < ATTR_W; x++) {
+                if (c[y * ATTR_W + x]) {
+                    lit++;
+                    outside += x < x0 || x > x1 || y < y0 || y > y1;
+                }
+            }
+        }
+        CHECKF(lit > 2000, "attractor %d (kind %d): spreads (%d pixels)", a, attr_kind(), lit);
+        CHECKF(outside == 0, "attractor %d: inside its box (%d outside)", a, outside);
+        bool dirty_lit = true;
+        for (int i = 0; i < n; i++) {
+            dirty_lit &= c[dirty[i]] > 0;
+        }
+        CHECKF(dirty_lit, "attractor %d: the points listed are lit", a);
+    }
+    CHECK(kinds[ATTR_CLIFFORD] > 0 && kinds[ATTR_DEJONG] > 0);
+    for (int i = 0; i < 400; i++) {                 /* the counts stop at ATTR_MAX */
+        attr_plot(50000, NULL, 0);
+    }
+    const uint8_t *c = attr_counts();
+    int top = 0;
+    for (int i = 0; i < ATTR_W * ATTR_W; i++) {
+        top = c[i] > top ? c[i] : top;
+    }
+    CHECK(top == ATTR_MAX);
+    attr_next();                                    /* the next one: from nothing */
+    top = 0;
+    for (int i = 0; i < ATTR_W * ATTR_W; i++) {
+        top = c[i] > top ? c[i] : top;
+    }
+    CHECK(top == 0);
+    uint32_t h[2] = {0, 0};                         /* the same seed, the same shape */
+    for (int k = 0; k < 2; k++) {
+        CHECK(attr_start(5));
+        attr_plot(20000, NULL, 0);
+        for (int i = 0; i < ATTR_W * ATTR_W; i++) {
+            h[k] = h[k] * 31 + attr_counts()[i];
+        }
+    }
+    CHECK(h[0] == h[1]);
+    attr_free();
+    CHECK(!attr_counts() && attr_plot(10, NULL, 0) == 0);
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -1449,7 +1584,8 @@ int main(int argc, char **argv)
         {"rules check", test_conflicts},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
-        {"life (screen saver)", test_life},
+        {"life (screen saver)", test_life},   {"rain (screen saver)", test_rain},
+        {"attractor (screen saver)", test_attractor},
     };
     sudoku_geom_init();
     int failed_tests = 0;

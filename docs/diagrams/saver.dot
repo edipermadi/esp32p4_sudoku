@@ -8,6 +8,8 @@ digraph saver {
     pause [label="Game paused (clock stops, board hidden, saved)\nLock screen put under the cover, if on\nBlack cover on the system layer"];
     clk   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Screen saver?\n(the lock button:\nalways Dark)"];
     analog[label="Analog clock (dim greys),\nhands each second, moved each minute,\nCPU at full speed"];
+    attr  [label="Strange attractor (VFD blue-green),\ndrawn point by point for 2 minutes,\nthen cleared, the next,\nCPU at full speed"];
+    rain  [label="Digital rain (VFD blue-green),\n20 steps a second,\nCPU at full speed"];
     dim   [label="Dim grey clock,\nmoved each minute,\nCPU at full speed"];
     life  [label="Game of Life (usual brightness),\n8 generations a second,\nnew board when it settles,\nCPU at full speed"];
     tap1  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A tap?"];
@@ -23,10 +25,14 @@ digraph saver {
     pause -> clk;
     clk -> dim [label="Digital"];
     clk -> analog [label="Analog"];
+    clk -> rain [label="Rain"];
+    clk -> attr [label="Attractor"];
     clk -> life [label="Life"];
     clk -> dark [label="Dark"];
     dim -> tap1;
     analog -> tap1;
+    rain -> tap1;
+    attr -> tap1;
     life -> tap1;
     tap1 -> wake [label="yes"];
     tap1 -> tap1 [label="no"];
