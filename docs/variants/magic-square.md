@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Magic Square: variant-examples #59](../screenshots/variants/magic-square-walkthrough/step-00.png)
+![Magic Square: variant-examples #59](../screenshots/variants/magic-square.png)
 
 ## The rules
 

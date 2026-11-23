@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Anti-Diagonal: variant-examples #55](../screenshots/variants/anti-diagonal-walkthrough/step-00.png)
+![Anti-Diagonal: variant-examples #55](../screenshots/variants/anti-diagonal.png)
 
 ## The rules
 

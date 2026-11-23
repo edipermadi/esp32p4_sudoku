@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Chess Sudoku: variant-examples #58](../screenshots/variants/chess-sudoku-walkthrough/step-00.png)
+![Chess Sudoku: variant-examples #58](../screenshots/variants/chess-sudoku.png)
 
 ## The rules
 

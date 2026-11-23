@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Pill Arrows: variant-examples #56](../screenshots/variants/pill-arrows-walkthrough/step-00.png)
+![Pill Arrows: variant-examples #56](../screenshots/variants/pill-arrows.png)
 
 ## The rules
 

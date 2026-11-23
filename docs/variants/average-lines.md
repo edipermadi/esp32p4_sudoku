@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Average Lines: variant-examples #60](../screenshots/variants/average-lines-walkthrough/step-00.png)
+![Average Lines: variant-examples #60](../screenshots/variants/average-lines.png)
 
 ## The rules
 

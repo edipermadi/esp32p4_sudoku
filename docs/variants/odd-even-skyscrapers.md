@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Odd/Even Skyscrapers: variant-examples #57](../screenshots/variants/odd-even-skyscrapers-walkthrough/step-00.png)
+![Odd/Even Skyscrapers: variant-examples #57](../screenshots/variants/odd-even-skyscrapers.png)
 
 ## The rules
 
