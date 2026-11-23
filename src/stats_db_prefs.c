@@ -61,7 +61,7 @@ void sdb_load_prefs(store_prefs_t *p)
             } else if (!strcmp(k, "lock_pin") && t) {
                 snprintf(p->lock_pin, sizeof(p->lock_pin), "%s", t);
             } else if (!strcmp(k, "saver_clock")) {
-                p->saver_clock = v != 0;
+                p->saver = v >= SAVER_MODE_DARK && v < SAVER_MODE_COUNT ? v : SAVER_MODE_DARK;
             } else if (!strcmp(k, "cvd")) {
                 p->cvd = v != 0;
             } else if (!strcmp(k, "no_notes")) {
@@ -114,7 +114,7 @@ void sdb_migrate_prefs(const store_prefs_t *p)
     sdb_set_setting("rules_seen", false, (int64_t)p->rules_seen, NULL);
     sdb_set_setting("lock_mode", false, p->lock_mode, NULL);
     sdb_set_setting("lock_pin", true, 0, p->lock_pin);
-    sdb_set_setting("saver_clock", false, p->saver_clock, NULL);
+    sdb_set_setting("saver_clock", false, p->saver, NULL);
     sdb_set_setting("cvd", false, p->cvd, NULL);
     sdb_set_setting("no_notes", false, p->no_notes, NULL);
     sdb_set_setting("left_hand", false, p->left_hand, NULL);

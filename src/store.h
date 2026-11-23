@@ -152,7 +152,7 @@ typedef struct {
     uint64_t rules_seen;                      /**< bit v: variant v's rules card has been shown */
     uint8_t lock_mode;                        /**< store_lock_t: the lock screen after a screen timeout */
     char lock_pin[8];                         /**< 4 digits (PIN mode), "" = none set */
-    bool saver_clock;                         /**< a dim drifting clock before the screen goes dark */
+    uint8_t saver;                            /**< store_saver_t: what shows before the screen goes dark */
     bool cvd;                                 /**< colour-blind friendly colours (Okabe-Ito) */
     bool no_notes;                            /**< new games start in the no-notes challenge */
     bool left_hand;                           /**< the game's number pad on the left of the board */
@@ -352,17 +352,25 @@ const char *store_lock_pin(void);
  */
 void store_set_lock_pin(const char *pin);
 
+/** @brief Screen saver (Settings > Display): what shows at the screen timeout until a touch; Dark saves
+ * power instead (sudoku.db's setting saver_clock: 0 to 3). */
+typedef enum {
+    SAVER_MODE_DARK = 0,                    /**< nothing: dark at once, saving power */
+    SAVER_MODE_CLOCK = 1,                   /**< a dim clock moving about */
+    SAVER_MODE_LIFE = 2,                    /**< Conway's Game of Life in a VFD's colours */
+    SAVER_MODE_ANALOG = 3,                  /**< an analog clock moving about */
+    SAVER_MODE_COUNT                        /**< how many */
+} store_saver_t;
 /**
- * @brief Screen-saver clock (Settings > Display): at the screen timeout, a dim clock
- * moving about for SAVER_CLOCK_MIN minutes, then dark.
- * @return true if on
+ * @brief The screen saver.
+ * @return store_saver_t
  */
-bool is_store_saver_clock(void);
+uint8_t store_saver_mode(void);
 /**
- * @brief Turns it on or off.
- * @param[in] on  on
+ * @brief Sets it.
+ * @param[in] mode  store_saver_t
  */
-void store_set_saver_clock(bool on);
+void store_set_saver_mode(uint8_t mode);
 /**
  * @brief Colour-blind friendly colours (Okabe-Ito) are on.
  * @return true if so

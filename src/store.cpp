@@ -42,7 +42,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .rules_seen = 0,
     .lock_mode = LOCK_OFF,
     .lock_pin = "",
-    .saver_clock = false,
+    .saver = SAVER_MODE_DARK,
     .cvd = false,
     .no_notes = false,
     .left_hand = false,
@@ -287,16 +287,16 @@ void store_set_lock_pin(const char *pin)
 }
 
 /* (documented in store.h) */
-bool is_store_saver_clock(void)
+uint8_t store_saver_mode(void)
 {
-    return s_p.saver_clock;
+    return s_p.saver;
 }
 
 /* (documented in store.h) */
-void store_set_saver_clock(bool on)
+void store_set_saver_mode(uint8_t mode)
 {
-    s_p.saver_clock = on;
-    stats_db_set_int("saver_clock", on);
+    s_p.saver = mode < SAVER_MODE_COUNT ? mode : SAVER_MODE_DARK;
+    stats_db_set_int("saver_clock", s_p.saver);   /* (the key from when it was the clock or not) */
 }
 
 /* (documented in store.h) */

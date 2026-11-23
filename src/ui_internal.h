@@ -371,13 +371,12 @@ enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
 
 
 /*
- * Screen-saver clock (Settings > Display): at the timeout the black cover
- * shows a dim clock and the date instead, at a new place every minute (no
- * burn-in), with the backlight low; after SAVER_CLOCK_MIN minutes the light
- * goes off as without it. A tap wakes it the same way.
+ * Screen saver (Settings > Display): at the timeout the black cover shows a
+ * dim clock and the date (at a new place every minute: no burn-in) or the Game
+ * of Life, at the usual brightness (low backlight PWM shows nothing on this
+ * panel), until a touch; the CPU stays at full speed. Dark turns the light off
+ * and saves power instead. A tap wakes either.
  */
-#define SAVER_CLOCK_MIN     10          /**< the dim clock shows this long, minutes; then dark */
-#define SAVER_CLOCK_LIGHT   12              /**< % backlight while it shows */
 
 /* ---- state: each file's own variables are static; the other files use these */
 /**
@@ -1396,6 +1395,23 @@ void saver_cb(lv_timer_t *t);
 void lock_dd_cb(lv_event_t *e);
 void pin_change_cb(lv_event_t *e);
 void lock_now_cb(lv_event_t *e);
+/**
+ * @brief The Game of Life screen saver starts (ui_saver_life.c): a full-screen picture on the cover,
+ *        a generation each 125 ms.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (nothing shown)
+ */
+bool saver_life_start(lv_obj_t *parent);
+/** @brief The Game of Life screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_life_stop(void);
+/**
+ * @brief The analog clock screen saver starts (ui_saver_analog.c): a dim face and hands, moved each
+ *        minute, updated each second.
+ * @param[in] parent  the screen saver's cover
+ */
+void saver_analog_start(lv_obj_t *parent);
+/** @brief The analog clock screen saver stops (its objects go with the cover; nothing if it isn't on). */
+void saver_analog_stop(void);
 
 /* ---- ui_board_draw.c */
 /**

@@ -17,10 +17,11 @@ The board's settings, as key-value pairs: one set for the board, not per player.
 
 | Key | Value |
 |---|---|
-| `dark_mode`, `sound`, `show_timer`, `saver_clock`, `cvd`, `no_notes`, `left_hand`, `gibberlink`, `big_digits`, `hint_nudge`, `night_mode` | 0 or 1 |
+| `dark_mode`, `sound`, `show_timer`, `cvd`, `no_notes`, `left_hand`, `gibberlink`, `big_digits`, `hint_nudge`, `night_mode` | 0 or 1 |
 | `brightness`, `volume`, `night_brightness` | percent (brightness 10–100) |
 | `screen_off_minutes` | 0 = never |
 | `assist` | Mistake check: 0 Off, 1 Rules, 2 Solution |
+| `saver_clock` | Screen saver: 0 Dark, 1 Digital clock, 2 Life, 3 Analog clock (named from when it was the clock or not) |
 | `accent` | 0 Blue … 4 Pink |
 | `rules_seen` | a bit per variant: its rules card was shown |
 | `lock_mode`, `lock_pin` | the lock screen: 0 Off, 1 Swipe, 2 PIN; the PIN |

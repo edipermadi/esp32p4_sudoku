@@ -28,6 +28,7 @@
 #include "share_core.h"
 #include "daily_core.h"
 #include "import_parse.h"
+#include "life_core.h"
 
 static int s_checks, s_failed;
 
@@ -1372,6 +1373,72 @@ static void test_learn(void)
     }
 }
 
+/* Life (the screen saver): a blinker turns and settles the board (a new seed), a block stays put, a glider
+ * crosses the wrapped edge, the glows (born, alive, fading out) and the same seed the same board */
+static void test_life(void)
+{
+    CHECK(life_clear());
+    life_set(10, 10, true);                         /* a blinker: 3 across */
+    life_set(11, 10, true);
+    life_set(12, 10, true);
+    CHECK(life_glow(11, 10) == LIFE_GLOW_BORN && life_population() == 3);
+    CHECK(!life_step());
+    CHECK(is_life_alive(11, 9) && is_life_alive(11, 10) && is_life_alive(11, 11) && !is_life_alive(10, 10));
+    CHECK(life_glow(11, 10) == LIFE_GLOW_ALIVE && life_glow(11, 9) == LIFE_GLOW_BORN && life_glow(10, 10) == LIFE_GLOW_FADE4);
+    CHECK(!life_step());                            /* back across: not yet seen twice in the history */
+    CHECK(life_glow(10, 10) == LIFE_GLOW_BORN && life_glow(11, 9) == LIFE_GLOW_FADE4);
+    CHECK(life_step());                             /* down again: a repeat, so a new seed */
+    CHECK(life_generation() == 0);
+    int pop = life_population();
+    CHECKF(pop > LIFE_CELLS * (LIFE_DENSITY - 5) / 100 && pop < LIFE_CELLS * (LIFE_DENSITY + 5) / 100, "seed: %d alive", pop);
+
+    CHECK(life_clear());                            /* a dead cell fades: FADE4 .. OFF, a generation each */
+    life_set(50, 50, true);
+    life_set(51, 50, true);
+    life_set(50, 51, true);
+    life_set(51, 51, true);                         /* a block, and a lone cell that dies */
+    life_set(5, 5, true);
+    life_step();
+    CHECK(life_glow(5, 5) == LIFE_GLOW_FADE4 && life_glow(50, 50) == LIFE_GLOW_ALIVE && life_population() == 4);
+    CHECK(life_step());                             /* the block alone, twice: settled */
+
+    CHECK(life_clear());                            /* a glider (heading down-right) across the corner */
+    const int gx[] = {1, 2, 0, 1, 2}, gy[] = {0, 1, 2, 2, 2};
+    for (int k = 0; k < 5; k++) {
+        life_set((LIFE_N - 3 + gx[k]) % LIFE_N, (LIFE_N - 3 + gy[k]) % LIFE_N, true);
+    }
+    for (int g = 0; g < 4 * 6; g++) {               /* 6 cells down and right */
+        CHECKF(!life_step(), "glider: settled at generation %d", g + 1);
+    }
+    for (int k = 0; k < 5; k++) {
+        CHECKF(is_life_alive((LIFE_N + 3 + gx[k]) % LIFE_N, (LIFE_N + 3 + gy[k]) % LIFE_N), "glider cell %d", k);
+    }
+    CHECK(life_population() == 5);
+    CHECK(life_glow(LIFE_N - 2, LIFE_N - 3) == LIFE_GLOW_OFF);   /* where it started: faded out */
+
+    uint8_t a[64];                                  /* the same seed, the same board */
+    CHECK(life_seed(1234));
+    for (int i = 0; i < 64; i++) {
+        a[i] = is_life_alive(i, 7);
+    }
+    life_step();
+    CHECK(life_seed(1234));
+    bool same = true;
+    for (int i = 0; i < 64; i++) {
+        same &= a[i] == is_life_alive(i, 7);
+    }
+    CHECK(same);
+    for (int g = 0; g < LIFE_GEN_MAX + 1; g++) {    /* never older than LIFE_GEN_MAX */
+        life_step();
+        CHECKF(life_generation() < LIFE_GEN_MAX, "generation %u", (unsigned)life_generation());
+        if (life_generation() >= LIFE_GEN_MAX) {
+            break;
+        }
+    }
+    life_free();
+    CHECK(life_population() == 0 && life_glow(0, 0) == LIFE_GLOW_OFF && !life_step());
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -1382,6 +1449,7 @@ int main(int argc, char **argv)
         {"rules check", test_conflicts},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
+        {"life (screen saver)", test_life},
     };
     sudoku_geom_init();
     int failed_tests = 0;

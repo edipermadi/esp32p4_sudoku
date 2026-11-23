@@ -1,39 +1,31 @@
 /**
  * @file ui_saver.c
  * @ingroup ui_sudoku
- * @brief The screen saver: after the screen timeout without a touch the game pauses, a dim clock moves
- *        about for a while (if on), then the screen goes black and the board saves power; the next
- *        tap only wakes it. The lock screen, if on, waits under it.
+ * @brief The screen saver: after the screen timeout without a touch the game pauses; then a dim clock
+ *        (digital, or analog: ui_saver_analog.c) moves about or the Game of Life runs (ui_saver_life.c)
+ *        until a touch, at full speed, or (Dark)
+ *        the screen goes black and the board saves power. The next tap only wakes it. The lock screen,
+ *        if on, waits under it.
  */
 #include "ui_internal.h"
 
 static void saver_sleep(bool lock_now);
+static void saver_show_stop(void);
 
 static lv_obj_t *s_saver;                 /**< the black cover on the system layer while the screen is off */
 static lv_obj_t *sv_clock;                /**< the dim clock (NULL: none, or dark already) */
 static lv_obj_t *sv_time;                 /**< its time */
 static lv_obj_t *sv_date;                 /**< its date */
-static lv_timer_t *sv_timer;              /**< it, each second */
-static uint32_t sv_since;                 /**< when it came up */
+static lv_timer_t *sv_timer;              /**< the clock, each second */
 static uint32_t sv_moved;                 /**< when it last moved */
 
 /**
- * @brief Each second: the clock's time and date, somewhere else each minute; after SAVER_CLOCK_MIN
- *        minutes it goes and the screen is dark.
+ * @brief Each second: the clock's time and date, somewhere else each minute (no burn-in).
  * @param[in] t  the timer (NULL: the first call)
  */
 static void saver_clock_tick(lv_timer_t *t)
 {
     if (!s_saver || !sv_clock) {
-        return;
-    }
-    if (lv_tick_elaps(sv_since) >= SAVER_CLOCK_MIN * 60u * 1000u) {   /* enough: dark */
-        lv_obj_delete(sv_clock);
-        sv_clock = NULL;
-        lv_timer_delete(sv_timer);
-        sv_timer = NULL;
-        lv_refr_now(NULL);
-        bsp_power_save(true);                       /* light off, panel asleep, CPU slower */
         return;
     }
     time_t now = time(NULL);
@@ -55,14 +47,16 @@ static void saver_clock_tick(lv_timer_t *t)
     }
 }
 
-/** @brief Stops the dim clock. */
-static void saver_clock_stop(void)
+/** @brief Stops the dim clock or Life. */
+static void saver_show_stop(void)
 {
     if (sv_timer) {
         lv_timer_delete(sv_timer);
     }
     sv_timer = NULL;
     sv_clock = NULL;                                /* (a child of s_saver: goes with it) */
+    saver_life_stop();                              /* (its picture goes now, before its memory) */
+    saver_analog_stop();
 }
 
 /**
@@ -74,7 +68,7 @@ static void saver_wake_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSED) {
-        saver_clock_stop();
+        saver_show_stop();
         bsp_power_save(false);                      /* CPU and panel back (if it was dark) */
         bsp_display_brightness_set(effective_brightness());
     } else if (s_saver) {
@@ -86,8 +80,8 @@ static void saver_wake_cb(lv_event_t *e)
 
 /**
  * @brief The screen off: the game paused, the lock screen (if on) under a black cover, then the dim
- *        clock (if on) or dark at once.
- * @param[in] lock_now  the lock button on Home: locked even with the lock Off, and no clock
+ *        clock or Life (if chosen) until a touch, at full speed; or dark, saving power.
+ * @param[in] lock_now  the lock button on Home: locked even with the lock Off, and no clock or Life
  */
 static void saver_sleep(bool lock_now)
 {
@@ -104,7 +98,19 @@ static void saver_sleep(bool lock_now)
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESS_LOST, NULL);
-    if (is_store_saver_clock() && !lock_now) {        /* dim clock first (not for "lock now") */
+    uint8_t mode = lock_now ? SAVER_MODE_DARK : store_saver_mode();   /* (not for "lock now") */
+    if (mode == SAVER_MODE_LIFE && saver_life_start(s_saver)) {
+        lv_refr_now(NULL);
+        bsp_display_brightness_set(effective_brightness());   /* (low PWM levels show nothing on this panel) */
+        return;
+    }
+    if (mode == SAVER_MODE_ANALOG) {
+        saver_analog_start(s_saver);
+        lv_refr_now(NULL);
+        bsp_display_brightness_set(effective_brightness());
+        return;
+    }
+    if (mode == SAVER_MODE_CLOCK) {                 /* dim clock first */
         sv_clock = lv_obj_create(s_saver);
         lv_obj_remove_style_all(sv_clock);
         lv_obj_set_size(sv_clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -113,11 +119,10 @@ static void saver_sleep(bool lock_now)
         lv_obj_set_clickable(sv_clock, false);
         sv_time = make_label(sv_clock, &font_timer_36, lv_color_hex(0x9AA0AA));
         sv_date = make_label(sv_clock, &lv_font_montserrat_20, lv_color_hex(0x6B7280));
-        sv_since = lv_tick_get();
         saver_clock_tick(NULL);
         sv_timer = lv_timer_create(saver_clock_tick, 1000, NULL);
         lv_refr_now(NULL);
-        bsp_display_brightness_set(SAVER_CLOCK_LIGHT);
+        bsp_display_brightness_set(effective_brightness());   /* (dim by its grey text: low PWM shows nothing) */
         return;
     }
     lv_refr_now(NULL);                  /* panel shows black before the light goes off */

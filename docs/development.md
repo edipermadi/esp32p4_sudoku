@@ -170,6 +170,9 @@ esp32p4_sudoku.ino      setup/loop
 src/ui_sudoku.c         the UI's start-up: the card and sudoku.db read, the settings applied, the screens and timers
 src/ui_notice.c         notices: a banner for a while, or one that stays while something runs (a file from the computer)
 src/ui_saver.c          the screen saver: the dim clock, dark, power saving, the waking tap
+src/ui_saver_analog.c   the analog clock screen saver: an LVGL scale as the face, the hands each second
+src/ui_saver_life.c     the Game of Life screen saver: the VFD-style dots, repainted as their glow changes
+src/life_core.c         the Game of Life without LVGL: the rules on a wrapped 120 x 120 board, the glows, reseeding
 src/ui_lock.c           the lock screen (Swipe or PIN) and the keypad it shares
 src/ui_pin_setup.c      Settings' PIN setup: a new PIN typed twice
 src/lock_core.c         the lock's PIN without LVGL: right or wrong, tries, the wait, setting a new one
