@@ -247,13 +247,16 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER || v == VAR_PALINDROME ||
             v == VAR_REGIONSUM || v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR ||
             v == VAR_DUTCH || v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT ||
-            v == VAR_DARROW || v == VAR_TEN) &&
+            v == VAR_DARROW || v == VAR_TEN || v == VAR_PILL) &&
             buf &&
             sudoku_geom_lines_text(v, thermos, buf)) {
         return buf;
     }
     if (v == VAR_SANDWICH && buf && sudoku_geom_sandwich_text(marks, buf)) {
         return buf;    /* (its sums are in marks) */
+    }
+    if (v == VAR_PSKY && buf && sudoku_geom_psky_text(marks, buf)) {
+        return buf;    /* (its clues are in marks) */
     }
     if (v == VAR_SKY && buf && sudoku_geom_sky_text(marks, buf)) {
         return buf;    /* (its clues too) */

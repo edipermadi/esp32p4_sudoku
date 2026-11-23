@@ -162,6 +162,9 @@ typedef enum {
     KIND_159,                            /**< 159 Sudoku */
     KIND_PRODUCT,                        /**< Product Killer */
     KIND_REGIONS,                        /**< Extra Regions */
+    KIND_ANTIDIAG,                       /**< Anti-Diagonal */
+    KIND_PILL,                           /**< Pill Arrows */
+    KIND_PSKY,                           /**< Odd/Even Skyscrapers */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**
@@ -1000,7 +1003,7 @@ typedef enum {
     REC_DAYS,                            /**< days */
     REC_MINUTES                          /**< minutes */
 } rec_unit_t;
-#define STATS_MAX_RECORDS 64             /**< records at most */
+#define STATS_MAX_RECORDS 72             /**< records at most */
 /** @brief A personal record. */
 typedef struct {
     const char *title;                   /**< static string */

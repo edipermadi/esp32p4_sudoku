@@ -189,6 +189,14 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             snprintf(tech, sizeof(tech), "From the clue of %s, the buildings seen add up to %d: of the ways its empty "
                      "cells can be filled, only those leave row %d, column %d %s. ", u1, geo->sky_sum[k], c / 9 + 1,
                      c % 9 + 1, digs);
+        } else if (t->kind == TECH_PSKY && k >= 0 && k < 18) {
+            mark_unit(geo, mark, k, 1);
+            unit_name(geo, k, u1, sizeof(u1));
+            const int pc = geo->psky_clue[k];
+            const int seen = pc & ~PSKY_EVEN;
+            snprintf(tech, sizeof(tech), "From the clue of %s, %d %s building%s seen: of the ways its empty cells "
+                     "can be filled, only those leave row %d, column %d %s. ", u1, seen, (pc & PSKY_EVEN) ? "even" : "odd",
+                     seen == 1 ? " is" : "s are", c / 9 + 1, c % 9 + 1, digs);
         } else if (t->kind == TECH_FRAME && k >= 0 && k < 18) {
             mark_unit(geo, mark, k, 1);
             unit_name(geo, k, u1, sizeof(u1));
@@ -233,7 +241,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             }
         }
         int lk = geo->line_kind;
-        snprintf(u1, sizeof(u1), "this %s", lk == LINE_ARROW ? "arrow" : "line");
+        snprintf(u1, sizeof(u1), "this %s", lk == LINE_ARROW || lk == LINE_PILL ? "arrow" : "line");
         snprintf(tech, sizeof(tech), "%s, so row %d, column %d can only be %s. ",
                  lk == LINE_ARROW ? "The arrow's shaft adds up to its circle" :
                  lk == LINE_RENBAN ? "The digits on this line are a run of consecutive digits" :
@@ -252,6 +260,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  "them lie outside that range" :
                  lk == LINE_DARROW ? "The two circles at this line's ends add up to the digits between them" :
                  lk == LINE_TEN ? "This line splits into runs of cells that each add up to 10" :
+                 lk == LINE_PILL ? "The arrow's shaft adds up to its pill, the two cells read as a two-digit number" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -273,6 +282,21 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  ? "Along the thermometer the digits rise or stay the same from the bulb (they rise where two "
                  "neighbours share a row, column or box)" : "Along the thermometer the digits rise from the bulb",
                  c / 9 + 1, c % 9 + 1, digs);
+    } else if (t->kind == TECH_ANTIDIAG) {         /* Anti-Diagonal: the diagonal */
+        const int dg = t->unit == 1, c = t->cell1 >= 0 ? t->cell1 : 0;
+        for (int k = 0; k < 9; k++) {
+            mark[dg ? k * 9 + 8 - k : k * 10] = 1;
+        }
+        snprintf(u1, sizeof(u1), "the %s diagonal", dg ? "top-right" : "top-left");
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        snprintf(tech, sizeof(tech), "A long diagonal holds at most three different digits, and %s has %s already, "
+                 "so row %d, column %d is one of them. ", u1, digs, c / 9 + 1, c % 9 + 1);
     } else if (t->kind == TECH_159) {              /* 159 Sudoku: the cell, and its row's columns 1, 5 and 9 */
         int c = t->unit;
         for (int k = 0; c >= 0 && c < 81 && k < 9; k += 4) {

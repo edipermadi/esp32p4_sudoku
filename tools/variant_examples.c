@@ -481,6 +481,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_SKYSUM:
         sudoku_skysum_text(g, marks, len);
         break;
+    case VAR_PSKY:
+        sudoku_psky_text(g, marks, len);
+        break;
     case VAR_FRAME:
         sudoku_frame_text(g, marks, len);
         break;
@@ -510,6 +513,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_LOCKOUT:
     case VAR_DARROW:
     case VAR_TEN:
+    case VAR_PILL:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -651,6 +655,13 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_NROOM_COL:
         printf(", \"rule\": \"nroom\", \"line\": %d", why == FIT_NROOM_ROW ? r : 9 + q);
         return;
+    case FIT_PSKY_ROW:
+    case FIT_PSKY_COL:
+        printf(", \"rule\": \"psky\", \"line\": %d", why == FIT_PSKY_ROW ? r : 9 + q);
+        return;
+    case FIT_ANTIDIAG:
+        printf(", \"rule\": \"antidiag\"");
+        return;
     case FIT_SKYSUM_ROW:
     case FIT_SKYSUM_COL:
         printf(", \"rule\": \"skysum\", \"line\": %d", why == FIT_SKYSUM_ROW ? r : 9 + q);
@@ -765,6 +776,16 @@ static void layout_json(const sudoku_geom_t *G)
         printf("[");
         for (int lu = 0; lu < 18; lu++) {
             printf("%s%d", lu ? "," : "", G->nroom[lu]);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"psky\": ");                     /* (odd: 1..5; even: 16 + 0..4) */
+    if (G->psky) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->psky_clue[lu]);
         }
         printf("]");
     } else {

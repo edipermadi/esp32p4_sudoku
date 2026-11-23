@@ -181,6 +181,38 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int lu = 0; geo->psky && lu < 18; lu++) {   /* Odd/Even Skyscrapers: more of the parity seen, or (to the 9) not it */
+        const int c = geo->psky_clue[lu], want = c & ~PSKY_EVEN, even = (c & PSKY_EVEN) != 0;
+        int seen = 0, top = 0, k = 0, cells[9];
+        if (!c) {
+            continue;
+        }
+        for (int j = 0; j < 9; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        }
+        for (; k < 9 && val[cells[k]] && top < 9; k++) {
+            if (val[cells[k]] > top) {
+                top = val[cells[k]];
+                seen += (top % 2 == 0) == even;
+            }
+        }
+        if (seen > want || (top == 9 && seen != want)) {
+            for (int j = 0; j < k; j++) {
+                out[cells[j]] = true;
+            }
+        }
+    }
+    for (int dg = 0; geo->antidiag && dg < 2; dg++) {   /* Anti-Diagonal: a fourth different digit on a long diagonal */
+        uint16_t have = 0;
+        for (int k = 0; k < 9; k++) {
+            const int o = dg ? k * 9 + 8 - k : k * 10;
+            have |= val[o] ? (uint16_t)(1u << val[o]) : 0;
+        }
+        for (int k = 0; __builtin_popcount(have) > 3 && k < 9; k++) {
+            const int o = dg ? k * 9 + 8 - k : k * 10;
+            out[o] = out[o] || val[o];
+        }
+    }
     for (int lu = 0; geo->xsums && lu < 18; lu++) {   /* X-Sums: the first X digits over the clue, or (full) not it */
         int c = geo->xsum[lu], cells[9], sum = 0, empty = 0;
         for (int j = 0; j < 9; j++) {
@@ -350,6 +382,19 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
             for (int i = 0; !sudoku_ten_allow(m, n, -1) && i < n; i++) {
                 out[cell[i]] = val[cell[i]] != 0;
+            }
+            break;
+        }
+        case LINE_PILL: {                           /* the shaft over the pill's number, or (all filled) not equal */
+            int sum = 0, empty = 0, a = val[cell[0]], b = val[cell[1]];
+            for (int i = 2; i < n; i++) {
+                sum += val[cell[i]];
+                empty += !val[cell[i]];
+            }
+            if (a && b && (sum + empty > 10 * a + b || (!empty && sum != 10 * a + b))) {
+                for (int i = 0; i < n; i++) {
+                    out[cell[i]] = out[cell[i]] || val[cell[i]];
+                }
             }
             break;
         }

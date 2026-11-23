@@ -274,6 +274,51 @@ bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want
 }
 
 /* (documented in gen_internal.h) */
+bool gen_pill_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+{
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
+    int n = 0;
+    for (int tries = 0; tries < 3000 && n < want; tries++) {
+        const int a = (int)(rnd(rng) % 81), down = (int)(rnd(rng) & 1), b = down ? a + 9 : a + 1;
+        if ((down ? a >= 72 : a % 9 == 8) || used[a] || used[b]) {
+            continue;
+        }
+        const int num = 10 * full[a] + full[b];
+        if (num > 39) {
+            continue;                               /* (a shaft of up to 7 cells, without many 9s) */
+        }
+        int len = 0, sum = 0, nb[8];
+        cells[n][len++] = (uint8_t)a;
+        cells[n][len++] = (uint8_t)b;
+        while (len < 9 && sum < num) {              /* the shaft, from the pill's second cell */
+            const int cur = cells[n][len - 1];
+            int k = line_neighbours(cur, used, cells[n], len, nb), m = 0;
+            for (int j = 0; j < k; j++) {
+                if (!is_line_crossing(cells[n], len, cur, nb[j]) && !is_block_crossed(blocks, cur, nb[j]) &&
+                        sum + full[nb[j]] <= num && (len > 2 || nb[j] != a)) {
+                    nb[m++] = nb[j];
+                }
+            }
+            if (!m) {
+                break;
+            }
+            const int o = nb[rnd(rng) % (uint32_t)m];
+            cells[n][len++] = (uint8_t)o;
+            sum += full[o];
+        }
+        if (sum != num) {
+            continue;
+        }
+        for (int j = 0; j < len; j++) {
+            used[cells[n][j]] = 1;
+        }
+        mark_line_blocks(blocks, cells[n], len);
+        lens[n++] = (uint8_t)len;
+    }
+    return n >= 3 && gen_geom_lines(VAR_PILL, cells, lens, n, out);
+}
+
+/* (documented in gen_internal.h) */
 bool gen_group_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
     const int kind = variant == VAR_ENTROPIC ? LINE_ENTROPIC : LINE_MODULAR;

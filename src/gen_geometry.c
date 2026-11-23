@@ -25,7 +25,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Nabner", "Numbered Rooms", "Sum Skyscrapers",
                                                      "Lockout Lines", "Sumless Killer", "Double Arrow",
                                                      "Diagonal Consecutive", "10 Lines", "Girandola",
-                                                     "159 Sudoku", "Product Killer", "Extra Regions"
+                                                     "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal",
+                                                     "Pill Arrows", "Odd/Even Skyscrapers"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -104,6 +105,24 @@ int sudoku_nroom_of(const uint8_t vals[81], int lu)
     line_cells(lu, cells);
     int x = vals[cells[0]];
     return x ? vals[cells[x - 1]] : 0;
+}
+
+/* (documented in generator.h) */
+int sudoku_psky_of(const uint8_t vals[81], int lu, bool even)
+{
+    int cells[9], n = 0, top = 0;
+    line_cells(lu, cells);
+    for (int k = 0; k < 9 && top < 9; k++) {
+        int x = vals[cells[k]];
+        if (!x) {
+            return -1;
+        }
+        if (x > top) {
+            top = x;
+            n += (x % 2 == 0) == even;
+        }
+    }
+    return n;
 }
 
 /* (documented in generator.h) */
@@ -299,6 +318,9 @@ void sudoku_geom_init(void)
     g[VAR_NONCONSEC] = g[VAR_CLASSIC];              /* Consecutive with no bars: no neighbours 1 apart */
     g[VAR_NONCONSEC].variant = VAR_NONCONSEC;
     g[VAR_NONCONSEC].consec_on = true;
+    g[VAR_ANTIDIAG] = g[VAR_CLASSIC];               /* at most three different digits on each long diagonal */
+    g[VAR_ANTIDIAG].variant = VAR_ANTIDIAG;
+    g[VAR_ANTIDIAG].antidiag = true;
     g[VAR_159] = g[VAR_CLASSIC];                    /* columns 1, 5, 9 say where the 1, 5, 9 are */
     g[VAR_159].variant = VAR_159;
     g[VAR_159].idx159 = true;
@@ -321,7 +343,7 @@ void sudoku_geom_init(void)
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
-                                  VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS
+                                  VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -345,7 +367,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS || variant == VAR_NABNER ||
             variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
             variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
-            variant == VAR_PRODUCT || variant == VAR_REGIONS) {
+            variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -365,7 +387,7 @@ static int line_kind_of(int variant)
            variant == VAR_MODULAR ? LINE_MODULAR : variant == VAR_DUTCH ? LINE_DUTCH :
            variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : variant == VAR_NABNER ? LINE_NABNER :
            variant == VAR_LOCKOUT ? LINE_LOCKOUT : variant == VAR_DARROW ? LINE_DARROW :
-           variant == VAR_TEN ? LINE_TEN : LINE_THERMO;
+           variant == VAR_TEN ? LINE_TEN : variant == VAR_PILL ? LINE_PILL : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -431,6 +453,13 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
         if ((out->line_kind == LINE_BETWEEN || out->line_kind == LINE_ENTROPIC || out->line_kind == LINE_MODULAR ||
                 out->line_kind == LINE_LOCKOUT || out->line_kind == LINE_DARROW) && lens[t] < 3) {
             return false;                           /* (two circles and something between them) */
+        }
+        if (out->line_kind == LINE_PILL) {          /* the pill: two cells side by side (or one above the other), then a shaft */
+            const int a = cells[t][0], b = cells[t][1];
+            if (lens[t] < 3 || !((b == a + 1 && a % 9 < 8) || b == a + 9)) {
+                return false;
+            }
+            out->allow[a] &= (uint16_t)0x7E;        /* (the tens: a shaft of 7 at most adds up to 63 at most) */
         }
         if (out->line_kind == LINE_LOCKOUT) {       /* the diamonds 4+ apart always enclose 5: never between them */
             for (int i = 1; i < lens[t] - 1; i++) {
@@ -691,6 +720,23 @@ bool gen_geom_skysum(const uint8_t clues[18], sudoku_geom_t *out)
                 out->allow[cells[0]] &= (uint16_t)((1u << (c - 9 + 1)) - 1);
             }
         }
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_psky(const uint8_t clues[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_PSKY;
+    out->psky = true;
+    for (int lu = 0; lu < 18; lu++) {
+        const int c = clues[lu], n = c & ~PSKY_EVEN;
+        if (c && ((c & ~(PSKY_EVEN | 0xF)) || ((c & PSKY_EVEN) ? n > 4 : n < 1 || n > 5))) {
+            return false;                           /* (odd: the 9 at least, 1 3 5 7 9 at most; even: 0..4) */
+        }
+        out->psky_clue[lu] = (uint8_t)c;
     }
     return true;
 }

@@ -72,7 +72,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
         const bool newest_lines = G->nthermos && (G->line_kind == LINE_ZIPPER || G->line_kind == LINE_BETWEEN ||
                                   G->line_kind == LINE_ENTROPIC || G->line_kind == LINE_MODULAR ||
                                   G->line_kind == LINE_NABNER || G->line_kind == LINE_LOCKOUT ||
-                                  G->line_kind == LINE_DARROW || G->line_kind == LINE_TEN);
+                                  G->line_kind == LINE_DARROW || G->line_kind == LINE_TEN || G->line_kind == LINE_PILL);
         if (G->edge_kind || G->nquads || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
             int tier = gen_technique_tier(G, out);
             ok = tier <= max_tier && (tier < 3 || gen_count_bounded(G, out, 2, node_limit) == 1);
@@ -115,13 +115,14 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool ends = variant == VAR_LOCKOUT || variant == VAR_DARROW || variant == VAR_TEN;
     const bool sumless = variant == VAR_SUMLESS, dcons = variant == VAR_DIAGCONSEC;
     const bool prodk = variant == VAR_PRODUCT, xregions = variant == VAR_REGIONS;
+    const bool pill = variant == VAR_PILL, psky = variant == VAR_PSKY;
     const bool grp = variant == VAR_ENTROPIC || variant == VAR_MODULAR;
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool fort = variant == VAR_FORTRESS;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
-                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions;
+                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -154,6 +155,23 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         } else if (killer) {                        /* a grid, then cages drawn over it */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!gen_killer_cages(full, level >= GEN_HARD ? 5 : 3, &rng, jig)) {
+                continue;
+            }
+        } else if (pill) {                          /* a grid, then arrows from two-cell pills */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            if (!gen_pill_paths(full, &rng, level >= GEN_HARD ? 10 : 8, jig)) {
+                continue;
+            }
+        } else if (psky) {                          /* a grid, then some of its 18 clues, odd or even */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t clues[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                const bool even = rnd(&rng) & 1;
+                const int c = sudoku_psky_of(full, lu, even);
+                clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)(even ? PSKY_EVEN | c : c) : 0;
+            }
+            if (!gen_geom_psky(clues, jig)) {
                 continue;
             }
         } else if (prodk) {                         /* a grid, then cages and their products */

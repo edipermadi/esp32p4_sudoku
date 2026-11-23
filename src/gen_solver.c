@@ -306,6 +306,52 @@ uint16_t sudoku_ten_allow(const uint16_t *m, int n, int p)
     return ok;
 }
 
+/**
+ * @brief Pill Arrows: the digits the cell at a place of an arrow may hold: the pill (places 0 and 1, tens and
+ * units) read as a number is the shaft's sum (gen_line_allow()'s case, kept apart like group_line_allow())
+ * @param[in] G     the board
+ * @param[in] t     the line
+ * @param[in] p     the place on it
+ * @param[in] v     the digits (0: empty)
+ * @param[in] cand  the candidates of the empty ones, or NULL
+ * @return a candidate mask
+ */
+static __attribute__((noinline)) uint16_t pill_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v,
+        const uint16_t *cand)
+{
+    const int n = G->thermo_n[t];
+    const uint8_t *cell = G->thermo_cell[t];
+    const uint16_t mt = LMASK(cell[0]), mu = LMASK(cell[1]);
+    if (!mt || !mu) {
+        return 0;
+    }
+    int smin = 0, smax = 0;                         /* the shaft's sum, the place asked about left out */
+    for (int k = 2; k < n; k++) {
+        if (k == p) {
+            continue;
+        }
+        const uint16_t m = LMASK(cell[k]);
+        if (!m) {
+            return 0;
+        }
+        smin += LO(m);
+        smax += HI(m);
+    }
+    uint16_t ok = 0;
+    if (p >= 2) {                                   /* the shaft: what's left of the pill's number */
+        return RANGE(10 * LO(mt) + LO(mu) - smax, 10 * HI(mt) + HI(mu) - smin);
+    }
+    for (int a = 1; a <= 9; a++) {                  /* a pill whose number the shaft can make */
+        for (int b = 1; b <= 9; b++) {
+            const int num = 10 * a + b;
+            if ((mt >> a & 1) && (mu >> b & 1) && num >= smin && num <= smax) {
+                ok |= (uint16_t)(1u << (p ? b : a));
+            }
+        }
+    }
+    return ok;
+}
+
 /* (documented in gen_internal.h) */
 uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, const uint16_t *cand)
 {
@@ -532,6 +578,9 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         free &= sudoku_ten_allow(m, n, p);
         break;
     }
+    case LINE_PILL:                                 /* the pill (places 0, 1: tens, units) is the shaft's sum */
+        free &= pill_line_allow(G, t, p, v, cand);
+        break;
     case LINE_LOCKOUT:                              /* the ends: diamonds (4+ apart), or circles (Double Arrow) */
     case LINE_DARROW:
         free &= ends_line_allow(G, t, p, v, cand);
@@ -655,6 +704,8 @@ typedef struct {
 #define R_NROOM   (1u << 12)            /**< Numbered Rooms */
 #define R_SKYSUM  (1u << 13)            /**< Sum Skyscrapers */
 #define R_159     (1u << 14)            /**< 159 Sudoku */
+#define R_ANTIDIAG (1u << 15)           /**< Anti-Diagonal */
+#define R_PSKY    (1u << 16)            /**< Odd/Even Skyscrapers */
 /** @} */
 
 /**
@@ -931,6 +982,34 @@ bool is_gen_sky_line_ok(const uint8_t x[9], int c)
     }
     int rest = 9 - k, more = 9 - top < rest ? 9 - top : rest;   /* at most this many more seen */
     return seen < c && seen + more >= c;            /* (the 9, still to come, is seen) */
+}
+
+/* (documented in gen_internal.h) */
+bool is_gen_psky_line_ok(const uint8_t x[9], int c)
+{
+    const bool even = (c & PSKY_EVEN) != 0;
+    const int want = c & ~PSKY_EVEN;
+    int seen = 0, top = 0, k = 0;
+    uint16_t placed = 0;
+    for (; k < 9 && x[k]; k++) {
+        placed |= (uint16_t)(1u << x[k]);
+        if (x[k] > top) {
+            top = x[k];
+            seen += (x[k] % 2 == 0) == even;
+        }
+    }
+    if (seen > want) {
+        return false;
+    }
+    if (top == 9 || k == 9) {
+        return seen == want;                        /* (the 9 hides the rest; or the line is full) */
+    }
+    int more = 0;                                   /* at most: every digit of that parity above top, still to come */
+    for (int d = top + 1; d <= 9; d++) {
+        more += !(placed >> d & 1) && (d % 2 == 0) == even;
+    }
+    const int least = even ? 0 : 1;                 /* (the 9, still to come, is seen: odd) */
+    return seen + least <= want && want <= seen + more;
 }
 
 /* (documented in gen_internal.h) */
@@ -1265,6 +1344,45 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
         WHY(line ? FIT_SKYSUM_COL : FIT_SKYSUM_ROW);
     }
+    for (int line = 0; (rules & R_PSKY) && free && line < 2; line++) {   /* Odd/Even Skyscrapers: its row's, column's clue */
+        int lu = line ? 9 + i % 9 : i / 9, c = G->psky_clue[lu], cells[9];
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        uint8_t x[9];
+        for (int k = 0; k < 9; k++) {
+            x[k] = g->v[cells[k]];
+        }
+        int at = line ? i / 9 : i % 9;
+        for (int d = 1; d <= 9; d++) {
+            if (!(free >> d & 1)) {
+                continue;
+            }
+            x[at] = (uint8_t)d;
+            if (!is_gen_psky_line_ok(x, c)) {
+                free &= (uint16_t)~(1u << d);
+            }
+        }
+        WHY(line ? FIT_PSKY_COL : FIT_PSKY_ROW);
+    }
+    if ((rules & R_ANTIDIAG) && free) {             /* Anti-Diagonal: three digits on its diagonal already: one of them */
+        const int r = i / 9, q = i % 9;
+        for (int dg = 0; dg < 2; dg++) {
+            if (dg ? r + q != 8 : r != q) {
+                continue;
+            }
+            uint16_t have = 0;
+            for (int k = 0; k < 9; k++) {
+                const int o = dg ? k * 9 + 8 - k : k * 10;
+                have |= o != i && g->v[o] ? (uint16_t)(1u << g->v[o]) : 0;
+            }
+            if (gen_popcount(have) >= 3) {
+                free &= have;
+            }
+        }
+    }
+    WHY(FIT_ANTIDIAG);
     for (int line = 0; (rules & R_FIRST3) && free && line < 2; line++) {
         int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;   /* its row's, its column's clue */
         if (at < 3 && is_gen_first3_clued(G, lu)) {
@@ -1444,7 +1562,7 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->frame || G->outside || G->rossini ? R_FIRST3 : 0) | (G->diag_nc ? R_DIAGNC : 0) |
                (G->nlk ? R_LK : 0) | (G->sandwich ? R_SANDWICH : 0) | (G->nthermos ? R_LINE : 0) |
                (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0) |
-               (G->idx159 ? R_159 : 0);
+               (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

@@ -200,6 +200,15 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
                 }
             }
         }
+        if (g->line_kind == LINE_PILL) {            /* the pill's number is the shaft's sum */
+            int sum = 0;
+            for (int i = 2; i < n; i++) {
+                sum += sol[g->thermo_cell[t][i]];
+            }
+            if (sum != 10 * sol[g->thermo_cell[t][0]] + sol[g->thermo_cell[t][1]]) {
+                return false;
+            }
+        }
         if (g->line_kind == LINE_TEN) {             /* runs of 10, end to end */
             int run = 0;
             for (int i = 0; i < n; i++) {
@@ -251,6 +260,21 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
         }
         bool up = x[0] < x[1] && x[1] < x[2], down = x[0] > x[1] && x[1] > x[2];
         if (g->rossini && (g->rossini_dir[lu] == ROSSINI_UP ? !up : g->rossini_dir[lu] == ROSSINI_DOWN ? !down : up || down)) {
+            return false;
+        }
+    }
+    for (int dg = 0; g->antidiag && dg < 2; dg++) {   /* Anti-Diagonal: three different digits at most */
+        uint16_t have = 0;
+        for (int k = 0; k < 9; k++) {
+            have |= (uint16_t)(1u << sol[dg ? k * 9 + 8 - k : k * 10]);
+        }
+        if (__builtin_popcount(have) > 3) {
+            return false;
+        }
+    }
+    for (int lu = 0; g->psky && lu < 18; lu++) {    /* Odd/Even Skyscrapers: the clues */
+        const int c = g->psky_clue[lu];
+        if (c && sudoku_psky_of(sol, lu, (c & PSKY_EVEN) != 0) != (c & ~PSKY_EVEN)) {
             return false;
         }
     }
@@ -386,7 +410,8 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->frame_sum, b->frame_sum, 18) && a->outside == b->outside &&
            !memcmp(a->outside_set, b->outside_set, sizeof(a->outside_set)) && a->rossini == b->rossini &&
            !memcmp(a->rossini_dir, b->rossini_dir, 18) && a->diag_nc == b->diag_nc && !memcmp(a->dmark, b->dmark, 81) &&
-           a->idx159 == b->idx159 && !memcmp(a->cage_prod, b->cage_prod, sizeof(a->cage_prod)) &&
+           a->idx159 == b->idx159 && a->antidiag == b->antidiag && a->psky == b->psky &&
+           !memcmp(a->psky_clue, b->psky_clue, 18) && !memcmp(a->cage_prod, b->cage_prod, sizeof(a->cage_prod)) &&
            !memcmp(a->lk_sum, b->lk_sum, a->nlk) && !memcmp(a->lk_dir, b->lk_dir, a->nlk) &&
            !memcmp(a->lk_cell, b->lk_cell, sizeof(a->lk_cell[0]) * a->nlk) &&
            a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
@@ -440,6 +465,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_SKYSUM:
         sudoku_skysum_text(g, marks, len);
         break;
+    case VAR_PSKY:
+        sudoku_psky_text(g, marks, len);
+        break;
     case VAR_FRAME:
         sudoku_frame_text(g, marks, len);
         break;
@@ -469,6 +497,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_LOCKOUT:
     case VAR_DARROW:
     case VAR_TEN:
+    case VAR_PILL:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -497,7 +526,7 @@ static void test_geometry(void)
         {VAR_MINI, 6, 36, 18, 12},     {VAR_KIDS, 4, 16, 12, 7},
         {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
         {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
-        {VAR_159, 9, 81, 27, 20},
+        {VAR_159, 9, 81, 27, 20}, {VAR_ANTIDIAG, 9, 81, 27, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -732,7 +761,7 @@ static void test_generate(void)
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
             if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR || v == VAR_DUTCH ||
                     v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT || v == VAR_DARROW ||
-                    v == VAR_TEN) {
+                    v == VAR_TEN || v == VAR_PILL) {
                 CHECKF(!is_lines_crossing(&board), "%s %s: two lines cross", variant_name(v), gen_level_name(lv));
             }
             CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));

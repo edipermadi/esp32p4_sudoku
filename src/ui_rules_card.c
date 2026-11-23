@@ -29,6 +29,7 @@ static const uint8_t PIC_GROUPS[] = {0, 1, 2, 3, 4, 0xFF};  /**< Entropic 2 9 4 
 static const uint8_t PIC_SLOW[] = {0, 1, 6, 7, 0xFF};       /**< 2 4, then 4 again across the boxes' corner, 7 */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 static const uint8_t PIC_SUMLESS[] = {0, 1, 2, 5, 0xFE, 0xFF};   /**< a cage over the box border, no sum */
+static const uint8_t PIC_PILL[] = {0, 1, 2, 3, 4, 0xFF};    /**< (1 2) 3 4 5: 12 = 3 + 4 + 5 */
 static const uint8_t PIC_PROD[] = {12, 0, 1, 0xFE, 70, 2, 3, 6, 0xFE, 0xFF};   /**< 3 x 4 = 12, and an empty 70 */
 static const uint8_t PIC_DMARKS[] = {0, DMARK_DR, 0xFF};   /**< 3 and 4 corner to corner: a mark; 8 and 4: none */
 static const uint8_t PIC_TEN[] = {0, 1, 2, 5, 4, 0xFF};    /**< 3 7 | 1 5 4: two runs of 10 */
@@ -122,6 +123,12 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_TEN] = {3, 2, 0, 0, "371" "945", NULL, NULL, NULL, NULL, NULL, PIC_TEN, NULL, -1, 0, NULL, NULL, LINE_TEN},
     [VAR_159] = {9, 1, 0, 0, "321465798", "100010001", NULL, NULL, NULL, NULL, NULL, NULL, -1},
     [VAR_PRODUCT] = {4, 2, 0, 0, "34.." "....", NULL, NULL, NULL, NULL, NULL, NULL, PIC_PROD, -1},
+    [VAR_ANTIDIAG] = {
+        5, 5, 0, 0, "3...7" ".7.3." "..3.." ".1.7." "7...3", "10001" "01010" "00100" "01010" "10001",
+        NULL, NULL, NULL, NULL, NULL, NULL, -1
+    },
+    [VAR_PILL] = {5, 1, 0, 0, "12345", NULL, NULL, NULL, NULL, NULL, PIC_PILL, NULL, -1, 0, NULL, NULL, LINE_PILL},
+    [VAR_PSKY] = {5, 1, 0, 0, "25198", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2, 0, NULL, NULL, 0, 0},
     [VAR_REGIONS] = {4, 2, 2, 2, "..8." "....", "0110" "0100", NULL, NULL, NULL, NULL, NULL, NULL, -1},
     [VAR_GIRANDOLA] = {
         9, 9, 3, 3, "4.......7" "....2...." "........." "........." ".9..5..1." "........." "........."
@@ -250,6 +257,14 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "puts the 9 in column 8.",
     [VAR_PRODUCT] = "Classic rules, plus cages (dashed outlines): the digits in a cage multiply to the number in its "
     "corner, and no digit repeats in a cage. Here 3 x 4 = 12, and the three empty cells make 70: 2, 5 and 7.",
+    [VAR_ANTIDIAG] = "Classic rules, and each of the two long diagonals (tinted) holds at most three different "
+    "digits, which repeat: here the top-left one holds 3 and 7, the other 7, 3 and 1. A digit can be on a diagonal up "
+    "to three times, once per box it crosses.",
+    [VAR_PILL] = "Classic rules, and on each arrow the pill, two cells in a capsule, read as a two-digit number, is "
+    "the sum of the digits along the shaft: 12 = 3 + 4 + 5. Digits may repeat along a shaft where the rules allow.",
+    [VAR_PSKY] = "Classic rules, and the digits are buildings that tall: from a clue, a taller one hides the "
+    "shorter ones behind it. A ringed clue counts the odd buildings seen, a shaded one the even ones. Here 2, 5 "
+    "and 9 are seen: the ringed 2 counts the odd ones, 5 and 9 (a shaded clue here would be 1: the 2).",
     [VAR_REGIONS] = "Classic rules, plus a few shaded regions: no digit repeats in a region. A region reaches over "
     "box borders, so the 8 here rules out 8 in the region's other cells, even in the next box.",
     [VAR_GIRANDOLA] = "Classic rules, and the nine tinted cells in a pinwheel pattern, one in each box, also hold "
@@ -476,6 +491,16 @@ static void rules_pic_draw_cb(lv_event_t *e)
         d.text_local = 1;
         lv_area_t a = {.x1 = x0 - 50, .y1 = y0 + (cs - 24) / 2, .x2 = x0 - 10, .y2 = y0 + cs};
         lv_draw_label(layer, &d, &a);
+        if (p == &RULES_PIC[VAR_PSKY]) {            /* Odd/Even Skyscrapers: its clue counts odd ones: a ring */
+            lv_draw_rect_dsc_t rr;
+            lv_draw_rect_dsc_init(&rr);
+            rr.bg_opa = LV_OPA_TRANSP;
+            rr.border_color = C_MUTED;
+            rr.border_width = 2;
+            rr.radius = LV_RADIUS_CIRCLE;
+            lv_area_t ring = {.x1 = x0 - 36, .y1 = y0 + cs / 2 - 15, .x2 = x0 - 6, .y2 = y0 + cs / 2 + 15};
+            lv_draw_rect(layer, &rr, &ring);
+        }
     }
     for (int i = 0; i < p->w * p->h; i++) {         /* digits and crosses */
         char t[2] = {0, 0};

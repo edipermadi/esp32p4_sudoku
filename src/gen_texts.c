@@ -216,6 +216,9 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_SKYSUM:
         sudoku_skysum_text(g, marks, 82);
         break;
+    case VAR_PSKY:
+        sudoku_psky_text(g, marks, 82);
+        break;
     case VAR_FRAME:
         sudoku_frame_text(g, marks, 82);
         break;
@@ -484,6 +487,40 @@ bool sudoku_geom_nroom_text(const char *text, sudoku_geom_t *out)
 bool sudoku_nroom_text(const sudoku_geom_t *g, char *buf, int len)
 {
     return write_clues18(g->nroom, buf, len);
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_psky_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t clues[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        bool even = p && *p == 'e';
+        char *end;
+        long v = p ? strtol(p + even, &end, 10) : -1;
+        if (!p || end == p + even || v < 0 || v > 5) {
+            return false;
+        }
+        clues[i] = (uint8_t)(even ? PSKY_EVEN | v : v);
+        p = *end == ',' ? end + 1 : (i == 17 && !*end ? end : NULL);
+    }
+    return p && !*p && gen_geom_psky(clues, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_psky_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        const int c = g->psky_clue[i];
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%s%d", i ? "," : "", (c & PSKY_EVEN) ? "e" : "",
+                         c & ~PSKY_EVEN);
+        if (w < 0 || pos + w >= len) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
 }
 
 /* (documented in generator.h) */

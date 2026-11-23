@@ -17,7 +17,8 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner",
                                                          "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
                                                          "Diagonal Consecutive", "10 Lines", "Girandola",
-                                                         "159 Sudoku", "Product Killer", "Extra Regions"
+                                                         "159 Sudoku", "Product Killer", "Extra Regions",
+                                                         "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -32,7 +33,8 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Slow Thermo", "Fortress", "Argyle", "Nabner",
                                                           "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
                                                           "Diagonal Consecutive", "10 Lines", "Girandola",
-                                                          "159 Sudoku", "Product Killer", "Extra Regions"
+                                                          "159 Sudoku", "Product Killer", "Extra Regions",
+                                                          "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -154,6 +156,12 @@ int stats_kind_of(int variant, bool daily)
         return KIND_PRODUCT;
     case VAR_REGIONS:
         return KIND_REGIONS;
+    case VAR_ANTIDIAG:
+        return KIND_ANTIDIAG;
+    case VAR_PILL:
+        return KIND_PILL;
+    case VAR_PSKY:
+        return KIND_PSKY;
     default:
         return KIND_NEW;
     }

@@ -502,6 +502,43 @@ bool gen_geom_nroom(const uint8_t clues[18], sudoku_geom_t *out);
  */
 bool gen_geom_skysum(const uint8_t clues[18], sudoku_geom_t *out);
 /**
+ * @brief Builds an Odd/Even Skyscrapers board from its 18 clues (0 none; 1..5 odd; PSKY_EVEN | 0..4 even)
+ * @param[in] clues  the clues
+ * @param[out] out  gets the board
+ * @return false if a clue can't be
+ */
+bool gen_geom_psky(const uint8_t clues[18], sudoku_geom_t *out);
+/**
+ * @brief Odd/Even Skyscrapers: can a line still keep its clue? x: its digits from the clue's side (0 empty;
+ * only the run of filled ones from the start counts)
+ * @param[in] x  the digits
+ * @param[in] c  the clue (1..5 odd; PSKY_EVEN | 0..4 even)
+ * @return true if still possible
+ */
+bool is_gen_psky_line_ok(const uint8_t x[9], int c);
+/**
+ * @brief Anti-Diagonal: a long diagonal with three different digits already: its empty cells take one of them
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_antidiag_logic(logic_t *L);
+/**
+ * @brief Odd/Even Skyscrapers: each clue's possible orders of the line's last missing digits
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_psky_logic(logic_t *L);
+/**
+ * @brief Pill Arrows: up to want arrows over the full grid: a pill of two cells side by side (or one above the
+ * other) whose number is under 40, and a shaft from its second cell adding up to it, never crossing
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  arrows wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_pill_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
  * @brief Builds a board from its decorations: Skyscraper, a classic board with clues beside the rows and
  *        columns.
  * @param[in] clues      the rows' clues, then the columns' (0: none)

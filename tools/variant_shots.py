@@ -30,7 +30,7 @@ PAGES = ["classic", "x-sudoku", "mini-6x6", "hyper", "jigsaw", "killer", "anti-k
          "outside-sudoku", "rossini", "diagonal-non-consecutive", "dutch-whispers", "parity-lines", "slow-thermo",
          "fortress", "argyle", "nabner", "numbered-rooms", "sum-skyscrapers",
          "lockout-lines", "sumless-killer", "double-arrow", "diagonal-consecutive", "10-lines", "girandola",
-         "159-sudoku", "product-killer", "extra-regions"]
+         "159-sudoku", "product-killer", "extra-regions", "anti-diagonal", "pill-arrows", "odd-even-skyscrapers"]
 
 
 def read_png(path):

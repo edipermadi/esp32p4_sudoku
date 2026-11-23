@@ -52,7 +52,7 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "numbered-rooms": "Numbered", "sum-skyscrapers": "Sum", "lockout-lines": "Lockout",
          "sumless-killer": "Sumless", "double-arrow": "Double", "diagonal-consecutive": "Diagonal C",
          "10-lines": "10", "girandola": "Girandola", "159-sudoku": "159", "product-killer": "Product",
-         "extra-regions": "Extra"}
+         "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -220,6 +220,8 @@ def rule_words(d, vals, c, v, r):
             return "it's next to a grey cell, which is bigger, so it isn't 9"
         if d.get("line_kind") == 3 and v == 5:              # German Whispers: no 5 on a line
             return "it's on a green line, and nothing is 5 or more away from a 5"
+        if d.get("line_kind") == 17:                        # Pill Arrows: the pill's tens
+            return "it's a pill's first digit, its tens: a shaft of up to 7 cells adds up to 63 at most"
         if d.get("line_kind") == 14 and v == 5:             # Lockout: never a 5 between the diamonds
             return "it's between the diamonds of a lockout line, and 5 is inside any two digits 4 or more apart"
         if d["thermos"]:
@@ -346,6 +348,28 @@ def rule_words(d, vals, c, v, r):
                             (run, a_n(v)) if run else "with %s there, the rest of its green line couldn't split "
                             "into runs of 10" % a_n(v))
             return "with %s there, its green line couldn't split into runs that each add up to 10" % a_n(v)
+        if kind == 17:                                      # Pill Arrows: the pill's number is the shaft's sum
+            i = cells.index(c)
+            tens, units = vals[cells[0]], vals[cells[1]]
+            shaft = [vals[x] for x in cells[2:] if x != c]
+            gaps = sum(1 for x in cells[2:] if x != c and not vals[x])
+            known = sum(shaft)
+            if i == 0:
+                return ("it's the pill's first digit, its tens: with %s there the pill would be %d or more, more than "
+                        "its shaft of %d cells can make" % (a_n(v), 10 * v + 1, len(cells) - 2)) if 10 * v > 9 * (
+                    len(cells) - 2) else "it's the pill's first digit, its tens, and with %s there the shaft can't " \
+                    "make the pill's number" % a_n(v)
+            if i == 1:
+                if tens and not gaps:
+                    return "it's the pill's second digit: the shaft adds up to %d, so the pill is %d" % (known, known)
+                return "it's the pill's second digit, and with %s there the shaft can't make the pill's number" % a_n(v)
+            if tens and units and not gaps:
+                return "the pill reads %d and the rest of the shaft makes %d, so it's %d" % (
+                    10 * tens + units, known, 10 * tens + units - known)
+            if tens and units:
+                return "the pill reads %d, and %s on its shaft wouldn't leave room for the rest" % (
+                    10 * tens + units, a_n(v))
+            return "with %s on its shaft, the pill couldn't read as the shaft's sum" % a_n(v)
         if kind == 15:                                      # Double Arrow: the two circles add up to the cells between
             ends = (cells[0], cells[-1])
             inner = [x for x in cells[1:-1] if x != c]
@@ -559,6 +583,45 @@ def rule_words(d, vals, c, v, r):
                     cap(name), a_n(x[0]), clue, ORD[x[0] - 1]))
             return "%s starts with %s, so its %s cell is its clue %d" % (cap(name), a_n(x[0]), ORD[x[0] - 1], clue)
         return ("with %s here, no first digit of %s could point at a cell holding its clue %d" % (a_n(v), name, clue))
+    if rule == "psky":                                      # Odd/Even Skyscrapers: the seen ones of the clue's parity
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["psky"][lu]
+        even, want = bool(clue & 16), clue & 15
+        kind = "even" if even else "odd"
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        got, top, k, shown = 0, 0, 0, []
+        while k < 9 and x[k]:
+            if x[k] > top:
+                top = x[k]
+                shown.append(x[k])
+                got += (x[k] % 2 == 0) == even
+            k += 1
+        side = "the left" if lu < 9 else "the top"
+        par = [s for s in shown if (s % 2 == 0) == even]
+        if got > want:
+            return "seen from %s of %s, %s would already be %d %s buildings seen, more than its clue %d" % (
+                side, name, listing(map(str, par)), got, kind, want)
+        if top == 9 or k == 9:
+            return "seen from %s of %s, %s there would make %d %s buildings seen, not its clue %d" % (
+                side, name, a_n(v), got, kind, want)
+        if not even and got + 1 > want:
+            return ("seen from %s of %s, %s and the 9 still to come would be more odd buildings than its clue %d" % (
+                side, name, listing(map(str, par)) or "nothing", want))
+        return "seen from %s of %s, %s there would leave too few %s buildings to see for its clue %d" % (
+            side, name, a_n(v), kind, want)
+    if rule == "antidiag":                                  # Anti-Diagonal: three different digits on it already
+        r_, c_ = c // 9, c % 9
+        for dg in (0, 1):
+            cells = [k * 10 for k in range(9)] if dg == 0 else [k * 9 + 8 - k for k in range(9)]
+            if c not in cells:
+                continue
+            have = sorted({vals[o] for o in cells if vals[o] and o != c})
+            if len(have) >= 3 and v not in have:
+                return "its long diagonal holds %s already, three different digits at most" % listing(map(str, have))
+        return "a long diagonal can't take a fourth different digit"
     if rule == "skysum":
         lu = r["line"]
         name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
@@ -690,7 +753,7 @@ def step_text(d, vals, s):
 
 def make_drawer(d, fonts):
     n, band = d["n"], BAND if (d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame")
-                              or d.get("outside") or d.get("rossini") or d.get("nroom") or d.get("skysum")) else 0
+                              or d.get("outside") or d.get("rossini") or d.get("nroom") or d.get("skysum") or d.get("psky")) else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -759,6 +822,21 @@ def make_drawer(d, fonts):
                 start = (x0 + (x1 - x0) * r0 / ln, y0 + (y1 - y0) * r0 / ln)
                 g.line([start] + pts[1:], fill=ARROW, width=4, joint="curve")
                 g.ellipse([x0 - r0, y0 - r0, x0 + r0, y0 + r0], outline=ARROW, width=3)
+                (ax, ay), (bx, by) = pts[-2], pts[-1]
+                ln = ((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
+                ux, uy, h = (bx - ax) / ln, (by - ay) / ln, CELL * 0.22
+                for s in (-1, 1):
+                    g.line([(bx, by), (bx - ux * h - s * uy * h * 0.8, by - uy * h + s * ux * h * 0.8)], fill=ARROW,
+                           width=4)
+            elif kind == 17:                                # Pill Arrows: a capsule, a shaft from its edge, a head
+                (x0, y0), (x1, y1) = pts[0], pts[1]
+                r0 = CELL * 0.4
+                (sx, sy), (tx, ty) = pts[1], pts[2]
+                ln = ((tx - sx) ** 2 + (ty - sy) ** 2) ** 0.5
+                start = (sx + (tx - sx) * r0 / ln, sy + (ty - sy) * r0 / ln)
+                g.line([start] + pts[2:], fill=ARROW, width=4, joint="curve")
+                g.rounded_rectangle([min(x0, x1) - r0, min(y0, y1) - r0, max(x0, x1) + r0, max(y0, y1) + r0], r0,
+                                    outline=ARROW, width=3)
                 (ax, ay), (bx, by) = pts[-2], pts[-1]
                 ln = ((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
                 ux, uy, h = (bx - ax) / ln, (by - ay) / ln, CELL * 0.22
@@ -924,15 +1002,20 @@ def make_drawer(d, fonts):
             g.line([(ax, ay), (ax + 6 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 2 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 6 * dx, ay + 2 * dy)], fill=SUM_FG, width=2)
-        clues = d.get("sky") or d.get("xsum") or d.get("frame") or d.get("nroom") or d.get("skysum")
+        clues = d.get("sky") or d.get("xsum") or d.get("frame") or d.get("nroom") or d.get("skysum") or d.get("psky")
         if clues:                                           # Skyscraper, X-Sums, Frame, ...: the clues (0: none drawn)
-            for i in range(9):
-                x, y = xy(i * 9)
-                if clues[i]:
-                    g.text((PAD + band / 2, y + CELL / 2), str(clues[i]), font=small, fill=SUM_FG, anchor="mm")
-                x, y = xy(i)
-                if clues[9 + i]:
-                    g.text((x + CELL / 2, PAD + band / 2), str(clues[9 + i]), font=small, fill=SUM_FG, anchor="mm")
+            for i in range(18):
+                if not clues[i]:
+                    continue
+                pos = (PAD + band / 2, xy(i * 9)[1] + CELL / 2) if i < 9 else (xy(i - 9)[0] + CELL / 2, PAD + band / 2)
+                if d.get("psky"):                           # Odd/Even Skyscrapers: odd ringed, even shaded
+                    rr = 12
+                    box = [pos[0] - rr, pos[1] - rr, pos[0] + rr, pos[1] + rr]
+                    if clues[i] & 16:
+                        g.rounded_rectangle(box, 4, fill=EVEN_BG)
+                    else:
+                        g.ellipse(box, outline=MUTED, width=2)
+                g.text(pos, str(clues[i] & 15 if d.get("psky") else clues[i]), font=small, fill=SUM_FG, anchor="mm")
         if d.get("outside"):                                # Outside Sudoku: the digits of each clue
             for i in range(18):
                 txt = "".join(str(x) for x in range(1, 10) if d["outside"][i] >> x & 1)

@@ -539,6 +539,36 @@ bool gen_skysum_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_psky_logic(logic_t *L)
+{
+    return sky_orders_logic(L, L->G->psky_clue, is_gen_psky_line_ok, TECH_PSKY);
+}
+
+/* (documented in gen_internal.h) */
+bool gen_antidiag_logic(logic_t *L)
+{
+    for (int dg = 0; dg < 2; dg++) {
+        uint16_t have = 0;
+        for (int k = 0; k < 9; k++) {
+            const int o = dg ? k * 9 + 8 - k : k * 10;
+            have |= L->v[o] ? (uint16_t)(1u << L->v[o]) : 0;
+        }
+        if (gen_popcount(have) < 3) {
+            continue;
+        }
+        for (int k = 0; k < 9; k++) {               /* the empty cells: one of the three */
+            const int o = dg ? k * 9 + 8 - k : k * 10;
+            if (!L->v[o] && (L->cand[o] & ~have)) {
+                eliminate(L, o, (uint16_t)(L->cand[o] & ~have));
+                trace(TECH_ANTIDIAG, dg, -1, have, 0, o, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
 bool gen_xsum_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
@@ -1172,6 +1202,12 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->idx159 && gen_159_logic(&L)) {
             continue;
         }
+        if (G->antidiag && gen_antidiag_logic(&L)) {
+            continue;
+        }
+        if (G->psky && gen_psky_logic(&L)) {
+            continue;
+        }
         if (G->diag_nc && gen_diagnc_logic(&L)) {
             continue;    /* Diagonal Non-Consecutive: the corners */
         }
@@ -1223,7 +1259,11 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->nthermos && G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {
         return 28;
     }
-    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum) {
+    if (G->antidiag) {
+        return 30;
+    }
+    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum ||
+            G->psky) {
         return 28;
     }
     if (G->consec_on) {

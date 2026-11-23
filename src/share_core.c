@@ -74,6 +74,7 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     case VAR_LOCKOUT:
     case VAR_DARROW:
     case VAR_TEN:
+    case VAR_PILL:
         key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL;
         break;
     case VAR_SANDWICH:
@@ -90,6 +91,9 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
         break;
     case VAR_SKYSUM:
         key = sudoku_skysum_text(G, extra, sizeof(extra)) ? "clues" : NULL;
+        break;
+    case VAR_PSKY:
+        key = sudoku_psky_text(G, extra, sizeof(extra)) ? "clues" : NULL;
         break;
     case VAR_FRAME:
         key = sudoku_frame_text(G, extra, sizeof(extra)) ? "clues" : NULL;
@@ -175,6 +179,11 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
             marks = extra;
         }
         break;
+    case VAR_PSKY:
+        if (sudoku_psky_text(G, extra, sizeof(extra))) {
+            marks = extra;
+        }
+        break;
     case VAR_FRAME:
         if (sudoku_frame_text(G, extra, sizeof(extra))) {
             marks = extra;
@@ -212,6 +221,7 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
     case VAR_LOCKOUT:
     case VAR_DARROW:
     case VAR_TEN:
+    case VAR_PILL:
         if (sudoku_thermos_text(G, extra, sizeof(extra))) {
             thermos = extra;
         }

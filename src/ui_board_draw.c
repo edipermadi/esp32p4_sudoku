@@ -317,15 +317,17 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
     lv_point_t start = pts[0], end = pts[n - 1];
     switch (kind) {
     case LINE_ARROW:
+    case LINE_PILL:                                 /* (Pill: the shaft from the pill's second cell) */
         ld.color = C_MUTED;
         ld.opa = LV_OPA_80;
         ld.width = 4;
-        if (n > 1) {                                /* the shaft starts at the circle's edge */
-            int dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y, r = cs * 4 / 10;
+        from = kind == LINE_PILL ? 1 : 0;
+        if (n > from + 1) {                         /* the shaft starts at the circle's (pill's) edge */
+            int dx = pts[from + 1].x - pts[from].x, dy = pts[from + 1].y - pts[from].y, r = cs * 4 / 10;
             int len = (int)sqrtf((float)(dx * dx + dy * dy));
             if (len) {
-                start.x = pts[0].x + dx * r / len;
-                start.y = pts[0].y + dy * r / len;
+                start.x = pts[from].x + dx * r / len;
+                start.y = pts[from].y + dy * r / len;
             }
         }
         break;
@@ -407,8 +409,8 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.width = cs * 3 / 10;
     }
     for (int i = from + 1; i < n; i++) {
-        ld.p1.x = i == 1 ? start.x : pts[i - 1].x;
-        ld.p1.y = i == 1 ? start.y : pts[i - 1].y;
+        ld.p1.x = i == from + 1 ? start.x : pts[i - 1].x;
+        ld.p1.y = i == from + 1 ? start.y : pts[i - 1].y;
         ld.p2.x = i == n - 1 ? end.x : pts[i].x;
         ld.p2.y = i == n - 1 ? end.y : pts[i].y;
         lv_draw_line(layer, &ld);
@@ -442,11 +444,17 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         lv_draw_rect(layer, &d, &b);
         lv_area_t b2 = {.x1 = pts[n - 1].x - r, .y1 = pts[n - 1].y - r, .x2 = pts[n - 1].x + r, .y2 = pts[n - 1].y + r};
         lv_draw_rect(layer, &d, &b2);
-    } else if (kind == LINE_ARROW) {                /* the circle, and the arrowhead at the shaft's end */
+    } else if (kind == LINE_ARROW || kind == LINE_PILL) {   /* the circle (or pill), and the arrowhead */
         d.bg_opa = LV_OPA_TRANSP;
         d.border_color = C_MUTED;
         d.border_opa = LV_OPA_80;
         d.border_width = 3;
+        if (kind == LINE_PILL && n > 1) {           /* a capsule round both of the pill's cells */
+            b.x1 = LV_MIN(pts[0].x, pts[1].x) - r;
+            b.y1 = LV_MIN(pts[0].y, pts[1].y) - r;
+            b.x2 = LV_MAX(pts[0].x, pts[1].x) + r;
+            b.y2 = LV_MAX(pts[0].y, pts[1].y) + r;
+        }
         lv_draw_rect(layer, &d, &b);
         if (n > 1) {
             int dx = pts[n - 1].x - pts[n - 2].x, dy = pts[n - 1].y - pts[n - 2].y;

@@ -38,6 +38,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Asterisk", "The nine asterisk cells hold 1-9 too: a digit can have one place left among them.", VAR_ASTERISK, TECH_NONE, false},
     {"Center Dot", "The nine box centres hold 1-9 too: a digit can have one place left among them.", VAR_CENTERDOT, TECH_NONE, false},
     {"Girandola", "The nine pinwheel cells hold 1-9 too: a digit can have one place left among them.", VAR_GIRANDOLA, TECH_NONE, false},
+    {"Anti-Diagonal", "A long diagonal holds three different digits at most: once it has three, the rest are those.", VAR_ANTIDIAG, TECH_ANTIDIAG, false},
     {"Extra region", "No digit repeats in a shaded region: its cells see each other across rows, columns and boxes.", VAR_REGIONS, TECH_NONE, false},
     {"159 Sudoku", "Columns 1, 5 and 9 say where the row's 1, 5 and 9 are: the two must agree.", VAR_159, TECH_159, false},
     {"Argyle lines", "No digit repeats on an argyle line: the cells along one see each other, like a row's.", VAR_ARGYLE, TECH_NONE, false},
@@ -70,6 +71,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Slow Thermometer", "Digits rise or stay the same: they only rise where two neighbours share a row, column or box.", VAR_SLOW, TECH_THERMO, false},
     {"Nabner line", "No two digits on a brown line are the same or 1 apart: each digit rules out its neighbours.", VAR_NABNER, TECH_LINE, false},
     {"Lockout line", "The diamonds are 4+ apart, the digits between outside their range: never a 5 between.", VAR_LOCKOUT, TECH_LINE, false},
+    {"Pill Arrow", "The pill's two cells read as a number are the shaft's sum: its first digit is small.", VAR_PILL, TECH_LINE, false},
     {"Double Arrow", "The two circles add up to the digits between them: each end bounds the other.", VAR_DARROW, TECH_LINE, false},
     {"10 Line", "The line splits into runs that each make 10: a big digit needs small ones beside it.", VAR_TEN, TECH_LINE, false},
     /* Clues */
@@ -84,6 +86,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Outside clue", "The clue's digits are among the first three cells: so they're nowhere else on that line.", VAR_OUTSIDE, TECH_OUTSIDE, true},
     {"Rossini arrow", "The first three rise toward the arrow; no arrow: they neither rise nor fall.", VAR_ROSSINI, TECH_ROSSINI, false},
     {"Numbered Rooms clue", "The first digit X says which cell holds the clue: only some X point at a cell that can.", VAR_NROOMS, TECH_NROOM, true},
+    {"Odd/Even Skyscraper clue", "Only the seen buildings of the clue's parity count: the 9 is always one of the odd.", VAR_PSKY, TECH_PSKY, false},
     {"Sum Skyscraper clue", "The buildings seen add up to the clue: the 9 is always seen, the rest make up the difference.", VAR_SKYSUM, TECH_SKYSUM, false},
 };
 #define LESSONS_N ((int)(sizeof(LESSONS) / sizeof(LESSONS[0])))   /**< learn_count() */
@@ -131,6 +134,7 @@ int learn_group(int k)
     case VAR_GIRANDOLA:
     case VAR_REGIONS:
     case VAR_159:
+    case VAR_ANTIDIAG:
     case VAR_ARGYLE:
         return LEARN_GRIDS;
     case VAR_KNIGHT:
@@ -158,6 +162,7 @@ int learn_group(int k)
     case VAR_ROSSINI:
     case VAR_NROOMS:
     case VAR_SKYSUM:
+    case VAR_PSKY:
         return LEARN_CLUES;
     default:
         return LEARN_LINES;                         /* (Thermo, Arrow, ... Slow Thermo) */
