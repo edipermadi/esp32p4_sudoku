@@ -9,12 +9,13 @@ CFLAGS  ?= -O2 -g -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -std=gnu
            -fsanitize=address,undefined -fno-omit-frame-pointer
 CPPFLAGS = -I$(SRC) -DSTATS_CAGES_LEN_T=1024
 GEN      = $(SRC)/gen_geometry.c $(SRC)/gen_solver.c $(SRC)/gen_grade.c $(SRC)/gen_make.c $(SRC)/gen_hints.c
-OBJS     = test_main.c $(GEN) $(SRC)/puzzles_data.c $(SRC)/sdx.c $(SRC)/learn_core.c
+CORES    = $(SRC)/learn_core.c $(SRC)/game_core.c $(SRC)/hint_core.c $(SRC)/share_core.c $(SRC)/daily_core.c
+OBJS     = test_main.c $(GEN) $(SRC)/puzzles_data.c $(SRC)/sdx.c $(CORES)
 
 run: sudoku_tests
 	./sudoku_tests
 
-sudoku_tests: $(OBJS) $(SRC)/generator.h $(SRC)/gen_internal.h $(SRC)/puzzles.h $(SRC)/sdx.h $(SRC)/learn_core.h
+sudoku_tests: $(OBJS) $(SRC)/generator.h $(SRC)/gen_internal.h $(SRC)/puzzles.h $(SRC)/sdx.h $(CORES:.c=.h)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(OBJS)
 
 # the variant pages' example puzzles: docs/variant-examples.sdx, and their opening steps printed

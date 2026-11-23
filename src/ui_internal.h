@@ -34,6 +34,12 @@
 #include "statistics_core.h"
 #include "collections.h"
 #include "puzzles_core.h"
+#include "puzzles_lookup.h"
+#include "daily_core.h"
+#include "game_core.h"
+#include "share_core.h"
+#include "hint_core.h"
+#include "screenshot_core.h"
 #include "players_core.h"
 #include "usb_msc.h"
 #include "generator.h"
@@ -143,24 +149,6 @@ typedef struct {
 #define L_GRID_Y  (L_PANE_Y + 62)           /**< the right pane's grid or rows, under name and stats */
 #define L_COLLS (PUZZLE_COLLECTION_COUNT + STATS_MAX_IMPORTS + STATS_MAX_SAVED)   /**< built-in, imported, saved */
 
-/* ------------------------------------------------------------- generated puzzles */
-/** @brief The puzzles made on the board live in sudoku.db (stats_db_gen_*); the last
- * few are cached here, and without a card that's the only place they are. */
-#define GEN_CACHE 24
-/** @brief A puzzle made on the board, cached: its board's extras, where it came from. */
-typedef struct {
-    uint16_t id;                        /**< 0 = free slot */
-    uint8_t variant;                    /**< sudoku_variant_t */
-    uint8_t level;                      /**< gen_level_t */
-    uint8_t regions[81];                /**< Jigsaw: the region map */
-    char cages[STATS_CAGES_LEN];        /**< Killer: the cages (sudoku_cages_text()), "" = none */
-    char marks[82];                     /**< Even-Odd / Consecutive: the marks (sudoku_marks_text()), "" = none */
-    char thermos[STATS_THERMOS_LEN];    /**< Thermo: the thermometers (sudoku_thermos_text()), "" = none */
-    char source[STATS_IMPORT_NAME];     /**< a puzzle typed in: its collection ("My puzzles"), "" = none */
-    int number;                         /**< and its number there */
-    uint8_t givens[81];                 /**< the puzzle, 0 = empty */
-    char day[12];                       /**< daily puzzle's date, "" otherwise */
-} gen_cache_t;
 
 /** @brief A context menu: a card of icon rows under its button (right edges lined up), on the
  * top layer; a tap anywhere else, or on the button again, closes it. An item's cb gets
@@ -252,26 +240,7 @@ typedef struct {
     const char *left_text;              /**< Outside Sudoku, Rossini: a clue left of the first row as text (left_clue -1), may be NULL */
 } rules_pic_t;
 
-/* ------------------------------------------------------------- send a puzzle by sound */
-/*
- * Share > Send by sound plays the puzzle on screen as Gibberlink (ggwave) messages;
- * another board with Gibberlink on (Settings > Sound) takes it in, checks it has one
- * solution, keeps it in Puzzles > Saved > "Received" and offers to play it.
- *
- * The puzzle is its .sdx line (stats_db.c): variant|level|givens|regions|cages|marks|
- * thermos, the variant and level as numbers (level "-": the receiver rates it), the
- * givens shortened (a run of 1-26 empty cells is one letter, a-z), trailing empty
- * fields left out. A message carries at most 140 bytes, so the line goes in parts:
- *
- *   SU$pz <id> <i>/<n> <part>*<crc>
- *
- * id: 2 hex digits, the same in all parts of one puzzle; crc: CRC-16/CCITT-FALSE of
- * the text after "SU$" (gibberlink.h). A Classic one is one part (about 6 s); a
- * Killer one three or four. The receiver plays no answer to a part (devctl "pz").
- */
-#define PZ_ID        "SU"                         /**< our Gibberlink sender id for puzzles */
-#define PZ_PART      110                          /**< characters of the line per message */
-#define PZ_MAX_PARTS 16                 /**< parts a puzzle may take */
+/* ------------------------------------------------------------- send a puzzle by sound (the format: share_core.h) */
 #define PZ_TIMEOUT_MS 90000                       /**< a puzzle's parts must all come within this */
 #define PZ_SOURCE    "Received"                   /**< where they're kept: "Received #1", "#2" ... */
 
@@ -322,17 +291,7 @@ void splash_built(int step);
  */
 void splash_hide(void);
 
-/* ------------------------------------------------------------- screenshot (ui_screenshot.c) */
-/*
- * The camera buttons (Solved dialog, Replay): the screen as a JPEG in screenshots/ on
- * the card. The frame is copied at once (the screen keeps going); a worker task on
- * core 0 has the hardware JPEG encoder compress it (by DMA, full colour resolution,
- * quality 90: about 100-200 KB instead of a 1.5 MB uncompressed PNG) and writes it.
- * The encoder gets RGB888, widened from RGB565 here: given RGB565 it widens by
- * shifting alone, and white came out (236, 245, 244), with a green cast.
- */
-#define SS_QUALITY 90                   /**< the screenshot's JPEG quality */
-#define SS_OUT_MAX (1024 * 1024)        /**< the JPEG's room, bytes */
+/* ------------------------------------------------------------- screenshot (ui_screenshot.c; the file: screenshot_core.c) */
 
 /* ------------------------------------------------------------- export as MP4 */
 /* (replay_video.h; the screen side: ui_replay_export.c) */
@@ -426,16 +385,6 @@ enum { ST_NETWORK = 0, ST_DISPLAY, ST_SOUND, ST_GAME, ST_DATA, ST_TABS };
 #define SAVER_CLOCK_LIGHT   12              /**< % backlight while it shows */
 
 /* ---- state: each file's own variables are static; the other files use these */
-/**
- * @brief The generated-puzzle cache (GEN_CACHE entries).
- * @return it
- */
-const gen_cache_t *ui_gen_cache(void);
-/**
- * @brief Sets the cache's buffer (made on first use).
- * @param[in] v  it
- */
-void ui_set_gen_cache(gen_cache_t *v);
 /**
  * @brief The dark scheme, whatever the setting (the start-up splash).
  * @return it
@@ -817,11 +766,6 @@ uint32_t attack_used_ms(void);
  */
 void attack_set_used_ms(uint32_t v);
 /**
- * @brief The saved collections (Puzzles > Saved): sets how many there are.
- * @param[in] v  how many
- */
-void ui_set_nsaved(int v);
-/**
  * @brief The hint's highlights.
  * @return 81 cells: 0, 1 = where to look, 2 = the cell
  */
@@ -1060,57 +1004,6 @@ void fmt_time(char *buf, size_t n, uint32_t s);
  */
 const char *ordinal(int n);
 /**
- * @brief the next RAM-only puzzle id (no card: they last until power-off)
- * @return the id
- */
-uint16_t gen_ram_take(void);
-/**
- * @brief Caches a generated puzzle.
- * @param[in] id  the puzzle
- * @param[in] variant  sudoku_variant_t
- * @param[in] level  gen_level_t
- * @param[in] givens  the puzzle
- * @param[in] regions  Jigsaw's regions, or NULL
- * @param[in] cages  Killer's cages, or NULL
- * @param[in] marks  the marks, or NULL
- * @param[in] thermos  the lines, or NULL
- * @param[in] day  a daily puzzle's date, or NULL
- */
-void gen_cache_put(uint16_t id, int variant, int level, const uint8_t givens[81], const uint8_t *regions, const char *cages, const char *marks, const char *thermos, const char *day);
-/**
- * @brief Notes where a cached puzzle came from (a puzzle typed in).
- * @param[in] id  the puzzle
- * @param[in] source  its collection
- * @param[in] number  its number there
- */
-void gen_cache_source(uint16_t id, const char *source, int number);
-/**
- * @brief A generated puzzle, and its date if it is a daily one.
- * @param[in] id  the puzzle
- * @param[out] givens  gets it, or NULL
- * @param[out] variant  gets it, or NULL
- * @param[out] level  gets it, or NULL
- * @param[out] day  gets its date ("" if not a daily one)
- * @return false: not found
- */
-bool gen_lookup_day(uint16_t id, uint8_t *givens, int *variant, int *level, char day[12]);
-/**
- * @brief The board of any puzzle: a fixed variant's geometry, or for a Jigsaw
- * puzzle its regions built into buf. *variant (may be NULL) is set too.
- * @param[in] id  the puzzle
- * @param[out] buf  room for a Jigsaw board
- * @param[out] variant  gets the variant, or NULL
- * @return its board
- */
-const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant);
-/**
- * @brief the givens of any puzzle, built-in or generated
- * @param[in] id  the puzzle
- * @param[out] cells  gets the givens
- * @return false: not found
- */
-bool puzzle_get(uint16_t id, uint8_t cells[81]);
-/**
  * @brief A button with a centred label.
  * @param[in] parent  where
  * @param[in] x  px
@@ -1173,7 +1066,7 @@ void ctx_menu_toggle(lv_obj_t *btn, const ctx_item_t *items, int n);
  */
 lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, const char *text);
 /**
- * @brief Marks every filled cell that shares a row, column, box (or diagonal) with the same digit.
+ * @brief Marks the digits of the game played that break a rule (game_conflicts()).
  * @return how many
  */
 int compute_conflicts(void);
@@ -1379,22 +1272,6 @@ void history_replay_poll(void);
  * @param[in] level  gen_level_t
  */
 void gen_start(int variant, int level);
-/**
- * @brief Today's daily puzzle.
- * @param[out] day  gets the date
- * @param[out] level  gets its level
- * @param[in] wday  unused
- * @return false while the clock isn't set
- */
-bool daily_today(char day[12], int *level, int *wday);
-/**
- * @brief "Hard", "X-Sudoku Medium": a daily puzzle's level, with its variant unless Classic
- * @param[in] variant  sudoku_variant_t
- * @param[in] level  gen_level_t
- * @param[out] buf  gets it
- * @param[in] n  its size
- */
-void daily_kind_text(int variant, int level, char *buf, size_t n);
 /**
  * @brief the Daily puzzle line on the home screen
  * @param[out] buf  gets it

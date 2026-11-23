@@ -5,6 +5,7 @@
  *   src/gen_*.c       geometry, solver, grader, generator, hints, layout texts
  *   src/puzzles_data.c the 1600 built-in puzzles
  *   src/sdx.c         the puzzle line format (.sdx import / export, Send by sound)
+ *   src/<name>_core.c the screens' plain-C halves: the rules check, hints' words, sharing, the daily puzzle
  *
  * Each test prints one line; any failed check prints where and the run ends with a
  * non-zero status. The "golden" values pin what a seed produces, so a change to the
@@ -18,6 +19,10 @@
 #include "learn_core.h"
 #include "puzzles.h"
 #include "sdx.h"
+#include "game_core.h"
+#include "hint_core.h"
+#include "share_core.h"
+#include "daily_core.h"
 
 static int s_checks, s_failed;
 
@@ -817,6 +822,182 @@ static void test_hints(void)
     }
 }
 
+/* ---------------------------------------------------------------- the screens' cores */
+
+#define EXAMPLES "../docs/variant-examples.sdx"   /**< one example puzzle per variant */
+
+/** @brief One example puzzle: its board, givens and solution. */
+typedef struct {
+    sdx_puzzle_t sp;
+    sudoku_geom_t geo;
+    uint8_t sol[81];
+} example_t;
+
+/* reads the next example from f; false at the end */
+static bool example_next(FILE *f, example_t *e)
+{
+    static char line[4096];
+    while (fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\r\n")] = 0;
+        if (!line[0] || line[0] == '#') {
+            continue;
+        }
+        bool ok = sdx_parse(line, &e->sp) && sdx_geom(&e->sp, &e->geo) && sudoku_solve(&e->geo, e->sp.givens, e->sol);
+        CHECKF(ok, "example reads and solves: %.40s", line);
+        if (ok) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* the rules check: no conflict in the givens or the solution of any variant's example; a digit
+ * changed in the solution is marked */
+static void test_conflicts(void)
+{
+    static example_t e;
+    bool out[81];
+    int n = 0;
+    FILE *f = fopen(EXAMPLES, "r");
+    CHECK(f != NULL);
+    while (f && example_next(f, &e)) {
+        const char *name = variant_name(e.sp.variant);
+        n++;
+        CHECKF(game_conflicts(&e.geo, e.sp.givens, out) == 0, "%s: the givens break no rule", name);
+        CHECKF(game_conflicts(&e.geo, e.sol, out) == 0, "%s: the solution breaks no rule", name);
+        uint8_t v[81];
+        memcpy(v, e.sol, 81);
+        int c = e.geo.cells[0];
+        v[c] = (uint8_t)(v[c] % e.geo.n + 1);          /* another digit: a repeat in its row */
+        CHECKF(game_conflicts(&e.geo, v, out) > 0 && out[c], "%s: a wrong digit is marked", name);
+    }
+    if (f) {
+        fclose(f);
+    }
+    CHECKF(n == VAR_COUNT, "%d examples, one per variant", n);
+
+    /* a variant's own rule, with no repeat: Killer's cage over its sum */
+    const sudoku_geom_t *K = NULL;
+    f = fopen(EXAMPLES, "r");
+    while (f && example_next(f, &e)) {
+        if (e.sp.variant == VAR_KILLER) {
+            K = &e.geo;
+            break;
+        }
+    }
+    if (f) {
+        fclose(f);
+    }
+    CHECK(K && K->ncages > 0);
+    if (K) {
+        uint8_t v[81] = {0};
+        for (int i = 0; i < K->cage_n[0]; i++) {
+            v[K->cage_cell[0][i]] = 9;                  /* (9s alone: over any cage's sum but 9) */
+        }
+        if (K->cage_n[0] > 1 || K->cage_sum[0] < 9) {
+            CHECK(game_conflicts(K, v, out) > 0 && out[K->cage_cell[0][0]]);
+        }
+    }
+}
+
+/* a hint for each example's first step: words, the cell highlighted, the button */
+static void test_hint_words(void)
+{
+    static example_t e;
+    char text[640];
+    uint8_t mark[81];
+    FILE *f = fopen(EXAMPLES, "r");
+    CHECK(f != NULL);
+    while (f && example_next(f, &e)) {
+        const char *name = variant_name(e.sp.variant);
+        sudoku_step_t st;
+        if (!sudoku_next_step(&e.geo, e.sp.givens, e.sol, &st)) {
+            continue;
+        }
+        const char *act = hint_explain(&e.geo, &st, 1, false, text, sizeof(text), mark);
+        CHECKF(text[0] && strcmp(act, "More") == 0, "%s: the nudge", name);
+        act = hint_explain(&e.geo, &st, 2, false, text, sizeof(text), mark);
+        CHECKF(text[0] && strlen(text) < sizeof(text) - 1, "%s: the reason fits: %s", name, text);
+        CHECKF(st.cell >= 0 && st.cell < 81 && mark[st.cell] == 2, "%s: the cell is highlighted", name);
+        CHECKF(strcmp(act, st.kind == STEP_WRONG ? "Erase it" : "Place it") == 0, "%s: the button", name);
+    }
+    if (f) {
+        fclose(f);
+    }
+}
+
+/* Share: the QR text, the .sdx line read back the same, its parts and their CRC */
+static void test_share(void)
+{
+    static example_t e;
+    static char text[2048], line[2048], back[2048];
+    CHECK(share_crc16("123456789", 9) == 0x29B1);     /* CRC-16/CCITT-FALSE's check value */
+    FILE *f = fopen(EXAMPLES, "r");
+    CHECK(f != NULL);
+    while (f && example_next(f, &e)) {
+        const int var = e.sp.variant;
+        const char *name = variant_name(var);
+        CHECKF(share_text(&e.geo, var, e.sp.givens, text, sizeof(text)), "%s: the QR text fits", name);
+        if (var == VAR_CLASSIC) {
+            CHECKF(strlen(text) == 81 && strspn(text, "0123456789") == 81, "Classic: 81 digits");
+        } else {
+            CHECKF(strncmp(text, name, strlen(name)) == 0, "%s: the QR text starts with its name", name);
+        }
+        int len = share_pz_line(&e.geo, var, e.sp.level, e.sp.givens, line, sizeof(line));
+        CHECKF(len > 0, "%s: the line fits", name);
+        if (len <= 0) {
+            continue;
+        }
+        /* sent in parts, read back */
+        int parts = (len + PZ_PART - 1) / PZ_PART;
+        back[0] = 0;
+        for (int i = 0; i < parts; i++) {
+            char msg[176], body[176];
+            share_pz_part(0x1A, i, parts, line, len, msg, sizeof(msg));
+            const char *star = strrchr(msg, '*');
+            CHECKF(strncmp(msg, PZ_ID "$pz ", 6) == 0 && star, "%s: part %d's frame", name, i + 1);
+            if (!star) {
+                continue;
+            }
+            size_t blen = (size_t)(star - (msg + 3));
+            memcpy(body, msg + 3, blen);
+            body[blen] = 0;
+            CHECKF(strtoul(star + 1, NULL, 16) == share_crc16(body, blen), "%s: part %d's CRC", name, i + 1);
+            unsigned id;
+            int pi, pn;
+            const char *data;
+            CHECKF(share_pz_part_read(body + 3, &id, &pi, &pn, &data) && id == 0x1A && pi == i + 1 && pn == parts,
+                   "%s: part %d reads back", name, i + 1);
+            strcat(back, data);
+        }
+        CHECKF(strcmp(back, line) == 0, "%s: the parts make the line", name);
+        sdx_puzzle_t sp;
+        sudoku_geom_t g;
+        CHECKF(sdx_parse(back, &sp) && sp.variant == var && memcmp(sp.givens, e.sp.givens, 81) == 0 &&
+               sdx_geom(&sp, &g), "%s: the line reads back the same", name);
+    }
+    if (f) {
+        fclose(f);
+    }
+    unsigned id;
+    int i, n;
+    const char *data;
+    CHECK(!share_pz_part_read("1A 3/2 abc", &id, &i, &n, &data));   /* part past the count */
+    CHECK(!share_pz_part_read("zz", &id, &i, &n, &data));
+}
+
+/* the daily puzzle: its seed is the date's, its name */
+static void test_daily(void)
+{
+    char buf[48];
+    CHECK(daily_seed("2026-11-23") == daily_seed("2026-11-23") && daily_seed("2026-11-23") != daily_seed("2026-11-24"));
+    CHECK(daily_seed("") != 0);
+    daily_kind_text(VAR_CLASSIC, GEN_HARD, buf, sizeof(buf));
+    CHECK(strcmp(buf, "Hard") == 0);
+    daily_kind_text(VAR_X, GEN_MEDIUM, buf, sizeof(buf));
+    CHECK(strcmp(buf, "X-Sudoku Medium") == 0);
+}
+
 /* ---------------------------------------------------------------- run */
 
 typedef struct { const char *name; void (*fn)(void); } test_t;
@@ -873,6 +1054,8 @@ int main(int argc, char **argv)
         {"generator", test_generate},        {"determinism (golden)", test_determinism},
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},
+        {"rules check", test_conflicts},     {"hint words", test_hint_words},
+        {"share", test_share},               {"daily puzzle", test_daily},
     };
     sudoku_geom_init();
     int failed_tests = 0;

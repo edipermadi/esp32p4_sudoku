@@ -15,25 +15,12 @@
  */
 #include <stdbool.h>
 #include <lvgl.h>
+#include "media_core.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** @brief What a file is (media_view_kind()). */
-enum {
-    MEDIA_NONE = 0,                     /**< neither */
-    MEDIA_IMAGE,                        /**< a picture (.jpg, .jpeg) */
-    MEDIA_VIDEO                         /**< a video (.mp4, .m4v) */
-};
-
-/**
- * @brief
- * @param[in] name  the file's name
- * @return MEDIA_NONE, MEDIA_IMAGE or MEDIA_VIDEO
- */
-/** @brief What a file is, by its name's extension. */
-int media_view_kind(const char *name);
 
 /**
  * @brief

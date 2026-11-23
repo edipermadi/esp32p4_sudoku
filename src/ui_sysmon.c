@@ -32,21 +32,6 @@ static int s_ticks;                                 /**< refreshes since the pag
 static lv_timer_t *h_timer;
 
 /* ------------------------------------------------------------- helpers */
-/* (documented in ui_sysmon_tab.h) */
-void fmt_bytes(char *buf, size_t n, uint64_t b)
-{
-    if (b < 1024) {
-        snprintf(buf, n, "%u B", (unsigned)b);
-    } else if (b < 1024 * 1024) {
-        snprintf(buf, n, "%u.%u KB", (unsigned)(b / 1024), (unsigned)(b % 1024 * 10 / 1024));
-    } else if (b < 1024ULL * 1024 * 1024) {
-        uint64_t k = b / 1024;
-        snprintf(buf, n, "%u.%u MB", (unsigned)(k / 1024), (unsigned)(k % 1024 * 10 / 1024));
-    } else {
-        uint64_t m = b / (1024 * 1024);
-        snprintf(buf, n, "%u.%02u GB", (unsigned)(m / 1024), (unsigned)(m % 1024 * 100 / 1024));
-    }
-}
 
 /**
  * @brief A row that spreads its children out (a title on the left, a value on the right).

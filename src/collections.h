@@ -2,7 +2,7 @@
  * @file collections.h
  * @ingroup collections
  * @brief The Puzzles screen's collections, as data: the declarations only, without LVGL (defined in
- *        ui_common.c and ui_game_tools.c).
+ *        puzzles_lookup.c).
  */
 #pragma once
 #include <stdbool.h>

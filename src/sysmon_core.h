@@ -10,6 +10,7 @@
 #include "sysmon_storage.h"
 #include "sysmon_tasks.h"
 #include "sysmon_history.h"
+#include "sysmon_format.h"
 
 /**
  * @defgroup sysmon_core System monitor core
@@ -24,6 +25,7 @@
  * | sysmon_storage.c / .h | @ref sysmon_storage "Storage": flash, NVS, microSD |
  * | sysmon_tasks.c / .h   | @ref sysmon_tasks "Tasks": the FreeRTOS task list |
  * | sysmon_history.c / .h | @ref sysmon_history "History": the last hour |
+ * | sysmon_format.c / .h  | @ref sysmon_format "Formatting": sizes as text |
  *
  * Include sysmon_core.h for all of them.
  *

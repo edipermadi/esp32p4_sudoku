@@ -9,8 +9,6 @@
 static void gen_task(void *arg);
 static void gen_poll_cb(lv_timer_t *t);
 static void gen_start_ex(int variant, int level, uint32_t seed, const char *day);
-static bool daily_today_v(char day[12], int *level, int *variant);
-static uint32_t daily_seed(const char *day);
 static void gen_levels_update(void);
 static void gen_pick_close(void);
 static void gen_level_cb(lv_event_t *e);
@@ -273,81 +271,15 @@ void gen_start(int variant, int level)
     gen_start_ex(variant, level, 0, NULL);
 }
 
-/* ------------------------------------------------------------- daily puzzle */
-/**
- * @brief One puzzle a day, the same for every player: made from the date (its seed),
- * with a variant and level by weekday (DAILY_*): Mon Classic Easy, Tue Mini
- * Medium, Wed X-Sudoku Medium, Thu Hyper Hard, Fri Killer Medium, Sat Jigsaw
- * Hard, Sun Classic Expert. Stored like any generated puzzle, with its date
- * (generated.day): a day's puzzle, once made, stays what it is. The streak
- * counts days in a row with the daily solved (stats_db).
- */
-static const uint8_t DAILY_LEVEL[7] = {GEN_EXPERT, GEN_EASY, GEN_MEDIUM, GEN_MEDIUM, GEN_HARD, GEN_MEDIUM, GEN_HARD};
-/** each weekday's daily variant (Sunday first) */
-static const uint8_t DAILY_VARIANT[7] = {VAR_CLASSIC, VAR_CLASSIC, VAR_MINI, VAR_X, VAR_HYPER, VAR_KILLER, VAR_JIGSAW};
 
-/**
- * @brief Today's date, level and variant.
- * @param[out] day  gets the date
- * @param[out] level  gets the level
- * @param[out] variant  gets the variant
- * @return false while the clock isn't set
- */
-static bool daily_today_v(char day[12], int *level, int *variant)
-{
-    time_t now = time(NULL);
-    if (!CLOCK_VALID(now)) {
-        return false;
-    }
-    struct tm tm;
-    localtime_r(&now, &tm);
-    strftime(day, 12, "%Y-%m-%d", &tm);
-    *level = DAILY_LEVEL[tm.tm_wday];
-    if (variant) {
-        *variant = DAILY_VARIANT[tm.tm_wday];
-    }
-    return true;
-}
-
-/* (documented in ui_internal.h) */
-bool daily_today(char day[12], int *level, int *wday)
-{
-    (void)wday;
-    return daily_today_v(day, level, NULL);
-}
-
-/* (documented in ui_internal.h) */
-void daily_kind_text(int variant, int level, char *buf, size_t n)
-{
-    const char *lv = level >= 0 && level < GEN_LEVELS ? gen_level_name(level) : "";
-    if (variant > VAR_CLASSIC && variant < VAR_COUNT) {
-        snprintf(buf, n, "%s %s", variant_name(variant), lv);
-    } else {
-        snprintf(buf, n, "%s", lv);
-    }
-}
-
-/**
- * @brief The daily puzzle's seed: FNV-1a of its date.
- * @param[in] day  the date
- * @return the seed
- */
-static uint32_t daily_seed(const char *day)          /* FNV-1a of the date */
-{
-    uint32_t h = 2166136261u;
-    for (const char *p = day; *p; p++) {
-        h = (h ^ (uint8_t)*p) * 16777619u;
-    }
-    return h ? h : 1;
-}
-
+/* ------------------------------------------------------------- daily puzzle (the choice: daily_core.c) */
 /* (documented in ui_internal.h) */
 void daily_sub_text(char *buf, size_t n)
 {
     char day[12], kind[32];
     int level, variant, id, streak;
     bool solved;
-    if (!daily_today_v(day, &level, &variant)) {
+    if (!daily_today(day, &level, &variant)) {
         snprintf(buf, n, "Needs the date: connect Wi-Fi in Settings");
         return;
     }
@@ -375,17 +307,14 @@ void daily_cb(lv_event_t *e)
     char day[12];
     int level, variant, id = 0, streak = 0;
     bool solved = false;
-    if (!daily_today_v(day, &level, &variant)) {
+    if (!daily_today(day, &level, &variant)) {
         sudoku_ui_notice("The daily puzzle needs today's date: connect Wi-Fi (Settings) so the clock is set.", 4000);
         return;
     }
     stats_db_daily_status(day, &id, &solved, &streak);
     if (!id) {                                        /* RAM-only (no card): look in the cache */
-        for (int i = 0; i < GEN_CACHE; i++) {
-            if (ui_gen_cache()[i].id && !strcmp(ui_gen_cache()[i].day, day)) {
-                id = ui_gen_cache()[i].id - PUZZLE_GEN_BASE;
-            }
-        }
+        uint16_t cached = gen_cache_find_day(day);
+        id = cached ? cached - PUZZLE_GEN_BASE : 0;
     }
     if (id) {
         if (solved) {

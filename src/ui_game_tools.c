@@ -12,10 +12,7 @@ static void atk_go_cb(lv_event_t *e);
 static void atk_home_cb(lv_event_t *e);
 static void rules_pic_draw_cb(lv_event_t *e);
 static void rules_show(int variant);
-static bool share_text(char *buf, size_t n);
 static void qr_draw_cb(lv_event_t *e);
-static uint16_t pz_crc16(const char *p, size_t n);
-static int pz_line(char *buf, size_t n);
 static void pz_send_poll(lv_timer_t *t);
 static void pz_send_cb(lv_event_t *e);
 static void pz_check_fn(void *arg);
@@ -32,7 +29,6 @@ static uint32_t atk_used_ms;      /**< the run's earlier puzzles */
 static int      atk_solved;       /**< puzzles solved in the run */
 static int      atk_mistakes;     /**< the run's mistakes */
 static uint16_t atk_last;         /**< the run's last puzzle (the next one is another) */
-static int s_nsaved;              /**< the saved collections (Puzzles > Saved) */
 
 /* ------------------------------------------------------------- time attack */
 
@@ -648,99 +644,6 @@ void rules_first_time(void)
 static uint8_t *qr_code;                            /**< qrcodegen_BUFFER_LEN_MAX each, PSRAM */
 static uint8_t *qr_temp;                            /**< qrcodegen's work space, PSRAM */
 
-/**
- * @brief the text in the code; false if it doesn't fit buf
- * @param[out] buf  gets the text
- * @param[in] n  its size
- * @return false if it doesn't fit
- */
-static bool share_text(char *buf, size_t n)
-{
-    const sudoku_geom_t *G = game_geo();
-    char giv[82];
-    int k = 0;
-    for (int i = 0; i < G->ncells; i++) {
-        giv[k++] = (char)('0' + game_given()[G->cells[i]]);    /* (6x6: its 36 cells) */
-    }
-    giv[k] = 0;
-    if (game_var() == VAR_CLASSIC) {
-        return (size_t)snprintf(buf, n, "%s", giv) < n;
-    }
-    int len = snprintf(buf, n, "%s %s", variant_name(game_var()), giv);
-    if (len < 0 || (size_t)len >= n) {
-        return false;
-    }
-    static char extra[STATS_CAGES_LEN];
-    extra[0] = 0;
-    const char *key = NULL;
-    switch (game_var()) {
-    case VAR_JIGSAW:
-        for (int i = 0; i < 81; i++) {
-            extra[i] = (char)('0' + G->region[i]);
-        }
-        extra[81] = 0;
-        key = "regions";
-        break;
-    case VAR_KILLER:
-        key = sudoku_cages_text(G, extra, sizeof(extra)) ? "cages" : NULL;
-        break;
-    case VAR_QUAD:
-        key = sudoku_quads_text(G, extra, sizeof(extra)) ? "circles" : NULL;
-        break;
-    case VAR_EVENODD:
-    case VAR_CONSEC:
-    case VAR_KROPKI:
-    case VAR_XV:
-    case VAR_GT:
-    case VAR_FORTRESS:
-        key = sudoku_marks_text(G, extra, sizeof(extra)) ? "marks" : NULL;
-        break;
-    case VAR_THERMO:
-    case VAR_SLOW:
-        key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "thermos" : NULL;
-        break;
-    case VAR_ARROW:
-    case VAR_RENBAN:
-    case VAR_WHISPER:
-    case VAR_PALINDROME:
-    case VAR_REGIONSUM:
-    case VAR_ZIPPER:
-    case VAR_BETWEEN:
-    case VAR_ENTROPIC:
-    case VAR_MODULAR:
-    case VAR_DUTCH:
-    case VAR_PARITY:
-        key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL;
-        break;
-    case VAR_SANDWICH:
-        key = sudoku_sandwich_text(G, extra, sizeof(extra)) ? "sums" : NULL;
-        break;
-    case VAR_SKY:
-        key = sudoku_sky_text(G, extra, sizeof(extra)) ? "clues" : NULL;
-        break;
-    case VAR_XSUM:
-        key = sudoku_xsum_text(G, extra, sizeof(extra)) ? "clues" : NULL;
-        break;
-    case VAR_FRAME:
-        key = sudoku_frame_text(G, extra, sizeof(extra)) ? "clues" : NULL;
-        break;
-    case VAR_OUTSIDE:
-        key = sudoku_outside_text(G, extra, sizeof(extra)) ? "clues" : NULL;
-        break;
-    case VAR_ROSSINI:
-        key = sudoku_rossini_text(G, extra, sizeof(extra)) ? "arrows" : NULL;
-        break;
-    case VAR_LK:
-        key = sudoku_lk_text(G, extra, sizeof(extra)) ? "diagonals" : NULL;
-        break;
-    default:
-        break;
-    }
-    if (key) {
-        len += snprintf(buf + len, n - (size_t)len, " %s=%s", key, extra);
-    }
-    return (size_t)len < n;
-}
 
 /**
  * @brief the code: black modules on white (whatever the theme), with a quiet zone of 3
@@ -812,127 +715,7 @@ lv_obj_t *qr_dialog(const char *title, const char *text, const char *note)
     return m;
 }
 
-/**
- * @brief CRC-16/CCITT-FALSE, the parts' check.
- * @param[in] p  the text
- * @param[in] n  its length
- * @return the CRC
- */
-static uint16_t pz_crc16(const char *p, size_t n)
-{
-    uint16_t c = 0xFFFF;
-    while (n--) {
-        c ^= (uint16_t)((uint8_t)*p++ << 8);
-        for (int k = 0; k < 8; k++) {
-            c = (uint16_t)(c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1);
-        }
-    }
-    return c;
-}
 
-/**
- * @brief the puzzle on screen as that line (sdx_format, the givens packed); its length, 0 if it doesn't fit
- * @param[out] buf  gets the line
- * @param[in] n  its size
- * @return its length, 0 if it doesn't fit
- */
-static int pz_line(char *buf, size_t n)
-{
-    const sudoku_geom_t *G = game_geo();
-    int v = VAR_CLASSIC, lv = -1;
-    if (puzzle_is_generated(game_id())) {
-        gen_lookup(game_id(), NULL, &v, &lv);
-    }
-    static char extra[STATS_CAGES_LEN];
-    char regions[82] = "";
-    const char *cages = "", *marks = "", *thermos = "";
-    extra[0] = 0;
-    switch (game_var()) {
-    case VAR_JIGSAW:
-        for (int i = 0; i < 81; i++) {
-            regions[i] = (char)('0' + G->region[i]);
-        }
-        regions[81] = 0;
-        break;
-    case VAR_KILLER:
-        if (sudoku_cages_text(G, extra, sizeof(extra))) {
-            cages = extra;
-        }
-        break;
-    case VAR_QUAD:
-        if (sudoku_quads_text(G, extra, sizeof(extra))) {
-            cages = extra;
-        }
-        break;
-    case VAR_EVENODD:
-    case VAR_CONSEC:
-    case VAR_KROPKI:
-    case VAR_XV:
-    case VAR_GT:
-    case VAR_FORTRESS:
-        if (sudoku_marks_text(G, extra, sizeof(extra))) {
-            marks = extra;
-        }
-        break;
-    case VAR_SANDWICH:
-        if (sudoku_sandwich_text(G, extra, sizeof(extra))) {
-            marks = extra;
-        }
-        break;
-    case VAR_SKY:
-        if (sudoku_sky_text(G, extra, sizeof(extra))) {
-            marks = extra;
-        }
-        break;
-    case VAR_XSUM:
-        if (sudoku_xsum_text(G, extra, sizeof(extra))) {
-            marks = extra;
-        }
-        break;
-    case VAR_FRAME:
-        if (sudoku_frame_text(G, extra, sizeof(extra))) {
-            marks = extra;
-        }
-        break;
-    case VAR_OUTSIDE:
-        if (sudoku_outside_text(G, extra, sizeof(extra))) {
-            marks = extra;
-        }
-        break;
-    case VAR_ROSSINI:
-        if (sudoku_rossini_text(G, extra, sizeof(extra))) {
-            marks = extra;
-        }
-        break;
-    case VAR_LK:
-        if (sudoku_lk_text(G, extra, sizeof(extra))) {
-            cages = extra;
-        }
-        break;
-    case VAR_THERMO:
-    case VAR_ARROW:
-    case VAR_RENBAN:
-    case VAR_WHISPER:
-    case VAR_PALINDROME:
-    case VAR_REGIONSUM:
-    case VAR_ZIPPER:
-    case VAR_BETWEEN:
-    case VAR_ENTROPIC:
-    case VAR_MODULAR:
-    case VAR_DUTCH:
-    case VAR_PARITY:
-    case VAR_SLOW:
-        if (sudoku_thermos_text(G, extra, sizeof(extra))) {
-            thermos = extra;
-        }
-        break;
-    default:
-        break;
-    }
-    int len = sdx_format(game_var(), lv >= 0 && lv < GEN_LEVELS ? lv : -1, game_given(), regions, cages, marks, thermos, true,
-                         buf, n);
-    return len < 0 ? 0 : len;
-}
 
 static lv_timer_t *pz_send_timer;       /**< waits until the parts are sent */
 
@@ -962,7 +745,11 @@ static void pz_send_cb(lv_event_t *e)
         return;
     }
     static char line[STATS_CAGES_LEN + 400];
-    int len = pz_line(line, sizeof(line));
+    int v = VAR_CLASSIC, lv = -1;
+    if (puzzle_is_generated(game_id())) {
+        gen_lookup(game_id(), NULL, &v, &lv);
+    }
+    int len = share_pz_line(game_geo(), game_var(), lv, game_given(), line, sizeof(line));
     int parts = (len + PZ_PART - 1) / PZ_PART;
     if (!len || parts > PZ_MAX_PARTS) {
         sudoku_ui_notice("This puzzle is too long to send by sound.", 3000);
@@ -970,10 +757,8 @@ static void pz_send_cb(lv_event_t *e)
     }
     unsigned id = esp_random() & 0xFF;
     for (int i = 0; i < parts; i++) {
-        char body[160], msg[176];
-        int k = len - i * PZ_PART < PZ_PART ? len - i * PZ_PART : PZ_PART;
-        snprintf(body, sizeof(body), "pz %02X %d/%d %.*s", id, i + 1, parts, k, line + i * PZ_PART);
-        snprintf(msg, sizeof(msg), PZ_ID "$%s*%04X", body, pz_crc16(body, strlen(body)));
+        char msg[176];
+        share_pz_part(id, i, parts, line, len, msg, sizeof(msg));
         if (!gibberlink_send(msg)) {
             sudoku_ui_notice("Couldn't send it: no memory for the sound.", 3000);
             return;
@@ -1126,18 +911,10 @@ static bool pz_take(char *line, char *why, size_t n)
 bool sudoku_ui_puzzle_part(const char *args, char *out, size_t n)
 {
     unsigned id;
-    int i, cnt, off = 0;
-    while (*args == ' ') {
-        args++;
-    }
-    if (sscanf(args, "%x %d/%d %n", &id, &i, &cnt, &off) < 3 || !off || cnt < 1 || cnt > PZ_MAX_PARTS || i < 1 ||
-            i > cnt) {
-        snprintf(out, n, "ERR pz: pz <id> <i>/<n> <part>");
-        return false;
-    }
-    const char *data = args + off;
-    if (strlen(data) > PZ_PART) {
-        snprintf(out, n, "ERR pz: a part is %d characters at most", PZ_PART);
+    int i, cnt;
+    const char *data;
+    if (!share_pz_part_read(args, &id, &i, &cnt, &data)) {
+        snprintf(out, n, "ERR pz: pz <id> <i>/<n> <part> (a part is %d characters at most)", PZ_PART);
         return false;
     }
     if (pz_rx.id != (int)id || pz_rx.n != cnt || lv_tick_elaps(pz_rx.start) > PZ_TIMEOUT_MS) {   /* a new one */
@@ -1184,7 +961,7 @@ void share_cb(lv_event_t *e)
     char name[48], title[64];
     puzzle_name(game_id(), name, sizeof(name));
     snprintf(title, sizeof(title), SYMBOL_QR "  %s", name);
-    lv_obj_t *m = share_text(text, sizeof(text))
+    lv_obj_t *m = share_text(game_geo(), game_var(), game_given(), text, sizeof(text))
                   ? qr_dialog(title, text, game_var() == VAR_CLASSIC ? "Scan it with a phone: the givens row by row, 0 = empty. Most "
                               "Sudoku apps can import this. Or send it by sound to another "
                               "board (Gibberlink on there)."
@@ -1225,9 +1002,9 @@ static void sv_close_cb(lv_event_t *e)
 /* (documented in ui_internal.h) */
 void sv_changed(void)
 {
-    int before = s_nsaved;
+    int before = ui_nsaved();
     imports_reload();
-    if (s_nsaved != before) {
+    if (ui_nsaved() != before) {
         list_fill_colls();
     }
     refresh_list();
@@ -1241,7 +1018,7 @@ void sv_changed(void)
 static void sv_toggle_cb(lv_event_t *e)
 {
     int k = (int)(intptr_t)lv_event_get_user_data(e);
-    if (k < 0 || k >= s_nsaved) {
+    if (k < 0 || k >= ui_nsaved()) {
         return;
     }
     char name[STATS_IMPORT_NAME], msg[96], why[96];
@@ -1318,10 +1095,10 @@ static void sv_open(void)
     lv_obj_set_style_pad_row(c, 8, 0);
     lv_obj_set_style_max_height(c, 400, 0);
     lv_obj_set_scroll_dir(c, LV_DIR_VER);
-    if (!s_nsaved) {
+    if (!ui_nsaved()) {
         make_wrap_text(c, NULL, C_MUTED, "No collections yet: make one.");
     }
-    for (int k = 0; k < s_nsaved; k++) {
+    for (int k = 0; k < ui_nsaved(); k++) {
         bool in = coll_find(PUZZLE_COLLECTION_COUNT + ui_nimports() + k, game_id()) >= 0;
         lv_obj_t *b = make_btn(c, 0, 0, 0, 56, NULL, NULL, sv_toggle_cb, (void *)(intptr_t)k);
         lv_obj_set_width(b, LV_PCT(100));
@@ -1333,7 +1110,7 @@ static void sv_open(void)
         lv_label_set_text_fmt(n, "%d", ui_saved()[k].count);
         lv_obj_align(n, LV_ALIGN_RIGHT_MID, -8, 0);
     }
-    if (s_nsaved < STATS_MAX_SAVED) {
+    if (ui_nsaved() < STATS_MAX_SAVED) {
         lv_obj_t *nb = make_btn(c, 0, 0, 0, 56, LV_SYMBOL_PLUS "  New collection...", &lv_font_montserrat_20,
                                 sv_new_cb, NULL);
         lv_obj_set_width(nb, LV_PCT(100));
@@ -1368,5 +1145,3 @@ int attack_solved(void) { return atk_solved; }
 void attack_set_solved(int v) { atk_solved = v; }
 int attack_mistakes(void) { return atk_mistakes; }
 void attack_set_mistakes(int v) { atk_mistakes = v; }
-int ui_nsaved(void) { return s_nsaved; }
-void ui_set_nsaved(int v) { s_nsaved = v; }

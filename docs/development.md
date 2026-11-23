@@ -133,15 +133,20 @@ src/ui_lock.c           the lock screen (Swipe or PIN) and Settings' PIN setup
 src/lock_core.c         the lock's PIN without LVGL: right or wrong, tries, the wait, setting a new one
 src/ui_remote.c         what serial control asks of the UI: fill, state, the screen's name, what uses the card, Benchmarking
 src/ui_internal.h       what the UI files share: includes, macros, types, and the functions and variables used by more than one
-src/ui_common.c         palette, widgets and helpers, the generated-puzzle cache, context menus
-src/ui_game.c           the game: rules check, saving, the board, confetti, input, building its screen
-src/ui_hints.c          hints and the game screen tour
+src/ui_common.c         palette, widgets and helpers, context menus
+src/ui_game.c           the game: saving, the board, confetti, input, building its screen
+src/game_core.c         the rules check without LVGL: which digits break a rule, for every variant
+src/ui_hints.c          the hint card and the game screen tour
+src/hint_core.c         a hint's words and highlights without LVGL, from the hint engine's step
 src/ui_game_tools.c     time attack, the rules card, Share (QR code), Send by sound, save to a collection
+src/share_core.c        Share without LVGL: the QR code's text, the .sdx line sent by sound, its parts and CRC
 src/ui_replay.c         the Replay screen (ui_replay_part.h)
 src/ui_replay_export.c  a replay exported as an MP4: the invisible display, the progress dialog
-src/ui_screenshot.c     the camera buttons: the screen as a JPEG on the card
+src/ui_screenshot.c     the camera buttons and their notice
+src/screenshot_core.c   the screen copied, compressed by the hardware JPEG encoder and written (a task)
 src/ui_insights.c       mistake insights (Statistics)
 src/ui_newpuzzle.c      New puzzle (the generator), the daily puzzle, Enter a puzzle
+src/daily_core.c        the daily puzzle without LVGL: today's variant and level, its seed, its name
 src/ui_learn.c          Learn: the lessons in tabs, the search for a lesson's puzzle (on the worker core), the practice game
 src/learn_core.c        Learn's lessons without LVGL: the ten techniques and a variant rule each, and the search for a position to practise one
 src/ui_list.c           Puzzles: the screen, tabs, collection column, panel, grid of numbers (ui_list_part.h)
@@ -149,7 +154,8 @@ src/ui_list_rows.c      its rows: a saved or imported collection's puzzles
 src/ui_list_starred.c   its Starred: the bookmarks
 src/ui_list_manage.c    its Export and Delete of a collection
 src/ui_home_menu.c      Home's menu layout: a column, a grid, or pages
-src/collections.h       the collections as data (declarations; defined in ui_common.c, ui_game_tools.c)
+src/collections.h       the collections as data (declarations; defined in puzzles_lookup.c)
+src/puzzles_lookup.c    any puzzle by its id: the generated-puzzle cache, givens, board, name; the collections
 src/puzzles_core.h      Puzzles without LVGL (a header for the four parts below)
 src/puzzles_select.c    the tab, the collection shown, Starred
 src/puzzles_solved.c    solved counts, the panel's numbers
@@ -224,7 +230,8 @@ src/files_trash.c       the Recycle bin: trash, restore, delete for good (a task
 src/files_preview.c     a puzzle file read, its puzzles parsed
 src/gibberlink.cpp      remote control by sound: ES7210 mics -> ggwave -> devctl commands, replies by sound
 src/ggwave/             ggwave 060aec7 (MIT), data over sound, vendored unchanged
-src/ui_media_view.c        the Files viewer: JPEG (hardware decoder), MP4 (tinyh264), full screen
+src/ui_media_view.c     the Files viewer's page: the picture, the bars, swipes and taps
+src/media_core.c        its decoding without LVGL: JPEG (hardware decoder), MP4 (tinyh264), two buffers, a worker task
 src/mp4_reader.c        MP4 index reader for the viewer: frame offsets, times, key frames, SPS/PPS
 src/mp4_writer.c        MP4 writer for replay export: H.264 frames in, the index (moov) written at the end
 src/video_enc.c         RGB888 frames -> the hardware H.264 encoder (colours converted by the PPA) -> mp4_writer
@@ -234,13 +241,14 @@ src/ui_sysmon_memory.c   System monitor > Memory: internal RAM, PSRAM, DMA; the 
 src/ui_sysmon_storage.c  System monitor > Storage: firmware, flash, NVS, microSD
 src/ui_sysmon_graphics.c System monitor > Graphics: LVGL frame rate, draw times, objects, timers
 src/ui_sysmon_tasks.c    System monitor > Tasks: the FreeRTOS task table, sortable
-src/sysmon_core.h       the system monitor's numbers, without LVGL (a header for the six parts below)
+src/sysmon_core.h       the system monitor's numbers, without LVGL (a header for the seven parts below)
 src/sysmon_chip.c       reset reason, uptime, chip, Ethernet MAC, task count
 src/sysmon_cpu.c        CPU load per core, the temperature sensor
 src/sysmon_memory.c     the heaps
 src/sysmon_storage.c    flash, NVS, the microSD card's free space
 src/sysmon_tasks.c      the FreeRTOS task list: the core-0 reader, CPU shares, sorting
 src/sysmon_history.c    the last hour, a sample every 10 s
+src/sysmon_format.c     sizes as text (B, KB, MB, GB)
 src/timezones.c         IANA time zone names -> POSIX TZ rules
 src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
