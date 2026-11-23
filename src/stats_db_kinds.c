@@ -18,7 +18,8 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
                                                          "Diagonal Consecutive", "10 Lines", "Girandola",
                                                          "159 Sudoku", "Product Killer", "Extra Regions",
-                                                         "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers"
+                                                         "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers",
+                                                         "Chess Sudoku", "Magic Square", "Average Lines"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -34,7 +35,8 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
                                                           "Diagonal Consecutive", "10 Lines", "Girandola",
                                                           "159 Sudoku", "Product Killer", "Extra Regions",
-                                                          "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers"
+                                                          "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers",
+                                                          "Chess Sudoku", "Magic Square", "Average Lines"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -162,6 +164,12 @@ int stats_kind_of(int variant, bool daily)
         return KIND_PILL;
     case VAR_PSKY:
         return KIND_PSKY;
+    case VAR_CHESS:
+        return KIND_CHESS;
+    case VAR_MAGIC:
+        return KIND_MAGIC;
+    case VAR_AVG:
+        return KIND_AVG;
     default:
         return KIND_NEW;
     }

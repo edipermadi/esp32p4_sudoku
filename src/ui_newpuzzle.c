@@ -84,6 +84,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {45, 147, 641, 489},   /* Anti-Diagonal (2026-11-23) */
     {12, 86, 124, 1262},   /* Pill Arrows */
     {46, 146, 671, 403},   /* Odd/Even Skyscrapers */
+    {20, 211, 519, 488},   /* Chess Sudoku (2026-11-23) */
+    {13, 39, 664, 591},    /* Magic Square */
+    {12, 72, 141, 773},    /* Average Lines */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */

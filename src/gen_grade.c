@@ -545,6 +545,26 @@ bool gen_psky_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_magic_logic(logic_t *L)
+{
+    for (int r = 3; r < 6; r++) {
+        for (int q = 3; q < 6; q++) {
+            const int i = r * 9 + q;
+            if (L->v[i]) {
+                continue;
+            }
+            const uint16_t keep = (uint16_t)(L->cand[i] & gen_magic_allow(L->v, L->cand, i));
+            if (keep != L->cand[i]) {
+                eliminate(L, i, (uint16_t)(L->cand[i] & ~keep));
+                trace(TECH_MAGIC, i, -1, keep, 0, i, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
 bool gen_antidiag_logic(logic_t *L)
 {
     for (int dg = 0; dg < 2; dg++) {
@@ -1205,6 +1225,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->antidiag && gen_antidiag_logic(&L)) {
             continue;
         }
+        if (G->magic && gen_magic_logic(&L)) {
+            continue;
+        }
         if (G->psky && gen_psky_logic(&L)) {
             continue;
         }
@@ -1259,7 +1282,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->nthermos && G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {
         return 28;
     }
-    if (G->antidiag) {
+    if (G->antidiag || G->magic) {
         return 30;
     }
     if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum ||
@@ -1272,7 +1295,8 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_EVENODD) {
         return 30;
     }
-    if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT || G->variant == VAR_ARGYLE) {
+    if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT || G->variant == VAR_ARGYLE ||
+            G->variant == VAR_CHESS) {
         return 32;
     }
     if (G->variant == VAR_ASTERISK || G->variant == VAR_CENTERDOT || G->variant == VAR_GIRANDOLA) {

@@ -112,7 +112,8 @@ static void why(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char 
         int o = G->xpeers[c][k];
         if (v[o] == d) {
             sprintf(b, "r%dc%d is %d (%s)", o / 9 + 1, o % 9 + 1, d,
-                    G->variant == VAR_KNIGHT ? "a knight's move away" : G->variant == VAR_ARGYLE ? "on an argyle line with it"
+                    G->variant == VAR_KNIGHT || (G->variant == VAR_CHESS && abs(o / 9 - c / 9) + abs(o % 9 - c % 9) == 3)
+                    ? "a knight's move away" : G->variant == VAR_ARGYLE ? "on an argyle line with it"
                     : "touching, corner to corner");
             return;
         }
@@ -152,7 +153,8 @@ static int blocker(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, ch
     for (int k = 0; k < G->nxpeers[c]; k++) {
         int o = G->xpeers[c][k];
         if (v[o] == d) {
-            strcpy(via, G->variant == VAR_KNIGHT ? "a knight's move" : G->variant == VAR_ARGYLE ? "an argyle line"
+            strcpy(via, G->variant == VAR_KNIGHT || (G->variant == VAR_CHESS && abs(o / 9 - c / 9) + abs(o % 9 - c % 9) == 3)
+                   ? "a knight's move" : G->variant == VAR_ARGYLE ? "an argyle line"
                    : "a touching cell");
             return o;
         }
@@ -514,6 +516,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_DARROW:
     case VAR_TEN:
     case VAR_PILL:
+    case VAR_AVG:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -661,6 +664,9 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
         return;
     case FIT_ANTIDIAG:
         printf(", \"rule\": \"antidiag\"");
+        return;
+    case FIT_MAGIC:
+        printf(", \"rule\": \"magic\"");
         return;
     case FIT_SKYSUM_ROW:
     case FIT_SKYSUM_COL:

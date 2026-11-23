@@ -26,7 +26,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Lockout Lines", "Sumless Killer", "Double Arrow",
                                                      "Diagonal Consecutive", "10 Lines", "Girandola",
                                                      "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal",
-                                                     "Pill Arrows", "Odd/Even Skyscrapers"
+                                                     "Pill Arrows", "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square",
+                                                     "Average Lines"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -279,9 +280,11 @@ void sudoku_geom_init(void)
      * ones are new; side by side they share a row or column already) */
     static const int8_t KM[8][2] = {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}};
     static const int8_t KG[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
-    for (int v = 0; v < 2; v++) {
-        sudoku_geom_t *k = &g[v ? VAR_KING : VAR_KNIGHT];
-        const int8_t (*M)[2] = v ? KG : KM;
+    g[VAR_CHESS] = g[VAR_CLASSIC];                  /* Chess Sudoku: both (the king's, then the knight's moves) */
+    g[VAR_CHESS].variant = VAR_CHESS;
+    for (int v = 0; v < 4; v++) {
+        sudoku_geom_t *k = &g[v == 0 ? VAR_KNIGHT : v == 1 ? VAR_KING : VAR_CHESS];
+        const int8_t (*M)[2] = v == 1 || v == 2 ? KG : KM;
         for (int c = 0; c < 81; c++) {
             for (int m = 0; m < 8; m++) {
                 int r = c / 9 + M[m][0], q = c % 9 + M[m][1];
@@ -318,6 +321,15 @@ void sudoku_geom_init(void)
     g[VAR_NONCONSEC] = g[VAR_CLASSIC];              /* Consecutive with no bars: no neighbours 1 apart */
     g[VAR_NONCONSEC].variant = VAR_NONCONSEC;
     g[VAR_NONCONSEC].consec_on = true;
+    g[VAR_MAGIC] = g[VAR_CLASSIC];                  /* the centre box a magic square: 5 in the middle, even corners */
+    g[VAR_MAGIC].variant = VAR_MAGIC;
+    g[VAR_MAGIC].magic = true;
+    for (int r = 3; r < 6; r++) {                   /* (every 3x3 magic square of 1-9 is the Lo Shu, turned or flipped) */
+        for (int q = 3; q < 6; q++) {
+            const bool mid = r == 4 && q == 4, corner = r != 4 && q != 4;
+            g[VAR_MAGIC].allow[r * 9 + q] = mid ? (uint16_t)(1u << 5) : corner ? (uint16_t)0x154 : (uint16_t)0x28A;
+        }
+    }
     g[VAR_ANTIDIAG] = g[VAR_CLASSIC];               /* at most three different digits on each long diagonal */
     g[VAR_ANTIDIAG].variant = VAR_ANTIDIAG;
     g[VAR_ANTIDIAG].antidiag = true;
@@ -343,7 +355,8 @@ void sudoku_geom_init(void)
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
-                                  VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY
+                                  VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY,
+                                  VAR_AVG
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -367,7 +380,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS || variant == VAR_NABNER ||
             variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
             variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
-            variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY) {
+            variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY ||
+            variant == VAR_AVG) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -387,7 +401,8 @@ static int line_kind_of(int variant)
            variant == VAR_MODULAR ? LINE_MODULAR : variant == VAR_DUTCH ? LINE_DUTCH :
            variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : variant == VAR_NABNER ? LINE_NABNER :
            variant == VAR_LOCKOUT ? LINE_LOCKOUT : variant == VAR_DARROW ? LINE_DARROW :
-           variant == VAR_TEN ? LINE_TEN : variant == VAR_PILL ? LINE_PILL : LINE_THERMO;
+           variant == VAR_TEN ? LINE_TEN : variant == VAR_PILL ? LINE_PILL :
+           variant == VAR_AVG ? LINE_AVG : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */

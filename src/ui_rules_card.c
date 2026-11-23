@@ -30,6 +30,7 @@ static const uint8_t PIC_SLOW[] = {0, 1, 6, 7, 0xFF};       /**< 2 4, then 4 aga
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 static const uint8_t PIC_SUMLESS[] = {0, 1, 2, 5, 0xFE, 0xFF};   /**< a cage over the box border, no sum */
 static const uint8_t PIC_PILL[] = {0, 1, 2, 3, 4, 0xFF};    /**< (1 2) 3 4 5: 12 = 3 + 4 + 5 */
+static const uint8_t PIC_AVG[] = {0, 1, 2, 3, 0xFF};       /**< (5) 3 8 4: 3 + 8 + 4 = 3 x 5 */
 static const uint8_t PIC_PROD[] = {12, 0, 1, 0xFE, 70, 2, 3, 6, 0xFE, 0xFF};   /**< 3 x 4 = 12, and an empty 70 */
 static const uint8_t PIC_DMARKS[] = {0, DMARK_DR, 0xFF};   /**< 3 and 4 corner to corner: a mark; 8 and 4: none */
 static const uint8_t PIC_TEN[] = {0, 1, 2, 5, 4, 0xFF};    /**< 3 7 | 1 5 4: two runs of 10 */
@@ -127,6 +128,12 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
         5, 5, 0, 0, "3...7" ".7.3." "..3.." ".1.7." "7...3", "10001" "01010" "00100" "01010" "10001",
         NULL, NULL, NULL, NULL, NULL, NULL, -1
     },
+    [VAR_CHESS] = {
+        5, 5, 0, 0, "....." "....." "..5.." "....." ".....", NULL, NULL, NULL,
+        ".x.x." "xxxxx" ".x.x." "xxxxx" ".x.x.", NULL, NULL, NULL, -1
+    },
+    [VAR_MAGIC] = {3, 3, 3, 3, "816" "357" "492", "111" "111" "111", NULL, NULL, NULL, NULL, NULL, NULL, -1},
+    [VAR_AVG] = {4, 1, 0, 0, "5384", NULL, NULL, NULL, NULL, NULL, PIC_AVG, NULL, -1, 0, NULL, NULL, LINE_AVG},
     [VAR_PILL] = {5, 1, 0, 0, "12345", NULL, NULL, NULL, NULL, NULL, PIC_PILL, NULL, -1, 0, NULL, NULL, LINE_PILL},
     [VAR_PSKY] = {5, 1, 0, 0, "25198", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2, 0, NULL, NULL, 0, 0},
     [VAR_REGIONS] = {4, 2, 2, 2, "..8." "....", "0110" "0100", NULL, NULL, NULL, NULL, NULL, NULL, -1},
@@ -257,6 +264,14 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "puts the 9 in column 8.",
     [VAR_PRODUCT] = "Classic rules, plus cages (dashed outlines): the digits in a cage multiply to the number in its "
     "corner, and no digit repeats in a cage. Here 3 x 4 = 12, and the three empty cells make 70: 2, 5 and 7.",
+    [VAR_CHESS] = "Classic rules, and no digit repeats a chess knight's move apart, nor in cells that touch, side by "
+    "side or corner to corner: the 5 here rules out every crossed cell.",
+    [VAR_MAGIC] = "Classic rules, and the tinted centre box is a magic square: each of its rows, columns and both "
+    "diagonals add up to 15, as here (8 + 1 + 6, 8 + 3 + 4, 8 + 5 + 2 ...). So its middle is always 5, its corners "
+    "even and the rest odd.",
+    [VAR_AVG] = "Classic rules, and on each teal line, the digit in the circle is the average of the line's other "
+    "digits: they add up to it times how many they are, 3 + 8 + 4 = 3 x 5. Digits may repeat along a line where the "
+    "rules allow.",
     [VAR_ANTIDIAG] = "Classic rules, and each of the two long diagonals (tinted) holds at most three different "
     "digits, which repeat: here the top-left one holds 3 and 7, the other 7, 3 and 1. A digit can be on a diagonal up "
     "to three times, once per box it crosses.",

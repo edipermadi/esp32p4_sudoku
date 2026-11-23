@@ -37,315 +37,61 @@
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py x-sums: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 51 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/x-sums-walkthrough/step-00.png)
 
-#### Step 1: the 1 in box 1
-
-Box 1 needs a 1. r1c3: column 3 has one (r9c3). r3c1, r3c2 and r3c3: row 3 has one (r3c4). r2c1: it's the first cell after a clue, and that clue can only start with 3 to 5. r2c2: Row 2's clue 17 can't be made up with a 1 there, whatever its first digit. Only **r1c1** is left: **r1c1 = 1**.
-
-![Step 1](../screenshots/variants/x-sums-walkthrough/step-01.png)
-
-#### Step 2: the 5 in box 2
-
-Box 2 needs a 5. r1c5 and r3c5: column 5 has one (r6c5). r1c6: column 6 has one (r7c6). r2c5 and r2c6: row 2 has one (r2c3). Only **r1c4** is left: **r1c4 = 5**.
-
-![Step 2](../screenshots/variants/x-sums-walkthrough/step-02.png)
-
-#### Step 3: the 6 in box 2
-
-Box 2 needs a 6. r1c5 and r1c6: row 1 has one (r1c8). r2c5 and r3c5: column 5 has one (r4c5). Only **r2c6** is left: **r2c6 = 6**.
-
-![Step 3](../screenshots/variants/x-sums-walkthrough/step-03.png)
-
-#### Step 4: the 1 in box 3
-
-Box 3 needs a 1. r1c9: row 1 has one (r1c1). r3c7, r3c8 and r3c9: row 3 has one (r3c4). r2c7: Column 7 starts with a 3, so its first 3 digits add up to its clue 15: with a 1 there, its other empty cell would need 11, which can't be made with digits not there yet. Only **r2c9** is left: **r2c9 = 1**.
-
-![Step 4](../screenshots/variants/x-sums-walkthrough/step-04.png)
-
-#### Step 5: the 2 in box 3
-
-Box 3 needs a 2. r1c9 and r3c9: column 9 has one (r4c9). r2c7 and r3c7: column 7 has one (r8c7). Only **r3c8** is left: **r3c8 = 2**.
-
-![Step 5](../screenshots/variants/x-sums-walkthrough/step-05.png)
-
-#### Step 6: the 2 in box 1
-
-Box 1 needs a 2. r2c1: column 1 has one (r6c1). r3c1, r3c2 and r3c3: row 3 has one (r3c8). r2c2: Row 2's clue 17 can't be made up with a 2 there, whatever its first digit. Only **r1c3** is left: **r1c3 = 2**.
-
-![Step 6](../screenshots/variants/x-sums-walkthrough/step-06.png)
-
-#### Step 7: the 2 in box 2
-
-Box 2 needs a 2. r1c5 and r1c6: row 1 has one (r1c3). r3c5: row 3 has one (r3c8). Only **r2c5** is left: **r2c5 = 2**.
-
-![Step 7](../screenshots/variants/x-sums-walkthrough/step-07.png)
-
-#### Step 8: the 3 in box 2
-
-Box 2 needs a 3. r1c5 and r1c6: row 1 has one (r1c7). Only **r3c5** is left: **r3c5 = 3**.
-
-![Step 8](../screenshots/variants/x-sums-walkthrough/step-08.png)
-
-#### Step 9: the 3 in box 1
-
-Box 1 needs a 3. r2c2: column 2 has one (r8c2). r3c1, r3c2 and r3c3: row 3 has one (r3c5). Only **r2c1** is left: **r2c1 = 3**.
-
-![Step 9](../screenshots/variants/x-sums-walkthrough/step-09.png)
-
-#### Step 10: the 7 in box 2
-
-Box 2 needs a 7. r1c6: it's the first cell after a clue, and that clue can only start with a 9. Only **r1c5** is left: **r1c5 = 7**.
-
-![Step 10](../screenshots/variants/x-sums-walkthrough/step-10.png)
-
-#### Step 11: the 9 in box 2
-
-Box 2 needs a 9, and r1c6 is its last empty cell: **r1c6 = 9**.
-
-![Step 11](../screenshots/variants/x-sums-walkthrough/step-11.png)
-
-#### Step 12: the 1 in box 4
-
-Box 4 needs a 1. r5c1: column 1 has one (r1c1). r5c3 and r6c3: column 3 has one (r9c3). r4c2: Row 4 starts with a 5, so its first 5 digits add up to its clue 31, but with a 1 there they come to 25. Only **r6c2** is left: **r6c2 = 1**.
-
-![Step 12](../screenshots/variants/x-sums-walkthrough/step-12.png)
-
-#### Step 13: the 3 in box 4
-
-Box 4 needs a 3. r4c2: row 4 has one (r4c6). r5c1: column 1 has one (r2c1). r6c3: row 6 has one (r6c9). Only **r5c3** is left: **r5c3 = 3**.
-
-![Step 13](../screenshots/variants/x-sums-walkthrough/step-13.png)
-
-#### Step 14: the 6 in box 4
-
-Box 4 needs a 6. r4c2: row 4 has one (r4c5). r6c3: row 6 has one (r6c7). Only **r5c1** is left: **r5c1 = 6**.
-
-![Step 14](../screenshots/variants/x-sums-walkthrough/step-14.png)
-
-#### Step 15: the 9 in box 4
-
-Box 4 needs a 9. r4c2: row 4 has one (r4c4). Only **r6c3** is left: **r6c3 = 9**.
-
-![Step 15](../screenshots/variants/x-sums-walkthrough/step-15.png)
-
-#### Step 16: the 7 in box 4
-
-Box 4 needs a 7, and r4c2 is its last empty cell: **r4c2 = 7**.
-
-![Step 16](../screenshots/variants/x-sums-walkthrough/step-16.png)
-
-#### Step 17: the 1 in box 5
-
-Box 5 needs a 1. r5c4: column 4 has one (r3c4). r5c6: column 6 has one (r8c6). Only **r5c5** is left: **r5c5 = 1**.
-
-![Step 17](../screenshots/variants/x-sums-walkthrough/step-17.png)
-
-#### Step 18: the 7 in box 5
-
-Box 5 needs a 7. r5c4: Column 4 starts with a 5, so its first 5 digits add up to its clue 25, but with a 7 there they come to 30. Only **r5c6** is left: **r5c6 = 7**.
-
-![Step 18](../screenshots/variants/x-sums-walkthrough/step-18.png)
-
-#### Step 19: the 2 in box 5
-
-Box 5 needs a 2, and r5c4 is its last empty cell: **r5c4 = 2**.
-
-![Step 19](../screenshots/variants/x-sums-walkthrough/step-19.png)
-
-#### Step 20: the 7 in box 6
-
-Box 6 needs a 7. r4c7 and r4c8: row 4 has one (r4c2). r5c7 and r5c9: row 5 has one (r5c6). Only **r6c8** is left: **r6c8 = 7**.
-
-![Step 20](../screenshots/variants/x-sums-walkthrough/step-20.png)
-
-#### Step 21: the 8 in box 6
-
-Box 6 needs an 8. r5c7 and r5c9: row 5 has one (r5c2). r4c8: Column 8 starts with a 6, so its first 6 digits add up to its clue 29, but with an 8 there they come to 36. Only **r4c7** is left: **r4c7 = 8**.
-
-![Step 21](../screenshots/variants/x-sums-walkthrough/step-21.png)
-
-#### Step 22: the 8 in box 3
-
-Box 3 needs an 8. r2c7: row 2 has one (r2c4). r3c7: column 7 has one (r4c7). r3c9: Column 9's clue 38 can't be made up with an 8 there, whatever its first digit. Only **r1c9** is left: **r1c9 = 8**.
-
-![Step 22](../screenshots/variants/x-sums-walkthrough/step-22.png)
-
-#### Step 23: the 1 in box 6
-
-Box 6 needs a 1. r5c7 and r5c9: row 5 has one (r5c5). Only **r4c8** is left: **r4c8 = 1**.
-
-![Step 23](../screenshots/variants/x-sums-walkthrough/step-23.png)
-
-#### Step 24: the 2 in box 7
-
-Box 7 needs a 2. r7c1 and r9c1: column 1 has one (r6c1). r7c3: column 3 has one (r1c3). r8c1 and r8c3: row 8 has one (r8c7). Only **r7c2** is left: **r7c2 = 2**.
-
-![Step 24](../screenshots/variants/x-sums-walkthrough/step-24.png)
-
-#### Step 25: the 4 in box 7
-
-Box 7 needs a 4. r7c3 and r8c3: column 3 has one (r4c3). r7c1: it's the first cell after a clue, and that clue can only start with a 9. r8c1: it's the first cell after a clue, and that clue can only start with 7 to 8. Only **r9c1** is left: **r9c1 = 4**.
-
-![Step 25](../screenshots/variants/x-sums-walkthrough/step-25.png)
-
-#### Step 26: the 9 in box 7
-
-Box 7 needs a 9. r7c3 and r8c3: column 3 has one (r6c3). r8c1: it's the first cell after a clue, and that clue can only start with 7 to 8. Only **r7c1** is left: **r7c1 = 9**.
-
-![Step 26](../screenshots/variants/x-sums-walkthrough/step-26.png)
-
-#### Step 27: the 2 in box 8
-
-Box 8 needs a 2. r7c5: row 7 has one (r7c2). r8c4 and r8c5: row 8 has one (r8c7). r9c4: column 4 has one (r5c4). r9c5: column 5 has one (r2c5). Only **r9c6** is left: **r9c6 = 2**.
-
-![Step 27](../screenshots/variants/x-sums-walkthrough/step-27.png)
-
-#### Step 28: the 4 in box 8
-
-Box 8 needs a 4. r8c4: column 4 has one (r6c4). r9c4 and r9c5: row 9 has one (r9c1). r8c5: Row 8's clue 41 can't be made up with a 4 there, whatever its first digit. Only **r7c5** is left: **r7c5 = 4**.
-
-![Step 28](../screenshots/variants/x-sums-walkthrough/step-28.png)
-
-#### Step 29: the 8 in box 8
-
-Box 8 needs an 8. r8c4 and r9c4: column 4 has one (r2c4). r8c5: Row 8's clue 41 can't be made up with an 8 there, whatever its first digit. Only **r9c5** is left: **r9c5 = 8**.
-
-![Step 29](../screenshots/variants/x-sums-walkthrough/step-29.png)
-
-#### Step 30: the 9 in box 8
-
-Box 8 needs a 9. r8c4 and r9c4: column 4 has one (r4c4). Only **r8c5** is left: **r8c5 = 9**.
-
-![Step 30](../screenshots/variants/x-sums-walkthrough/step-30.png)
-
-#### Step 31: the 1 in box 9
-
-Box 9 needs a 1. r7c8: column 8 has one (r4c8). r7c9: column 9 has one (r2c9). r8c8 and r8c9: row 8 has one (r8c6). r9c7 and r9c9: row 9 has one (r9c3). Only **r7c7** is left: **r7c7 = 1**.
-
-![Step 31](../screenshots/variants/x-sums-walkthrough/step-31.png)
-
-#### Step 32: the 9 in box 3
-
-Box 3 needs a 9. r2c7 and r3c7: Column 7 starts with a 3, so its first 3 digits add up to its clue 15: with a 9 there, its other empty cell would need 3, which can't be made with digits not there yet. Only **r3c9** is left: **r3c9 = 9**.
-
-![Step 32](../screenshots/variants/x-sums-walkthrough/step-32.png)
-
-#### Step 33: the 9 in box 1
-
-Box 1 needs a 9. r3c1, r3c2 and r3c3: row 3 has one (r3c9). Only **r2c2** is left: **r2c2 = 9**.
-
-![Step 33](../screenshots/variants/x-sums-walkthrough/step-33.png)
-
-#### Step 34: the 5 in box 3
-
-Box 3 needs a 5. r2c7: row 2 has one (r2c3). Only **r3c7** is left: **r3c7 = 5**.
-
-![Step 34](../screenshots/variants/x-sums-walkthrough/step-34.png)
-
-#### Step 35: the 7 in box 3
-
-Box 3 needs a 7, and r2c7 is its last empty cell: **r2c7 = 7**.
-
-![Step 35](../screenshots/variants/x-sums-walkthrough/step-35.png)
-
-#### Step 36: the 5 in box 6
-
-Box 6 needs a 5. r5c7: column 7 has one (r3c7). Only **r5c9** is left: **r5c9 = 5**.
-
-![Step 36](../screenshots/variants/x-sums-walkthrough/step-36.png)
-
-#### Step 37: the 4 in box 6
-
-Box 6 needs a 4, and r5c7 is its last empty cell: **r5c7 = 4**.
-
-![Step 37](../screenshots/variants/x-sums-walkthrough/step-37.png)
-
-#### Step 38: the 4 in box 9
-
-Box 9 needs a 4. r7c8 and r7c9: row 7 has one (r7c5). r8c8: column 8 has one (r2c8). r9c7 and r9c9: row 9 has one (r9c1). Only **r8c9** is left: **r8c9 = 4**.
-
-![Step 38](../screenshots/variants/x-sums-walkthrough/step-38.png)
-
-#### Step 39: the 5 in box 9
-
-Box 9 needs a 5. r7c8 and r7c9: row 7 has one (r7c6). r9c7 and r9c9: row 9 has one (r9c2). Only **r8c8** is left: **r8c8 = 5**.
-
-![Step 39](../screenshots/variants/x-sums-walkthrough/step-39.png)
-
-#### Step 40: the 7 in box 9
-
-Box 9 needs a 7. r7c8: column 8 has one (r6c8). r9c7: column 7 has one (r2c7). r7c9: Column 9 starts with an 8, so its first 8 digits add up to its clue 38, but with a 7 there they come to 39. Only **r9c9** is left: **r9c9 = 7**.
-
-![Step 40](../screenshots/variants/x-sums-walkthrough/step-40.png)
-
-#### Step 41: the 7 in box 8
-
-Box 8 needs a 7. r9c4: row 9 has one (r9c9). Only **r8c4** is left: **r8c4 = 7**.
-
-![Step 41](../screenshots/variants/x-sums-walkthrough/step-41.png)
-
-#### Step 42: the 7 in box 7
-
-Box 7 needs a 7. r8c1 and r8c3: row 8 has one (r8c4). Only **r7c3** is left: **r7c3 = 7**.
-
-![Step 42](../screenshots/variants/x-sums-walkthrough/step-42.png)
-
-#### Step 43: the 7 in box 1
-
-Box 1 needs a 7. r3c2: column 2 has one (r4c2). r3c3: column 3 has one (r7c3). Only **r3c1** is left: **r3c1 = 7**.
-
-![Step 43](../screenshots/variants/x-sums-walkthrough/step-43.png)
-
-#### Step 44: the 8 in box 1
-
-Box 1 needs an 8. r3c2: column 2 has one (r5c2). Only **r3c3** is left: **r3c3 = 8**.
-
-![Step 44](../screenshots/variants/x-sums-walkthrough/step-44.png)
-
-#### Step 45: the 6 in box 1
-
-Box 1 needs a 6, and r3c2 is its last empty cell: **r3c2 = 6**.
-
-![Step 45](../screenshots/variants/x-sums-walkthrough/step-45.png)
-
-#### Step 46: the 6 in box 7
-
-Box 7 needs a 6. r8c1: column 1 has one (r5c1). Only **r8c3** is left: **r8c3 = 6**.
-
-![Step 46](../screenshots/variants/x-sums-walkthrough/step-46.png)
-
-#### Step 47: the 8 in box 7
-
-Box 7 needs an 8, and r8c1 is its last empty cell: **r8c1 = 8**.
-
-![Step 47](../screenshots/variants/x-sums-walkthrough/step-47.png)
-
-#### Step 48: the 6 in box 8
-
-Box 8 needs a 6, and r9c4 is its last empty cell: **r9c4 = 6**.
-
-![Step 48](../screenshots/variants/x-sums-walkthrough/step-48.png)
-
-#### Step 49: the 6 in box 9
-
-Box 9 needs a 6. r7c8: column 8 has one (r1c8). r9c7: row 9 has one (r9c4). Only **r7c9** is left: **r7c9 = 6**.
-
-![Step 49](../screenshots/variants/x-sums-walkthrough/step-49.png)
-
-#### Step 50: the 8 in box 9
-
-Box 9 needs an 8. r9c7: row 9 has one (r9c5). Only **r7c8** is left: **r7c8 = 8**.
-
-![Step 50](../screenshots/variants/x-sums-walkthrough/step-50.png)
-
-#### Step 51: the 9 in box 9
-
-Box 9 needs a 9, and r9c7 is its last empty cell: **r9c7 = 9**.
-
-![Step 51](../screenshots/variants/x-sums-walkthrough/step-51.png)
+1. [the 1 in box 1](x-sums/step-01.md)
+2. [the 5 in box 2](x-sums/step-02.md)
+3. [the 6 in box 2](x-sums/step-03.md)
+4. [the 1 in box 3](x-sums/step-04.md)
+5. [the 2 in box 3](x-sums/step-05.md)
+6. [the 2 in box 1](x-sums/step-06.md)
+7. [the 2 in box 2](x-sums/step-07.md)
+8. [the 3 in box 2](x-sums/step-08.md)
+9. [the 3 in box 1](x-sums/step-09.md)
+10. [the 7 in box 2](x-sums/step-10.md)
+11. [the 9 in box 2](x-sums/step-11.md)
+12. [the 1 in box 4](x-sums/step-12.md)
+13. [the 3 in box 4](x-sums/step-13.md)
+14. [the 6 in box 4](x-sums/step-14.md)
+15. [the 9 in box 4](x-sums/step-15.md)
+16. [the 7 in box 4](x-sums/step-16.md)
+17. [the 1 in box 5](x-sums/step-17.md)
+18. [the 7 in box 5](x-sums/step-18.md)
+19. [the 2 in box 5](x-sums/step-19.md)
+20. [the 7 in box 6](x-sums/step-20.md)
+21. [the 8 in box 6](x-sums/step-21.md)
+22. [the 8 in box 3](x-sums/step-22.md)
+23. [the 1 in box 6](x-sums/step-23.md)
+24. [the 2 in box 7](x-sums/step-24.md)
+25. [the 4 in box 7](x-sums/step-25.md)
+26. [the 9 in box 7](x-sums/step-26.md)
+27. [the 2 in box 8](x-sums/step-27.md)
+28. [the 4 in box 8](x-sums/step-28.md)
+29. [the 8 in box 8](x-sums/step-29.md)
+30. [the 9 in box 8](x-sums/step-30.md)
+31. [the 1 in box 9](x-sums/step-31.md)
+32. [the 9 in box 3](x-sums/step-32.md)
+33. [the 9 in box 1](x-sums/step-33.md)
+34. [the 5 in box 3](x-sums/step-34.md)
+35. [the 7 in box 3](x-sums/step-35.md)
+36. [the 5 in box 6](x-sums/step-36.md)
+37. [the 4 in box 6](x-sums/step-37.md)
+38. [the 4 in box 9](x-sums/step-38.md)
+39. [the 5 in box 9](x-sums/step-39.md)
+40. [the 7 in box 9](x-sums/step-40.md)
+41. [the 7 in box 8](x-sums/step-41.md)
+42. [the 7 in box 7](x-sums/step-42.md)
+43. [the 7 in box 1](x-sums/step-43.md)
+44. [the 8 in box 1](x-sums/step-44.md)
+45. [the 6 in box 1](x-sums/step-45.md)
+46. [the 6 in box 7](x-sums/step-46.md)
+47. [the 8 in box 7](x-sums/step-47.md)
+48. [the 6 in box 8](x-sums/step-48.md)
+49. [the 6 in box 9](x-sums/step-49.md)
+50. [the 8 in box 9](x-sums/step-50.md)
+51. [the 9 in box 9](x-sums/step-51.md)
 
 Solved.
 

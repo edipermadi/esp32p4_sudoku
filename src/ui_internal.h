@@ -848,7 +848,7 @@ void draw_dmark(lv_layer_t *layer, int cx, int cy, bool dl, int half);
  * @brief A line through cell centres pts[0..n-1] (cs: the cell size), as its kind is drawn, under the
  * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey
  * ring (the circle) and a thin shaft from its edge with an arrowhead at the end; LINE_RENBAN a
- * wide purple band; LINE_PILL as LINE_ARROW with a capsule round its first two cells; LINE_WHISPER a narrow green line, LINE_DUTCH an amber one, LINE_PARITY a red one,
+ * wide purple band; LINE_AVG a teal ring and a thin teal line from its edge; LINE_PILL as LINE_ARROW with a capsule round its first two cells; LINE_WHISPER a narrow green line, LINE_DUTCH an amber one, LINE_PARITY a red one,
  * LINE_NABNER a brown one; LINE_BETWEEN a thin grey line between two rings, LINE_DARROW the same in blue,
  * LINE_LOCKOUT a thin grey one between two diamonds;
  * LINE_SLOW as LINE_THERMO. Also the rules card's picture.

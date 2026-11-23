@@ -224,7 +224,7 @@ static bool is_ends_line(bool lockout, const uint8_t full[81], const uint8_t *on
 /* (documented in gen_internal.h) */
 bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
-    const bool lockout = variant == VAR_LOCKOUT, ten = variant == VAR_TEN;
+    const bool lockout = variant == VAR_LOCKOUT, ten = variant == VAR_TEN, avg = variant == VAR_AVG;
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
     int n = 0;
     for (int tries = 0; tries < 3000 && n < want; tries++) {
@@ -237,7 +237,7 @@ bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want
         run = full[c];
         while (len < target) {
             int cur = cells[n][len - 1], k = line_neighbours(cur, used, cells[n], len, nb), m = 0;
-            if (!lockout && !ten && sum + (len > 1 ? full[cur] : 0) > 17) {
+            if (!lockout && !ten && !avg && sum + (len > 1 ? full[cur] : 0) > 17) {
                 break;                              /* (Double Arrow: two circles make 17 at most) */
             }
             for (int j = 0; j < k; j++) {
@@ -257,6 +257,12 @@ bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want
                 if (!run) {
                     best = len;                     /* every run so far makes 10 */
                 }
+            } else if (avg) {                       /* the circle the average of the rest so far */
+                int rest = 0;
+                for (int j = 1; j < len; j++) {
+                    rest += full[cells[n][j]];
+                }
+                best = len >= 3 && rest == full[c] * (len - 1) ? len : best;
             } else if (len >= 3 && is_ends_line(lockout, full, cells[n], len)) {
                 best = len;                         /* o as the other end */
             }

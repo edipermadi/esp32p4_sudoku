@@ -517,6 +517,21 @@ bool gen_geom_psky(const uint8_t clues[18], sudoku_geom_t *out);
  */
 bool is_gen_psky_line_ok(const uint8_t x[9], int c);
 /**
+ * @brief Magic Square: the digits a cell of the centre box may hold: in each of its lines (its row and column of
+ * the box, and a diagonal through it) two others, by their digits or candidates, must make 15 with it
+ * @param[in] v  the digits (0: empty)
+ * @param[in] cand  the candidates of the empty ones, or NULL (then any)
+ * @param[in] i  the cell, in the centre box
+ * @return a candidate mask
+ */
+uint16_t gen_magic_allow(const uint8_t *v, const uint16_t *cand, int i);
+/**
+ * @brief Magic Square: each cell of the centre box by its lines (gen_magic_allow() with the candidates)
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_magic_logic(logic_t *L);
+/**
  * @brief Anti-Diagonal: a long diagonal with three different digits already: its empty cells take one of them
  * @param[in,out] L  the logic state
  * @return true if a candidate went
@@ -611,8 +626,9 @@ bool gen_between_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_g
  * @brief Lockout Lines, Double Arrow, 10 Lines: up to want lines over the full grid, each a random walk of
  * up to 6 cells (10 Lines: 8) kept at the longest length that keeps the rule (Lockout: the ends 4+ apart and
  * every cell between outside their range; Double Arrow: the ends add up to the cells between; 10 Lines:
- * runs of 10 to the end); a line never crosses itself or another
- * @param[in] variant  VAR_LOCKOUT, VAR_DARROW or VAR_TEN
+ * runs of 10 to the end; Average Lines: the first cell the average of the rest); a line never crosses itself or
+ * another
+ * @param[in] variant  VAR_LOCKOUT, VAR_DARROW, VAR_TEN or VAR_AVG
  * @param[in] full  the solution
  * @param[in,out] rng  the random state
  * @param[in] want  lines wanted

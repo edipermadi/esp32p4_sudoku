@@ -66,6 +66,9 @@ static const char *units_word(const sudoku_geom_t *geo)
     if (geo->variant == VAR_KNIGHT) {
         return "row, column, box or a knight's move away";
     }
+    if (geo->variant == VAR_CHESS) {
+        return "row, column, box, a knight's move away or a touching cell";
+    }
     if (geo->variant == VAR_ARGYLE) {
         return "row, column, box or argyle line";
     }
@@ -261,6 +264,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  lk == LINE_DARROW ? "The two circles at this line's ends add up to the digits between them" :
                  lk == LINE_TEN ? "This line splits into runs of cells that each add up to 10" :
                  lk == LINE_PILL ? "The arrow's shaft adds up to its pill, the two cells read as a two-digit number" :
+                 lk == LINE_AVG ? "The circled digit is the average of the other digits on its line" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -282,6 +286,21 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  ? "Along the thermometer the digits rise or stay the same from the bulb (they rise where two "
                  "neighbours share a row, column or box)" : "Along the thermometer the digits rise from the bulb",
                  c / 9 + 1, c % 9 + 1, digs);
+    } else if (t->kind == TECH_MAGIC) {            /* Magic Square: the centre box */
+        const int c = t->unit >= 0 && t->unit < 81 ? t->unit : 40;
+        for (int k = 0; k < 9; k++) {
+            mark[(3 + k / 3) * 9 + 3 + k % 3] = 1;
+        }
+        snprintf(u1, sizeof(u1), "the centre box");
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        snprintf(tech, sizeof(tech), "The centre box is a magic square: each of its rows, columns and diagonals adds "
+                 "up to 15, so row %d, column %d can only be %s. ", c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_ANTIDIAG) {         /* Anti-Diagonal: the diagonal */
         const int dg = t->unit == 1, c = t->cell1 >= 0 ? t->cell1 : 0;
         for (int k = 0; k < 9; k++) {

@@ -149,6 +149,11 @@
  *                read as a two-digit number, are the sum of the shaft
  *   VAR_PSKY     Odd/Even Skyscrapers: Classic rules, and a clue counts the odd buildings
  *                seen from it (or, a shaded clue, the even ones)
+ *   VAR_CHESS    Chess Sudoku: Anti-Knight and Anti-King together
+ *   VAR_MAGIC    Magic Square: Classic rules, and the centre box is a magic square (its
+ *                rows, columns and diagonals add up to 15)
+ *   VAR_AVG      Average Lines: Classic rules, and on each line its circled cell is the
+ *                average of the others
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -263,6 +268,9 @@ typedef enum {
     VAR_ANTIDIAG,                       /**< Anti-Diagonal */
     VAR_PILL,                           /**< Pill Arrows */
     VAR_PSKY,                           /**< Odd/Even Skyscrapers */
+    VAR_CHESS,                          /**< Chess Sudoku */
+    VAR_MAGIC,                          /**< Magic Square */
+    VAR_AVG,                            /**< Average Lines */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -278,7 +286,7 @@ typedef enum {
  *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner", "Numbered Rooms", "Sum Skyscrapers",
  *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola",
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
- *         "Odd/Even Skyscrapers"
+ *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines"
  */
 const char *variant_name(int variant);
 
@@ -316,8 +324,9 @@ enum {
     LINE_LOCKOUT,                       /**< Lockout Lines: end diamonds 4+ apart, the digits between outside their range */
     LINE_DARROW,                        /**< Double Arrow: the two end circles add up to the digits between */
     LINE_TEN,                           /**< 10 Lines: runs of cells along it that each add up to 10 */
-    LINE_PILL                           /**< Pill Arrows: the first two cells (the pill, a two-digit number) are the
+    LINE_PILL,                          /**< Pill Arrows: the first two cells (the pill, a two-digit number) are the
                                          *   rest's sum */
+    LINE_AVG                            /**< Average Lines: the first cell (the circle) is the others' average */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -394,7 +403,7 @@ typedef struct {
     bool consec_on;                     /**< Consecutive: the bars are rules */
     uint8_t consec[81];                 /**< Consecutive: bars, bit CONSEC_RIGHT = to the cell on the right, CONSEC_DOWN = below */
     uint8_t nxpeers[81];                /**< peers that share no unit (Anti-Knight: the knight's moves; Anti-King: the touching cells): how many */
-    uint8_t xpeers[81][12];             /**< which (Argyle: up to 12) */
+    uint8_t xpeers[81][12];             /**< which (Argyle, Chess Sudoku: up to 12) */
     /* Thermo, Arrow, Renban, German Whispers, Palindrome, Region Sum, Zipper, Between Lines: lines,
      * each a path of cells (side by side or diagonal), of the kind line_kind: a thermometer from its
      * bulb (digits rise along it), an arrow from its circle (the rest, its shaft, adds up to it), a
@@ -422,6 +431,7 @@ typedef struct {
     uint8_t rossini_dir[18];            /**< per row and column (as frame_sum), its first 3 digits: ROSSINI_* */
     bool idx159;                        /**< 159 Sudoku: columns 1, 5 and 9 give the place of the 1, 5 and 9 in their row */
     bool antidiag;                      /**< Anti-Diagonal: each long diagonal holds at most three different digits */
+    bool magic;                         /**< Magic Square: the centre box's rows, columns and diagonals add up to 15 */
     bool psky;                          /**< Odd/Even Skyscrapers: the clues are rules */
     uint8_t psky_clue[18];              /**< per row and column (as sky[]): 0 no clue; 1..5 the odd buildings seen;
                                          *   PSKY_EVEN | 0..4 the even ones */
@@ -1003,7 +1013,7 @@ static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
 
 /**
  * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot, the Girandola, 159
- * Sudoku's columns 1, 5 and 9, Extra Regions' regions, Anti-Diagonal's diagonals
+ * Sudoku's columns 1, 5 and 9, Extra Regions' regions, Anti-Diagonal's diagonals, Magic Square's box
  * @param[in] g  the board
  * @param[in] cell  the cell
  * @return true if so
@@ -1013,7 +1023,8 @@ static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
     return is_sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || is_sudoku_geom_on_asterisk(g, cell) ||
            is_sudoku_geom_on_centerdot(g, cell) || is_sudoku_geom_on_girandola(g, cell) ||
            (g->idx159 && cell % 9 % 4 == 0) || (g->variant == VAR_REGIONS && g->cage_of[cell] != CAGE_NONE) ||
-           (g->antidiag && (cell / 9 == cell % 9 || cell / 9 + cell % 9 == 8));
+           (g->antidiag && (cell / 9 == cell % 9 || cell / 9 + cell % 9 == 8)) ||
+           (g->magic && cell / 9 / 3 == 1 && cell % 9 / 3 == 1);
 }
 
 /* ---------------------------------------------------------------- generating */
@@ -1129,7 +1140,8 @@ enum {
     FIT_159,                            /**< 159 Sudoku: the row's column 1, 5 or 9 (or what it points at) */
     FIT_ANTIDIAG,                       /**< Anti-Diagonal: its diagonal has three other digits already */
     FIT_PSKY_ROW,                       /**< Odd/Even Skyscrapers: the row's clue */
-    FIT_PSKY_COL                        /**< Odd/Even Skyscrapers: the column's clue */
+    FIT_PSKY_COL,                       /**< Odd/Even Skyscrapers: the column's clue */
+    FIT_MAGIC                           /**< Magic Square: a row, column or diagonal of the centre box */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1191,7 +1203,8 @@ typedef enum {
     TECH_SKYSUM,             /**< Sum Skyscrapers: a clue */
     TECH_159,                /**< 159 Sudoku: a row's column 1, 5 or 9 and the cell it points at */
     TECH_ANTIDIAG,           /**< Anti-Diagonal: a diagonal with its three digits */
-    TECH_PSKY                /**< Odd/Even Skyscrapers: a clue */
+    TECH_PSKY,               /**< Odd/Even Skyscrapers: a clue */
+    TECH_MAGIC               /**< Magic Square: a line of the centre box */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {

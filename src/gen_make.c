@@ -72,7 +72,8 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
         const bool newest_lines = G->nthermos && (G->line_kind == LINE_ZIPPER || G->line_kind == LINE_BETWEEN ||
                                   G->line_kind == LINE_ENTROPIC || G->line_kind == LINE_MODULAR ||
                                   G->line_kind == LINE_NABNER || G->line_kind == LINE_LOCKOUT ||
-                                  G->line_kind == LINE_DARROW || G->line_kind == LINE_TEN || G->line_kind == LINE_PILL);
+                                  G->line_kind == LINE_DARROW || G->line_kind == LINE_TEN || G->line_kind == LINE_PILL ||
+                                  G->line_kind == LINE_AVG);
         if (G->edge_kind || G->nquads || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
             int tier = gen_technique_tier(G, out);
             ok = tier <= max_tier && (tier < 3 || gen_count_bounded(G, out, 2, node_limit) == 1);
@@ -112,7 +113,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
     const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
-    const bool ends = variant == VAR_LOCKOUT || variant == VAR_DARROW || variant == VAR_TEN;
+    const bool ends = variant == VAR_LOCKOUT || variant == VAR_DARROW || variant == VAR_TEN || variant == VAR_AVG;
     const bool sumless = variant == VAR_SUMLESS, dcons = variant == VAR_DIAGCONSEC;
     const bool prodk = variant == VAR_PRODUCT, xregions = variant == VAR_REGIONS;
     const bool pill = variant == VAR_PILL, psky = variant == VAR_PSKY;
@@ -466,7 +467,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             }
             gen_geom_sandwich(sums, jig);
         } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC || variant == VAR_DIAGNC ||
-                   variant == VAR_ARGYLE) {
+                   variant == VAR_ARGYLE || variant == VAR_CHESS || variant == VAR_MAGIC) {
             /* not every fill works out quickly: try again */
             if (!gen_random_full_grid(G, full, &rng, 20000)) {
                 continue;

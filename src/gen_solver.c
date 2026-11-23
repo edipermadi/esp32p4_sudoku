@@ -578,6 +578,35 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         free &= sudoku_ten_allow(m, n, p);
         break;
     }
+    case LINE_AVG: {                                /* the circle (place 0) times the others' count is their sum */
+        const int k = n - 1;
+        int smin = 0, smax = 0;
+        for (int j = 1; j < n; j++) {
+            if (j == p) {
+                continue;
+            }
+            const uint16_t m = LMASK(cell[j]);
+            if (!m) {
+                return 0;
+            }
+            smin += LO(m);
+            smax += HI(m);
+        }
+        if (p == 0) {                               /* the circle: a digit whose k times the others can make */
+            uint16_t ok = 0;
+            for (int d = 1; d <= 9; d++) {
+                ok |= d * k >= smin && d * k <= smax ? (uint16_t)(1u << d) : 0;
+            }
+            free &= ok;
+        } else {
+            const uint16_t m = LMASK(cell[0]);
+            if (!m) {
+                return 0;
+            }
+            free &= RANGE(LO(m) * k - smax, HI(m) * k - smin);
+        }
+        break;
+    }
     case LINE_PILL:                                 /* the pill (places 0, 1: tens, units) is the shaft's sum */
         free &= pill_line_allow(G, t, p, v, cand);
         break;
@@ -706,6 +735,7 @@ typedef struct {
 #define R_159     (1u << 14)            /**< 159 Sudoku */
 #define R_ANTIDIAG (1u << 15)           /**< Anti-Diagonal */
 #define R_PSKY    (1u << 16)            /**< Odd/Even Skyscrapers */
+#define R_MAGIC   (1u << 17)            /**< Magic Square */
 /** @} */
 
 /**
@@ -982,6 +1012,57 @@ bool is_gen_sky_line_ok(const uint8_t x[9], int c)
     }
     int rest = 9 - k, more = 9 - top < rest ? 9 - top : rest;   /* at most this many more seen */
     return seen < c && seen + more >= c;            /* (the 9, still to come, is seen) */
+}
+
+/* (documented in gen_internal.h) */
+uint16_t gen_magic_allow(const uint8_t *v, const uint16_t *cand, int i)
+{
+    /* the centre box's lines through cell i: its row, its column, and the diagonals through it */
+    const int r = i / 9 - 3, q = i % 9 - 3;
+    int lines[4][3], nl = 0;
+    for (int k = 0; k < 3; k++) {
+        lines[nl][k] = (r + 3) * 9 + 3 + k;
+    }
+    nl++;
+    for (int k = 0; k < 3; k++) {
+        lines[nl][k] = (3 + k) * 9 + q + 3;
+    }
+    nl++;
+    if (r == q) {
+        for (int k = 0; k < 3; k++) {
+            lines[nl][k] = (3 + k) * 9 + 3 + k;
+        }
+        nl++;
+    }
+    if (r + q == 2) {
+        for (int k = 0; k < 3; k++) {
+            lines[nl][k] = (3 + k) * 9 + 5 - k;
+        }
+        nl++;
+    }
+    uint16_t free = 0x3FE;
+    for (int l = 0; l < nl; l++) {                  /* a digit with two others (their digits, or candidates) making 15 */
+        int o[2], no = 0;
+        for (int k = 0; k < 3; k++) {
+            if (lines[l][k] != i) {
+                o[no++] = lines[l][k];
+            }
+        }
+        const uint16_t ma = v[o[0]] ? (uint16_t)(1u << v[o[0]]) : cand ? cand[o[0]] : 0x3FE;
+        const uint16_t mb = v[o[1]] ? (uint16_t)(1u << v[o[1]]) : cand ? cand[o[1]] : 0x3FE;
+        uint16_t ok = 0;
+        for (int a = 1; a <= 9; a++) {
+            const int d0 = 15 - a;
+            for (int b = 1; (ma >> a & 1) && b <= 9; b++) {
+                const int d = d0 - b;
+                if ((mb >> b & 1) && a != b && d >= 1 && d <= 9 && d != a && d != b) {
+                    ok |= (uint16_t)(1u << d);
+                }
+            }
+        }
+        free &= ok;
+    }
+    return free;
 }
 
 /* (documented in gen_internal.h) */
@@ -1366,6 +1447,10 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
         WHY(line ? FIT_PSKY_COL : FIT_PSKY_ROW);
     }
+    if ((rules & R_MAGIC) && free && i / 9 / 3 == 1 && i % 9 / 3 == 1) {   /* Magic Square: its lines make 15 */
+        free &= gen_magic_allow(g->v, NULL, i);
+    }
+    WHY(FIT_MAGIC);
     if ((rules & R_ANTIDIAG) && free) {             /* Anti-Diagonal: three digits on its diagonal already: one of them */
         const int r = i / 9, q = i % 9;
         for (int dg = 0; dg < 2; dg++) {
@@ -1562,7 +1647,8 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->frame || G->outside || G->rossini ? R_FIRST3 : 0) | (G->diag_nc ? R_DIAGNC : 0) |
                (G->nlk ? R_LK : 0) | (G->sandwich ? R_SANDWICH : 0) | (G->nthermos ? R_LINE : 0) |
                (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0) |
-               (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0);
+               (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0) |
+               (G->magic ? R_MAGIC : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

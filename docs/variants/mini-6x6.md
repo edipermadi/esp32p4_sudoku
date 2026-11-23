@@ -37,129 +37,30 @@ Box 2 then has two cells left, r1c5 and r2c4, for 4 and 5; row 1 already has a 5
 <!-- walkthrough -->
 <!-- Written by tools/walkthrough.py mini-6x6: edit the script, not this part. -->
 
-The whole puzzle, from the start to the last cell: 20 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
+The whole puzzle, from the start to the last cell: 20 steps, each one a single (one place left for a digit, or one digit left for a cell), taken in the order a box's single comes first, so not quite the order of the worked example above. Each step has a page of its own, with **Previous** and **Next**: pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue.
 
 ![The start](../screenshots/variants/mini-6x6-walkthrough/step-00.png)
 
-#### Step 1: the 2 in box 1
-
-Box 1 needs a 2. r2c2: column 2 has one (r3c2). r2c3: column 3 has one (r6c3). Only **r2c1** is left: **r2c1 = 2**.
-
-![Step 1](../screenshots/variants/mini-6x6-walkthrough/step-01.png)
-
-#### Step 2: the 1 in box 2
-
-Box 2 needs a 1. r1c5 and r1c6: row 1 has one (r1c1). r2c4: column 4 has one (r6c4). Only **r2c5** is left: **r2c5 = 1**.
-
-![Step 2](../screenshots/variants/mini-6x6-walkthrough/step-02.png)
-
-#### Step 3: the 2 in box 2
-
-Box 2 needs a 2. r1c5: column 5 has one (r4c5). r2c4: row 2 has one (r2c1). Only **r1c6** is left: **r1c6 = 2**.
-
-![Step 3](../screenshots/variants/mini-6x6-walkthrough/step-03.png)
-
-#### Step 4: the 4 in box 2
-
-Box 2 needs a 4. r2c4: column 4 has one (r4c4). Only **r1c5** is left: **r1c5 = 4**.
-
-![Step 4](../screenshots/variants/mini-6x6-walkthrough/step-04.png)
-
-#### Step 5: the 5 in box 2
-
-Box 2 needs a 5, and r2c4 is its last empty cell: **r2c4 = 5**.
-
-![Step 5](../screenshots/variants/mini-6x6-walkthrough/step-05.png)
-
-#### Step 6: the 4 in box 3
-
-Box 3 needs a 4. r4c2 and r4c3: row 4 has one (r4c4). Only **r3c1** is left: **r3c1 = 4**.
-
-![Step 6](../screenshots/variants/mini-6x6-walkthrough/step-06.png)
-
-#### Step 7: the 5 in box 3
-
-Box 3 needs a 5. r4c3: column 3 has one (r1c3). Only **r4c2** is left: **r4c2 = 5**.
-
-![Step 7](../screenshots/variants/mini-6x6-walkthrough/step-07.png)
-
-#### Step 8: the 6 in box 3
-
-Box 3 needs a 6, and r4c3 is its last empty cell: **r4c3 = 6**.
-
-![Step 8](../screenshots/variants/mini-6x6-walkthrough/step-08.png)
-
-#### Step 9: the 6 in box 1
-
-Box 1 needs a 6. r2c3: column 3 has one (r4c3). Only **r2c2** is left: **r2c2 = 6**.
-
-![Step 9](../screenshots/variants/mini-6x6-walkthrough/step-09.png)
-
-#### Step 10: the 4 in box 1
-
-Box 1 needs a 4, and r2c3 is its last empty cell: **r2c3 = 4**.
-
-![Step 10](../screenshots/variants/mini-6x6-walkthrough/step-10.png)
-
-#### Step 11: the 1 in box 4
-
-Box 4 needs a 1. r3c4 and r3c5: row 3 has one (r3c3). Only **r4c6** is left: **r4c6 = 1**.
-
-![Step 11](../screenshots/variants/mini-6x6-walkthrough/step-11.png)
-
-#### Step 12: the 3 in box 4
-
-Box 4 needs a 3. r3c5: column 5 has one (r6c5). Only **r3c4** is left: **r3c4 = 3**.
-
-![Step 12](../screenshots/variants/mini-6x6-walkthrough/step-12.png)
-
-#### Step 13: the 6 in box 4
-
-Box 4 needs a 6, and r3c5 is its last empty cell: **r3c5 = 6**.
-
-![Step 13](../screenshots/variants/mini-6x6-walkthrough/step-13.png)
-
-#### Step 14: the 1 in box 5
-
-Box 5 needs a 1. r5c3: column 3 has one (r3c3). r6c1 and r6c2: row 6 has one (r6c4). Only **r5c2** is left: **r5c2 = 1**.
-
-![Step 14](../screenshots/variants/mini-6x6-walkthrough/step-14.png)
-
-#### Step 15: the 3 in box 5
-
-Box 5 needs a 3. r6c1 and r6c2: row 6 has one (r6c5). Only **r5c3** is left: **r5c3 = 3**.
-
-![Step 15](../screenshots/variants/mini-6x6-walkthrough/step-15.png)
-
-#### Step 16: the 4 in box 5
-
-Box 5 needs a 4. r6c1: column 1 has one (r3c1). Only **r6c2** is left: **r6c2 = 4**.
-
-![Step 16](../screenshots/variants/mini-6x6-walkthrough/step-16.png)
-
-#### Step 17: the 5 in box 5
-
-Box 5 needs a 5, and r6c1 is its last empty cell: **r6c1 = 5**.
-
-![Step 17](../screenshots/variants/mini-6x6-walkthrough/step-17.png)
-
-#### Step 18: the 2 in box 6
-
-Box 6 needs a 2. r5c5: column 5 has one (r4c5). r5c6: column 6 has one (r1c6). Only **r5c4** is left: **r5c4 = 2**.
-
-![Step 18](../screenshots/variants/mini-6x6-walkthrough/step-18.png)
-
-#### Step 19: the 4 in box 6
-
-Box 6 needs a 4. r5c5: column 5 has one (r1c5). Only **r5c6** is left: **r5c6 = 4**.
-
-![Step 19](../screenshots/variants/mini-6x6-walkthrough/step-19.png)
-
-#### Step 20: the 5 in box 6
-
-Box 6 needs a 5, and r5c5 is its last empty cell: **r5c5 = 5**.
-
-![Step 20](../screenshots/variants/mini-6x6-walkthrough/step-20.png)
+1. [the 2 in box 1](mini-6x6/step-01.md)
+2. [the 1 in box 2](mini-6x6/step-02.md)
+3. [the 2 in box 2](mini-6x6/step-03.md)
+4. [the 4 in box 2](mini-6x6/step-04.md)
+5. [the 5 in box 2](mini-6x6/step-05.md)
+6. [the 4 in box 3](mini-6x6/step-06.md)
+7. [the 5 in box 3](mini-6x6/step-07.md)
+8. [the 6 in box 3](mini-6x6/step-08.md)
+9. [the 6 in box 1](mini-6x6/step-09.md)
+10. [the 4 in box 1](mini-6x6/step-10.md)
+11. [the 1 in box 4](mini-6x6/step-11.md)
+12. [the 3 in box 4](mini-6x6/step-12.md)
+13. [the 6 in box 4](mini-6x6/step-13.md)
+14. [the 1 in box 5](mini-6x6/step-14.md)
+15. [the 3 in box 5](mini-6x6/step-15.md)
+16. [the 4 in box 5](mini-6x6/step-16.md)
+17. [the 5 in box 5](mini-6x6/step-17.md)
+18. [the 2 in box 6](mini-6x6/step-18.md)
+19. [the 4 in box 6](mini-6x6/step-19.md)
+20. [the 5 in box 6](mini-6x6/step-20.md)
 
 Solved.
 

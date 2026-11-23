@@ -75,6 +75,7 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     case VAR_DARROW:
     case VAR_TEN:
     case VAR_PILL:
+    case VAR_AVG:
         key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL;
         break;
     case VAR_SANDWICH:
@@ -222,6 +223,7 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
     case VAR_DARROW:
     case VAR_TEN:
     case VAR_PILL:
+    case VAR_AVG:
         if (sudoku_thermos_text(G, extra, sizeof(extra))) {
             thermos = extra;
         }

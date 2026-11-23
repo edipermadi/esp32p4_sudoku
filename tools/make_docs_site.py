@@ -8,6 +8,7 @@ Turns README.md and the Markdown under docs/ into HTML pages for GitHub Pages:
     OUT_DIR/<page>.html                 docs/<page>.md
     OUT_DIR/variants.html               docs/variants/README.md, and
     OUT_DIR/variant-<name>.html         docs/variants/<name>.md (in the order its table links them)
+    OUT_DIR/variant-<name>-step-NN.html docs/variants/<name>/step-NN.md (its walkthrough, a page per step)
     OUT_DIR/internals.html              docs/internals/README.md, and
     OUT_DIR/internals-<name>.html       docs/internals/<name>.md (likewise)
     OUT_DIR/screenshots/...             docs/screenshots/
@@ -94,6 +95,17 @@ for src, page, title in MENU:
     if src in SECTIONS:
         sub = section_pages(src, SECTIONS[src])
         PAGES += [(s, p, page, sub) for s, p in sub]
+# a variant's walkthrough steps: a page each, under Variants, with the variant's page as their parent (their own
+# Markdown has the previous / next links)
+STEP_PARENT = {}
+for src, page, _, _ in list(PAGES):
+    folder = os.path.join(HERE, src[:-3])
+    if src.startswith("docs/variants/") and os.path.isdir(folder):
+        for f in sorted(os.listdir(folder)):
+            if re.match(r"step-\d+\.md$", f):
+                step = "%s-%s.html" % (page[:-5], f[:-3])
+                PAGES.append(("%s/%s" % (src[:-3], f), step, "variants.html", None))
+                STEP_PARENT[step] = page
 PAGE_OF = {src: page for src, page, _, _ in PAGES}
 TITLE_OF = {page: title for _, page, title in MENU}
 
@@ -127,6 +139,7 @@ def rewrite(url, src):
 
 def render(src):
     text = open(os.path.join(HERE, src), encoding="utf-8").read()
+    text = re.sub(r"<!--.*?-->\n?", "", text, flags=re.S)   # (notes for editors: HTML is off, they'd show as text)
     text = NAV_LINE.sub(r"\1", text)
     md = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable("table").enable("strikethrough")
     tokens = md.parse(text)
@@ -251,6 +264,10 @@ def main():
         nav = "".join('<a href="%s"%s>%s</a>' % (p, ' class="on"' if p == under else "", html.escape(t))
                       for _, p, t in MENU)
         crumb = pager = ""
+        if page in STEP_PARENT:                     # a walkthrough step: Variants › the variant › this step
+            crumb = '<p class="crumb"><a href="%s">%s</a> › <a href="%s">%s</a> › %s</p>\n' % (
+                under, html.escape(TITLE_OF[under]), STEP_PARENT[page], html.escape(titles[STEP_PARENT[page]]),
+                html.escape(titles[page]))
         if sub:                                     # a section's page: where it is, and its neighbours
             crumb = '<p class="crumb"><a href="%s">%s</a> › %s</p>\n' % (
                 under, html.escape(TITLE_OF[under]), html.escape(titles[page]))

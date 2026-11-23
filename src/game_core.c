@@ -202,6 +202,15 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int l = 0; geo->magic && l < 8; l++) {   /* Magic Square: a full row, column or diagonal of the centre box not 15 */
+        static const uint8_t LN[8][3] = {{30, 31, 32}, {39, 40, 41}, {48, 49, 50}, {30, 39, 48}, {31, 40, 49},
+            {32, 41, 50}, {30, 40, 50}, {32, 40, 48}
+        };
+        const int a = val[LN[l][0]], b = val[LN[l][1]], c = val[LN[l][2]];
+        if (a && b && c && a + b + c != 15) {
+            out[LN[l][0]] = out[LN[l][1]] = out[LN[l][2]] = true;
+        }
+    }
     for (int dg = 0; geo->antidiag && dg < 2; dg++) {   /* Anti-Diagonal: a fourth different digit on a long diagonal */
         uint16_t have = 0;
         for (int k = 0; k < 9; k++) {
@@ -382,6 +391,20 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
             for (int i = 0; !sudoku_ten_allow(m, n, -1) && i < n; i++) {
                 out[cell[i]] = val[cell[i]] != 0;
+            }
+            break;
+        }
+        case LINE_AVG: {                            /* the others can't (or, all filled, don't) average the circle */
+            int sum = 0, empty = 0, circle = val[cell[0]];
+            for (int i = 1; i < n; i++) {
+                sum += val[cell[i]];
+                empty += !val[cell[i]];
+            }
+            const int want = circle * (n - 1);
+            if (circle && (sum + empty > want || sum + 9 * empty < want)) {
+                for (int i = 0; i < n; i++) {
+                    out[cell[i]] = out[cell[i]] || val[cell[i]];
+                }
             }
             break;
         }

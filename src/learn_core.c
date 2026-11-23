@@ -38,11 +38,13 @@ static const learn_lesson_t LESSONS[] = {
     {"Asterisk", "The nine asterisk cells hold 1-9 too: a digit can have one place left among them.", VAR_ASTERISK, TECH_NONE, false},
     {"Center Dot", "The nine box centres hold 1-9 too: a digit can have one place left among them.", VAR_CENTERDOT, TECH_NONE, false},
     {"Girandola", "The nine pinwheel cells hold 1-9 too: a digit can have one place left among them.", VAR_GIRANDOLA, TECH_NONE, false},
+    {"Magic Square", "The centre box's lines make 15: 5 in the middle, even corners, and each line's third digit follows.", VAR_MAGIC, TECH_MAGIC, false},
     {"Anti-Diagonal", "A long diagonal holds three different digits at most: once it has three, the rest are those.", VAR_ANTIDIAG, TECH_ANTIDIAG, false},
     {"Extra region", "No digit repeats in a shaded region: its cells see each other across rows, columns and boxes.", VAR_REGIONS, TECH_NONE, false},
     {"159 Sudoku", "Columns 1, 5 and 9 say where the row's 1, 5 and 9 are: the two must agree.", VAR_159, TECH_159, false},
     {"Argyle lines", "No digit repeats on an argyle line: the cells along one see each other, like a row's.", VAR_ARGYLE, TECH_NONE, false},
     /* Marks: rules between cells */
+    {"Chess Sudoku", "Neither a knight's move nor a king's touch: each digit rules out up to twelve more cells.", VAR_CHESS, TECH_NONE, false},
     {"Anti-Knight", "Cells a knight's move apart can't hold the same digit: they see each other too.", VAR_KNIGHT, TECH_NONE, false},
     {"Anti-King", "Cells that touch, also at a corner, can't hold the same digit: they see each other too.", VAR_KING, TECH_NONE, false},
     {"Non-Consecutive", "Side-by-side cells are never 1 apart: a digit's neighbours rule out the digits next to it.", VAR_NONCONSEC, TECH_CONSEC, false},
@@ -71,6 +73,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Slow Thermometer", "Digits rise or stay the same: they only rise where two neighbours share a row, column or box.", VAR_SLOW, TECH_THERMO, false},
     {"Nabner line", "No two digits on a brown line are the same or 1 apart: each digit rules out its neighbours.", VAR_NABNER, TECH_LINE, false},
     {"Lockout line", "The diamonds are 4+ apart, the digits between outside their range: never a 5 between.", VAR_LOCKOUT, TECH_LINE, false},
+    {"Average line", "The circle is the average of the line's other digits: they add up to it times their count.", VAR_AVG, TECH_LINE, false},
     {"Pill Arrow", "The pill's two cells read as a number are the shaft's sum: its first digit is small.", VAR_PILL, TECH_LINE, false},
     {"Double Arrow", "The two circles add up to the digits between them: each end bounds the other.", VAR_DARROW, TECH_LINE, false},
     {"10 Line", "The line splits into runs that each make 10: a big digit needs small ones beside it.", VAR_TEN, TECH_LINE, false},
@@ -135,10 +138,12 @@ int learn_group(int k)
     case VAR_REGIONS:
     case VAR_159:
     case VAR_ANTIDIAG:
+    case VAR_MAGIC:
     case VAR_ARGYLE:
         return LEARN_GRIDS;
     case VAR_KNIGHT:
     case VAR_KING:
+    case VAR_CHESS:
     case VAR_NONCONSEC:
     case VAR_DIAGNC:
     case VAR_DIAGCONSEC:

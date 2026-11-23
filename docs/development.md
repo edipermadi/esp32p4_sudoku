@@ -136,6 +136,9 @@ Lockout Lines, Sumless Killer and Double Arrow were added on 2026-11-23 too, mea
 | Anti-Diagonal | 45 / 149 (30.5) | 147 / 259 (22.8) | 641 / 1464 (21.7) | 489 / 964 (18.1) |
 | Pill Arrows | 12 / 15 (29.7) | 86 / 116 (17.1) | 124 / 164 (17.4) | 1262 / 1586 (15) |
 | Odd/Even Skyscrapers | 46 / 224 (30.3) | 146 / 249 (24.9) | 671 / 1828 (24.6) | 403 / 1478 (21.6) |
+| Chess Sudoku | 20 / 31 (33) | 211 / 409 (14.2) | 519 / 1391 (13) | 488 / 716 (10.5) |
+| Magic Square | 13 / 31 (31.8) | 39 / 60 (24) | 664 / 1823 (23.4) | 591 / 943 (22.6) |
+| Average Lines | 12 / 28 (30.1) | 72 / 82 (18.3) | 141 / 232 (16.5) | 773 / 994 (13.8) |
 
 159 Sudoku, Product Killer and Extra Regions (2026-11-23), measured the same way; all on level. Product Killer Hard is slow because few cage layouts come out exactly Hard (about 19 tries a puzzle): products give a lot away. Its cage rule looks every "k different digits multiplying to p" up in a sorted list of the 512 sets of digits (`s_prod_sets`), one search for all nine digits: asked one digit at a time, by a small search, it took 1.7 s on the PC instead of 0.2 s.
 

@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
 A variant page's full walkthrough: its example puzzle (docs/variant-examples.sdx) solved to the
-end one single at a time, a picture per step drawn with PIL (no board needed), and the steps
-written into the page between the markers
+end one single at a time, a picture per step drawn with PIL (no board needed). Each step gets a page of
+its own, docs/variants/<page>/step-NN.md, with links to the step before and after and back to the
+variant page; the variant page gets the start picture and a list of the steps, linking those pages,
+between the markers
 
     <!-- walkthrough -->
     <!-- /walkthrough -->
 
 (added as a section "The whole puzzle, step by step" at the end of the page when it has none).
 
-    python3 tools/walkthrough.py classic        one page: docs/variants/classic.md, its pictures in
+    python3 tools/walkthrough.py classic        one page: docs/variants/classic.md, its steps in
+                                                docs/variants/classic/, its pictures in
                                                 docs/screenshots/variants/classic-walkthrough/
     python3 tools/walkthrough.py --all          every variant page
 
@@ -26,6 +29,7 @@ the variant's own marks are drawn as on the board.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -52,7 +56,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "numbered-rooms": "Numbered", "sum-skyscrapers": "Sum", "lockout-lines": "Lockout",
          "sumless-killer": "Sumless", "double-arrow": "Double", "diagonal-consecutive": "Diagonal C",
          "10-lines": "10", "girandola": "Girandola", "159-sudoku": "159", "product-killer": "Product",
-         "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd"}
+         "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd",
+         "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -70,6 +75,7 @@ PALINDROME, REGIONSUM, ZIPPER = (178, 181, 187), (119, 173, 241), (234, 149, 185
 ENTROPIC, MODULAR = (239, 178, 108), (98, 192, 192)
 DUTCH, PARITY = (228, 190, 64), (230, 128, 128)
 NABNER = (196, 160, 118)                                    # Nabner's lines (the board's brown, on white)
+AVG = (46, 158, 143)                                        # Average Lines (the board's teal)
 DARROW = (74, 127, 217)                                     # Double Arrow's lines and circles (the board's blue)
 TEN = (159, 209, 166)                                       # 10 Lines' green band (the board's, on white)
 GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
@@ -348,6 +354,23 @@ def rule_words(d, vals, c, v, r):
                             (run, a_n(v)) if run else "with %s there, the rest of its green line couldn't split "
                             "into runs of 10" % a_n(v))
             return "with %s there, its green line couldn't split into runs that each add up to 10" % a_n(v)
+        if kind == 18:                                      # Average Lines: the circle is the others' average
+            i, k = cells.index(c), len(cells) - 1
+            circle = vals[cells[0]]
+            others = [vals[x] for x in cells[1:] if x != c]
+            gaps = sum(1 for x in cells[1:] if x != c and not vals[x])
+            if i == 0:
+                if not gaps:
+                    return ("it's the circle: the line's %d other digits add up to %d, so their average is %s" % (
+                        k, sum(others), "%d" % (sum(others) // k) if sum(others) % k == 0 else "no whole digit"))
+                return "it's the circle, and %d times %d is out of reach of the line's other %d cells" % (k, v, k)
+            if circle and not gaps:
+                return "the circle %d times its %d other cells is %d, and the rest make %d, so it's %d" % (
+                    circle, k, circle * k, sum(others), circle * k - sum(others))
+            if circle:
+                return "the circle %d times its %d other cells is %d, and %s here wouldn't leave room for the rest" % (
+                    circle, k, circle * k, a_n(v))
+            return "with %s here, the circle couldn't be the line's average" % a_n(v)
         if kind == 17:                                      # Pill Arrows: the pill's number is the shaft's sum
             i = cells.index(c)
             tens, units = vals[cells[0]], vals[cells[1]]
@@ -612,6 +635,24 @@ def rule_words(d, vals, c, v, r):
                 side, name, listing(map(str, par)) or "nothing", want))
         return "seen from %s of %s, %s there would leave too few %s buildings to see for its clue %d" % (
             side, name, a_n(v), kind, want)
+    if rule == "magic":                                     # Magic Square: the centre box's lines make 15
+        lines = [[30, 31, 32], [39, 40, 41], [48, 49, 50], [30, 39, 48], [31, 40, 49], [32, 41, 50], [30, 40, 50],
+                 [32, 40, 48]]
+        for ln in lines:
+            if c not in ln:
+                continue
+            o = [x for x in ln if x != c]
+            if vals[o[0]] and vals[o[1]]:
+                need = 15 - vals[o[0]] - vals[o[1]]
+                return "%s and %s make %d on a line of the centre box, so it's %d to make 15" % (
+                    rc(o[0]), rc(o[1]), vals[o[0]] + vals[o[1]], need)
+        if c == 40:
+            return "it's the middle of the magic square: always 5"
+        corner = c in (30, 32, 48, 50)
+        if (corner and v % 2) or (not corner and v % 2 == 0):
+            return "it's %s of the magic square, which is always %s" % (
+                "a corner" if corner else "an edge", "even" if corner else "odd")
+        return "with %s there, a line of the centre box couldn't make 15" % a_n(v)
     if rule == "antidiag":                                  # Anti-Diagonal: three different digits on it already
         r_, c_ = c // 9, c % 9
         for dg in (0, 1):
@@ -828,6 +869,13 @@ def make_drawer(d, fonts):
                 for s in (-1, 1):
                     g.line([(bx, by), (bx - ux * h - s * uy * h * 0.8, by - uy * h + s * ux * h * 0.8)], fill=ARROW,
                            width=4)
+            elif kind == 18:                                # Average Lines: a teal ring, a line from its edge
+                (x0, y0), (x1, y1) = pts[0], pts[1]
+                ln = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
+                r0 = CELL * 0.4
+                g.line([(x0 + (x1 - x0) * r0 / ln, y0 + (y1 - y0) * r0 / ln)] + pts[1:], fill=AVG, width=4,
+                       joint="curve")
+                g.ellipse([x0 - r0, y0 - r0, x0 + r0, y0 + r0], outline=AVG, width=3)
             elif kind == 17:                                # Pill Arrows: a capsule, a shaft from its edge, a head
                 (x0, y0), (x1, y1) = pts[0], pts[1]
                 r0 = CELL * 0.4
@@ -1080,14 +1128,32 @@ def walk(page, fonts):
     draw(vals, None, os.path.join(img_dir, "step-00.png"))
     order = "" if page == "classic" else (", taken in the order a box's single comes first, so not quite the "
                                           "order of the worked example above")
+    step_dir = os.path.join(ROOT, "docs", "variants", page)   # a page per step, next to the variant's page
+    os.makedirs(step_dir, exist_ok=True)
+    for f in os.listdir(step_dir):                          # (an older, longer walkthrough's leftovers)
+        if re.match(r"step-\d+\.md$", f):
+            os.remove(os.path.join(step_dir, f))
+    n = len(d["steps"])
     md = ["<!-- walkthrough -->", "<!-- Written by tools/walkthrough.py %s: edit the script, not this part. -->"
           % page, "",
           "The whole puzzle, from the start to the last cell: %d steps, each one a single (one place left for a "
-          "digit, or one digit left for a cell)%s. In each picture, the unit the step looks at is tinted yellow "
-          "(for a cell with one digit left: its row, column and box), the new digit is on green, the digits that "
-          "rule cells out have an **orange ring**, and the empty cells they rule out a **red cross**. Givens are "
-          "on grey, digits from earlier steps in blue." % (len(d["steps"]), order), "",
+          "digit, or one digit left for a cell)%s. Each step has a page of its own, with **Previous** and **Next**: "
+          "pick one from the list below. In each picture, the unit the step looks at is tinted yellow (for a cell with one digit left: its row, "
+          "column and box), the new digit is on green, the digits that rule cells out have an **orange ring**, and "
+          "the empty cells they rule out a **red cross**. Givens are on grey, digits from earlier steps in blue."
+          % (n, order), "",
           "![The start](../screenshots/variants/%s/step-00.png)" % rel, ""]
+    page_text = open(path).read()                           # (the heading the walkthrough is under: the links' anchor)
+    heads = re.findall(r"^##+ (.+)$", page_text[:page_text.find("<!-- walkthrough -->")], re.M)
+    anchor = re.sub(r"[^\w\- ]", "", (heads[-1] if heads else "The whole puzzle, step by step").strip().lower()).replace(" ", "-")
+    back = "[All steps](../%s.md#%s)" % (page, anchor)
+
+    def nav(i):
+        """the links at the top and bottom of step i's page"""
+        prev = "[← Step %d](step-%02d.md)" % (i - 1, i - 1) if i > 1 else "[← The start](../%s.md#%s)" % (page, anchor)
+        nxt = "[Step %d →](step-%02d.md)" % (i + 1, i + 1) if i < n else back
+        return "**Step %d of %d** · %s · %s · %s" % (i, n, prev, back, nxt)
+
     for i, s in enumerate(d["steps"], 1):
         text = step_text(d, vals, s)                        # (the reasons read the grid before the step)
         vals[s["cell"]] = s["digit"]
@@ -1095,9 +1161,16 @@ def walk(page, fonts):
         draw(vals, s, os.path.join(img_dir, name))
         title = ("the %d in %s" % (s["digit"], unit_words(s["unit_name"])) if s["kind"] == "hidden"
                  else rc(s["cell"]))
-        md += ["#### Step %d: %s" % (i, title), "", text, "",
-               "![Step %d](../screenshots/variants/%s/%s)" % (i, rel, name), ""]
-    md += ["Solved.", "", "<!-- /walkthrough -->"]
+        md.append("%d. [%s](%s/step-%02d.md)" % (i, title, page, i))
+        body = ["# %s, step %d: %s" % (d["variant"], i, title), "", nav(i), "", text, "",
+                "![Step %d](../../screenshots/variants/%s/%s)" % (i, rel, name), ""]
+        if i == n:
+            body += ["Solved.", ""]
+        body += [nav(i), ""]
+        with open(os.path.join(step_dir, "step-%02d.md" % i), "w") as f:
+            f.write("<!-- Written by tools/walkthrough.py %s: edit the script, not this page. -->\n" % page +
+                    "\n".join(body))
+    md += ["", "Solved.", "", "<!-- /walkthrough -->"]
     text = open(path).read()
     if "<!-- walkthrough -->" not in text:
         text = text.rstrip("\n") + ("\n\n## The whole puzzle, step by step\n\n"

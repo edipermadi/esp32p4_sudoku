@@ -165,6 +165,9 @@ typedef enum {
     KIND_ANTIDIAG,                       /**< Anti-Diagonal */
     KIND_PILL,                           /**< Pill Arrows */
     KIND_PSKY,                           /**< Odd/Even Skyscrapers */
+    KIND_CHESS,                          /**< Chess Sudoku */
+    KIND_MAGIC,                          /**< Magic Square */
+    KIND_AVG,                            /**< Average Lines */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

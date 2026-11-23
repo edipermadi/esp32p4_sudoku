@@ -351,6 +351,19 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;
+    case LINE_AVG:                                  /* (a teal line from its circle) */
+        ld.color = lv_color_hex(0x2E9E8F);
+        ld.opa = LV_OPA_80;
+        ld.width = 4;
+        if (n > 1) {
+            int dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y, r = cs * 4 / 10;
+            int len = (int)sqrtf((float)(dx * dx + dy * dy));
+            if (len) {
+                start.x = pts[0].x + dx * r / len;
+                start.y = pts[0].y + dy * r / len;
+            }
+        }
+        break;
     case LINE_TEN:
         ld.color = lv_color_hex(0x3FA34D);
         ld.opa = LV_OPA_50;
@@ -423,6 +436,12 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
     if (kind == LINE_THERMO || kind == LINE_SLOW) {   /* the bulb */
         d.bg_color = C_MUTED;
         d.bg_opa = LV_OPA_40;
+        lv_draw_rect(layer, &d, &b);
+    } else if (kind == LINE_AVG) {                  /* the circle at its start */
+        d.bg_opa = LV_OPA_TRANSP;
+        d.border_color = lv_color_hex(0x2E9E8F);
+        d.border_opa = LV_OPA_80;
+        d.border_width = 3;
         lv_draw_rect(layer, &d, &b);
     } else if (kind == LINE_LOCKOUT) {              /* a diamond at each end */
         for (int e = 0; e < 2; e++) {

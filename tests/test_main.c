@@ -200,6 +200,15 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
                 }
             }
         }
+        if (g->line_kind == LINE_AVG) {             /* the circle is the others' average */
+            int sum = 0;
+            for (int i = 1; i < n; i++) {
+                sum += sol[g->thermo_cell[t][i]];
+            }
+            if (sum != sol[g->thermo_cell[t][0]] * (n - 1)) {
+                return false;
+            }
+        }
         if (g->line_kind == LINE_PILL) {            /* the pill's number is the shaft's sum */
             int sum = 0;
             for (int i = 2; i < n; i++) {
@@ -262,6 +271,15 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
         if (g->rossini && (g->rossini_dir[lu] == ROSSINI_UP ? !up : g->rossini_dir[lu] == ROSSINI_DOWN ? !down : up || down)) {
             return false;
         }
+    }
+    for (int k = 0; g->magic && k < 3; k++) {       /* Magic Square: the centre box's lines */
+        const int r = (3 + k) * 9 + 3, c = 3 * 9 + 3 + k;
+        if (sol[r] + sol[r + 1] + sol[r + 2] != 15 || sol[c] + sol[c + 9] + sol[c + 18] != 15) {
+            return false;
+        }
+    }
+    if (g->magic && (sol[30] + sol[40] + sol[50] != 15 || sol[32] + sol[40] + sol[48] != 15)) {
+        return false;
     }
     for (int dg = 0; g->antidiag && dg < 2; dg++) {   /* Anti-Diagonal: three different digits at most */
         uint16_t have = 0;
@@ -410,7 +428,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->frame_sum, b->frame_sum, 18) && a->outside == b->outside &&
            !memcmp(a->outside_set, b->outside_set, sizeof(a->outside_set)) && a->rossini == b->rossini &&
            !memcmp(a->rossini_dir, b->rossini_dir, 18) && a->diag_nc == b->diag_nc && !memcmp(a->dmark, b->dmark, 81) &&
-           a->idx159 == b->idx159 && a->antidiag == b->antidiag && a->psky == b->psky &&
+           a->idx159 == b->idx159 && a->antidiag == b->antidiag && a->magic == b->magic && a->psky == b->psky &&
            !memcmp(a->psky_clue, b->psky_clue, 18) && !memcmp(a->cage_prod, b->cage_prod, sizeof(a->cage_prod)) &&
            !memcmp(a->lk_sum, b->lk_sum, a->nlk) && !memcmp(a->lk_dir, b->lk_dir, a->nlk) &&
            !memcmp(a->lk_cell, b->lk_cell, sizeof(a->lk_cell[0]) * a->nlk) &&
@@ -498,6 +516,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_DARROW:
     case VAR_TEN:
     case VAR_PILL:
+    case VAR_AVG:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -527,6 +546,7 @@ static void test_geometry(void)
         {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
         {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
         {VAR_159, 9, 81, 27, 20}, {VAR_ANTIDIAG, 9, 81, 27, 20},
+        {VAR_CHESS, 9, 81, 27, 20},     {VAR_MAGIC, 9, 81, 27, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -547,6 +567,10 @@ static void test_geometry(void)
     CHECK(is_sudoku_geom_on_diag(sudoku_geom(VAR_X), 80) && !is_sudoku_geom_on_diag(sudoku_geom(VAR_X), 1));
     CHECK(strcmp(variant_name(VAR_KIDS), "Kids 4x4") == 0);
     /* Anti-King: cell 2 (row 0, column 2) touches (1, 3) diagonally, outside its box */
+    /* Chess Sudoku: r5c5 sees 20 in its units and 8 knight's moves (its 4 corners are in its box); r4c4 20, 6 knight's
+     * moves outside its box and 3 corners */
+    CHECKF(sudoku_geom(VAR_CHESS)->npeers[30] == 29, "Chess Sudoku peers of cell 30: %d", sudoku_geom(VAR_CHESS)->npeers[30]);
+    CHECKF(sudoku_geom(VAR_CHESS)->npeers[40] == 28, "Chess Sudoku peers of cell 40: %d", sudoku_geom(VAR_CHESS)->npeers[40]);
     CHECKF(sudoku_geom(VAR_KING)->npeers[2] == 21, "Anti-King peers of cell 2: %d", sudoku_geom(VAR_KING)->npeers[2]);
     CHECK(is_sudoku_geom_peer(sudoku_geom(VAR_KING), 2, 12) && !is_sudoku_geom_peer(sudoku_geom(VAR_CLASSIC), 2, 12));
     /* Disjoint: cell 0's group is the top-left cell of every box */
@@ -761,7 +785,7 @@ static void test_generate(void)
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
             if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR || v == VAR_DUTCH ||
                     v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT || v == VAR_DARROW ||
-                    v == VAR_TEN || v == VAR_PILL) {
+                    v == VAR_TEN || v == VAR_PILL || v == VAR_AVG) {
                 CHECKF(!is_lines_crossing(&board), "%s %s: two lines cross", variant_name(v), gen_level_name(lv));
             }
             CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));

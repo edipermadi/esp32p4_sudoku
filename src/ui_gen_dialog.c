@@ -31,14 +31,14 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
         VAR_KIDS, VAR_MINI, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_REGIONS,
-        VAR_DISJOINT, VAR_JIGSAW, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
+        VAR_DISJOINT, VAR_JIGSAW, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
     },
     {
-        VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
+        VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT, VAR_CHESS,
         VAR_DIAGCONSEC, VAR_NONCONSEC, VAR_DIAGNC, GEN_CAT_END
     },
     {
-        VAR_THERMO, VAR_SLOW, VAR_ARROW, VAR_PILL, VAR_PALINDROME, VAR_RENBAN, VAR_PARITY, VAR_WHISPER, VAR_DUTCH, VAR_DARROW,
+        VAR_THERMO, VAR_SLOW, VAR_ARROW, VAR_AVG, VAR_PILL, VAR_PALINDROME, VAR_RENBAN, VAR_PARITY, VAR_WHISPER, VAR_DUTCH, VAR_DARROW,
         VAR_REGIONSUM, VAR_ZIPPER, VAR_NABNER, VAR_BETWEEN, VAR_LOCKOUT, VAR_TEN, VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
     },
     {
@@ -63,6 +63,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_DIAGCONSEC] = "Diagonal C.", [VAR_TEN] = "10 Lines", [VAR_GIRANDOLA] = "Girandola",
     [VAR_159] = "159 Sudoku", [VAR_PRODUCT] = "Product", [VAR_REGIONS] = "Extra Regions",
     [VAR_ANTIDIAG] = "Anti-Diagonal", [VAR_PILL] = "Pill Arrow", [VAR_PSKY] = "Odd/Even Sky",
+    [VAR_CHESS] = "Chess", [VAR_MAGIC] = "Magic Square", [VAR_AVG] = "Average",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -118,6 +119,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_DIAGCONSEC] = "9x9 with corner marks: marked corner neighbours are 1 apart, unmarked ones aren't.",
     [VAR_TEN] = "9x9 with green lines: each splits into runs of cells that add up to 10.",
     [VAR_GIRANDOLA] = "9x9, and the nine tinted pinwheel cells also hold 1-9 once each.",
+    [VAR_CHESS] = "9x9: no repeat a knight's move apart, nor in cells that touch (Anti-Knight and Anti-King).",
+    [VAR_MAGIC] = "9x9, and the tinted centre box is a magic square: its lines add up to 15.",
+    [VAR_AVG] = "9x9 with teal lines: the circled digit is the average of the line's other digits.",
     [VAR_ANTIDIAG] = "9x9, and each tinted long diagonal holds at most three different digits.",
     [VAR_PILL] = "9x9 with arrows: the two cells in a pill, read as a number, are the sum of the shaft.",
     [VAR_PSKY] = "9x9 with clues outside: a ringed clue counts the odd buildings seen, a shaded one the even.",
