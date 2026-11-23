@@ -79,19 +79,19 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | Even-Odd | 6 / 12 (32.2) | 57 / 199 (20.1) | 183 / 374 (20.5) | 192 / 388 (19.4) |
 | Consecutive | 19 / 38 (14) | 300 / 486 (6.6) | 639 / 1828 (5.9) | 366 / 587 (3.1) |
 | Thermo | 8 / 17 (29) | 86 / 194 (21.4) | 416 / 1431 (16.8) | 331 / 603 (16.8) |
-| Sandwich | 297 / 761 (26.2) | 199 / 412 (20.9) | 2348 / 4201 (21.9) | 1987 / 2596 (14.8) |
+| Sandwich | 312 / 799 (26.2) | 208 / 433 (20.9) | 2438 / 4351 (21.9) | 2081 / 2725 (14.8) |
 | Kids 4x4 | 0 / 0 (8.8) | 0 / 0 (4.4) | – | – |
 | Anti-King | 7 / 15 (34.6) | 94 / 171 (23.7) | 326 / 1123 (22.7) | 191 / 301 (21.2) |
-| Non-Consecutive | 862 / 3058 (25.4) | 909 / 1927 (14.4) | 2908 / 7173 (15) | 1540 / 3076 (11.3) |
+| Non-Consecutive | 1020 / 3613 (25.4) | 1045 / 2236 (14.4) | 3376 / 8363 (15) | 1803 / 3626 (11.3) |
 | Disjoint Groups | 7 / 18 (33.8) | 43 / 101 (21.3) | 168 / 526 (20.4) | 119 / 311 (20.5) |
 | Asterisk | 6 / 12 (35.7) | 93 / 186 (24.8) | 337 / 971 (24.3) | 186 / 412 (23.7) |
 | Kropki | 28 / 35 (15.6) | 116 / 146 (2.7) | 352 / 864 (2.4) | 189 / 377 (0) |
-| XV | 15 / 20 (23.9) | 136 / 181 (4.6) | 307 / 749 (3.2) | 1743 / 5422 (3.8) |
+| XV | 15 / 21 (23.9) | 133 / 176 (4.6) | 302 / 740 (3.2) | 1743 / 5503 (3.8) |
 | Greater-Than | 7 / 10 (18.5) | 24 / 35 (4.2) | 197 / 538 (3.4) | 489 / 751 (3.8) |
 | Quadruple | 9 / 13 (29.4) | 72 / 92 (13.3) | 204 / 359 (9) | 600 / 1975 (7.4) |
 | Arrow | 9 / 11 (29.6) | 320 / 551 (18.5) | 518 / 1733 (16.2) | 497 / 770 (14.5) |
 | Renban | 9 / 19 (30.6) | 174 / 248 (18.8) | 525 / 943 (17) | 477 / 721 (14.9) |
-| German Whispers | 12 / 26 (29.7) | 450 / 1265 (14.6) | 1784 / 3302 (13.2) | 1111 / 2311 (11.4) |
+| German Whispers | 9 / 18 (29.7) | 261 / 627 (14.6) | 991 / 1795 (13.2) | 564 / 1191 (11.4) |
 | Skyscraper | 38 / 121 (29.9) | 159 / 235 (22.2) | 677 / 1665 (22.8) | 304 / 828 (21.3) |
 | Little Killer | 15 / 29 (29.7) | 471 / 692 (20.7) | 1102 / 2132 (18.8) | 1225 / 1638 (16.6) |
 | Palindrome | 11 / 20 (29.3) | 284 / 449 (15.2) | 905 / 2445 (13) | 756 / 1250 (12.2) |
@@ -99,19 +99,19 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | X-Sums | 27 / 48 (29.7) | 314 / 591 (11.3) | 1181 / 3082 (14.7) | 875 / 1594 (11.6) |
 | Zipper Lines | 12 / 21 (29.2) | 86 / 97 (15.5) | 186 / 490 (12.6) | 946 / 1088 (12.9) |
 | Frame | 15 / 27 (30) | 112 / 230 (15.1) | 641 / 1895 (17.3) | 262 / 790 (13.3) |
-| Between Lines | 19 / 30 (29.8) | 88 / 112 (21.2) | 293 / 532 (19.7) | 1672 / 4862 (20.6) |
+| Between Lines | 17 / 31 (29.8) | 90 / 116 (21.2) | 302 / 550 (19.7) | 1362 / 4071 (20.6) |
 | Entropic Lines | 15 / 27 (30) | 85 / 129 (18.6) | 223 / 411 (15.4) | 829 / 1731 (15.9) |
 | Modular Lines | 13 / 21 (29.7) | 81 / 141 (18.4) | 192 / 387 (16.1) | 905 / 2322 (14.5) |
 | Center Dot | 9 / 20 (35.7) | 79 / 179 (26.8) | 333 / 556 (26) | 242 / 595 (24.6) |
 | Outside Sudoku | 37 / 68 (30.1) | 117 / 185 (16.4) | 1406 / 3822 (18.2) | 1360 / 4978 (17.7) |
-| Rossini | 41 / 96 (30.2) | 292 / 717 (21.9) | 1780 / 4290 (21.4) | 643 / 2608 (20.7) |
+| Rossini | 21 / 36 (30.2) | 168 / 496 (21.9) | 788 / 1551 (21.4) | 255 / 685 (20.7) |
 | Diagonal Non-Consecutive | 274 / 595 (32.2) | 512 / 823 (16.8) | 798 / 1675 (16.1) | 839 / 1044 (14) |
-| Dutch Whispers | 16 / 29 (29.1) | 460 / 1263 (17.2) | 1277 / 1951 (15.5) | 1349 / 3228 (15) |
+| Dutch Whispers | 12 / 24 (29.1) | 271 / 661 (17.2) | 735 / 1191 (15.5) | 713 / 1717 (15) |
 | Parity Lines | 9 / 11 (30.1) | 187 / 384 (19.7) | 784 / 2131 (18.2) | 754 / 2497 (17.7) |
 | Slow Thermo | 11 / 23 (29.9) | 188 / 496 (21.8) | 696 / 1934 (17.6) | 535 / 1216 (17.7) |
 | Fortress | 13 / 38 (27.9) | 82 / 148 (19.4) | 212 / 433 (18) | 1005 / 1732 (17.8) |
 | Argyle | 673 / 1164 (34.9) | 472 / 753 (21.3) | 758 / 1110 (19) | 944 / 1184 (17.1) |
-| Nabner | 29 / 68 (29.5) | 80 / 104 (22.5) | 202 / 384 (20.6) | 799 / 937 (18.7) |
+| Nabner | 20 / 45 (29.5) | 73 / 92 (22.5) | 182 / 342 (20.6) | 438 / 527 (18.7) |
 | Numbered Rooms | 26 / 52 (30.1) | 382 / 856 (13.9) | 1147 / 2591 (16) | 1081 / 3165 (16.6) |
 | Sum Skyscrapers | 25 / 69 (29.6) | 154 / 361 (21.8) | 548 / 1486 (23.3) | 822 / 2397 (16.5) |
 
@@ -133,7 +133,16 @@ Lockout Lines, Sumless Killer and Double Arrow were added on 2026-11-23 too, mea
 
 Diagonal Consecutive, 10 Lines and Girandola were added on 2026-11-23 too, measured the same way (`genbench 48`, `genbench 49`: "10" would be variant 10, Sandwich); all 120 came out at the level asked for. 10 Lines Expert was among the slowest at first (5.3 s, up to 7.6 s): 73 % of the time went to `sudoku_ten_allow()`, the rule that tries every way to split a line, called about 3 million times a puzzle on the PC. Worked out with bit shifts (a digit's step moves every running sum at once) instead of a loop per sum, it takes a third of the time (1.8 s, up to 2.8 s) for the same puzzles. Its loops go digit by digit on purpose: `__builtin_ctz()` is a library call (`__ctzsi2`) on the board's RISC-V core.
 
-Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), Between Lines Expert (up to 4.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. The board's RISC-V core has no ctz, clz or popcount instruction (`__builtin_ctz()` and the like become library calls), so a rule asked millions of times a puzzle looks digits up in tables instead (`s_mask_lo`, `s_mask_hi`, `s_mask_n`; X-Sums' first digits per clue in `sudoku_xsum_firsts()`). That, and not recomputing what depends only on the clue, took X-Sums Hard from 3.0 s (up to 7.9 s) to 1.2 s (up to 3.1 s) on 2026-11-23, and 10 Lines Expert from 5.3 s to 1.8 s; Lockout Lines Expert from 2.0 s to 1.6 s by capping each low diamond's partner once instead of checking all 81 pairs against the line. The puzzles stayed the same (`docs/variant-examples.sdx` unchanged byte for byte). Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
+Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 8.4 s), XV Expert (up to 5.5 s), Between Lines Expert (up to 4.1 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. The board's RISC-V core has no ctz, clz or popcount instruction: `__builtin_ctz()` and the like become library calls (`__ctzsi2` ...). The solver counts and finds digits in its masks by table instead (`src/gen_bits.h`, 3 KB in flash; `tests/test_main.c` checks every entry), which made the whole search 5-14 % faster on the board (Non-Consecutive Hard 3.62 s to 3.38 s, German Whispers Hard 1.16 s to 0.99 s, measured on the same firmware with and without; a shift-and-add version without tables was far slower). X-Sums, Lockout Lines and Rossini keep a copy in RAM (`s_mask_lo` ...), as measured. On 2026-11-23 the slowest rules were also reworked, each giving the same puzzles (`docs/variant-examples.sdx` unchanged byte for byte):
+
+| Rule | What changed | Board, before → after |
+|---|---|---|
+| X-Sums | the first digits a clue allows, a 46-entry table instead of worked out 17 million times a puzzle | Hard 3.0 → 1.2 s (worst 7.9 → 3.1 s) |
+| 10 Lines | every running sum moved at once by a bit shift, both ways along the line | Expert 5.3 → 1.8 s |
+| Rossini | a rising or falling arrow answered directly from the other cells' smallest and largest digits, not by trying every three | Hard 1.8 → 0.8 s |
+| German, Dutch Whispers, Nabner | "k or more from some digit of a neighbour" is one range from its smallest and largest digit, not a 9 x 9 loop | German Hard 1.8 → 1.0 s, Dutch Expert 1.3 → 0.7 s, Nabner Expert 0.8 → 0.4 s |
+| Between Lines, Lockout Lines | for each low end, the most (or least) the other end can be, worked out once, not all 81 pairs against the line | Between Expert 1.7 → 1.4 s, Lockout Expert 2.0 → 1.6 s |
+| XV, Kropki, Greater-Than | a filled neighbour looked up directly, not through a loop over its one digit | no change measured on the board | Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
 ## The UI files
 

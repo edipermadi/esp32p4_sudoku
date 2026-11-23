@@ -51,7 +51,11 @@ uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const u
             continue;
         }
         bool before = j == 0 || j == 2;             /* the neighbour is left of / above i */
-        uint16_t others = v[nb[j]] ? (uint16_t)(1u << v[nb[j]]) : cand ? cand[nb[j]] : 0;
+        if (v[nb[j]]) {                             /* (filled, as in the search: its digit's row of the table) */
+            free &= before ? s_edge_fwd[k][mk[j]][v[nb[j]]] : s_edge_bwd[k][mk[j]][v[nb[j]]];
+            continue;
+        }
+        uint16_t others = cand ? cand[nb[j]] : 0;
         if (!others) {
             continue;    /* (empty, and no candidates to go by) */
         }
@@ -66,36 +70,45 @@ uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const u
     return free;
 }
 
-/** @brief a 10-bit digit mask's smallest digit, largest digit and count (bits 1..9; 0 for an empty mask): the
- *  board's core has no ctz, clz or popcount instruction, and X-Sums asks millions of times a puzzle */
+/** @brief a 10-bit mask's lowest bit, highest bit and count (0 for an empty mask), in RAM: the board's core has no
+ *  ctz, clz or popcount instruction (library calls there), and X-Sums, Lockout Lines and Rossini ask millions of
+ *  times a puzzle. These three were measured with this RAM copy; the rest of the solver uses gen_bits.h's
+ *  tables (in flash), which measured 5-14 % faster on the board than the builtins (2026-11-23). */
 static uint8_t s_mask_lo[1024], s_mask_hi[1024], s_mask_n[1024];
 
-/** @brief fills s_mask_lo, s_mask_hi and s_mask_n (once) */
+/** @brief fills s_mask_lo, s_mask_hi and s_mask_n (once; two tasks doing it at once write the same values) */
 static void mask_tables(void)
 {
     if (s_mask_n[0x3FE]) {
         return;
     }
-    for (int m = 0; m < 1024; m++) {
-        int lo = 0, hi = 0, n = 0;
-        for (int d = 1; d <= 9; d++) {
+    for (int m = 1; m < 1024; m++) {
+        int lo = -1, hi = 0, n = 0;
+        for (int d = 0; d <= 9; d++) {
             if (m >> d & 1) {
-                lo = lo ? lo : d;
+                lo = lo < 0 ? d : lo;
                 hi = d;
                 n++;
             }
         }
         s_mask_lo[m] = (uint8_t)lo;
         s_mask_hi[m] = (uint8_t)hi;
-        s_mask_n[m] = (uint8_t)n;                   /* (0x3FE last: 9, the filled mark) */
+        s_mask_n[m] = (uint8_t)n;
     }
 }
+
+/** @brief the lowest bit of a 10-bit mask, by table (mask_tables() filled) */
+#define mask_lo(m) (s_mask_lo[(m) & 0x3FF])
+/** @brief the highest bit of a 10-bit mask, by table */
+#define mask_hi(m) (s_mask_hi[(m) & 0x3FF])
+/** @brief how many bits of a 10-bit mask are set, by table */
+#define mask_n(m) (s_mask_n[(m) & 0x3FF])
 
 /** @name gen_line_allow()'s helpers (v, cand: its arguments)
  *  @{ */
 #define LMASK(c) ((uint16_t)(v[c] ? (1u << v[c]) : cand ? cand[c] : 0x3FE))   /**< cell c's digits: its digit, else its candidates (all without them) */
-#define LO(m) (__builtin_ctz(m))                    /**< the smallest digit in a mask */
-#define HI(m) (31 - __builtin_clz(m))               /**< the largest digit in a mask */
+#define LO(m) (gen_lowest(m))                       /**< the smallest digit in a mask */
+#define HI(m) (gen_highest(m))               /**< the largest digit in a mask */
 /** the digits a..b as a mask (clamped to 1..9; empty when a > b) */
 #define RANGE(a, b) ((uint16_t)((a) > (b) || (b) < 1 || (a) > 9 ? 0 : \
                      (((1u << ((b) > 9 ? 10 : (b) + 1)) - 1) & ~((1u << ((a) < 1 ? 1 : (a))) - 1))))
@@ -186,8 +199,8 @@ static __attribute__((noinline)) uint16_t ends_line_allow(const sudoku_geom_t *G
             if (!m) {
                 return 0;
             }
-            clo[nb] = s_mask_lo[m & 0x3FE];
-            chi[nb++] = s_mask_hi[m & 0x3FE];
+            clo[nb] = mask_lo(m);
+            chi[nb++] = mask_hi(m);
         }
         int cap[10];
         for (int lo = 1; lo <= 9; lo++) {
@@ -335,36 +348,21 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
             if (q < 0 || q >= n) {
                 continue;
             }
-            uint16_t m = LMASK(cell[q]), ok = 0;
+            const uint16_t m = LMASK(cell[q]);
             if (!m) {
                 continue;
             }
-            for (int d = 1; d <= 9; d++) {
-                for (int w = 1; w <= 9; w++) {
-                    if ((m >> w & 1) && abs(d - w) >= (G->line_kind == LINE_DUTCH ? 4 : 5)) {
-                        ok |= (uint16_t)(1u << d);
-                        break;
-                    }
-                }
-            }
-            free &= ok;
+            /* d is k or more from some w of m: from the largest (d <= HI - k) or the smallest (d >= LO + k) */
+            const int k = G->line_kind == LINE_DUTCH ? 4 : 5;
+            free &= (uint16_t)(RANGE(1, HI(m) - k) | RANGE(LO(m) + k, 9));
         }
         break;
     case LINE_NABNER:                               /* 2 or more away from every other digit on the line */
         for (int k = 0; k < n; k++) {
-            uint16_t m = k == p ? 0 : LMASK(cell[k]), ok = 0;
-            if (!m) {
-                continue;
+            const uint16_t m = k == p ? 0 : LMASK(cell[k]);
+            if (m) {                                /* (2 or more from some w of m: as Whispers' neighbours) */
+                free &= (uint16_t)(RANGE(1, HI(m) - 2) | RANGE(LO(m) + 2, 9));
             }
-            for (int d = 1; d <= 9; d++) {
-                for (int w = 1; w <= 9; w++) {
-                    if ((m >> w & 1) && abs(d - w) >= 2) {
-                        ok |= (uint16_t)(1u << d);
-                        break;
-                    }
-                }
-            }
-            free &= ok;
         }
         break;
     case LINE_RENBAN: {                             /* different digits, all within a window of n */
@@ -496,20 +494,27 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         if (!ma || !mb) {
             return 0;
         }
+        /* a cell between has a digit inside lo..hi (strictly) when its smallest digit above lo is below hi:
+         * for each lo, past[lo] is the most of those over the cells, and hi must be above it */
+        int past[10];
+        for (int lo = 1; lo <= 9; lo++) {
+            past[lo] = lo;
+            for (int k = 1; k < n - 1; k++) {
+                if (k == p) {
+                    continue;
+                }
+                const uint16_t above = (uint16_t)(LMASK(cell[k]) & ~((2u << lo) - 1));
+                const int x = above ? LO(above) : 10;   /* (none above lo: no hi will do) */
+                past[lo] = x > past[lo] ? x : past[lo];
+            }
+        }
         for (int a = 1; a <= 9; a++) {              /* a pair of circles that leaves every cell between a digit */
             for (int b = 1; b <= 9; b++) {
                 int lo = a < b ? a : b, hi = a < b ? b : a;
-                if (!(ma >> a & 1) || !(mb >> b & 1) || hi - lo - 1 < G->between_need[t]) {
+                if (!(ma >> a & 1) || !(mb >> b & 1) || hi - lo - 1 < G->between_need[t] || hi <= past[lo]) {
                     continue;                       /* (room for the cells between that must differ) */
                 }
-                uint16_t inner = RANGE(lo + 1, hi - 1);
-                bool fits = true;
-                for (int k = 1; k < n - 1 && fits; k++) {
-                    fits = k == p || (LMASK(cell[k]) & inner) != 0;
-                }
-                if (fits) {
-                    ok |= p == 0 ? (uint16_t)(1u << a) : p == n - 1 ? (uint16_t)(1u << b) : inner;
-                }
+                ok |= p == 0 ? (uint16_t)(1u << a) : p == n - 1 ? (uint16_t)(1u << b) : RANGE(lo + 1, hi - 1);
             }
         }
         free &= ok;
@@ -596,7 +601,7 @@ void gen_bread_tables(void)
         return;
     }
     for (int m = 0; m < 128; m++) {                 /* subsets of 2..8 */
-        int k = __builtin_popcount(m), sum = 0;
+        int k = gen_popcount(m), sum = 0;
         for (int b = 0; b < 7; b++) {
             if (m >> b & 1) {
                 sum += b + 2;
@@ -746,12 +751,12 @@ static bool is_xsum_ok(const uint16_t m[9], int c)
                     fits = false;
                 }
                 used |= mk;
-                known += s_mask_lo[mk & 0x3FE];
+                known += mask_lo(mk);
             } else {
                 ne++;
                 any |= mk;
-                lo += s_mask_lo[mk & 0x3FE];
-                hi += s_mask_hi[mk & 0x3FE];
+                lo += mask_lo(mk);
+                hi += mask_hi(mk);
             }
         }
         if (!fits) {
@@ -759,7 +764,7 @@ static bool is_xsum_ok(const uint16_t m[9], int c)
         }
         int dlo, dhi;                               /* ne different digits, none of those placed */
         mask_k_range((uint16_t)(any & ~used), ne, &dlo, &dhi);
-        if (ne && s_mask_n[(any & ~used) & 0x3FE] < ne) {
+        if (ne && mask_n(any & ~used) < ne) {
             continue;
         }
         lo = dlo > lo ? dlo : lo;
@@ -825,6 +830,19 @@ static inline bool is_first3_ok(const sudoku_geom_t *G, int lu, int a, int b, in
     return true;
 }
 
+/**
+ * @brief the digits a..b as a mask (clamped to 1..9; empty when a > b), as gen_line_allow()'s RANGE()
+ * @param[in] a  the first
+ * @param[in] b  the last
+ * @return the mask
+ */
+static inline uint16_t digits_between(int a, int b)
+{
+    a = a < 1 ? 1 : a;
+    b = b > 9 ? 9 : b;
+    return a > b ? 0 : (uint16_t)(((1u << (b + 1)) - 1) & ~((1u << a) - 1));
+}
+
 /* (documented in gen_internal.h) */
 uint16_t gen_first3_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand)
 {
@@ -841,12 +859,36 @@ uint16_t gen_first3_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t 
         m[k] = v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : cand ? cand[cells[k]] : (uint16_t)(0x3FE & ~placed);
     }
     const int o1 = at == 0 ? 1 : 0, o2 = at == 2 ? 1 : 2;   /* the other two of the first three */
+    const int dir = G->rossini && !G->frame && !G->outside ? G->rossini_dir[lu] : ROSSINI_NONE;
+    if (dir != ROSSINI_NONE) {                      /* Rossini's arrow: rising (or falling) from the clue, directly */
+        if (!m[o1] || !m[o2]) {
+            return 0;
+        }
+        mask_tables();
+        const bool up = dir == ROSSINI_UP;
+        uint16_t free = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (!(m[at] >> d & 1)) {
+                continue;
+            }
+            bool fits;
+            if (at == 1) {                          /* the middle: a first digit on one side, a third on the other */
+                fits = up ? mask_lo(m[0]) < d && d < mask_hi(m[2]) : mask_hi(m[0]) > d && d > mask_lo(m[2]);
+            } else if (at == 0) {                   /* the first: a middle digit between it and the third's reach */
+                fits = (m[1] & (up ? digits_between(d + 1, mask_hi(m[2]) - 1) : digits_between(mask_lo(m[2]) + 1, d - 1))) != 0;
+            } else {                                /* the third: a middle digit between the first's reach and it */
+                fits = (m[1] & (up ? digits_between(mask_lo(m[0]) + 1, d - 1) : digits_between(d + 1, mask_hi(m[0]) - 1))) != 0;
+            }
+            free |= fits ? (uint16_t)(1u << d) : 0;
+        }
+        return free;
+    }
     const int sum = G->frame ? G->frame_sum[lu] : 0;
     uint16_t free = 0;
     for (uint16_t md = m[at]; md; md &= (uint16_t)(md - 1)) {   /* a digit, with two others the other two cells can hold */
-        int d = __builtin_ctz(md);
+        int d = gen_lowest(md);
         for (uint16_t mx = (uint16_t)(m[o1] & ~(1u << d)); mx && !(free >> d & 1); mx &= (uint16_t)(mx - 1)) {
-            int x = __builtin_ctz(mx);
+            int x = gen_lowest(mx);
             uint16_t my = (uint16_t)(m[o2] & ~(1u << d) & ~(1u << x));
             if (sum) {                              /* Frame: the third is what's left of the sum, nothing else to check */
                 int y = sum - d - x;
@@ -856,7 +898,7 @@ uint16_t gen_first3_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t 
                 continue;
             }
             for (; my; my &= (uint16_t)(my - 1)) {
-                int y = __builtin_ctz(my), t[3];
+                int y = gen_lowest(my), t[3];
                 t[at] = d;
                 t[o1] = x;
                 t[o2] = y;
@@ -1320,7 +1362,7 @@ static int search(grid_t *g, int limit, uint32_t *rng)
             continue;
         }
         uint16_t free = grid_free(g, i);
-        int n = __builtin_popcount(free);
+        int n = gen_popcount(free);
         if (n < best_n) {
             best = i;
             best_n = n;

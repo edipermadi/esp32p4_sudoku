@@ -56,8 +56,8 @@ bool gen_singles(logic_t *L)
     const sudoku_geom_t *G = L->G;
     for (int k = 0; k < G->ncells; k++) {           /* naked single */
         int c = G->cells[k];
-        if (!L->v[c] && __builtin_popcount(L->cand[c]) == 1) {
-            place(L, c, __builtin_ctz(L->cand[c]));
+        if (!L->v[c] && gen_popcount(L->cand[c]) == 1) {
+            place(L, c, gen_lowest(L->cand[c]));
             return true;
         }
     }
@@ -183,7 +183,7 @@ bool gen_cage_logic(logic_t *L)
         avail &= (uint16_t)~used;
         uint16_t allowed = 0;
         for (uint16_t m = avail; m; m = (uint16_t)((m - 1) & avail)) {
-            if (__builtin_popcount(m) != n || s_mask_sum[m] != left) {
+            if (gen_popcount(m) != n || s_mask_sum[m] != left) {
                 continue;
             }
             bool fits = true;
@@ -570,8 +570,8 @@ bool gen_lk_logic(logic_t *L)
                 if (!m) {
                     return false;
                 }
-                lo -= 31 - __builtin_clz(m);
-                hi -= __builtin_ctz(m);
+                lo -= gen_highest(m);
+                hi -= gen_lowest(m);
             }
             uint16_t keep = 0;
             for (int d = 1; d <= 9; d++) {
@@ -619,8 +619,8 @@ bool gen_thermo_logic(logic_t *L)
             if (!m) {
                 return false;
             }
-            lo[i] = __builtin_ctz(m);
-            hi[i] = 31 - __builtin_clz(m);
+            lo[i] = gen_lowest(m);
+            hi[i] = gen_highest(m);
         }
         for (int i = 1; i < n; i++) {               /* (Slow Thermo: the step is 0 where the two don't see each other) */
             if (lo[i] < lo[i - 1] + sudoku_thermo_step(G, t, i)) {
@@ -793,7 +793,7 @@ bool gen_pairs(logic_t *L)
         /* naked pair: two cells with the same two candidates */
         for (int a = 0; a < n; a++) {
             int ca = G->unit[u][a];
-            if (L->v[ca] || __builtin_popcount(L->cand[ca]) != 2) {
+            if (L->v[ca] || gen_popcount(L->cand[ca]) != 2) {
                 continue;
             }
             for (int b = a + 1; b < n; b++) {
@@ -809,7 +809,7 @@ bool gen_pairs(logic_t *L)
                     }
                 }
                 if (changed) {
-                    int d1 = __builtin_ctz(L->cand[ca]), d2 = 31 - __builtin_clz(L->cand[ca]);
+                    int d1 = gen_lowest(L->cand[ca]), d2 = gen_highest(L->cand[ca]);
                     trace(TECH_NAKED_PAIR, u, -1, d1, d2, ca, cb);
                     return true;
                 }
@@ -825,7 +825,7 @@ bool gen_pairs(logic_t *L)
             }
         }
         for (int d1 = 1; d1 <= n; d1++) {
-            if (__builtin_popcount(where[d1]) != 2) {
+            if (gen_popcount(where[d1]) != 2) {
                 continue;
             }
             for (int d2 = d1 + 1; d2 <= n; d2++) {
@@ -868,7 +868,7 @@ bool gen_naked_triple(logic_t *L)
     for (int ui = 0; ui < G->nunits; ui++) {
         int u = G->unit_ids[ui], cs[9], m = 0;
         for (int k = 0; k < n; k++) {
-            int c = G->unit[u][k], p = __builtin_popcount(L->cand[c]);
+            int c = G->unit[u][k], p = gen_popcount(L->cand[c]);
             if (!L->v[c] && p >= 2 && p <= 3) {
                 cs[m++] = c;
             }
@@ -877,7 +877,7 @@ bool gen_naked_triple(logic_t *L)
             for (int b = a + 1; b < m; b++) {
                 for (int e = b + 1; e < m; e++) {
                     uint16_t un = (uint16_t)(L->cand[cs[a]] | L->cand[cs[b]] | L->cand[cs[e]]);
-                    if (__builtin_popcount(un) != 3) {
+                    if (gen_popcount(un) != 3) {
                         continue;
                     }
                     bool changed = false;
@@ -923,7 +923,7 @@ bool gen_fish(logic_t *L, int size)
                         p |= (uint16_t)(1u << j);
                     }
                 }
-                int k = __builtin_popcount(p);
+                int k = gen_popcount(p);
                 if (!placed && k >= 2 && k <= size) {
                     line[nl] = i;
                     pos[nl++] = p;
@@ -934,7 +934,7 @@ bool gen_fish(logic_t *L, int size)
                 for (pick[1] = pick[0] + 1; pick[1] < nl; pick[1]++) {
                     for (pick[2] = size == 3 ? pick[1] + 1 : nl; pick[2] < (size == 3 ? nl : nl + 1); pick[2]++) {
                         uint16_t cover = (uint16_t)(pos[pick[0]] | pos[pick[1]] | (size == 3 ? pos[pick[2]] : 0));
-                        if (__builtin_popcount(cover) != size) {
+                        if (gen_popcount(cover) != size) {
                             continue;
                         }
                         bool base[9] = {false};
@@ -983,13 +983,13 @@ bool gen_xy_wing(logic_t *L)
     for (int k = 0; k < G->ncells; k++) {
         int p = G->cells[k];
         uint16_t pm = L->cand[p];
-        if (L->v[p] || __builtin_popcount(pm) != 2) {
+        if (L->v[p] || gen_popcount(pm) != 2) {
             continue;
         }
         for (int i = 0; i < G->npeers[p]; i++) {
             int a = G->peers[p][i];
             uint16_t am = L->cand[a];
-            if (L->v[a] || __builtin_popcount(am) != 2 || __builtin_popcount(am & pm) != 1) {
+            if (L->v[a] || gen_popcount(am) != 2 || gen_popcount(am & pm) != 1) {
                 continue;
             }
             uint16_t z = (uint16_t)(am & ~pm);                   /* a is x or z */
@@ -1012,7 +1012,7 @@ bool gen_xy_wing(logic_t *L)
                 if (changed) {
                     const int cells[3] = {p, a, b};
                     bool first = s_trace && s_trace->kind == TECH_NONE;
-                    trace_cells(TECH_XY_WING, -1, -1, -1, __builtin_ctz(z), pm, cells, 3);
+                    trace_cells(TECH_XY_WING, -1, -1, -1, gen_lowest(z), pm, cells, 3);
                     if (first) {                                 /* the pincers' two digits each */
                         s_trace->cell1 = am;
                         s_trace->cell2 = want;

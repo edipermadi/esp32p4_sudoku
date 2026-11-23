@@ -25,24 +25,24 @@ static int gen_pick_var = VAR_CLASSIC;              /**< variant chosen there (k
 /** @brief the New puzzle dialog's tabs: their names */
 static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "Clues"};
 /** @brief each tab's variants, in button order: the grids and their extra regions; marks and rules
- * between cells; lines; clues (cages, and sums or counts outside the grid) */
+ * between cells; lines; clues (cages, and sums or counts outside the grid). Each tab runs from the easiest,
+ * top left, to the hardest, bottom right: the familiar rules and those marked on the board first, those where
+ * a missing mark says something, and the less familiar kinds, later. */
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
-        VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_MINI, VAR_KIDS, VAR_DISJOINT, VAR_ASTERISK, VAR_CENTERDOT,
-        VAR_GIRANDOLA,
-        VAR_ARGYLE, GEN_CAT_END
+        VAR_KIDS, VAR_MINI, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_DISJOINT,
+        VAR_JIGSAW, VAR_ARGYLE, GEN_CAT_END
     },
     {
-        VAR_KNIGHT, VAR_KING, VAR_NONCONSEC, VAR_DIAGNC, VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
-        VAR_FORTRESS, VAR_DIAGCONSEC, GEN_CAT_END
+        VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
+        VAR_DIAGCONSEC, VAR_NONCONSEC, VAR_DIAGNC, GEN_CAT_END
     },
     {
-        VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM, VAR_ZIPPER, VAR_BETWEEN,
-        VAR_ENTROPIC, VAR_MODULAR, VAR_DUTCH, VAR_PARITY, VAR_SLOW, VAR_NABNER, VAR_LOCKOUT,
-        VAR_DARROW, VAR_TEN, GEN_CAT_END
+        VAR_THERMO, VAR_SLOW, VAR_ARROW, VAR_PALINDROME, VAR_RENBAN, VAR_PARITY, VAR_WHISPER, VAR_DUTCH, VAR_DARROW,
+        VAR_REGIONSUM, VAR_ZIPPER, VAR_NABNER, VAR_BETWEEN, VAR_LOCKOUT, VAR_TEN, VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
     },
     {
-        VAR_KILLER, VAR_SANDWICH, VAR_SKY, VAR_LK, VAR_XSUM, VAR_FRAME, VAR_OUTSIDE, VAR_ROSSINI, VAR_NROOMS, VAR_SKYSUM,
+        VAR_KILLER, VAR_FRAME, VAR_OUTSIDE, VAR_SKY, VAR_LK, VAR_SANDWICH, VAR_ROSSINI, VAR_XSUM, VAR_SKYSUM, VAR_NROOMS,
         VAR_SUMLESS, GEN_CAT_END
     },
 };

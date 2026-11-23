@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "generator.h"
+#include "gen_bits.h"
 
 /** @addtogroup generator
  *  @{ */

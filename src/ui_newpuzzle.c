@@ -37,19 +37,19 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {6, 57, 183, 192},      /* Even-Odd */
     {19, 300, 639, 366},    /* Consecutive */
     {8, 86, 416, 331},      /* Thermo */
-    {297, 199, 2348, 1987}, /* Sandwich */
+    {312, 208, 2438, 2081}, /* Sandwich */
     {1, 1, 1, 1},           /* Kids 4x4 (Easy and Medium only) */
     {7, 94, 326, 191},      /* Anti-King */
-    {862, 909, 2908, 1540}, /* Non-Consecutive */
+    {1020, 1045, 3376, 1803}, /* Non-Consecutive */
     {7, 43, 168, 119},      /* Disjoint Groups */
     {6, 93, 337, 186},      /* Asterisk */
     {28, 116, 352, 189},    /* Kropki */
-    {15, 136, 307, 1743},   /* XV */
+    {15, 133, 302, 1743},   /* XV */
     {7, 24, 197, 489},      /* Greater-Than */
     {9, 72, 204, 600},      /* Quadruple */
     {9, 320, 518, 497},   /* Arrow */
     {9, 174, 525, 477},   /* Renban */
-    {12, 450, 1784, 1111}, /* German Whispers */
+    {9, 261, 991, 564}, /* German Whispers */
     {38, 159, 677, 304},    /* Skyscraper */
     {15, 471, 1102, 1225},  /* Little Killer */
     {11, 284, 905, 756},    /* Palindrome (2026-11-22) */
@@ -57,19 +57,19 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {27, 314, 1181, 875},   /* X-Sums (its rule tabled, 2026-11-23: Hard was 3012) */
     {12, 86, 186, 946},     /* Zipper Lines (2026-11-22; lines that don't cross, logic-first digging) */
     {15, 112, 641, 262},    /* Frame (re-measured 2026-11-22) */
-    {19, 88, 293, 1672},    /* Between Lines (the same) */
+    {17, 90, 302, 1362},    /* Between Lines (the same) */
     {15, 85, 223, 829},     /* Entropic Lines (the same) */
     {13, 81, 192, 905},     /* Modular Lines */
     {9, 79, 333, 242},      /* Center Dot */
     {37, 117, 1406, 1360},  /* Outside Sudoku (2026-11-22) */
-    {41, 292, 1780, 643},   /* Rossini */
+    {21, 168, 788, 255},   /* Rossini */
     {274, 512, 798, 839},   /* Diagonal Non-Consecutive */
-    {16, 460, 1277, 1349},  /* Dutch Whispers (2026-11-22) */
+    {12, 271, 735, 713},  /* Dutch Whispers (2026-11-22) */
     {9, 187, 784, 754},     /* Parity Lines */
     {11, 188, 696, 535},    /* Slow Thermo */
     {13, 82, 212, 1005},    /* Fortress (2026-11-22) */
     {673, 472, 758, 944},   /* Argyle */
-    {29, 80, 202, 799},     /* Nabner (2026-11-23) */
+    {20, 73, 182, 438},     /* Nabner (2026-11-23) */
     {26, 382, 1147, 1081},  /* Numbered Rooms */
     {25, 154, 548, 822},    /* Sum Skyscrapers */
     {14, 77, 187, 1570},    /* Lockout Lines (2026-11-23; its pair check capped: Expert was 2020) */

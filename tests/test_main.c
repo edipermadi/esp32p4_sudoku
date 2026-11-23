@@ -17,6 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "generator.h"
+#include "gen_bits.h"
 #include "learn_core.h"
 #include "puzzles.h"
 #include "sdx.h"
@@ -459,6 +460,18 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
 }
 
 /* ---------------------------------------------------------------- tests */
+
+/* gen_bits.h's tables: each entry as the builtins say */
+static void test_bits(void)
+{
+    int bad = 0;
+    for (unsigned m = 0; m < 1024; m++) {
+        bad += gen_popcount(m) != __builtin_popcount(m);
+        bad += m && gen_lowest(m) != __builtin_ctz(m);
+        bad += m && gen_highest(m) != 31 - __builtin_clz(m);
+    }
+    CHECKF(bad == 0, "gen_bits.h: %d entries wrong", bad);
+}
 
 static void test_geometry(void)
 {
@@ -1195,7 +1208,7 @@ static void test_learn(void)
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
-        {"geometry", test_geometry},         {"built-in puzzles", test_builtin},
+        {"bit tables", test_bits},           {"geometry", test_geometry},         {"built-in puzzles", test_builtin},
         {"generator", test_generate},        {"determinism (golden)", test_determinism},
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},

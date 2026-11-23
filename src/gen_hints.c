@@ -59,8 +59,8 @@ static int find_naked_single(const logic_t *L, int *digit)
     const sudoku_geom_t *G = L->G;
     for (int k = 0; k < G->ncells; k++) {
         int c = G->cells[k];
-        if (!L->v[c] && __builtin_popcount(L->cand[c]) == 1) {
-            *digit = __builtin_ctz(L->cand[c]);
+        if (!L->v[c] && gen_popcount(L->cand[c]) == 1) {
+            *digit = gen_lowest(L->cand[c]);
             return c;
         }
     }
@@ -126,7 +126,7 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
         if (vals[c]) {
             continue;
         }
-        int n = __builtin_popcount(L.cand[c]);
+        int n = gen_popcount(L.cand[c]);
         if (n < best_n) {
             best = c;
             best_n = n;
