@@ -1,0 +1,25 @@
+// Switching player: Players > a row; sdb_do_switch() (stats_db.c side), sd_poll_cb() (UI side)
+digraph player_switch {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="A player's row tapped"];
+    sw    [label="stats_db_switch_player(id): queued"];
+    exists[shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="The player\nstill exists?"];
+    gone  [shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="\"That player no longer exists\";\nthe list refreshed"];
+    flush [label="The old player's last moves saved\n(the queued game save written now)"];
+    cur   [label="current_player = id\n(settings)"];
+    cache [label="Their statistics loaded;\ntheir newest unfinished game read"];
+    post  [label="\"Player changed\" posted\n(with their game)"];
+    take  [label="The UI's poll takes it: the RAM copy\nreplaced, their game in progress set,\nthe game screen forgets the old one"];
+    note  [label="Notice: \"Now playing: Abi\""];
+    redraw[label="Home and Players redrawn; Statistics\nand Trophies asked again if shown"];
+    end   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Playing as them"];
+
+    start -> sw -> exists [style=dashed];
+    exists -> gone [label="no"];
+    exists -> flush [label="yes"];
+    flush -> cur -> cache -> post;
+    post -> take [style=dashed, label="sd_poll_cb, 100 ms"];
+    take -> note -> redraw -> end;
+}

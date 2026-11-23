@@ -1,0 +1,44 @@
+// A command heard by Gibberlink: the worker (gibberlink.cpp, core 0) and gibberlink_poll() (LVGL task)
+digraph gibberlink {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Microphones: 512 samples\n(21.3 ms, the two averaged)"];
+    deaf  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Our own reply playing,\nor within 400 ms of it?"];
+    dec   [label="ggwave decodes"];
+    msg   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A whole\nmessage?"];
+    own   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="\"P4$...\"?\n(our own id)"];
+    ign   [shape=oval, fillcolor="#F2F2F2", color="#999999", label="Ignored"];
+    strip [label="A sender id (\"AB$\") dropped"];
+    queue [label="Queued to the LVGL task"];
+    busy  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Last answer\nstill to send?"];
+    crc   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Ends in *XXXX:\nCRC right?"];
+    bad   [label="Answer: \"ERR checksum\"\n(not run)"];
+    run   [label="Run as devctl would\n(tap, fill, state, ping, pz ...)"];
+    pz    [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A puzzle's part\n(\"pz ...\")?"];
+    quiet [shape=oval, fillcolor="#F2F2F2", color="#999999", label="No answer\n(the next part is coming)"];
+    reply [label="\"P4$answer\" (with *XXXX\nif asked with one)"];
+    send  [label="Worker: ggwave audible Fast,\nplayed by the sfx task"];
+    end   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Answer heard"];
+
+    start -> deaf;
+    deaf -> start [label="yes"];
+    deaf -> dec [label="no"];
+    dec -> msg;
+    msg -> start [label="no"];
+    msg -> own [label="yes"];
+    own -> ign [label="yes"];
+    own -> strip [label="no"];
+    strip -> queue;
+    queue -> busy [style=dashed];
+    busy -> busy [label="yes: wait"];
+    busy -> crc [label="no"];
+    crc -> bad [label="wrong"];
+    crc -> run [label="right, or none"];
+    bad -> reply;
+    run -> pz;
+    pz -> quiet [label="yes"];
+    pz -> reply [label="no"];
+    reply -> send [style=dashed];
+    send -> end;
+}

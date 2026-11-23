@@ -48,6 +48,12 @@ Why 180 MHz and not lower: on this chip the memory and bus clocks follow the CPU
 
 Night mode (Settings > Display) is separate: between its hours the dark look and a lower brightness apply (`night_check()`, every 20 s); `effective_brightness()` is the lower of the two.
 
+## The lock screen
+
+Settings > Display > Lock screen: Off, Swipe or PIN (`src/ui_lock.c`; the PIN's checks in `src/lock_core.c`). It is put under the screen saver's cover when the saver starts, so the waking tap shows it; Home's lock button shows it at once.
+
+![The lock screen](../diagrams/lock.svg)
+
 ## Turning off
 
 Home's power button (`power_off_cb()`), confirmed:
@@ -61,6 +67,9 @@ Only the **RESET** button wakes it, as a normal start. The hold-all matters on p
 ## Lending the card over USB
 
 Settings > Data > USB drive > Connect (`src/usb_drive.c`, `src/usb_msc.cpp`):
+
+![Lending the card over USB](../diagrams/usb.svg)
+
 
 1. the database's pending writes are flushed and `sudoku.db` is closed (`stats_db_suspend()`), the FAT volume unmounted;
 2. TinyUSB's mass-storage device exposes the card to the computer (the "Sudoku SD Card" drive); a panel covers the screen meanwhile;

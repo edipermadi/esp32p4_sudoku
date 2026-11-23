@@ -1,0 +1,38 @@
+// The lock screen: ui_lock.c, lock_core.c
+digraph lock {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="The screen saver starts,\nor Home's lock button"];
+    mode  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Lock mode?\n(PIN without a PIN set: Swipe)"];
+    none  [shape=oval, fillcolor="#F2F2F2", color="#999999", label="No lock (unless the\nlock button forces Swipe)"];
+    cover [label="Lock screen on the system layer:\nthe time, the date, who plays"];
+    swipe [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Swipe up\n≥ 140 px?"];
+    snap  [label="Snaps back"];
+    wait  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Waiting after too\nmany wrong PINs?"];
+    count [label="Keypad dimmed: \"Too many tries:\nwait 25 s\" (each second)"];
+    key   [label="A digit typed (dots fill)"];
+    four  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="4 digits?"];
+    right [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="The PIN?"];
+    tries [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="5 wrong\nin a row?"];
+    wrong [label="Buzz, dots red, cleared:\n\"Wrong PIN (n left)\""];
+    hold  [label="30 s wait: keys ignored"];
+    open  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Unlocked: back where it was"];
+
+    start -> mode;
+    mode -> none [label="Off"];
+    mode -> cover [label="Swipe or PIN"];
+    cover -> swipe [label="Swipe"];
+    swipe -> snap [label="no"]; snap -> swipe;
+    swipe -> open [label="yes"];
+    cover -> wait [label="PIN"];
+    wait -> count [label="yes"]; count -> wait;
+    wait -> key [label="no"];
+    key -> four;
+    four -> wait [label="no"];
+    four -> right [label="yes"];
+    right -> open [label="yes"];
+    right -> tries [label="no"];
+    tries -> wrong [label="no"]; wrong -> wait;
+    tries -> hold [label="yes"]; hold -> wait;
+}

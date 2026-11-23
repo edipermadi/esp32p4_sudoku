@@ -1,0 +1,46 @@
+// Importing puzzles from puzzles/ on the card: sdb_do_import() and import_one() in stats_db_import.c
+digraph import {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Settings > Data > Import puzzles\n(Files > a file > Import: that file alone, the same way)"];
+    clock [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Clock set?"];
+    noclk [shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="\"Needs the clock\"\n(each collection gets its date)"];
+    dir   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="puzzles/ there?"];
+    mk    [shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="Folder made; \"put files in it\""];
+    file  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Next file? (at most 2000\npuzzles in one run)"];
+    ext   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label=".opensudoku, .sdm,\n.sdx or .txt?"];
+    seen  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="That file imported\nbefore? (imported.file)"];
+    fmt   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Which format?"];
+    sdx   [label=".sdx: a line per puzzle, any variant;\neach checked; one transaction"];
+    parse [label="A puzzle per line, or OpenSudoku XML\n(import_parse.c)"];
+    grade [label="Each graded; one without exactly one\nsolution is left out (counted)"];
+    any   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Any good?"];
+    chunk [label="In one transaction: 100 at a time into\ngenerated, each 100 a collection\n(\"Book\", or \"Book 1\", \"Book 2\" ...)"];
+    commit[shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="All written?"];
+    rb    [label="ROLLBACK: nothing of this file"];
+    ok    [label="COMMIT"];
+    msg   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="\"Imported n puzzles from m files\"\n(the Puzzles screen's collections refreshed)"];
+
+    start -> clock;
+    clock -> noclk [label="no"];
+    clock -> dir [label="yes"];
+    dir -> mk [label="no"];
+    dir -> file [label="yes"];
+    file -> msg [label="no"];
+    file -> ext [label="yes"];
+    ext -> file [label="no: skipped"];
+    ext -> seen [label="yes"];
+    seen -> file [label="yes: skipped"];
+    seen -> fmt [label="no"];
+    fmt -> sdx [label=".sdx"];
+    fmt -> parse [label="other"];
+    sdx -> commit;
+    parse -> grade -> any;
+    any -> file [label="no"];
+    any -> chunk [label="yes"];
+    chunk -> commit;
+    commit -> ok [label="yes"];
+    commit -> rb [label="no (a name taken ...)"];
+    ok -> file; rb -> file;
+}

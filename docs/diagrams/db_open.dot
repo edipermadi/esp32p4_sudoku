@@ -1,0 +1,45 @@
+// Opening sudoku.db: do_open_inner() in stats_db.c (the stats_db task)
+digraph db_open {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="stats_db_start()\n(start-up, the card back from USB)"];
+    mount [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Card mounted?\n(FAT)"];
+    nofat [shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="No database:\nnot FAT, or no card"];
+    tiny  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A sudoku.db under 100 bytes?\n(an old build's empty file)"];
+    del   [label="Deleted"];
+    exist [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="sudoku.db\nexists?"];
+    fresh [label="A new skeleton: the current settings,\nplayer and game, no statistics"];
+    open  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="sqlite3_open\nworks?"];
+    err   [shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="Error: the game runs\nwithout a database"];
+    schema[label="CREATE TABLE IF NOT EXISTS (every table)"];
+    up    [label="upgrade_schema(): a column added for each one\nmissing; tables rebuilt for players (_v3)\nor five games (_v8), in one transaction"];
+    post  [label="Indexes and the level_stats view\nrecreated; user_version = 11"];
+    who   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="settings.current_player\nis a player?"];
+    first [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Any player?"];
+    minp  [label="The lowest id"];
+    make  [label="\"Player 1\" created\n(or the board's name for it)"];
+    nvs   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="migrated_from_nvs\nnot set yet?"];
+    merge [label="Old NVS statistics merged\n(not into a fresh file);\nthe settings copied in"];
+    prefs [label="Settings read back; the player's\nstatistics loaded (the RAM copy)"];
+    back  [label="Achievements of every player checked\nquietly; the progress cache refreshed"];
+    ready [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Ready: the UI takes the settings\nand statistics (stats_db_take_*)"];
+
+    start -> mount;
+    mount -> nofat [label="no"];
+    mount -> tiny [label="yes"];
+    tiny -> del [label="yes"]; del -> exist;
+    tiny -> exist [label="no"];
+    exist -> open [label="yes"];
+    exist -> fresh [label="no"]; fresh -> open;
+    open -> err [label="no"];
+    open -> schema [label="yes"];
+    schema -> up -> post -> who;
+    who -> nvs [label="yes"];
+    who -> first [label="no"];
+    first -> minp [label="yes"]; minp -> nvs;
+    first -> make [label="no"]; make -> nvs;
+    nvs -> merge [label="yes"]; merge -> prefs;
+    nvs -> prefs [label="no"];
+    prefs -> back -> ready;
+}

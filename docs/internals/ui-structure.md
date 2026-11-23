@@ -29,6 +29,8 @@ The screens are LVGL screens kept in a registry (`src/ui_screens.c`): `screen_ho
 
 **`apply_theme(dark)`** builds them all: the palette (`palette_build()`: the scheme, the accent, the colour-blind colours), LVGL's theme, then each screen's `build_*()` in turn. It runs at start-up (the splash's loading bar moves with each screen) and whenever the look changes: dark mode, night mode starting or ending, the accent colour, colour-blind colours, a restored `sudoku.db`. Because every screen is rebuilt:
 
+![Rebuilding every screen](../diagrams/theme.svg)
+
 - **no state lives in the widgets**: a screen draws from the state (the game, the settings, the database's answers) every time it is built or refreshed, so a rebuild loses nothing;
 - the screen that was showing is shown again, and the old screens are deleted **later** (`lv_obj_delete_async()`): the rebuild may be running inside one of their events;
 - for a moment there are two copies of every screen, so a data change never triggers a rebuild (it once left the SD card's DMA too little internal RAM); new collections refresh only the Puzzles screen (`list_fill_colls()`).

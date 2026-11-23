@@ -1,0 +1,26 @@
+// Rebuilding every screen: apply_theme() in ui_screens.c
+digraph theme {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Dark mode, night mode, the accent,\ncolour-blind colours, a restored sudoku.db,\nor start-up"];
+    pal   [label="Palette built (scheme, accent,\ncolour-blind colours); LVGL theme set"];
+    keep  [label="The screen showing and every\nold screen remembered"];
+    build [label="Every screen built again: game, Puzzles, Home,\nStatistics, Settings, Wi-Fi, System monitor, Files,\nPlayers, History, Gameplays, Trophies\n(start-up: the loading bar moves with each)"];
+    game  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A game in progress?"];
+    redraw[label="Its board, notes button, pause cover,\nconflicts and header redrawn from the state"];
+    ref   [label="Puzzles, Home, Statistics refreshed"];
+    same  [label="The new copy of the screen that was\nshowing is shown (Home at start-up)"];
+    ask   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Gameplays or\nTrophies showing?"];
+    req   [label="Their data asked for again"];
+    del   [label="Old screens deleted later (async):\nthis may run inside one of their events"];
+    end   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Same place, new look"];
+
+    start -> pal -> keep -> build -> game;
+    game -> redraw [label="yes"]; redraw -> ref;
+    game -> ref [label="no"];
+    ref -> same -> ask;
+    ask -> req [label="yes"]; req -> del;
+    ask -> del [label="no"];
+    del -> end;
+}

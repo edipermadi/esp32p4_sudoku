@@ -24,6 +24,8 @@ One row per collection imported from `puzzles/` on the card (Settings > Data > I
 
 ## Written
 
+![Importing puzzles](../../diagrams/import.svg)
+
 In one transaction per file: the puzzles into `generated` (each graded; a puzzle without exactly one solution is skipped), then this row (`src/stats_db_import.c`). The formats: a puzzle per line (`.sdm`, `.txt`), OpenSudoku's XML (`.opensudoku`), and `.sdx` for any variant (`src/import_parse.c`, `src/sdx.c`).
 
 ## Read

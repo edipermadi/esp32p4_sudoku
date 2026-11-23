@@ -1,0 +1,32 @@
+// Lending the card over USB: ui_settings_usb.c, usb_drive.c
+digraph usb {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Settings > Data > USB drive:\nConnect"];
+    card  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A card, not being\nformatted?"];
+    nocard[shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="\"No microSD card\""];
+    host  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A computer on the\nUSB OTG port?"];
+    grey  [shape=oval, fillcolor="#F2F2F2", color="#999999", label="(the button is greyed out)"];
+    susp  [label="stats_db_suspend(): pending writes saved,\nsudoku.db closed, the card unmounted"];
+    lend  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="USB mass storage\nstarted?"];
+    back1 [label="sudoku.db reopened;\n\"Couldn't start the USB drive\""];
+    panel [label="Panel over everything: the card is a drive on\nthe computer (copy sudoku.db, or restore one)"];
+    wait  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Ejected, unplugged,\nor Done tapped?\n(polled every 100 ms)"];
+    ret   [label="USB stopped; the card mounted again;\nsudoku.db reopened (a new skeleton if deleted)"];
+    reload[label="Every setting reloaded from sudoku.db\n(the file may have been replaced)"];
+    end   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="\"Card back on the board\""];
+
+    start -> card;
+    card -> nocard [label="no"];
+    card -> host [label="yes"];
+    host -> grey [label="no"];
+    host -> susp [label="yes"];
+    susp -> lend;
+    lend -> back1 [label="no"];
+    lend -> panel [label="yes"];
+    panel -> wait;
+    wait -> wait [label="no"];
+    wait -> ret [label="yes"];
+    ret -> reload -> end;
+}

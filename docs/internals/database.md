@@ -235,6 +235,12 @@ The same four fields make up a `.sdx` line (`src/sdx.c`), so sharing, importing 
 
 `SCHEMA_POST` drops and recreates the index and the view on every start, so they always match the current build.
 
+## Opening it
+
+At start-up, and whenever the card comes back (from a computer, a format), the `stats_db` task opens the file, creates what's missing, upgrades what's old and chooses the player:
+
+![Opening sudoku.db](../diagrams/db_open.svg)
+
 ## Life of the data
 
 **Opening a puzzle**:

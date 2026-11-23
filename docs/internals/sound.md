@@ -36,6 +36,9 @@ Tuning the sounds: [Development](../development.md#tuning-the-sounds).
 - **Listening**: the `gibberlink` task (core 0) reads the microphones 512 samples at a time (21.3 ms; the two averaged) and feeds ggwave, set up for audible Normal and Fast at 24 kHz. 512 samples at 24 kHz give 46.875 Hz a frequency bin, the same as ggwave's usual 48 kHz / 1024, so the board understands phones, browsers and Gibberlink's agents.
 - **A message** (up to 140 bytes) is one devctl command (`tap 360 400`, `fill 1:9`, `state`, `ping` ...), optionally after a sender id (`AB$tap 360 400`) and optionally ending in `*` and a CRC-16/CCITT-FALSE of the text (`fill 1:9 4:2*7C3E`): ggwave's error correction now and then turns a garbled message into another valid-looking one, and with the check a garbled one isn't run (`ERR checksum`).
 - **Running it**: the heard text is queued to the LVGL task, which runs it exactly as if it came over serial ([devctl](../devctl.md)), and queues the answer back.
+
+![A command heard by Gibberlink](../diagrams/gibberlink.svg)
+
 - **Replying**: the worker encodes the answer as ggwave audible Fast, prefixed `P4$` (with the same kind of check), and has the `sfx` task play it as a PCM clip at ggwave volume 80 (30 was too quiet: a laptop a metre away missed one reply in four). Two replies are 700 ms apart so the listener's decoder settles.
 - **Not hearing itself**: while a reply plays, and for 400 ms after, nothing is decoded; the board's own sound effects aren't decoded either.
 - A small icon at the bottom right shows while Gibberlink is on, lit for 1.5 s after a command.

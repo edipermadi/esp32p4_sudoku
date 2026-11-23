@@ -35,6 +35,9 @@ the Replay screen on an invisible 720×720 LVGL display (renders into the video'
 
 `src/media_core.c`, `src/media_video.c`, `src/ui_media_view.c`:
 
+![Playing an MP4](../diagrams/video.svg)
+
+
 ```
 mp4_reader: the moov box → each frame's offset, size, time, key frame; SPS/PPS as Annex-B
   → worker task "media" (core 0): reads a frame, feeds tinyh264 (software H.264 decoder) → I420

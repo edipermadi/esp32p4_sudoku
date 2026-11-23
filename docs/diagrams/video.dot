@@ -1,0 +1,44 @@
+// Playing an MP4 in the Files viewer: media_video_run() in media_video.c (task media, core 0)
+digraph video {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="A video opened"];
+    read  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="MP4 index read; H.264\nBaseline; ≤ 1920×1088?"];
+    no    [shape=oval, fillcolor="#FBE3E3", color="#B14A4A", label="Message on the page\n(\"only Baseline videos play here\" ...)"];
+    setup [label="tinyh264 opened; the converter\ntask started (core 1)"];
+    stop  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Stop asked?\n(closed, another file)"];
+    end   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Decoder and converter closed"];
+    seek  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A seek asked?"];
+    key   [label="Back to the key frame before it;\nshow only the target"];
+    last  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Past the last frame?"];
+    ended [label="Ended: wait for Play\n(from the start) or a seek"];
+    play  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Playing?"];
+    pause [label="Wait (paused)"];
+    feed  [label="Read frame i; decode it (I420)"];
+    show  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A target set and not\nreached yet? (seeking)"];
+    late  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Behind time by more than 2 frames?\n(at most 3 in a row)"];
+    skipf [label="Decoded, not shown\n(the video keeps its speed)"];
+    conv  [label="To the converter: RGB565, scaled to fit,\nonly the rows that changed; shown when due"];
+    nexti [label="i + 1"];
+
+    start -> read;
+    read -> no [label="no"];
+    read -> setup [label="yes"];
+    setup -> stop;
+    stop -> end [label="yes"];
+    stop -> seek [label="no"];
+    seek -> key [label="yes"]; key -> feed;
+    seek -> last [label="no"];
+    last -> ended [label="yes"]; ended -> stop;
+    last -> play [label="no"];
+    play -> pause [label="no"]; pause -> stop;
+    play -> feed [label="yes"];
+    feed -> show;
+    show -> nexti [label="yes"];
+    show -> late [label="no"];
+    late -> skipf [label="yes"]; skipf -> nexti;
+    late -> conv [label="no"];
+    conv -> nexti [style=dashed];
+    nexti -> stop;
+}

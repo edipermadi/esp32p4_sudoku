@@ -1,0 +1,34 @@
+// A time attack run: ui_attack.c, tick_cb() and back_cb() in ui_game_controls.c, on_solved() in ui_game.c
+digraph time_attack {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Home > Time attack > Start"];
+    pick  [label="A random Easy puzzle\n(not the last one, not the Continue game)"];
+    play  [label="Played as usual; Hint and Fill off;\nno challenges"];
+    tick  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="10 minutes used?\n(earlier puzzles + this one;\nthe clock stops while paused)"];
+    back  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Back tapped?"];
+    ask   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="\"Stop the run?\""];
+    stop  [shape=oval, fillcolor="#F2F2F2", color="#999999", label="Run not recorded\n(its solves still count)"];
+    solved[shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Puzzle solved?"];
+    count [label="Solve recorded; the run's count,\ntime and mistakes add up"];
+    up    [label="Time's up: the board locks"];
+    rec   [label="Run recorded (attack table);\nachievements checked"];
+    board [label="Result and the leaderboard\n(each player's best run)"];
+    again [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Again or\nHome?"];
+    home  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Home"];
+
+    start -> pick -> play -> tick;
+    tick -> up [label="yes"];
+    tick -> back [label="no"];
+    back -> ask [label="yes"];
+    ask -> play [label="Keep going"];
+    ask -> stop [label="Stop"];
+    back -> solved [label="no"];
+    solved -> count [label="yes"];
+    count -> pick [label="next one after 0.9 s"];
+    solved -> tick [label="no"];
+    up -> rec -> board -> again;
+    again -> start [label="Again"];
+    again -> home [label="Home"];
+}

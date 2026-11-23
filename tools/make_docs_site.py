@@ -116,7 +116,7 @@ def rewrite(url, src):
     target = posixpath.normpath(posixpath.join(posixpath.dirname(src), path)) if path else src
     if target in PAGE_OF:
         out = PAGE_OF[target]
-    elif target.startswith("docs/screenshots/") or target.startswith("docs/diagrams/"):
+    elif target.startswith("docs/screenshots/") or (target.startswith("docs/diagrams/") and target.endswith(".svg")):
         out = target[len("docs/"):]
     elif target in DOWNLOADS:
         out = posixpath.basename(target)

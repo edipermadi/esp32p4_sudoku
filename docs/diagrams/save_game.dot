@@ -1,0 +1,41 @@
+// Saving the game in progress: save_current() (ui_game.c), stats_db_save_game() and sdb_flush_game() (stats_db_games.c)
+digraph save_game {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="A move made, a pause,\nleaving the game"];
+    kind  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Solved, a Learn practice\nor a time attack game?"];
+    skip  [shape=oval, fillcolor="#F2F2F2", color="#999999", label="Not kept"];
+    prog  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Any progress, or already\nthe game in progress?"];
+    look  [shape=oval, fillcolor="#F2F2F2", color="#999999", label="Only looked at:\nthe slot stays as it is"];
+    ram   [label="Into RAM: the game in progress\nand its move log (store_game.cpp)"];
+    card  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="sudoku.db\nopen?"];
+    ramonly [shape=oval, fillcolor="#F2F2F2", color="#999999", label="RAM only until power-off"];
+    other [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Another game's save still\nwaiting to be written?"];
+    spill [label="That one queued on its own\n(CMD_GAME_SPILL)"];
+    next  [label="This save becomes \"the next one\"\n(replacing any waiting save of this game)"];
+    queued[shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A write already\nqueued?"];
+    q     [label="CMD_GAME queued"];
+    write [label="Worker: the newest waiting save written\n(INSERT OR REPLACE, seq = highest + 1)"];
+    five  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="More than 5 games\nfor this player?"];
+    drop  [label="The oldest by seq deleted;\na notice says so"];
+    done  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Saved"];
+
+    start -> kind;
+    kind -> skip [label="yes"];
+    kind -> prog [label="no"];
+    prog -> look [label="no"];
+    prog -> ram [label="yes"];
+    ram -> card;
+    card -> ramonly [label="no"];
+    card -> other [label="yes"];
+    other -> spill [label="yes"]; spill -> next;
+    other -> next [label="no"];
+    next -> queued;
+    queued -> done [label="yes: it will write\nthe newest"];
+    queued -> q [label="no"];
+    q -> write [style=dashed];
+    write -> five;
+    five -> drop [label="yes"]; drop -> done;
+    five -> done [label="no"];
+}

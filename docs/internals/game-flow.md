@@ -2,7 +2,7 @@
 
 [← Internals](README.md) · [README](../../README.md) · [Features](../features.md) · [Data & storage](../data.md) · [Building](../building.md) · [Development](../development.md) · [Remote control](../devctl.md)
 
-What happens when a puzzle is opened, a digit is entered and the puzzle is solved: the decisions the game screen makes, in the order it makes them. The code is in `src/ui_continue_open.c`, `src/ui_game.c` and `src/ui_game_win.c`; the state they share (the board, the clock, the move log) is described in [UI structure](ui-structure.md).
+What happens when a puzzle is opened, a digit is entered, the game is saved and the puzzle is solved, a player switches, a time attack runs and the daily puzzle is opened: the decisions the game screen makes, in the order it makes them. The code is in `src/ui_continue_open.c`, `src/ui_game.c` and `src/ui_game_win.c`; the state they share (the board, the clock, the move log) is described in [UI structure](ui-structure.md).
 
 The flowcharts' sources are in `docs/diagrams/` (`make diagrams` renders them).
 
@@ -23,6 +23,20 @@ A tap on the pad (or on a cell, with a digit locked by a long press) is `enter_d
 `on_solved()` decides what kind of game it was. A normal game shows the Solved dialog after the confetti, and only then records the solve (80 ms later, so the dialog appears without waiting for the card); the database checks achievements and the toast comes by the usual poll.
 
 ![Solving](../diagrams/solved.svg)
+
+## Saving the game in progress
+
+After every move (and on a pause, or leaving the game) the game goes into RAM and, with a card, to `sudoku.db`. Saves are coalesced: only the newest one waiting is written, so a burst of taps is one write; a save of another game still waiting is written on its own first.
+
+![Saving the game in progress](../diagrams/save_game.svg)
+
+## Switching player
+
+![Switching player](../diagrams/player_switch.svg)
+
+## A time attack run
+
+![A time attack run](../diagrams/time_attack.svg)
 
 ## The daily puzzle
 

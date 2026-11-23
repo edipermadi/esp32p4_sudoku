@@ -41,7 +41,7 @@ The effects are note tables at the top of `src/sfx.c`. Each note has a frequency
 
 ## Diagrams
 
-The flowcharts in the docs (start-up, the screen saver, a move, solving, hints, generating, Send by sound, achievements ...) are Graphviz files in `docs/diagrams/*.dot`, with their rendered `.svg` next to them, committed so GitHub and the docs site show them without Graphviz. After changing a `.dot` file, run `make diagrams` (needs `dot`: `apt install graphviz`) and commit both. A flowchart describes the code: when the flow it shows changes, change it too. The shared look is at the top of each file ([docs/diagrams/README.md](diagrams/README.md)).
+The flowcharts in the docs (start-up, opening `sudoku.db`, the screen saver and lock screen, a move, saving, solving, hints, generating, importing, USB lending, Gibberlink, Send by sound, video playback, achievements ...) are Graphviz files in `docs/diagrams/*.dot`, with their rendered `.svg` next to them, committed so GitHub and the docs site show them without Graphviz. After changing a `.dot` file, run `make diagrams` (needs `dot`: `apt install graphviz`) and commit both. A flowchart describes the code: when the flow it shows changes, change it too. The shared look is at the top of each file ([docs/diagrams/README.md](diagrams/README.md)).
 
 ## Tests
 
