@@ -117,16 +117,10 @@ LV_FONT_DECLARE(font_icons_20)    /**< the same at 20 px + Montserrat 20 */
 #define GAME_PAD_W  (SCR_W - GAME_PAD_X - 8)  /**< its width */
 
 #define SAVE_DELAY_MS    80      /**< solve bookkeeping once the Solved! dialog is up */
-#define UNDO_MAX         128            /**< undo steps kept */
 #define MAX_PER_COLL     100            /**< puzzles a built-in collection shows */
 
 /* ------------------------------------------------------------- game state */
-/** @brief The board in play: digits, pencil marks and cell colours (also each undo / redo step). */
-typedef struct {
-    uint8_t  val[81];            /**< digits, 0 = empty (givens included) */
-    uint16_t notes[81];          /**< pencil marks: bit d = d */
-    uint8_t  colors[81];         /**< cell colours, 0 = none, 1..CELL_COLORS (long press a cell) */
-} board_t;
+/* (board_t, UNDO_MAX and the undo history: game_core.h) */
 /** @brief Time attack (Home): Easy puzzles one after another for 10 minutes. Its games
  * aren't kept (no Continue); its solves count as usual. */
 #define ATK_MS (10u * 60u * 1000u)
@@ -906,7 +900,7 @@ lv_obj_t *screen_edit(void);
 /* ui_players.c */
 /* ui_replay.c */
 lv_obj_t *screen_replay(void);
-/* ui_settings.c */
+/* ui_screens.c */
 lv_obj_t *screen_files(void);
 lv_obj_t *screen_game(void);
 void screen_set_game(lv_obj_t *v);
@@ -1407,3 +1401,198 @@ void saver_cb(lv_timer_t *t);
 void lock_dd_cb(lv_event_t *e);
 void pin_change_cb(lv_event_t *e);
 void lock_now_cb(lv_event_t *e);
+
+/* ---- ui_board_draw.c */
+/**
+ * @brief a Little Killer clue's label draws its arrow, toward its diagonal's first cell
+ * @param[in] e  the draw event (the label's user data: its direction + 1, 0: none)
+ */
+void lk_clue_draw_cb(lv_event_t *e);
+/**
+ * @brief Is the game screen's tour up (ui_tour.c)?
+ * @return true if so
+ */
+bool is_tour_open(void);
+/**
+ * @brief The move log of the game played (ui_game.c).
+ * @return it (game_nmoves() of them)
+ */
+const game_move_t *game_moves(void);
+
+/* ---- ui_game_win.c */
+/**
+ * @brief starts the confetti; done runs when it's over (at once if it can't start)
+ * @param[in] done  runs when it's over
+ */
+void confetti(void (*done)(void));
+/** @brief The Solved dialog filled in for the solve just made, then the confetti and the dialog. */
+void win_prepare(void);
+/** @brief Builds the Solved dialog (hidden) on the game screen. */
+void win_build(void);
+/**
+ * @brief Start time, worked out from uptime if the clock was set after the puzzle
+ * was opened (Wi-Fi connects a few seconds after start-up).
+ * @return Unix time, 0 = not known
+ */
+int64_t game_started_at(void);
+/** @brief Hides the Solved dialog (a game restarted or opened; ui_game_win.c). */
+void win_hide(void);
+
+/* ---- ui_game_colors.c */
+/**
+ * @brief A long press on a cell: its menu (paint it; on Killer, the cage's digit sets).
+ * @param[in] e  the event (user data: the cell)
+ */
+void cell_long_cb(lv_event_t *e);
+/**
+ * @brief After a move: conflicts, solved or not, the board redrawn, the game saved.
+ */
+void after_move(void);
+/**
+ * @brief The colours a cell can be painted.
+ * @param[in] k  1..CELL_COLORS
+ * @return the colour
+ */
+lv_color_t cell_color(int k);
+/** @brief before every edit: the board goes on the undo ring, and redo is gone */
+void push_undo(void);
+
+/* ---- ui_game_input.c */
+/**
+ * @brief A cell tapped: selects it (digit-first: places the locked digit).
+ * @param[in] e  the event (user data: the cell)
+ */
+void cell_click_cb(lv_event_t *e);
+/**
+ * @brief A short tap enters the digit in the selected cell; while a digit is
+ * locked (digit-first) it moves the lock to that digit, or unlocks it.
+ * @param[in] e  the event (user data: the digit)
+ */
+void pad_click_cb(lv_event_t *e);
+/**
+ * @brief A long press locks the digit: then each tap on a cell places it there.
+ * @param[in] e  the event (user data: the digit)
+ */
+void pad_long_cb(lv_event_t *e);
+/**
+ * @brief Auto notes: every empty cell gets all the digits that still fit there as
+ * pencil marks (replacing its notes). Undo takes it back.
+ * @param[in] e  the event
+ */
+void auto_notes_cb(lv_event_t *e);
+/**
+ * @brief Erase: the selected cell's digit or pencil marks.
+ * @param[in] e  the event
+ */
+void erase_cb(lv_event_t *e);
+/**
+ * @brief Undo: the board as it was before the last edit.
+ * @param[in] e  the event
+ */
+void undo_cb(lv_event_t *e);
+/**
+ * @brief Redo: puts back what the last Undo took away (until the next edit).
+ * @param[in] e  the event
+ */
+void redo_cb(lv_event_t *e);
+/**
+ * @brief Notes: the pad writes pencil marks, or digits.
+ * @param[in] e  the event
+ */
+void notes_cb(lv_event_t *e);
+/**
+ * @brief Fill: the selected cell gets its digit from the solution; counts as a hint
+ * @param[in] e  the event
+ */
+void fill_cb(lv_event_t *e);
+/**
+ * @brief The selected cell can be edited: not a given, the game neither solved nor paused.
+ * @return true if so
+ */
+bool can_edit(void);
+/**
+ * @brief a digit placed in cell i: its notes go, and peers lose that note
+ * @param[in] i  the cell
+ * @param[in] d  the digit
+ */
+void place_digit(int i, int d);
+/**
+ * @brief chimes for a digit d placed in cell i without a conflict
+ * @param[in] i  the cell
+ * @param[in] d  the digit
+ */
+void placed_sounds(int i, int d);
+/**
+ * @brief one entry in the move log (a cell's digit changed)
+ * @param[in] cell  the cell
+ * @param[in] digit  its digit, 0 = cleared
+ * @param[in] kind  MOVE_*
+ */
+void record_move(int cell, int digit, move_kind_t kind);
+/* ---- ui_game.c: the game's state, for its other files (ui_game_input.c, ui_game_colors.c, ui_game_win.c) */
+/** @brief The board, to change it. @return it */
+board_t *game_board(void);
+/** @brief Undo and redo. @return them */
+game_history_t *game_hist(void);
+/** @brief Digit-first: the digit locked on the pad. @return it, 0 = none */
+int game_lock(void);
+/** @brief Locks a digit on the pad (digit-first). @param[in] v  the digit, 0 = none */
+void game_set_lock(int v);
+/** @brief Sets the cells filled with Fill. @param[in] v  how many */
+void game_set_hints(uint16_t v);
+/** @brief The solution (valid when is_game_sol_ok()). @return its 81 digits */
+const uint8_t *game_sol(void);
+/** @brief Is the solution known? @return true if so */
+bool is_game_sol_ok(void);
+/**
+ * @brief Puzzles > Enter puzzle: the screen to type one in (ui_enter_puzzle.c).
+ * @param[in] e  the event
+ */
+void enter_cb(lv_event_t *e);
+
+/* ---- ui_name_dialog.c */
+/**
+ * @brief The name dialog for a player: New player, or Rename player.
+ * @param[in] rename_id  the player to rename (0: add one)
+ * @param[in] current    their name now (NULL: none)
+ */
+void nd_open(int32_t rename_id, const char *current);
+
+/* ---- ui_avatar_picker.c */
+/**
+ * @brief The menu's Avatar: the picker for who plays now (a title and None, a row of groups, the
+ *        emoji scrolling), opened at theirs.
+ * @param[in] e  the event
+ */
+void player_avatar_cb(lv_event_t *e);
+/** @brief The Players screen's ⋮ button (ui_players.c). @return it */
+lv_obj_t *players_menu_btn(void);
+
+/* ---- ui_stats_chart.c */
+/**
+ * @brief Draws the progress chart: the time scale, a dot per solve joined by a faint line, the
+ *        average of the last AVG_WIN on top, and the legend.
+ * @param[in] e  the draw event
+ */
+void plot_draw_cb(lv_event_t *e);
+/**
+ * @brief The chart (or table) shown, and the text under the chart: how many solves, the fastest, and
+ *        the newest 5 against the first 5 (or why there's no chart).
+ * @param[in] v        the view
+ * @param[in] from_db  it came from sudoku.db
+ */
+void chart_render(const stats_view_t *v, bool from_db);
+/**
+ * @brief The ⋮ menu (top right): Insights (mistakes, from the move logs), Chart or Table (the one not shown), About
+ *        statistics.
+ * @param[in] e  the event
+ */
+void stats_menu_cb(lv_event_t *e);
+/**
+ * @brief Builds Statistics' progress chart (hidden) on its screen (ui_stats_chart.c).
+ * @param[in] px  its left edge
+ * @param[in] pw  its width
+ */
+void chart_build(int px, int pw);
+/** @brief Does Statistics show the chart rather than the table (ui_stats.c)? @return true if so */
+bool is_stats_chart_mode(void);

@@ -8,51 +8,20 @@
 #include "game_core.h"
 
 /* this file's own functions, in any order */
+static void restart_confirm_cb(lv_event_t *e);
+static void atk_stop_cb(lv_event_t *e);
+static void atk_keep_cb(lv_event_t *e);
 static bool is_peer(int a, int b);
 static bool is_digit_wrong(int i);
 static bool is_unit_complete(int u);
 static int units_completed_by(int i);
-static lv_color_t cell_color(int k);
 static int filled_count(void);
-static int64_t game_started_at(void);
-static void solve_commit_cb(lv_timer_t *t);
-static float cf_rand(float lo, float hi);
-static void cf_draw_cb(lv_event_t *e);
-static void cf_stop(void);
-static void cf_tick(lv_timer_t *t);
-static void confetti(void (*done)(void));
-static void win_show(void);
 static void on_solved(void);
-static void after_move(void);
-static void push_undo_keep_redo(void);
-static void push_undo(void);
-static bool can_edit(void);
-static void record_move(int cell, int digit, move_kind_t kind);
-static void fill_cb(lv_event_t *e);
-static void place_digit(int i, int d);
-static void placed_sounds(int i, int d);
-static void cell_click_cb(lv_event_t *e);
-static void cm_close(void);
-static void cm_backdrop_cb(lv_event_t *e);
-static void cm_color_cb(lv_event_t *e);
-static int cage_sets_text(int k, char *buf, size_t n);
-static void cell_long_cb(lv_event_t *e);
 static void cell_draw_cb(lv_event_t *e);
-static void pad_click_cb(lv_event_t *e);
-static void pad_long_cb(lv_event_t *e);
-static void auto_notes_cb(lv_event_t *e);
-static void erase_cb(lv_event_t *e);
-static void undo_cb(lv_event_t *e);
-static void redo_cb(lv_event_t *e);
-static void notes_cb(lv_event_t *e);
 static void hint_act_cb(lv_event_t *e);
 static void hint_close_cb(lv_event_t *e);
 static void hint_cb(lv_event_t *e);
 static void pause_cb(lv_event_t *e);
-static void win_next_cb(lv_event_t *e);
-static void win_list_cb(lv_event_t *e);
-static void win_hide_cb(lv_event_t *e);
-static void win_share_cb(lv_event_t *e);
 static void star_cb(lv_event_t *e);
 static void game_menu_cb(lv_event_t *e);
 
@@ -74,8 +43,6 @@ static uint32_t g_elapsed_ms;    /**< the game's clock, ms (pauses excluded) */
 static uint16_t g_mistakes;      /**< digits placed that broke a rule (undo doesn't remove them) */
 static uint16_t g_hints;         /**< cells filled with Fill (undo doesn't remove them either) */
 static uint32_t g_flags;         /**< GAME_FLAG_* (store.h): the no-notes challenge, techniques the hints showed */
-static lv_obj_t *g_win_badge;    /**< Solved dialog: the no-notes challenge badge */
-static lv_obj_t *g_win_share;    /**< Solved dialog: Share (a daily puzzle) */
 static uint8_t  g_sol[81];       /**< the solution, for Fill */
 static game_move_t *g_moves;     /**< move log of this attempt (moves.h), PSRAM, GAME_MOVES_MAX */
 static int      h_step;          /**< 0 = no hint open, 1 = nudge shown, 2 = reason shown */
@@ -97,11 +64,7 @@ static uint32_t g_started_tick;  /**< lv_tick_get() then, to work it out once NT
                                     0 = not this session (resumed with no known start) */
 static uint32_t g_last_tick;     /**< the clock's last tick, lv_tick_get() */
 
-static board_t *g_undo;          /**< UNDO_MAX boards, PSRAM (31 KB) */
-static int      g_undo_head;     /**< the newest undo step */
-static int      g_undo_len;      /**< undo steps kept */
-static board_t *g_redo;          /**< undone boards, newest last, PSRAM; any new edit empties it */
-static int      g_redo_len;      /**< redo steps */
+static game_history_t g_hist;    /**< undo and redo (game_core.h): UNDO_MAX boards each, PSRAM (31 KB) */
 static int      g_lock;          /**< digit-first: the digit locked on the pad (long press), 0 = none */
 static int g_from_coll = -1;              /**< the collection the game was opened from (Next, back to the list) */
 
@@ -121,14 +84,7 @@ static lv_obj_t *g_timer_icon;           /**< its icon */
 static lv_obj_t *g_status;               /**< "Filled 40 / 81", "Solved in ..." */
 static lv_obj_t *g_notes_btn;            /**< Notes */
 static lv_obj_t *g_pause_ovl;            /**< the pause cover */
-static lv_obj_t *g_win_ovl;              /**< the Solved dialog */
-static lv_obj_t *g_win_time;             /**< its time */
-static lv_obj_t *g_win_best;             /**< its best time line */
-static lv_obj_t *g_win_miss;             /**< its mistakes line */
-static lv_obj_t *g_win_hint;             /**< its hints line */
 static lv_obj_t *g_hint_cnt;     /**< hints used, on the Fill button */
-static lv_obj_t *g_win_h2h;      /**< Solved dialog: how others did on this puzzle */
-static lv_obj_t *g_win_h2h_row;  /**< ... in a row with the leader's avatar */
 static lv_obj_t *g_undo_btn;             /**< Undo */
 static lv_obj_t *g_redo_btn;             /**< Redo */
 /* (the tour points at these) */
@@ -210,17 +166,6 @@ static int units_completed_by(int i)
     return n;
 }
 
-/**
- * @brief The colours a cell can be painted.
- * @param[in] k  1..CELL_COLORS
- * @return the colour
- */
-static lv_color_t cell_color(int k)
-{
-    static const uint32_t C[CELL_COLORS] = {0xE5484D, 0xF5A524, 0xE2D33C, 0x30A46C, 0x3E7BFA, 0x9E6CF0};
-    return lv_color_hex(C[(k - 1) % CELL_COLORS]);
-}
-
 /* (documented in ui_internal.h) */
 lv_color_t cell_base_bg(const sudoku_geom_t *geo, int i, bool given)
 {
@@ -255,20 +200,6 @@ bool has_progress(void)
         }
     }
     return false;
-}
-
-/**
- * @brief Start time, worked out from uptime if the clock was set after the puzzle
- * was opened (Wi-Fi connects a few seconds after start-up).
- * @return Unix time, 0 = not known
- */
-static int64_t game_started_at(void)
-{
-    time_t now = time(NULL);
-    if (!g_started_at && g_started_tick && CLOCK_VALID(now)) {
-        g_started_at = (int64_t)now - (int64_t)((lv_tick_get() - g_started_tick) / 1000);
-    }
-    return g_started_at;
 }
 
 /* (documented in ui_internal.h) */
@@ -427,8 +358,8 @@ void refresh_board(void)
         lv_obj_set_style_text_color(lv_obj_get_child(g_pad[d - 1], 0), locked ? lv_color_white() : C_TEXT, 0);
         lv_obj_set_style_text_color(g_pad_cnt[d - 1], locked ? lv_color_white() : C_MUTED, 0);
     }
-    lv_obj_set_style_opa(g_undo_btn, g_undo_len ? LV_OPA_COVER : LV_OPA_40, 0);
-    lv_obj_set_style_opa(g_redo_btn, g_redo_len ? LV_OPA_COVER : LV_OPA_40, 0);
+    lv_obj_set_style_opa(g_undo_btn, g_hist.len ? LV_OPA_COVER : LV_OPA_40, 0);
+    lv_obj_set_style_opa(g_redo_btn, g_hist.redo_len ? LV_OPA_COVER : LV_OPA_40, 0);
 
     if (g_hints) {
         lv_label_set_text_fmt(g_hint_cnt, "%u", (unsigned)g_hints);
@@ -462,212 +393,7 @@ void refresh_board(void)
     }
 }
 
-/* the solve, recorded a moment after the Solved dialog is up (SAVE_DELAY_MS) */
-static uint16_t s_solve_id;              /**< the puzzle */
-static uint32_t s_solve_secs;            /**< its time, s */
-static uint32_t s_solve_mistakes;        /**< its mistakes */
-static uint32_t s_solve_hints;           /**< its hints */
-static uint32_t s_solve_flags;           /**< its GAME_FLAG_* */
-static int64_t  s_solve_started;         /**< when it was started, Unix time */
 
-/**
- * @brief Records the solve (SAVE_DELAY_MS after the Solved dialog is up), and asks how the others did.
- * @param[in] t  the timer
- */
-static void solve_commit_cb(lv_timer_t *t)
-{
-    store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
-    stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_hints,
-                          s_solve_started, g_moves, g_nmoves, s_solve_flags);   /* finished: now */
-    /* head-to-head: where this leaves the player among everyone who solved it (after the solve above) */
-    stats_h2h_t h;
-    char line[96] = "";
-    if (is_stats_db_ready() && stats_db_puzzle_rank(s_solve_id, &h) && h.rank) {
-        char t[16];
-        fmt_time(t, sizeof(t), h.leader_seconds);
-        if (!h.leader[0]) {
-            snprintf(line, sizeof(line), "Nobody else has solved this one yet");
-        } else if (h.second) {
-            snprintf(line, sizeof(line), SYMBOL_STAR "  1st of %d: ahead of %s (%s)", h.of, h.leader, t);
-        } else {
-            snprintf(line, sizeof(line), "%d%s of %d   -   %s leads with %s", h.rank, ordinal(h.rank), h.of, h.leader, t);
-        }
-    }
-    lv_label_set_text(g_win_h2h, line);
-    while (lv_obj_get_child_count(g_win_h2h_row) > 1) {
-        lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
-    }
-    const stats_player_t *lead = line[0] && h.leader[0] ? player_find(0, h.leader) : NULL;
-    if (lead && lead->avatar && lead->avatar <= AVATAR_COUNT) {   /* the one ahead (or behind): their avatar */
-        lv_obj_t *b = player_badge(g_win_h2h_row, lead, -1, 26, 8);
-        lv_obj_move_to_index(b, 0);
-    }
-    char day[12] = "";
-    if (puzzle_is_generated(s_solve_id) && gen_lookup_day(s_solve_id, NULL, NULL, NULL, day) && day[0]) {
-        int id, streak;
-        bool solved;
-        if (stats_db_daily_status(day, &id, &solved, &streak) && solved) {   /* after the solve above (queued first) */
-            char msg[128];
-            int len = snprintf(msg, sizeof(msg), "Daily puzzle solved! Streak: %d day%s.", streak,
-                               streak == 1 ? "" : "s");
-            int rank = 0, of = 0;
-            if (stats_db_daily_rank(day, &rank, &of) && rank && of > 1) {
-                snprintf(msg + len, sizeof(msg) - len, " You're %d%s of %d today (Trophies > Daily).", rank,
-                         ordinal(rank), of);
-            }
-            sudoku_ui_notice(msg, 5000);
-        }
-    }
-}
-
-/** @brief The confetti's colours. */
-static const uint32_t CF_COLORS[] = {0xE53935, 0xFB8C00, 0xFDD835, 0x43A047, 0x1E88E5, 0x8E24AA, 0xEC407A, 0x00ACC1};
-static cf_piece_t *cf_p;                 /**< the pieces (CF_N) */
-static lv_obj_t *cf_ovl;                 /**< the overlay drawing them (NULL: none) */
-static lv_timer_t *cf_timer;             /**< its redraw */
-static uint32_t cf_t0;                   /**< when it started, lv_tick_get() */
-static uint32_t cf_last;                 /**< the last frame */
-static void (*cf_done)(void);           /**< runs when the confetti is over */
-
-/**
- * @brief A random number.
- * @param[in] lo  from
- * @param[in] hi  to
- * @return lo..hi
- */
-static float cf_rand(float lo, float hi)
-{
-    return lo + (hi - lo) * (float)(esp_random() & 0xFFFF) / 65535.0f;
-}
-
-/**
- * @brief Draws the confetti.
- * @param[in] e  the draw event
- */
-static void cf_draw_cb(lv_event_t *e)
-{
-    lv_layer_t *layer = lv_event_get_layer(e);
-    uint32_t age = lv_tick_elaps(cf_t0);
-    lv_opa_t opa = age + CF_FADE_MS < CF_MS ? LV_OPA_COVER
-                   : (lv_opa_t)(LV_OPA_COVER * (CF_MS - LV_MIN(age, CF_MS)) / CF_FADE_MS);
-    lv_draw_rect_dsc_t d;
-    lv_draw_rect_dsc_init(&d);
-    d.radius = 2;
-    d.bg_opa = opa;
-    for (int i = 0; i < CF_N; i++) {
-        const cf_piece_t *p = &cf_p[i];
-        if (p->y > SCR_W + 30 || p->x < -30 || p->x > SCR_W + 30) {
-            continue;
-        }
-        int32_t w = (int32_t)(p->w * fabsf(cosf(p->spin))) + 2;   /* turning over */
-        int32_t x = (int32_t)(p->x + 10.0f * sinf(p->sway)), y = (int32_t)p->y;
-        lv_area_t a = {x - w / 2, y - p->h / 2, x + (w - 1) / 2, y + (p->h - 1) / 2};
-        d.bg_color = lv_color_hex(CF_COLORS[p->color]);
-        lv_draw_rect(layer, &d, &a);
-    }
-}
-
-/**
- * @brief Stops the confetti (its overlay and timer go).
- */
-static void cf_stop(void)
-{
-    if (cf_timer) {
-        lv_timer_delete(cf_timer);
-    }
-    cf_timer = NULL;
-    if (cf_ovl) {
-        lv_obj_delete(cf_ovl);
-    }
-    cf_ovl = NULL;
-    free(cf_p);
-    cf_p = NULL;
-}
-
-/**
- * @brief Moves the confetti a frame; at the end it stops and cf_done runs.
- * @param[in] t  the timer
- */
-static void cf_tick(lv_timer_t *t)
-{
-    uint32_t now = lv_tick_get();
-    float dt = (float)lv_tick_diff(now, cf_last) / 1000.0f;
-    cf_last = now;
-    if (dt > 0.1f) {
-        dt = 0.1f;    /* (a slow frame doesn't throw them) */
-    }
-    for (int i = 0; i < CF_N; i++) {
-        cf_piece_t *p = &cf_p[i];
-        p->vy += 1300.0f * dt;                      /* gravity, px/s^2 */
-        float drag = 1.0f - 2.5f * dt;              /* air: the burst slows fast, then it's a fall */
-        p->vx *= drag;
-        p->vy *= drag;
-        p->x += p->vx * dt;
-        p->y += p->vy * dt;
-        p->spin += p->spin_v * dt;
-        p->sway += p->sway_v * dt;
-    }
-    lv_obj_invalidate(cf_ovl);
-    if (lv_tick_elaps(cf_t0) >= CF_MS) {
-        void (*done)(void) = cf_done;
-        cf_stop();
-        if (done) {
-            done();
-        }
-    }
-}
-
-/**
- * @brief starts the confetti; done runs when it's over (at once if it can't start)
- * @param[in] done  runs when it's over
- */
-static void confetti(void (*done)(void))
-{
-    cf_stop();
-    cf_p = malloc(sizeof(cf_piece_t) * CF_N);
-    if (!cf_p) {
-        if (done) {
-            done();
-        }
-        return;
-    }
-    for (int i = 0; i < CF_N; i++) {
-        cf_piece_t *p = &cf_p[i];
-        /* the burst, from the middle (tuned so the highest just reach the top edge and
-         * nearly all have fallen off the bottom by the end) */
-        float ang = cf_rand(0, 6.2832f), speed = cf_rand(400, 1300);
-        p->x = SCR_W / 2 + cf_rand(-12, 12);
-        p->y = SCR_W / 2 + cf_rand(-12, 12);
-        p->vx = speed * cosf(ang);
-        p->vy = speed * sinf(ang) - cf_rand(250, 600);   /* mostly upwards */
-        p->spin = cf_rand(0, 6.28f);
-        p->spin_v = cf_rand(6, 14);
-        p->sway = cf_rand(0, 6.28f);
-        p->sway_v = cf_rand(3, 6);
-        p->w = (uint8_t)cf_rand(9, 15);
-        p->h = (uint8_t)cf_rand(12, 20);
-        p->color = (uint8_t)(esp_random() % (sizeof(CF_COLORS) / sizeof(CF_COLORS[0])));
-    }
-    cf_ovl = lv_obj_create(lv_layer_top());
-    lv_obj_remove_style_all(cf_ovl);
-    lv_obj_set_size(cf_ovl, SCR_W, SCR_W);
-    lv_obj_set_clickable(cf_ovl, true);             /* no taps until the dialog is up */
-    lv_obj_add_event_cb(cf_ovl, cf_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
-    cf_done = done;
-    cf_t0 = cf_last = lv_tick_get();
-    cf_timer = lv_timer_create(cf_tick, 16, NULL);
-}
-
-/** @brief the Solved! dialog, after the confetti; the solve is saved once it's up */
-static void win_show(void)
-{
-    if (lv_screen_active() == screen_game() && g_solved) {   /* (the dialog only where it belongs) */
-        lv_obj_set_hidden(g_pause_ovl, true);
-        lv_obj_set_hidden(g_win_ovl, false);
-    }
-    lv_timer_t *ct = lv_timer_create(solve_commit_cb, SAVE_DELAY_MS, NULL);
-    lv_timer_set_repeat_count(ct, 1);
-}
 
 /**
  * @brief The puzzle is solved: the clock stops, the fanfare, confetti, then the Solved dialog; the solve is recorded.
@@ -700,128 +426,7 @@ static void on_solved(void)
         lv_timer_set_repeat_count(nt, 1);
         return;
     }
-    uint32_t secs = (g_elapsed_ms + 500) / 1000;
-    uint32_t prev = store_best_time(g_id);
-    uint32_t rec = secs ? (secs > 0xFFFF ? 0xFFFF : secs) : 1;   /* as store_record_solve() stores it */
-    bool best = !prev || rec < prev;
-    s_solve_id = g_id;
-    s_solve_secs = secs;
-    s_solve_mistakes = g_mistakes;
-    s_solve_hints = g_hints;
-    s_solve_flags = g_flags;
-    s_solve_started = game_started_at();
-
-    char t[16], b[16];
-    fmt_time(t, sizeof(t), secs);
-    lv_label_set_text(g_win_time, t);
-    if (best && prev) {
-        fmt_time(b, sizeof(b), prev);
-        lv_label_set_text_fmt(g_win_best, "New best!  (was %s)", b);
-        lv_obj_set_style_text_color(g_win_best, C_ORANGE, 0);
-    } else if (best) {
-        lv_label_set_text(g_win_best, "First solve!");
-        lv_obj_set_style_text_color(g_win_best, C_ORANGE, 0);
-    } else {
-        fmt_time(b, sizeof(b), prev);
-        lv_label_set_text_fmt(g_win_best, "Best time %s", b);
-        lv_obj_set_style_text_color(g_win_best, C_MUTED, 0);
-    }
-    if (g_mistakes == 0) {
-        lv_label_set_text(g_win_miss, "No mistakes");
-        lv_obj_set_style_text_color(g_win_miss, C_GREEN, 0);
-    } else {
-        lv_label_set_text_fmt(g_win_miss, "%u mistake%s", (unsigned)g_mistakes, g_mistakes == 1 ? "" : "s");
-        lv_obj_set_style_text_color(g_win_miss, C_MUTED, 0);
-    }
-    lv_label_set_text(g_win_h2h, "");                 /* (solve_commit_cb fills it in) */
-    while (lv_obj_get_child_count(g_win_h2h_row) > 1) {
-        lv_obj_delete(lv_obj_get_child(g_win_h2h_row, 0));
-    }
-    if (g_hints == 0) {
-        lv_label_set_text(g_win_hint, "No hints");
-        lv_obj_set_style_text_color(g_win_hint, C_GREEN, 0);
-    } else {
-        lv_label_set_text_fmt(g_win_hint, "%u hint%s used", (unsigned)g_hints, g_hints == 1 ? "" : "s");
-        lv_obj_set_style_text_color(g_win_hint, C_ORANGE, 0);
-    }
-    lv_obj_set_hidden(g_win_badge, !(g_flags & GAME_FLAG_NO_NOTES));
-    char day[12] = "";                              /* a daily puzzle: its result can be shared */
-    lv_obj_set_hidden(g_win_share, !(puzzle_is_generated(g_id) && gen_lookup_day(g_id, NULL, NULL, NULL, day) &&
-                                     day[0]));
-    if (!is_stats_db_ready()) {
-        sudoku_ui_notice("No sudoku.db on a microSD card: this result is kept only until the board is "
-                         "switched off.", 6000);
-    }
-    lv_obj_set_hidden(g_pause_ovl, true);
-    update_header();
-    confetti(win_show);                             /* then the dialog (win_show) */
-}
-
-/**
- * @brief After a move: conflicts, solved or not, the board redrawn, the game saved.
- */
-static void after_move(void)
-{
-    hint_drop();                                    /* the board changed: an open hint no longer fits */
-    compute_conflicts();
-    bool full = filled_count() == g_geo->ncells;
-    bool ok = true;
-    for (int i = 0; i < 81; i++) {
-        ok &= !g_conflict[i];
-    }
-    if (full && ok) {
-        on_solved();
-    }
-    refresh_board();
-    save_current();                                 /* every move (not once solved) */
-}
-
-/**
- * @brief Keeps the board as an undo step (the redo steps stay).
- */
-static void push_undo_keep_redo(void)
-{
-    g_undo[g_undo_head] = g_b;
-    g_undo_head = (g_undo_head + 1) % UNDO_MAX;
-    if (g_undo_len < UNDO_MAX) {
-        g_undo_len++;
-    }
-}
-
-/** @brief before every edit: the board goes on the undo ring, and redo is gone */
-static void push_undo(void)
-{
-    push_undo_keep_redo();
-    g_redo_len = 0;
-}
-
-/**
- * @brief The selected cell can be edited: not a given, the game neither solved nor paused.
- * @return true if so
- */
-static bool can_edit(void)
-{
-    return g_sel >= 0 && !g_given[g_sel] && !g_solved && !g_paused;
-}
-
-/**
- * @brief one entry in the move log (a cell's digit changed)
- * @param[in] cell  the cell
- * @param[in] digit  its digit, 0 = cleared
- * @param[in] kind  MOVE_*
- */
-static void record_move(int cell, int digit, move_kind_t kind)
-{
-    if (!g_moves) {
-        g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
-    }
-    if (!g_moves || g_nmoves >= GAME_MOVES_MAX) {
-        return;
-    }
-    g_moves[g_nmoves++] = (game_move_t) {
-        .t_ms = g_elapsed_ms, .cell = (uint8_t)cell, .digit = (uint8_t)digit,
-        .kind = (uint8_t)kind
-    };
+    win_prepare();
 }
 
 /* (documented in ui_internal.h) */
@@ -869,264 +474,6 @@ void enter_digit(int d)
     placed_sounds(i, d);
 }
 
-/**
- * @brief Fill: the selected cell gets its digit from the solution; counts as a hint
- * @param[in] e  the event
- */
-static void fill_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused) {
-        return;
-    }
-    if (g_attack) {
-        sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
-        return;
-    }
-    if (!g_sol_ok) {
-        sudoku_ui_notice("Fill isn't available: this puzzle has no solution.", 3000);
-        return;
-    }
-    if (g_sel < 0 || g_given[g_sel]) {
-        sudoku_ui_notice("Tap an empty cell first, then Fill.", 2500);
-        return;
-    }
-    int i = g_sel, d = g_sol[i];
-    if (g_b.val[i] == d) {
-        sudoku_ui_notice("That cell is already right.", 2000);
-        return;
-    }
-    push_undo();
-    place_digit(i, d);
-    record_move(i, d, MOVE_FILL);
-    if (g_hints < 0xFFFF) {
-        g_hints++;
-    }
-    after_move();
-    if (!g_solved) {
-        placed_sounds(i, d);
-    }
-}
-
-/**
- * @brief a digit placed in cell i: its notes go, and peers lose that note
- * @param[in] i  the cell
- * @param[in] d  the digit
- */
-static void place_digit(int i, int d)
-{
-    g_b.val[i] = (uint8_t)d;
-    g_b.notes[i] = 0;
-    for (int j = 0; j < 81; j++) {
-        if (j != i && is_peer(i, j)) {
-            g_b.notes[j] &= (uint16_t)~(1u << d);
-        }
-    }
-}
-
-/**
- * @brief chimes for a digit d placed in cell i without a conflict
- * @param[in] i  the cell
- * @param[in] d  the digit
- */
-static void placed_sounds(int i, int d)
-{
-    if (g_conflict[i]) {
-        return;
-    }
-    int n = 0;
-    bool clean = true;
-    for (int j = 0; j < 81; j++) {
-        if (g_b.val[j] == d) {
-            n++;
-            clean &= !g_conflict[j];
-        }
-    }
-    if (n == g_geo->n && clean) {
-        sfx_play(SFX_DIGIT_DONE);
-    }
-    int units = units_completed_by(i);              /* row / column / box / diagonal now complete */
-    if (units) {
-        sfx_play(units > 1 ? SFX_UNITS_DONE : SFX_UNIT_DONE);
-    }
-}
-
-/**
- * @brief A cell tapped: selects it (digit-first: places the locked digit).
- * @param[in] e  the event (user data: the cell)
- */
-static void cell_click_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused) {
-        return;
-    }
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    g_sel = i;
-    if (g_lock && !g_given[i]) {                    /* digit-first: the locked digit goes in (or its note) */
-        enter_digit(g_lock);
-        return;
-    }
-    refresh_board();
-}
-
-/* ---- the cell menu (long press a cell): paint it, and on Killer the cage's digit sets */
-static lv_obj_t *cm_ovl;                 /**< the cell menu (NULL: closed) */
-static int cm_cell;                      /**< its cell */
-
-/**
- * @brief Closes the cell menu.
- */
-static void cm_close(void)
-{
-    if (cm_ovl) {
-        lv_obj_delete_async(cm_ovl);
-    }
-    cm_ovl = NULL;
-}
-
-/**
- * @brief A tap beside the cell menu closes it.
- * @param[in] e  the event
- */
-static void cm_backdrop_cb(lv_event_t *e)
-{
-    if (lv_event_get_target_obj(e) == lv_event_get_current_target_obj(e)) {
-        cm_close();
-    }
-}
-
-/**
- * @brief A colour picked in the cell menu: the cell painted (undo takes it back).
- * @param[in] e  the event (user data: the colour)
- */
-static void cm_color_cb(lv_event_t *e)
-{
-    int k = (int)(intptr_t)lv_event_get_user_data(e);
-    int i = cm_cell;
-    cm_close();
-    if (g_solved || g_paused || i < 0 || g_b.colors[i] == k) {
-        return;
-    }
-    push_undo();
-    g_b.colors[i] = (uint8_t)k;
-    after_move();                                   /* redraws and saves (colours aren't in the move log) */
-}
-
-/**
- * @brief the sets of different digits that make up a cage's sum and hold the digits
- * already in it, as text ("1+5+9   2+4+9 ..."); how many sets
- * @param[in] k  the cage
- * @param[out] buf  gets the text
- * @param[in] n  its size
- * @return how many sets
- */
-static int cage_sets_text(int k, char *buf, size_t n)
-{
-    int size = g_geo->cage_n[k], sum = g_geo->cage_sum[k], count = 0;
-    uint16_t have = 0;
-    for (int j = 0; j < size; j++) {
-        int v = g_b.val[g_geo->cage_cell[k][j]];
-        if (v) {
-            have |= (uint16_t)(1u << v);
-        }
-    }
-    size_t len = 0;
-    buf[0] = 0;
-    for (uint16_t m = 2; m < 0x400; m += 2) {       /* digit sets as bits 1..9 */
-        if (__builtin_popcount(m) != size || (m & have) != have) {
-            continue;
-        }
-        int s = 0;
-        for (int d = 1; d <= 9; d++) {
-            s += (m >> d & 1) * d;
-        }
-        if (s != sum) {
-            continue;
-        }
-        count++;
-        if (len + 24 >= n) {
-            continue;    /* (the count still goes on) */
-        }
-        len += snprintf(buf + len, n - len, "%s", count > 1 ? "     " : "");
-        bool first = true;
-        for (int d = 1; d <= 9; d++) {
-            if (!(m >> d & 1)) {
-                continue;
-            }
-            len += snprintf(buf + len, n - len, first ? "%d" : "+%d", d);
-            first = false;
-        }
-    }
-    return count;
-}
-
-/**
- * @brief A long press on a cell: its menu (paint it; on Killer, the cage's digit sets).
- * @param[in] e  the event (user data: the cell)
- */
-static void cell_long_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused) {
-        return;
-    }
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    cm_close();
-    cm_cell = i;
-    cm_ovl = lv_obj_create(lv_layer_top());
-    lv_obj_remove_style_all(cm_ovl);
-    lv_obj_set_size(cm_ovl, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(cm_ovl, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(cm_ovl, LV_OPA_30, 0);
-    lv_obj_set_clickable(cm_ovl, true);
-    lv_obj_add_event_cb(cm_ovl, cm_backdrop_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *card = lv_obj_create(cm_ovl);
-    lv_obj_set_size(card, 520, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_color(card, C_CARD, 0);
-    lv_obj_set_style_border_color(card, C_ACCENT, 0);
-    lv_obj_set_style_border_width(card, 2, 0);
-    lv_obj_set_style_radius(card, 14, 0);
-    lv_obj_set_style_pad_all(card, 14, 0);
-    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(card, 10, 0);
-    lv_obj_set_scrollable(card, false);
-    /* above the cell's row when it's low on the board, else below it */
-    lv_area_t co;
-    lv_obj_get_coords(g_cells[i], &co);
-    lv_obj_align(card, co.y1 > SCR_W / 2 ? LV_ALIGN_TOP_MID : LV_ALIGN_BOTTOM_MID, 0, co.y1 > SCR_W / 2 ? 70 : -20);
-    lv_obj_t *t = make_label(card, &lv_font_montserrat_18, C_TEXT);
-    lv_label_set_text_fmt(t, "Row %d, column %d: colour", i / 9 + 1, i % 9 + 1);
-    lv_obj_t *row = lv_obj_create(card);
-    lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, LV_PCT(100), 56);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(row, 8, 0);
-    for (int k = 0; k <= CELL_COLORS; k++) {        /* none, then the colours */
-        lv_obj_t *b = make_btn(row, 0, 0, 58, 56, k ? NULL : LV_SYMBOL_CLOSE, &lv_font_montserrat_20, cm_color_cb,
-                               (void *)(intptr_t)k);
-        if (k) {
-            lv_obj_set_style_bg_color(b, cell_color(k), 0);
-        } else {
-            lv_obj_set_style_bg_color(b, C_CARD2, 0);
-        }
-        if (g_b.colors[i] == k) {
-            lv_obj_set_style_border_color(b, C_TEXT, 0);
-            lv_obj_set_style_border_width(b, 3, 0);
-        }
-    }
-    int k = g_geo->cage_of[i];
-    if (k != CAGE_NONE) {                           /* Killer helper */
-        char sets[240];
-        int n = cage_sets_text(k, sets, sizeof(sets));
-        lv_obj_t *h = make_label(card, &lv_font_montserrat_16, C_MUTED);
-        lv_label_set_text_fmt(h, "Cage: %d in %d cells, %d way%s%s", g_geo->cage_sum[k], g_geo->cage_n[k], n,
-                              n == 1 ? "" : "s", n ? ":" : " (check the digits in it)");
-        if (n) {
-            lv_obj_t *l = make_label(card, &lv_font_montserrat_20, C_TEXT);
-            lv_obj_set_width(l, LV_PCT(100));
-            lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
-            lv_label_set_text(l, sets);
-        }
-    }
-}
 
 /**
  * @brief Draws a cell's pencil marks.
@@ -1173,154 +520,6 @@ static void cell_draw_cb(lv_event_t *e)
         d.text = DIGITS[n];
         lv_draw_label(layer, &d, &a);
     }
-}
-
-/**
- * @brief A short tap enters the digit in the selected cell; while a digit is
- * locked (digit-first) it moves the lock to that digit, or unlocks it.
- * @param[in] e  the event (user data: the digit)
- */
-static void pad_click_cb(lv_event_t *e)
-{
-    int d = (int)(intptr_t)lv_event_get_user_data(e);
-    if (g_lock) {
-        g_lock = g_lock == d ? 0 : d;
-        refresh_board();
-        return;
-    }
-    enter_digit(d);
-}
-
-/**
- * @brief A long press locks the digit: then each tap on a cell places it there.
- * @param[in] e  the event (user data: the digit)
- */
-static void pad_long_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused) {
-        return;
-    }
-    int d = (int)(intptr_t)lv_event_get_user_data(e);
-    g_lock = g_lock == d ? 0 : d;
-    refresh_board();
-}
-
-/**
- * @brief Auto notes: every empty cell gets all the digits that still fit there as
- * pencil marks (replacing its notes). Undo takes it back.
- * @param[in] e  the event
- */
-static void auto_notes_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused || (g_flags & GAME_FLAG_NO_NOTES)) {
-        return;
-    }
-    uint16_t notes[81];
-    int changed = 0;
-    for (int k = 0; k < g_geo->ncells; k++) {
-        int c = g_geo->cells[k];
-        notes[c] = g_b.notes[c];
-        if (g_b.val[c]) {
-            continue;
-        }
-        uint16_t m = g_geo->all;
-        for (int p = 0; p < g_geo->npeers[c]; p++) {
-            m &= (uint16_t)~(1u << g_b.val[g_geo->peers[c][p]]);
-        }
-        notes[c] = m;
-        changed += m != g_b.notes[c];
-    }
-    if (!changed) {
-        sudoku_ui_notice("The notes already show every digit that fits.", 2500);
-        return;
-    }
-    push_undo();
-    for (int k = 0; k < g_geo->ncells; k++) {
-        g_b.notes[g_geo->cells[k]] = notes[g_geo->cells[k]];
-    }
-    after_move();
-}
-
-/**
- * @brief Erase: the selected cell's digit or pencil marks.
- * @param[in] e  the event
- */
-static void erase_cb(lv_event_t *e)
-{
-    if (!can_edit()) {
-        return;
-    }
-    if (!g_b.val[g_sel] && !g_b.notes[g_sel]) {
-        return;
-    }
-    push_undo();
-    if (g_b.val[g_sel]) {
-        record_move(g_sel, 0, MOVE_ERASE);
-    }
-    g_b.val[g_sel] = 0;
-    g_b.notes[g_sel] = 0;
-    after_move();
-}
-
-/**
- * @brief Undo: the board as it was before the last edit.
- * @param[in] e  the event
- */
-static void undo_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused || g_undo_len == 0) {
-        return;
-    }
-    if (g_redo_len == UNDO_MAX) {                   /* full: the oldest undone board goes */
-        memmove(g_redo, g_redo + 1, sizeof(board_t) * (UNDO_MAX - 1));
-        g_redo_len--;
-    }
-    g_redo[g_redo_len++] = g_b;                     /* for Redo */
-    g_undo_head = (g_undo_head + UNDO_MAX - 1) % UNDO_MAX;
-    g_undo_len--;
-    uint8_t before[81];
-    memcpy(before, g_b.val, sizeof(before));
-    g_b = g_undo[g_undo_head];
-    for (int i = 0; i < 81; i++) {
-        if (g_b.val[i] != before[i]) {
-            record_move(i, g_b.val[i], MOVE_UNDO);
-        }
-    }
-    after_move();
-}
-
-/**
- * @brief Redo: puts back what the last Undo took away (until the next edit).
- * @param[in] e  the event
- */
-static void redo_cb(lv_event_t *e)
-{
-    if (g_solved || g_paused || g_redo_len == 0) {
-        return;
-    }
-    push_undo_keep_redo();
-    uint8_t before[81];
-    memcpy(before, g_b.val, sizeof(before));
-    g_b = g_redo[--g_redo_len];
-    for (int i = 0; i < 81; i++) {
-        if (g_b.val[i] != before[i]) {
-            record_move(i, g_b.val[i], MOVE_REDO);
-        }
-    }
-    after_move();
-}
-
-/**
- * @brief Notes: the pad writes pencil marks, or digits.
- * @param[in] e  the event
- */
-static void notes_cb(lv_event_t *e)
-{
-    if (g_flags & GAME_FLAG_NO_NOTES) {             /* (the button is off in the challenge anyway) */
-        lv_obj_remove_state(g_notes_btn, LV_STATE_CHECKED);
-        return;
-    }
-    g_notes_mode = lv_obj_has_state(g_notes_btn, LV_STATE_CHECKED);
 }
 
 /* (documented in ui_internal.h) */
@@ -1512,72 +711,7 @@ void build_game(void)
     lv_obj_set_hidden(h_card, true);
     h_step = 0;
 
-    /* solved dialog */
-    g_win_ovl = lv_obj_create(screen_game());
-    lv_obj_remove_style_all(g_win_ovl);
-    lv_obj_set_size(g_win_ovl, SCR_W, SCR_W);
-    lv_obj_set_style_bg_color(g_win_ovl, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(g_win_ovl, (lv_opa_t)P->scrim_opa, 0);
-    lv_obj_set_clickable(g_win_ovl, true);
-    lv_obj_set_hidden(g_win_ovl, true);
-    lv_obj_add_event_cb(g_win_ovl, win_hide_cb, LV_EVENT_CLICKED, NULL);
-
-    lv_obj_t *card = lv_obj_create(g_win_ovl);
-    lv_obj_set_size(card, 480, 362);
-    lv_obj_center(card);
-    lv_obj_set_style_bg_color(card, C_CARD, 0);
-    lv_obj_set_style_border_color(card, C_GREEN, 0);
-    lv_obj_set_style_border_width(card, 2, 0);
-    lv_obj_set_style_radius(card, 16, 0);
-    lv_obj_set_scrollable(card, false);
-
-    lv_obj_t *wt = make_label(card, &lv_font_montserrat_28, C_GREEN);
-    lv_label_set_text(wt, LV_SYMBOL_OK "  Solved!");
-    lv_obj_align(wt, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t *tl = make_label(card, &lv_font_montserrat_16, C_MUTED);
-    lv_label_set_text(tl, "Time to solve");
-    lv_obj_align(tl, LV_ALIGN_TOP_MID, 0, 62);
-    g_win_time = make_label(card, &font_timer_36, C_TEXT);
-    lv_obj_align(g_win_time, LV_ALIGN_TOP_MID, 0, 86);
-    g_win_best = make_label(card, &lv_font_montserrat_18, C_MUTED);
-    lv_obj_align(g_win_best, LV_ALIGN_TOP_MID, 0, 136);
-    g_win_miss = make_label(card, &lv_font_montserrat_18, C_MUTED);
-    lv_obj_align(g_win_miss, LV_ALIGN_TOP_MID, 0, 164);
-    g_win_hint = make_label(card, &lv_font_montserrat_18, C_MUTED);
-    lv_obj_align(g_win_hint, LV_ALIGN_TOP_MID, 0, 190);
-    g_win_h2h_row = lv_obj_create(card);            /* head-to-head: filled in a moment later */
-    lv_obj_remove_style_all(g_win_h2h_row);
-    lv_obj_set_size(g_win_h2h_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(g_win_h2h_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(g_win_h2h_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(g_win_h2h_row, 8, 0);
-    lv_obj_set_clickable(g_win_h2h_row, false);
-    lv_obj_align(g_win_h2h_row, LV_ALIGN_TOP_MID, 0, 218);
-    g_win_h2h = make_label(g_win_h2h_row, &font_icons_20, C_ACCENT);   /* (with a leader's avatar: 26 + 8 less) */
-    lv_obj_set_style_max_width(g_win_h2h, 440 - 34, 0);
-    lv_obj_set_height(g_win_h2h, lv_font_get_line_height(&font_icons_20));   /* one line */
-    lv_label_set_long_mode(g_win_h2h, LV_LABEL_LONG_MODE_DOTS);
-    g_win_badge = make_label(card, &lv_font_montserrat_16, C_ACCENT);   /* the no-notes challenge */
-    lv_label_set_text(g_win_badge, LV_SYMBOL_EDIT "  No-notes challenge: done without notes");
-    lv_obj_align(g_win_badge, LV_ALIGN_TOP_MID, 0, 250);
-    lv_obj_set_hidden(g_win_badge, true);
-    lv_obj_t *shot = make_btn(card, 0, 0, 56, 48, SYMBOL_CAMERA, &font_icons_20, screenshot_cb, NULL);
-    lv_obj_set_style_bg_color(shot, C_CARD2, 0);    /* a screenshot of the solved board */
-    lv_obj_align(shot, LV_ALIGN_TOP_LEFT, 0, 0);
-    g_win_share = make_btn(card, 0, 0, 56, 48, SYMBOL_QR, &font_icons_20, win_share_cb, NULL);   /* daily: share */
-    lv_obj_set_style_bg_color(g_win_share, C_CARD2, 0);
-    lv_obj_align(g_win_share, LV_ALIGN_TOP_RIGHT, 0, 0);
-    lv_obj_set_hidden(g_win_share, true);
-
-    lv_obj_t *b1 = make_btn(card, 0, 0, 128, 60, LV_SYMBOL_LIST "  Puzzles", &lv_font_montserrat_16, win_list_cb, NULL);
-    lv_obj_align(b1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_set_style_bg_color(b1, C_CARD2, 0);
-    lv_obj_t *b3 = make_btn(card, 0, 0, 128, 60, LV_SYMBOL_PLAY "  Replay", &lv_font_montserrat_16, win_replay_cb, NULL);
-    lv_obj_align(b3, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_style_bg_color(b3, C_CARD2, 0);
-    lv_obj_t *b2 = make_btn(card, 0, 0, 128, 60, "Next  " LV_SYMBOL_RIGHT, &lv_font_montserrat_16, win_next_cb, NULL);
-    lv_obj_align(b2, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-    lv_obj_set_style_bg_color(b2, C_ACCENT, 0);
+    win_build();                                    /* the Solved dialog (ui_game_win.c) */
 
     g_layout_var = -1;                              /* new widgets: lay them out for the current puzzle */
     game_layout();
@@ -1693,74 +827,14 @@ void reset_game(void)
     g_nmoves = 0;                                   /* a new attempt, a new log */
     hint_drop();
     mark_started();                                 /* opened or restarted: a new attempt */
-    g_undo_len = 0;
-    g_undo_head = 0;
-    g_redo_len = 0;
+    game_history_clear(&g_hist);
     g_lock = 0;
     g_sel = -1;
     g_solved = false;
-    lv_obj_set_hidden(g_win_ovl, true);
+    win_hide();
     set_paused(false);
     compute_conflicts();
     refresh_board();
-}
-
-/**
- * @brief Solved dialog: Next (the next puzzle of the collection it came from).
- * @param[in] e  the event
- */
-static void win_next_cb(lv_event_t *e)
-{
-    if (g_from_coll >= PUZZLE_COLLECTION_COUNT && coll_saved_index(g_from_coll) >= 0) {   /* a saved collection */
-        int i = coll_find(g_from_coll, g_id);
-        if (i >= 0) {
-            open_puzzle(coll_puzzle(g_from_coll, (i + 1) % coll_size(g_from_coll)));
-            return;
-        }
-    }
-    int ic = coll_of(g_id);
-    if (ic >= PUZZLE_COLLECTION_COUNT) {         /* imported: the next one of its collection */
-        uint16_t first = coll_first(ic), next = g_id + 1;
-        if (next >= first + coll_size(ic)) {
-            next = first;
-        }
-        open_puzzle(next);
-        return;
-    }
-    if (puzzle_is_generated(g_id)) {             /* another one of the same variant and level */
-        int lv = GEN_MEDIUM, var = VAR_CLASSIC;
-        gen_lookup(g_id, NULL, &var, &lv);
-        gen_start(var, lv);
-        return;
-    }
-    int c = puzzle_collection_of(g_id);
-    const puzzle_collection_t *pc = puzzle_collection(c);
-    uint16_t next = g_id + 1;
-    if (next >= pc->first + pc->count) {
-        next = pc->first;
-    }
-    open_puzzle(next);
-}
-
-/**
- * @brief Solved dialog: back to the list.
- * @param[in] e  the event
- */
-static void win_list_cb(lv_event_t *e)
-{
-    show_list();
-}
-
-/**
- * @brief A tap beside the Solved dialog's card hides it, to look at the solved board.
- * @param[in] e  the event
- */
-static void win_hide_cb(lv_event_t *e)
-{
-    /* tap outside the card: look at the solved board */
-    if (lv_event_get_target_obj(e) == g_win_ovl) {
-        lv_obj_set_hidden(g_win_ovl, true);
-    }
 }
 
 /* (documented in ui_internal.h) */
@@ -1833,35 +907,6 @@ void start_game(uint16_t id, bool resume)
 }
 
 /**
- * @brief Solved dialog of a daily puzzle: the result as a QR code, for a phone (and a message to friends)
- * @param[in] e  the event
- */
-static void win_share_cb(lv_event_t *e)
-{
-    char day[12] = "", kind[48] = "", t[16];
-    int var = 0, lv = 0;
-    if (!puzzle_is_generated(s_solve_id) || !gen_lookup_day(s_solve_id, NULL, &var, &lv, day) || !day[0]) {
-        return;
-    }
-    daily_kind_text(var, lv, kind, sizeof(kind));
-    fmt_time(t, sizeof(t), s_solve_secs);
-    char hints[24];
-    if (s_solve_hints) {
-        snprintf(hints, sizeof(hints), "%u hint%s", (unsigned)s_solve_hints, s_solve_hints == 1 ? "" : "s");
-    } else {
-        snprintf(hints, sizeof(hints), "no hints");
-    }
-    static char text[256];
-    snprintf(text, sizeof(text), "Sudoku daily %s (%s)\n%s: solved in %s, %u mistake%s, %s%s\nESP32-P4 Sudoku",
-             day, kind, store_player_name(), t, (unsigned)s_solve_mistakes, s_solve_mistakes == 1 ? "" : "s", hints,
-             (s_solve_flags & GAME_FLAG_NO_NOTES) ? ", no notes" : "");
-    if (!qr_dialog(SYMBOL_QR "  Today's result", text,
-                   "Scan it with a phone to send it to friends: the day, the puzzle, your time and mistakes.")) {
-        sudoku_ui_notice("Couldn't make a QR code of the result.", 3000);
-    }
-}
-
-/**
  * @brief the ⋮ menu of the second row: the variant's rules, Share (a QR code), Star (Puzzles > Starred), Save
  * (into a collection: Puzzles > Saved), Auto notes, Restart
  * @param[in] e  the event
@@ -1898,16 +943,6 @@ static void star_cb(lv_event_t *e)
     sudoku_ui_notice(g_starred ? "Starred: it's under Puzzles > Starred." : "No longer starred.", 2000);
 }
 
-/* (documented in ui_internal.h) */
-void win_replay_cb(lv_event_t *e)
-{
-    char t[16], sub[96];
-    fmt_time(t, sizeof(t), s_solve_secs);
-    snprintf(sub, sizeof(sub), "%s   -   solved in %s   -   %u hint%s   -   orange = Fill",
-             store_player_name(), t, (unsigned)g_hints, g_hints == 1 ? "" : "s");
-    open_replay(g_id, g_moves, g_moves ? g_nmoves : 0, sub, store_player_name());
-}
-
 /* ---- accessors: the other UI files reach this file's state through these */
 const char *const *ui_digits(void) { return DIGITS; }
 uint16_t game_id(void) { return g_id; }
@@ -1919,6 +954,13 @@ const sudoku_geom_t *game_geo_buf(void) { return g_geo_buf; }
 void game_set_geo_buf(sudoku_geom_t *v) { g_geo_buf = v; }
 const uint8_t *game_given(void) { return g_given; }
 const board_t *game_b(void) { return &g_b; }
+board_t *game_board(void) { return &g_b; }
+game_history_t *game_hist(void) { return &g_hist; }
+int game_lock(void) { return g_lock; }
+void game_set_lock(int v) { g_lock = v; }
+void game_set_hints(uint16_t v) { g_hints = v; }
+const uint8_t *game_sol(void) { return g_sol; }
+bool is_game_sol_ok(void) { return g_sol_ok; }
 int game_sel(void) { return g_sel; }
 void game_set_sel(int v) { g_sel = v; }
 bool is_game_notes_mode(void) { return g_notes_mode; }
@@ -1932,6 +974,7 @@ uint16_t game_mistakes(void) { return g_mistakes; }
 uint16_t game_hints(void) { return g_hints; }
 uint32_t game_flags(void) { return g_flags; }
 void game_set_flags(uint32_t v) { g_flags = v; }
+const game_move_t *game_moves(void) { return g_moves; }
 int hint_step(void) { return h_step; }
 void hint_set_step(int v) { h_step = v; }
 const sudoku_step_t *hint_info(void) { return &h_info; }
@@ -1953,14 +996,14 @@ uint32_t game_started_tick(void) { return g_started_tick; }
 void game_set_started_tick(uint32_t v) { g_started_tick = v; }
 uint32_t game_last_tick(void) { return g_last_tick; }
 void game_set_last_tick(uint32_t v) { g_last_tick = v; }
-const board_t *game_undo(void) { return g_undo; }
-void game_set_undo(board_t *v) { g_undo = v; }
-int game_undo_head(void) { return g_undo_head; }
-void game_set_undo_head(int v) { g_undo_head = v; }
-int game_undo_len(void) { return g_undo_len; }
-void game_set_undo_len(int v) { g_undo_len = v; }
-const board_t *game_redo(void) { return g_redo; }
-void game_set_redo(board_t *v) { g_redo = v; }
+const board_t *game_undo(void) { return g_hist.undo; }
+void game_set_undo(board_t *v) { g_hist.undo = v; }
+int game_undo_head(void) { return g_hist.head; }
+void game_set_undo_head(int v) { g_hist.head = v; }
+int game_undo_len(void) { return g_hist.len; }
+void game_set_undo_len(int v) { g_hist.len = v; }
+const board_t *game_redo(void) { return g_hist.redo; }
+void game_set_redo(board_t *v) { g_hist.redo = v; }
 int game_from_coll(void) { return g_from_coll; }
 void game_set_from_coll(int v) { g_from_coll = v; }
 lv_obj_t *game_grid(void) { return g_grid; }
@@ -1978,3 +1021,189 @@ lv_obj_t *game_hint_btn(void) { return g_hint_btn; }
 lv_obj_t *game_bulb_btn(void) { return g_bulb_btn; }
 lv_obj_t *game_timer_btn(void) { return g_timer_btn; }
 lv_obj_t *game_fill_btn(void) { return g_fill_btn; }
+
+/* ------------------------------------------------------------- restart, back, the clock */
+/**
+ * @brief Restart confirmed: the game back to its givens.
+ * @param[in] e  the event (user data: the dialog)
+ */
+static void restart_confirm_cb(lv_event_t *e)
+{
+    lv_obj_t *mbox = (lv_obj_t *)lv_event_get_user_data(e);
+    if (store_saved_game()->id == game_id()) {
+        store_clear_game();
+    }
+    reset_game();
+    lv_msgbox_close_async(mbox);
+}
+
+/* (documented in ui_internal.h) */
+void restart_cb(lv_event_t *e)
+{
+    if (!is_game_solved() && !has_progress()) {
+        reset_game();
+        return;
+    }
+    lv_obj_t *m = make_msgbox("Restart puzzle?", "All entries and the timer will be reset.");
+    msgbox_button(m, "Cancel", mbox_close_cb, false);
+    msgbox_button(m, "Restart", restart_confirm_cb, true);
+}
+
+/**
+ * @brief The time attack's Stop: the run ends (not recorded).
+ * @param[in] e  the event (user data: the dialog)
+ */
+static void atk_stop_cb(lv_event_t *e)
+{
+    lv_msgbox_close(lv_event_get_user_data(e));
+    game_set_attack(false);                               /* (not recorded: the run wasn't finished) */
+    game_set_solved(true);
+    show_home();
+}
+
+/**
+ * @brief The time attack's Keep going: back to the puzzle.
+ * @param[in] e  the event (user data: the dialog)
+ */
+static void atk_keep_cb(lv_event_t *e)
+{
+    lv_msgbox_close(lv_event_get_user_data(e));
+    set_paused(false);
+}
+
+/* (documented in ui_internal.h) */
+void back_cb(lv_event_t *e)
+{
+    if (is_game_attack() && !is_game_solved()) {
+        set_paused(true);
+        lv_obj_t *m = make_msgbox(LV_SYMBOL_CHARGE "  Stop the run?", "A time attack only counts when its 10 "
+                                  "minutes are up. Puzzles solved so far still count as solves.");
+        msgbox_button(m, "Keep going", atk_keep_cb, false);
+        msgbox_button(m, "Stop", atk_stop_cb, true);
+        return;
+    }
+    save_current();
+    show_list();
+}
+
+/* (documented in ui_internal.h) */
+void tick_cb(lv_timer_t *t)
+{
+    uint32_t now = lv_tick_get();
+    bool running = game_id() != STORE_NO_GAME && lv_screen_active() == screen_game() && !is_game_solved() && !is_game_paused() && !is_tour_open();
+    if (running) {
+        game_set_elapsed_ms(game_elapsed_ms() + (now - game_last_tick()));
+        update_timer_label();
+        if (is_game_attack() && attack_used_ms() + game_elapsed_ms() >= ATK_MS) {
+            atk_finish();
+        }
+    }
+    game_set_last_tick(now);
+}
+
+/* (documented in ui_internal.h) */
+void mark_started(void)
+{
+    time_t now = time(NULL);
+    game_set_start_stamp(CLOCK_VALID(now) ? (int64_t)now : 0);
+    game_set_started_tick(lv_tick_get());
+    if (!game_started_tick()) {
+        game_set_started_tick(1);
+    }
+}
+
+/* (documented in ui_internal.h) */
+int64_t game_started_at(void)
+{
+    time_t now = time(NULL);
+    if (!g_started_at && g_started_tick && CLOCK_VALID(now)) {
+        g_started_at = (int64_t)now - (int64_t)((lv_tick_get() - g_started_tick) / 1000);
+    }
+    return g_started_at;
+}
+
+/* (documented in ui_internal.h) */
+void after_move(void)
+{
+    hint_drop();                                    /* the board changed: an open hint no longer fits */
+    compute_conflicts();
+    bool full = filled_count() == g_geo->ncells;
+    bool ok = true;
+    for (int i = 0; i < 81; i++) {
+        ok &= !g_conflict[i];
+    }
+    if (full && ok) {
+        on_solved();
+    }
+    refresh_board();
+    save_current();                                 /* every move (not once solved) */
+}
+
+/* (documented in ui_internal.h) */
+lv_color_t cell_color(int k)
+{
+    static const uint32_t C[CELL_COLORS] = {0xE5484D, 0xF5A524, 0xE2D33C, 0x30A46C, 0x3E7BFA, 0x9E6CF0};
+    return lv_color_hex(C[(k - 1) % CELL_COLORS]);
+}
+
+/* (documented in ui_internal.h) */
+void push_undo(void)
+{
+    game_history_push(&g_hist, &g_b, false);
+}
+
+/* (documented in ui_internal.h) */
+bool can_edit(void)
+{
+    return g_sel >= 0 && !g_given[g_sel] && !g_solved && !g_paused;
+}
+
+/* (documented in ui_internal.h) */
+void place_digit(int i, int d)
+{
+    g_b.val[i] = (uint8_t)d;
+    g_b.notes[i] = 0;
+    for (int j = 0; j < 81; j++) {
+        if (j != i && is_peer(i, j)) {
+            g_b.notes[j] &= (uint16_t)~(1u << d);
+        }
+    }
+}
+
+/* (documented in ui_internal.h) */
+void placed_sounds(int i, int d)
+{
+    if (g_conflict[i]) {
+        return;
+    }
+    int n = 0;
+    bool clean = true;
+    for (int j = 0; j < 81; j++) {
+        if (g_b.val[j] == d) {
+            n++;
+            clean &= !g_conflict[j];
+        }
+    }
+    if (n == g_geo->n && clean) {
+        sfx_play(SFX_DIGIT_DONE);
+    }
+    int units = units_completed_by(i);              /* row / column / box / diagonal now complete */
+    if (units) {
+        sfx_play(units > 1 ? SFX_UNITS_DONE : SFX_UNIT_DONE);
+    }
+}
+
+/* (documented in ui_internal.h) */
+void record_move(int cell, int digit, move_kind_t kind)
+{
+    if (!g_moves) {
+        g_moves = heap_caps_malloc(sizeof(game_move_t) * GAME_MOVES_MAX, MALLOC_CAP_SPIRAM);
+    }
+    if (!g_moves || g_nmoves >= GAME_MOVES_MAX) {
+        return;
+    }
+    g_moves[g_nmoves++] = (game_move_t) {
+        .t_ms = g_elapsed_ms, .cell = (uint8_t)cell, .digit = (uint8_t)digit,
+        .kind = (uint8_t)kind
+    };
+}

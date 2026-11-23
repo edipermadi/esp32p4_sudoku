@@ -2,7 +2,7 @@
 
 [← Internals](README.md) · [README](../../README.md) · [Features](../features.md) · [Data & storage](../data.md) · [Development](../development.md) · [Variants](../variants/README.md)
 
-How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them and gives hints. It is all in `src/gen_*.c` (`gen_geometry.c` the boards and texts, `gen_solver.c` the rules and the search, `gen_grade.c` the techniques, `gen_make.c` generating, `gen_hints.c` hints; they share `gen_internal.h`) and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`.
+How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them and gives hints. It is all in `src/gen_*.c` (`gen_geometry.c` the boards and texts, `gen_solver.c` the rules and the search, `gen_grade.c` the techniques, `gen_make.c` generating, `gen_regions.c` Jigsaw regions and Killer cages, `gen_lines.c` the line variants' lines, `gen_hints.c` hints; they share `gen_internal.h`) and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`.
 
 ## In one paragraph
 
@@ -199,7 +199,7 @@ The usual path, roughly in the order it was done for the last few:
    - the rule in `grid_free()` with a `WHY()` checkpoint (`gen_solver.c`);
    - a `gen_*_logic()` step, added to `gen_technique_tier()` (`gen_grade.c`) and `sudoku_next_step()` (`gen_hints.c`);
    - `gen_easy_min_clues()` (`gen_grade.c`);
-   - a branch in `sudoku_generate()` that derives the clues from a full grid (`gen_make.c`).
+   - a branch in `sudoku_generate()` that derives the clues from a full grid (`gen_make.c`; a new line kind's paths in `gen_lines.c`).
 3. **Elsewhere**:
    - `sdx.c` (import/export);
    - `ui_common.c` (rebuilding the board from the database);

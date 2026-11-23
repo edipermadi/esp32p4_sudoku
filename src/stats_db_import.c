@@ -3,6 +3,7 @@
  * @brief Puzzle collections imported from the card (.sdm, .xml, .sdx files).
  */
 #include "stats_db_internal.h"
+#include "import_parse.h"
 
 static int query_int_text(const char *sql, const char *text);
 
@@ -11,78 +12,6 @@ static int query_int_text(const char *sql, const char *text);
 #define IMPORT_MAX_RUN 2000                          /**< puzzles per import run */
 
 static volatile bool s_imports_changed;              /**< an import changed the collections */
-
-/**
- * @brief 81 cells from text.
- * @param[in] p    the text (digits, '.' or '0' = empty)
- * @param[out] out  gets the cells
- * @return false if it isn't a puzzle
- */
-static bool parse_cells(const char *p, uint8_t out[81])
-{
-    for (int i = 0; i < 81; i++) {
-        char c = p[i];
-        if (c >= '1' && c <= '9') {
-            out[i] = (uint8_t)(c - '0');
-        } else if (c == '0' || c == '.') {
-            out[i] = 0;
-        } else {
-            return false;
-        }
-    }
-    char after = p[81];
-    return !(after >= '0' && after <= '9') && after != '.';
-}
-
-/**
- * @brief The puzzles of one file.
- * @param[in] path   the file
- * @param[in] xml    OpenSudoku's XML: the puzzles are data="..." (or '...') attributes; else a puzzle
- *               per line
- * @param[out] cells  gets them
- * @param[in] max    puzzles at most
- * @return how many
- */
-static int parse_file(const char *path, bool xml, uint8_t (*cells)[81], int max)
-{
-    FILE *f = fopen(path, "r");
-    if (!f) {
-        return 0;
-    }
-    static char line[512];
-    int n = 0;
-    while (n < max && fgets(line, sizeof(line), f)) {
-        if (xml) {
-            for (const char *q = line; n < max && (q = strstr(q, "data=")) != NULL; q += 5) {
-                if ((q[5] == '"' || q[5] == '\'') && strlen(q + 6) >= 82 && parse_cells(q + 6, cells[n])) {
-                    n++;
-                }
-            }
-        } else {
-            const char *q = line;
-            while (*q == ' ' || *q == '\t') {
-                q++;
-            }
-            if (strlen(q) >= 81 && parse_cells(q, cells[n])) {
-                n++;
-            }
-        }
-    }
-    fclose(f);
-    return n;
-}
-
-/**
- * @brief Whether a name ends with a suffix (any case).
- * @param[in] s       the name
- * @param[in] suffix  the suffix, e.g. ".sdm"
- * @return true: it does
- */
-static bool is_ends_with(const char *s, const char *suffix)
-{
-    size_t a = strlen(s), b = strlen(suffix);
-    return a >= b && strcasecmp(s + a - b, suffix) == 0;
-}
 
 /**
  * @brief Adds a collection's row to imported.
@@ -264,7 +193,7 @@ static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], in
     char base[STATS_IMPORT_NAME];                   /* the collection's name: the file's, without the extension */
     const char *dot = strrchr(fn, '.');
     snprintf(base, sizeof(base), "%.*s", (int)(dot ? dot - fn : (int)strlen(fn)), fn);
-    if (is_ends_with(fn, ".sdx")) {                    /* any variant: line by line (see import_sdx) */
+    if (is_import_name_ends_with(fn, ".sdx")) {                    /* any variant: line by line (see import_sdx) */
         int got = sdb_exec("BEGIN") ? import_sdx(path, fn, base, max, bad) : -1;
         if (got > 0 && sdb_exec("COMMIT")) {
             return got;
@@ -272,7 +201,7 @@ static int import_one(const char *path, const char *fn, uint8_t (*cells)[81], in
         sdb_exec("ROLLBACK");
         return got < 0 ? -1 : 0;
     }
-    int n = parse_file(path, is_ends_with(fn, ".opensudoku"), cells, max);
+    int n = import_parse_file(path, is_import_name_ends_with(fn, ".opensudoku"), cells, max);
     static uint8_t *levels;                         /* each one rated by the grader (generator.h) */
     if (!levels && !(levels = heap_caps_malloc(IMPORT_MAX_RUN, MALLOC_CAP_SPIRAM))) {
         return -1;
@@ -365,8 +294,8 @@ void sdb_do_import(void)
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && total < IMPORT_MAX_RUN) {
         const char *fn = e->d_name;
-        if (!is_ends_with(fn, ".opensudoku") && !is_ends_with(fn, ".sdx") && !is_ends_with(fn, ".sdm") &&
-                !is_ends_with(fn, ".txt")) {
+        if (!is_import_name_ends_with(fn, ".opensudoku") && !is_import_name_ends_with(fn, ".sdx") && !is_import_name_ends_with(fn, ".sdm") &&
+                !is_import_name_ends_with(fn, ".txt")) {
             continue;
         }
         if (query_int_text("SELECT COUNT(*) FROM imported WHERE file = ?1", fn) > 0) {

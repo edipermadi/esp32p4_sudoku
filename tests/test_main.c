@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include "generator.h"
 #include "learn_core.h"
 #include "puzzles.h"
@@ -23,6 +24,7 @@
 #include "hint_core.h"
 #include "share_core.h"
 #include "daily_core.h"
+#include "import_parse.h"
 
 static int s_checks, s_failed;
 
@@ -986,6 +988,74 @@ static void test_share(void)
     CHECK(!share_pz_part_read("zz", &id, &i, &n, &data));
 }
 
+/* the undo history: undo and redo walk the boards back and forth, an edit drops the redo steps, the ring keeps
+ * the newest UNDO_MAX */
+static void test_history(void)
+{
+    static board_t undo[UNDO_MAX], redo[UNDO_MAX];
+    game_history_t h = {.undo = undo, .redo = redo};
+    board_t b;
+    memset(&b, 0, sizeof(b));
+    game_history_clear(&h);
+    CHECK(!game_history_undo(&h, &b) && !game_history_redo(&h, &b));
+    for (int i = 1; i <= 3; i++) {                  /* three edits: cell 0 holds 1, 2, 3 */
+        game_history_push(&h, &b, false);
+        b.val[0] = (uint8_t)i;
+    }
+    CHECK(game_history_undo(&h, &b) && b.val[0] == 2);
+    CHECK(game_history_undo(&h, &b) && b.val[0] == 1);
+    CHECK(game_history_redo(&h, &b) && b.val[0] == 2);
+    CHECK(h.len == 2 && h.redo_len == 1);
+    game_history_push(&h, &b, false);               /* an edit: redo is gone */
+    b.val[0] = 9;
+    CHECK(h.redo_len == 0 && !game_history_redo(&h, &b) && b.val[0] == 9);
+    CHECK(game_history_undo(&h, &b) && b.val[0] == 2);
+    game_history_clear(&h);
+    for (int i = 0; i < UNDO_MAX + 10; i++) {       /* more than the ring holds: the newest stay */
+        b.val[1] = (uint8_t)(i % 250);
+        game_history_push(&h, &b, false);
+    }
+    CHECK(h.len == UNDO_MAX);
+    int n = 0;
+    while (game_history_undo(&h, &b)) {
+        n++;
+    }
+    CHECK(n == UNDO_MAX && b.val[1] == (uint8_t)(10 % 250));
+}
+
+/* importing: a puzzle per line, OpenSudoku's XML, the cells' text, the file names */
+static void test_import_parse(void)
+{
+    uint8_t c[81];
+    const char *P = "53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79";
+    CHECK(import_parse_cells(P, c) && c[0] == 5 && c[1] == 3 && c[2] == 0 && c[80] == 9);
+    char longer[100];
+    snprintf(longer, sizeof(longer), "%s5", P);
+    CHECK(!import_parse_cells(longer, c));          /* 82 digits: not a puzzle */
+    char bad[100];
+    snprintf(bad, sizeof(bad), "%s", P);
+    bad[10] = 'x';
+    CHECK(!import_parse_cells(bad, c));
+    static uint8_t cells[4][81];
+    char path[] = "/tmp/sudoku_import_XXXXXX";
+    int fd = mkstemp(path);
+    CHECK(fd >= 0);
+    if (fd >= 0) {
+        FILE *f = fdopen(fd, "w");
+        fprintf(f, "# a comment\n  %s\nnot a puzzle\n%s\n", P, P);
+        fclose(f);
+        CHECK(import_parse_file(path, false, cells, 4) == 2 && cells[1][0] == 5);
+        CHECK(import_parse_file(path, false, cells, 1) == 1);          /* at most max */
+        f = fopen(path, "w");
+        fprintf(f, "<opensudoku><game data=\"%s\"/><game data='%s'/></opensudoku>\n", P, P);
+        fclose(f);
+        CHECK(import_parse_file(path, true, cells, 4) == 2 && cells[0][80] == 9);
+        remove(path);
+    }
+    CHECK(import_parse_file("/nonexistent/x.sdm", false, cells, 4) == 0);
+    CHECK(is_import_name_ends_with("Book.SDM", ".sdm") && !is_import_name_ends_with("sdm", ".sdm.txt"));
+}
+
 /* the daily puzzle: its seed is the date's, its name */
 static void test_daily(void)
 {
@@ -1056,6 +1126,7 @@ int main(int argc, char **argv)
         {"hints", test_hints},               {"learn", test_learn},
         {"rules check", test_conflicts},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
+        {"undo history", test_history},      {"import parsing", test_import_parse},
     };
     sudoku_geom_init();
     int failed_tests = 0;

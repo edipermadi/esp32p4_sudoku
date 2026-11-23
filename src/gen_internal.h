@@ -8,7 +8,9 @@
  * | gen_geometry.c  | the names, each variant's board, the variants' texts read and written      |
  * | gen_solver.c    | counting and filling: every variant's rules (grid_free()), the search       |
  * | gen_grade.c     | human-style grading: the techniques and the level they give                 |
- * | gen_make.c      | generating: digging to a level; Jigsaw regions, Killer cages, lines, ...    |
+ * | gen_make.c      | generating: digging to a level, each variant's decorations asked for        |
+ * | gen_regions.c   | Jigsaw regions and Killer cages made for a solution                         |
+ * | gen_lines.c     | the line variants' lines made for a solution                                |
  * | gen_hints.c     | the next step a person would take                                           |
  *
  * The solver's checks and their tables stay in one file (gen_solver.c), so its inner loop keeps
@@ -435,5 +437,107 @@ bool gen_geom_xsum(const uint8_t clues[18], sudoku_geom_t *out);
  * @return false if a clue can't be met
  */
 bool gen_geom_sky(const uint8_t clues[18], sudoku_geom_t *out);
+/* ---- gen_regions.c, gen_lines.c: what gen_make.c calls */
+/**
+ * @brief A random Jigsaw map: the 3x3 boxes, reshaped by trading cells across
+ * region borders (a cell of A goes to B, a cell of B next to A goes to A)
+ * while both regions stay in one piece.
+ * @param[out] map  gets the region of each cell
+ * @param[in,out] rng  the random state
+ */
+void gen_jigsaw_map(uint8_t map[81], uint32_t *rng);
+/**
+ * @brief Random cages over a solved grid: from each cell not in a cage yet (in a
+ * random order), a cage grows to 2..max_size cells through neighbours whose
+ * digit isn't in it yet. A lone cell left over joins a neighbouring cage
+ * that can take its digit, if there is one.
+ * @param[in] full  the solution
+ * @param[in] max_size  cells per cage at most
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
+ * @return false if the cages don't make one
+ */
+bool gen_killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out);
+/**
+ * @brief Between Lines: up to want lines over the full grid, from a circle, a random walk of up to 7
+ * cells whose digits all lie on one side of it (above it, or below), kept at the longest length
+ * whose last cell (the other circle) lies beyond all the cells between; a line never crosses itself
+ * or another
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_between_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
+ * @brief Entropic, Modular Lines: up to want lines over the full grid, random walks of 3 to 8 cells
+ * through cells whose digit keeps the rule: each of the first three in a group of its own, every one
+ * after in the group of the cell three back; a line never crosses itself or another
+ * @param[in] variant  VAR_ENTROPIC or VAR_MODULAR
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_group_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
+ * @brief Palindrome: up to want lines (3-9 cells) over the full grid, grown from the middle out, a
+ * cell at each end at a time, both holding the same digit (so they never see each other)
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
+ * @brief Region Sum Lines: up to want lines over the full grid, random walks of up to 8 cells kept at
+ * the longest length (3 or more) where each box they pass through adds up to the same
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_regionsum_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
+ * @brief Arrow, Renban, Whispers, Parity: up to want lines drawn over the full grid as random walks (side by
+ * side or diagonal, not crossing), each kept only if the grid keeps its rule: an arrow's shaft
+ * (1-3 cells) adds up to its circle, a Renban (3-5 cells) is a run of consecutive digits, along a
+ * German (Dutch) Whispers line (3-6 cells) neighbours are 5 (4) or more apart, along a Parity line (3-8
+ * cells) one odd, one even
+ * @param[in] variant  VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_DUTCH or VAR_PARITY
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
+ * @brief Thermo: up to want thermometers (3-6 cells) drawn over the full grid as random walks whose digits rise from the bulb;
+ *        Slow Thermo (3-7 cells): or stay the same (where a step can: half the time; a solved grid only repeats a
+ *        digit in cells that don't see each other)
+ * @param[in] slow  Slow Thermo
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  thermometers wanted
+ * @param[out] out  gets the board
+ * @return false: fewer than 3
+ */
+bool gen_thermo_paths(bool slow, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
+ * @brief Zipper Lines: up to want lines (3-7 cells) over the full grid, grown from the middle out, a
+ * cell at each end at a time, each pair adding up to the line's total (odd: its middle digit; even:
+ * the middle pair's sum); a line never crosses itself or another
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_zipper_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
 /** @} */
 /** @} */

@@ -2,7 +2,7 @@
  * @file learn_core.h
  * @ingroup learn_core
  * @brief Learn's lessons and the search for a puzzle to practise each one on, without LVGL (the dialog and the
- *        practice game: ui_newpuzzle.c).
+ *        practice game: ui_learn.c).
  */
 #pragma once
 #include <stdbool.h>

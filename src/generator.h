@@ -15,7 +15,9 @@
  * | gen_geometry.c  | the names, each variant's board, the variants' texts read and written |
  * | gen_solver.c    | counting and filling: every variant's rules, the search |
  * | gen_grade.c     | human-style grading: the techniques and the level they give |
- * | gen_make.c      | generating: digging to a level; Jigsaw regions, Killer cages, lines, ... |
+ * | gen_make.c      | generating: digging to a level, each variant's decorations asked for |
+ * | gen_regions.c   | Jigsaw regions and Killer cages made for a solution |
+ * | gen_lines.c     | the line variants' lines made for a solution |
  * | gen_hints.c     | the next step a person would take |
  *
  * generator.h is what the rest of the firmware uses; the files share gen_internal.h. How it all

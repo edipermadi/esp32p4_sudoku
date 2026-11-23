@@ -2,7 +2,7 @@
  * @file share_core.c
  * @ingroup share_core
  * @brief Sharing a puzzle, without LVGL: the QR code's text, the .sdx line sent by sound, and its parts (the
- *        dialogs: ui_game_tools.c).
+ *        dialogs: ui_share.c).
  */
 #include "share_core.h"
 #include <stdio.h>

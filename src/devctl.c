@@ -119,7 +119,7 @@ static void run(char *line)
         devctl_state();
         return;
     }
-    if (!strcmp(cmd, "pz")) {                      /* pz <id> <i>/<n> <part>: a puzzle sent by sound (ui_game_tools.c) */
+    if (!strcmp(cmd, "pz")) {                      /* pz <id> <i>/<n> <part>: a puzzle sent by sound (ui_share.c) */
         char o[96];
         sudoku_ui_puzzle_part(line + 2, o, sizeof(o));
         devctl_reply("%s\n", o);

@@ -15,7 +15,10 @@
  *
  * | File                  | What's in it |
  * |-----------------------|--------------|
- * | ui_settings.c         | the screen around the tabs (title, tab bar, a pane per tab), the rows' look (settings_row() and the controls), and what isn't one tab's: the theme, settings reloaded from sudoku.db, the poll of sudoku.db's results, power off, the dark screen while the flash is written |
+ * | ui_settings.c         | the screen around the tabs (title, tab bar, a pane per tab), the rows' look (settings_row() and the controls), power off |
+ * | ui_screens.c          | the screens' registry, the theme (apply_theme() rebuilds them all), the Wi-Fi, System monitor and Files screens |
+ * | ui_db_poll.c          | the poll of sudoku.db's results, settings reloaded from sudoku.db |
+ * | ui_flash_busy.c       | the dark screen while the flash is written |
  * | ui_settings_network.c | Wi-Fi, time zone |
  * | ui_settings_display.c | dark mode, accent, colour-blind colours, digit size, brightness, screen off, lock screen and PIN, screen-saver clock, night mode |
  * | ui_settings_sound.c   | sound effects, volume, Gibberlink |
@@ -93,12 +96,12 @@ lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_c
 /** @name Between the tabs and the screen around them
  *  @{ */
 /**
- * @brief The dark look is on: dark mode, or night mode now (ui_settings.c).
+ * @brief The dark look is on: dark mode, or night mode now (ui_screens.c).
  * @return true while the screens are in the dark palette
  */
 bool is_ui_dark(void);
 /**
- * @brief The settings come again (ui_settings.c): after the card was lent over USB, or a factory reset.
+ * @brief The settings come again (ui_db_poll.c): after the card was lent over USB, or a factory reset.
  * @param[in] from_db  from sudoku.db, once it has (re)opened (sd_poll_cb() takes them then); false: from
  *                 the settings in RAM, at once (apply_loaded_prefs())
  * @param[in] to_home  then Home is shown (a factory reset)
@@ -117,3 +120,6 @@ void settings_data_poll_card(void);
 /** @} */
 
 /** @} */
+/** @brief Sets the Settings screen (build_settings(); ui_screens.c). @param[in] v  the screen */
+void screen_set_settings(lv_obj_t *v);
+

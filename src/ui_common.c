@@ -380,3 +380,41 @@ lv_obj_t *make_wrap_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t col
 /* ---- accessors: the other UI files reach this file's state through these */
 const palette_t *ui_palette_dark(void) { return &PAL_DARK; }
 const palette_t *ui_palette(void) { return ui_pal; }
+
+/* ------------------------------------------------------------- dialogs */
+/* (documented in ui_internal.h) */
+void mbox_close_cb(lv_event_t *e)
+{
+    lv_msgbox_close_async((lv_obj_t *)lv_event_get_user_data(e));
+}
+/* (documented in ui_internal.h) */
+lv_obj_t *make_msgbox(const char *title, const char *text)
+{
+    lv_obj_t *m = lv_msgbox_create(NULL);
+    lv_msgbox_add_title(m, title);
+    /* left-aligned, wrapped; NULL: the caller fills the content */
+    if (text) {
+        make_wrap_text(lv_msgbox_get_content(m), NULL, C_TEXT, text);
+    }
+    lv_obj_set_width(m, 520);
+    lv_obj_set_style_text_font(m, &lv_font_montserrat_20, 0);
+    return m;
+}
+/* (documented in ui_internal.h) */
+void msgbox_button(lv_obj_t *m, const char *text, lv_event_cb_t cb, bool primary)
+{
+    lv_obj_t *b = lv_msgbox_add_footer_button(m, text);
+    lv_obj_set_flex_grow(b, 1);
+    lv_obj_set_height(b, 52);
+    if (!primary) {                                 /* Cancel, Close ...: grey, not the dialog's own white */
+        lv_obj_set_style_bg_color(b, C_CARD2, 0);
+        lv_obj_set_style_text_color(b, C_TEXT, 0);
+    }
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, m);
+    /* LVGL makes the footer LV_DPI_DEF / 3 (~43 px) tall, less than these
+     * 52 px buttons, which then spill over the text and past the box edge */
+    lv_obj_t *foot = lv_msgbox_get_footer(m);
+    lv_obj_set_height(foot, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_top(foot, 10, 0);
+    lv_obj_set_style_pad_bottom(foot, 18, 0);                  /* room under the buttons */
+}

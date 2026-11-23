@@ -1,7 +1,7 @@
 /**
  * @file game_core.c
  * @ingroup game_core
- * @brief The game's rules check, without LVGL (the game screen: ui_game.c).
+ * @brief The game's rules check and undo history, without LVGL (the game screen: ui_game.c).
  */
 #include "game_core.h"
 #include <stdlib.h>
@@ -362,4 +362,51 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
         n += out[i];
     }
     return n;
+}
+
+/* (documented in game_core.h) */
+void game_history_clear(game_history_t *h)
+{
+    h->head = h->len = h->redo_len = 0;
+}
+
+/* (documented in game_core.h) */
+void game_history_push(game_history_t *h, const board_t *b, bool keep_redo)
+{
+    h->undo[h->head] = *b;
+    h->head = (h->head + 1) % UNDO_MAX;
+    if (h->len < UNDO_MAX) {
+        h->len++;
+    }
+    if (!keep_redo) {
+        h->redo_len = 0;
+    }
+}
+
+/* (documented in game_core.h) */
+bool game_history_undo(game_history_t *h, board_t *b)
+{
+    if (h->len == 0) {
+        return false;
+    }
+    if (h->redo_len == UNDO_MAX) {                  /* full: the oldest undone board goes */
+        memmove(h->redo, h->redo + 1, sizeof(board_t) * (UNDO_MAX - 1));
+        h->redo_len--;
+    }
+    h->redo[h->redo_len++] = *b;                    /* for Redo */
+    h->head = (h->head + UNDO_MAX - 1) % UNDO_MAX;
+    h->len--;
+    *b = h->undo[h->head];
+    return true;
+}
+
+/* (documented in game_core.h) */
+bool game_history_redo(game_history_t *h, board_t *b)
+{
+    if (h->redo_len == 0) {
+        return false;
+    }
+    game_history_push(h, b, true);
+    *b = h->redo[--h->redo_len];
+    return true;
 }
