@@ -14,8 +14,25 @@ bool sudoku_geom_marks(int variant, const char *text, sudoku_geom_t *out)
 {
     const int ek = variant == VAR_KROPKI ? EDGE_KROPKI : variant == VAR_XV ? EDGE_XV : variant == VAR_GT ? EDGE_GT : 0;
     if (!text || strlen(text) != 81 || (variant != VAR_EVENODD && variant != VAR_CONSEC && variant != VAR_FORTRESS &&
-                                        !ek)) {
+                                        variant != VAR_DIAGCONSEC && !ek)) {
         return false;
+    }
+    if (variant == VAR_DIAGCONSEC) {                /* corner marks; unmarked corners aren't 1 apart */
+        *out = *sudoku_geom(VAR_DIAGNC);
+        out->variant = VAR_DIAGCONSEC;
+        for (int c = 0; c < 81; c++) {
+            if (text[c] < '0' || text[c] > '3') {
+                return false;
+            }
+            out->dmark[c] = (uint8_t)(text[c] - '0');
+            if (c % 9 == 8 || c >= 72) {
+                out->dmark[c] &= (uint8_t)~DMARK_DR;
+            }
+            if (c % 9 == 0 || c >= 72) {
+                out->dmark[c] &= (uint8_t)~DMARK_DL;
+            }
+        }
+        return true;
     }
     *out = *sudoku_geom(VAR_CLASSIC);               /* (made on first use) */
     out->variant = (uint8_t)variant;
@@ -207,7 +224,7 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
         sudoku_rossini_text(g, marks, 82);
         break;
     default:
-        if (g->variant == VAR_EVENODD || g->variant == VAR_CONSEC || g->edge_kind) {
+        if (g->variant == VAR_EVENODD || g->variant == VAR_CONSEC || g->variant == VAR_DIAGCONSEC || g->edge_kind) {
             sudoku_marks_text(g, marks, 82);
         }
         break;
@@ -630,6 +647,8 @@ bool sudoku_marks_text(const sudoku_geom_t *g, char *buf, int len)
             buf[c] = (char)('0' + EDGE_RIGHT(g->edge[c]) + 3 * EDGE_DOWN(g->edge[c]));
         } else if (g->variant == VAR_CONSEC) {
             buf[c] = (char)('0' + (g->consec[c] & 3));
+        } else if (g->variant == VAR_DIAGCONSEC) {
+            buf[c] = (char)('0' + (g->dmark[c] & 3));
         } else {
             buf[c] = g->parity[c] == PARITY_EVEN ? 'e' : g->parity[c] == PARITY_ODD ? 'o' : '.';
         }

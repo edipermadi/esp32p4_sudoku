@@ -54,7 +54,7 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {15, 471, 1102, 1225},  /* Little Killer */
     {11, 284, 905, 756},    /* Palindrome (2026-11-22) */
     {21, 403, 1070, 1206},  /* Region Sum Lines */
-    {72, 835, 3012, 2360},  /* X-Sums */
+    {27, 314, 1181, 875},   /* X-Sums (its rule tabled, 2026-11-23: Hard was 3012) */
     {12, 86, 186, 946},     /* Zipper Lines (2026-11-22; lines that don't cross, logic-first digging) */
     {15, 112, 641, 262},    /* Frame (re-measured 2026-11-22) */
     {19, 88, 293, 1672},    /* Between Lines (the same) */
@@ -72,9 +72,12 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {29, 80, 202, 799},     /* Nabner (2026-11-23) */
     {26, 382, 1147, 1081},  /* Numbered Rooms */
     {25, 154, 548, 822},    /* Sum Skyscrapers */
-    {16, 80, 198, 2020},    /* Lockout Lines (2026-11-23) */
+    {14, 77, 187, 1570},    /* Lockout Lines (2026-11-23; its pair check capped: Expert was 2020) */
     {49, 395, 292, 119},    /* Sumless Killer */
     {11, 78, 218, 1172},    /* Double Arrow */
+    {11, 405, 1186, 590},   /* Diagonal Consecutive (2026-11-23) */
+    {12, 100, 156, 1806},   /* 10 Lines (its rule in bit shifts, 2026-11-23: Expert was 5321) */
+    {6, 86, 214, 198},      /* Girandola */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */

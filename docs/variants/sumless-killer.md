@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Sumless Killer: variant-examples #47](../screenshots/variants/sumless-killer-walkthrough/step-00.png)
+![Sumless Killer: variant-examples #47](../screenshots/variants/sumless-killer.png)
 
 ## The rules
 

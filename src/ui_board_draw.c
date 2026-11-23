@@ -136,6 +136,45 @@ static void board_marks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
 }
 
 /* (documented in ui_internal.h) */
+void draw_dmark(lv_layer_t *layer, int cx, int cy, bool dl, int half)
+{
+    lv_draw_line_dsc_t ld;
+    lv_draw_line_dsc_init(&ld);
+    ld.color = C_ORANGE;
+    ld.width = 6;
+    ld.round_start = ld.round_end = 1;
+    ld.p1.x = dl ? cx + half : cx - half;
+    ld.p1.y = cy - half;
+    ld.p2.x = dl ? cx - half : cx + half;
+    ld.p2.y = cy + half;
+    lv_draw_line(layer, &ld);
+}
+
+/**
+ * @brief Diagonal Consecutive: the marks across the corners
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
+ */
+static void board_dmarks_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    for (int i = 0; i < 72; i++) {
+        if (!geo->dmark[i]) {
+            continue;
+        }
+        lv_area_t a;
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
+        const int half = (a.x2 - a.x1) / 7;
+        if (geo->dmark[i] & DMARK_DR) {             /* at its bottom-right corner */
+            draw_dmark(layer, a.x2, a.y2, false, half);
+        }
+        if (geo->dmark[i] & DMARK_DL) {             /* at its bottom-left corner */
+            draw_dmark(layer, a.x1, a.y2, true, half);
+        }
+    }
+}
+
+/* (documented in ui_internal.h) */
 void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int cy)
 {
     if (kind == EDGE_KROPKI) {
@@ -308,6 +347,11 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;
+    case LINE_TEN:
+        ld.color = lv_color_hex(0x3FA34D);
+        ld.opa = LV_OPA_50;
+        ld.width = cs * 20 / 100;
+        break;
     case LINE_NABNER:
         ld.color = lv_color_hex(0xA0703C);
         ld.opa = LV_OPA_80;
@@ -454,6 +498,9 @@ void board_regions_draw_cb(lv_event_t *e)
     }
     if (geo && (geo->consec_on || geo->variant == VAR_EVENODD)) {
         board_marks_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (geo && geo->variant == VAR_DIAGCONSEC) {
+        board_dmarks_draw(grid, geo, lv_event_get_layer(e));
     }
     if (geo && geo->edge_kind && geo->edge_kind != EDGE_FORT) {   /* (Fortress: the grey cells say it all) */
         board_edges_draw(grid, geo, lv_event_get_layer(e));

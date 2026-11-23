@@ -66,6 +66,31 @@ uint16_t gen_edge_allow(const sudoku_geom_t *G, int i, const uint8_t *v, const u
     return free;
 }
 
+/** @brief a 10-bit digit mask's smallest digit, largest digit and count (bits 1..9; 0 for an empty mask): the
+ *  board's core has no ctz, clz or popcount instruction, and X-Sums asks millions of times a puzzle */
+static uint8_t s_mask_lo[1024], s_mask_hi[1024], s_mask_n[1024];
+
+/** @brief fills s_mask_lo, s_mask_hi and s_mask_n (once) */
+static void mask_tables(void)
+{
+    if (s_mask_n[0x3FE]) {
+        return;
+    }
+    for (int m = 0; m < 1024; m++) {
+        int lo = 0, hi = 0, n = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (m >> d & 1) {
+                lo = lo ? lo : d;
+                hi = d;
+                n++;
+            }
+        }
+        s_mask_lo[m] = (uint8_t)lo;
+        s_mask_hi[m] = (uint8_t)hi;
+        s_mask_n[m] = (uint8_t)n;                   /* (0x3FE last: 9, the filled mark) */
+    }
+}
+
 /** @name gen_line_allow()'s helpers (v, cand: its arguments)
  *  @{ */
 #define LMASK(c) ((uint16_t)(v[c] ? (1u << v[c]) : cand ? cand[c] : 0x3FE))   /**< cell c's digits: its digit, else its candidates (all without them) */
@@ -146,22 +171,44 @@ static __attribute__((noinline)) uint16_t ends_line_allow(const sudoku_geom_t *G
     if (!ma || !mb) {
         return 0;
     }
+    mask_tables();
     uint16_t ok = 0;
     if (G->line_kind == LINE_LOCKOUT) {             /* diamonds 4+ apart, every digit between outside their range */
+        /* a cell between can go outside lo..hi when its smallest digit is below lo or its largest above
+         * hi: for each lo, cap[lo] is the most hi can be (below every such largest, of the cells whose
+         * smallest isn't below lo) */
+        int clo[9], chi[9], nb = 0;
+        for (int k = 1; k < n - 1; k++) {
+            if (k == p) {
+                continue;
+            }
+            const uint16_t m = LMASK(cell[k]);
+            if (!m) {
+                return 0;
+            }
+            clo[nb] = s_mask_lo[m & 0x3FE];
+            chi[nb++] = s_mask_hi[m & 0x3FE];
+        }
+        int cap[10];
+        for (int lo = 1; lo <= 9; lo++) {
+            cap[lo] = 9;
+            for (int j = 0; j < nb; j++) {
+                if (clo[j] >= lo && chi[j] - 1 < cap[lo]) {
+                    cap[lo] = chi[j] - 1;
+                }
+            }
+        }
         for (int a = 1; a <= 9; a++) {
+            if (!(ma >> a & 1)) {
+                continue;
+            }
             for (int b = 1; b <= 9; b++) {
                 int lo = a < b ? a : b, hi = a < b ? b : a;
-                if (!(ma >> a & 1) || !(mb >> b & 1) || hi - lo < 4) {
+                if (!(mb >> b & 1) || hi - lo < 4 || hi > cap[lo]) {
                     continue;
                 }
-                const uint16_t out = (uint16_t)(RANGE(1, lo - 1) | RANGE(hi + 1, 9));
-                bool fits = true;
-                for (int k = 1; k < n - 1 && fits; k++) {
-                    fits = k == p || (LMASK(cell[k]) & out) != 0;
-                }
-                if (fits) {
-                    ok |= p == 0 ? (uint16_t)(1u << a) : p == n - 1 ? (uint16_t)(1u << b) : out;
-                }
+                ok |= p == 0 ? (uint16_t)(1u << a) : p == n - 1 ? (uint16_t)(1u << b)
+                      : (uint16_t)(RANGE(1, lo - 1) | RANGE(hi + 1, 9));
             }
         }
         return ok;
@@ -184,6 +231,66 @@ static __attribute__((noinline)) uint16_t ends_line_allow(const sudoku_geom_t *G
         return RANGE(smin - HI(mo), smax - LO(mo));
     }
     return RANGE(LO(ma) + LO(mb) - smax, HI(ma) + HI(mb) - smin);
+}
+
+/**
+ * @brief 10 Lines: the running sums (0..9, bit s) a run can be at after adding a digit from m
+ * @param[in] from  the running sums before (bit s)
+ * @param[in] m  the digits (bit d)
+ * @return the running sums after: s + d below 10, or 0 where a run reaches 10
+ */
+static inline uint16_t ten_step(uint16_t from, uint16_t m)
+{
+    uint32_t to = 0;                                /* (a plain loop: no ctz instruction on the board's core) */
+    for (int d = 1; d <= 9; d++) {
+        if (m >> d & 1) {
+            const uint32_t sh = (uint32_t)from << d;   /* bit s + d */
+            to |= (sh & 0x3FF) | (sh >> 10 & 1);     /* (exactly 10: a new run, sum 0) */
+        }
+    }
+    return (uint16_t)to;
+}
+
+/**
+ * @brief 10 Lines: the running sums (bit s) from which adding a digit from m lands in one of to
+ * @param[in] to  the running sums wanted after (bit s)
+ * @param[in] m  the digits (bit d)
+ * @return the running sums before
+ */
+static inline uint16_t ten_back(uint16_t to, uint16_t m)
+{
+    uint32_t from = 0;
+    for (int d = 1; d <= 9; d++) {
+        if (m >> d & 1) {
+            from |= ((uint32_t)to >> d) & ((1u << (10 - d)) - 1);   /* s + d below 10, and in to */
+            from |= (to & 1u) << (10 - d);           /* s + d exactly 10, a new run (sum 0) in to */
+        }
+    }
+    return (uint16_t)from;
+}
+
+/* (documented in generator.h) */
+uint16_t sudoku_ten_allow(const uint16_t *m, int n, int p)
+{
+    uint16_t fwd = 1;                               /* (a run starts at the line's start) */
+    for (int k = 0; k < (p < 0 ? n : p); k++) {
+        fwd = ten_step(fwd, m[k]);
+    }
+    if (p < 0) {
+        return (uint16_t)(fwd & 1);                 /* (and ends at its end) */
+    }
+    uint16_t back = 1;                              /* the sums after p from which the rest can end at 0 */
+    for (int k = n - 1; k > p; k--) {
+        back = ten_back(back, m[k]);
+    }
+    uint16_t ok = 0;
+    for (int d = 1; d <= 9; d++) {
+        const uint32_t sh = (uint32_t)fwd << d;     /* (ten_step() for the one digit) */
+        if ((m[p] >> d & 1) && (((sh & 0x3FF) | (sh >> 10 & 1)) & back)) {
+            ok |= (uint16_t)(1u << d);
+        }
+    }
+    return ok;
 }
 
 /* (documented in gen_internal.h) */
@@ -412,6 +519,14 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
     case LINE_MODULAR:                              /* any three in a row: one digit of each group */
         free &= group_line_allow(G, t, p, v, cand);
         break;
+    case LINE_TEN: {                                /* runs that each add up to 10 */
+        uint16_t m[9];
+        for (int k = 0; k < n; k++) {
+            m[k] = k == p ? 0x3FE : LMASK(cell[k]);
+        }
+        free &= sudoku_ten_allow(m, n, p);
+        break;
+    }
     case LINE_LOCKOUT:                              /* the ends: diamonds (4+ apart), or circles (Double Arrow) */
     case LINE_DARROW:
         free &= ends_line_allow(G, t, p, v, cand);
@@ -631,12 +746,12 @@ static bool is_xsum_ok(const uint16_t m[9], int c)
                     fits = false;
                 }
                 used |= mk;
-                known += __builtin_ctz(mk);
+                known += s_mask_lo[mk & 0x3FE];
             } else {
                 ne++;
                 any |= mk;
-                lo += __builtin_ctz(mk);
-                hi += 31 - __builtin_clz(mk);
+                lo += s_mask_lo[mk & 0x3FE];
+                hi += s_mask_hi[mk & 0x3FE];
             }
         }
         if (!fits) {
@@ -644,7 +759,7 @@ static bool is_xsum_ok(const uint16_t m[9], int c)
         }
         int dlo, dhi;                               /* ne different digits, none of those placed */
         mask_k_range((uint16_t)(any & ~used), ne, &dlo, &dhi);
-        if (ne && __builtin_popcount(any & ~used) < ne) {
+        if (ne && s_mask_n[(any & ~used) & 0x3FE] < ne) {
             continue;
         }
         lo = dlo > lo ? dlo : lo;
@@ -660,6 +775,7 @@ static bool is_xsum_ok(const uint16_t m[9], int c)
 uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand)
 {
     int cells[9], c = G->xsum[lu];
+    mask_tables();
     line_cells(lu, cells);
     if (at > 0 && v[cells[0]] && at >= v[cells[0]]) {
         return 0x3FE;                               /* past the first X: the clue doesn't reach it */
@@ -999,7 +1115,8 @@ static uint16_t grid_free(const grid_t *g, int i)
         int r = i / 9 + (k < 2 ? -1 : 1), c = i % 9 + (k % 2 ? 1 : -1);
         int w = r >= 0 && r < 9 && c >= 0 && c < 9 ? g->v[r * 9 + c] : 0;
         if (w) {
-            free &= (uint16_t)~((1u << (w + 1)) | (1u << (w - 1)));
+            const uint16_t near = (uint16_t)((1u << (w + 1)) | (1u << (w - 1)));
+            free &= is_sudoku_dmarked(G, i, k) ? near : (uint16_t)~near;   /* (Diagonal Consecutive: marked, 1 apart) */
         }
     }
     WHY(FIT_DIAGNC);

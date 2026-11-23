@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Sum Skyscrapers: variant-examples #45](../screenshots/variants/sum-skyscrapers-walkthrough/step-00.png)
+![Sum Skyscrapers: variant-examples #45](../screenshots/variants/sum-skyscrapers.png)
 
 ## The rules
 

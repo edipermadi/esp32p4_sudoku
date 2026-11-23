@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Double Arrow: variant-examples #48](../screenshots/variants/double-arrow-walkthrough/step-00.png)
+![Double Arrow: variant-examples #48](../screenshots/variants/double-arrow.png)
 
 ## The rules
 

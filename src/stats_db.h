@@ -156,6 +156,9 @@ typedef enum {
     KIND_LOCKOUT,                        /**< Lockout Lines */
     KIND_SUMLESS,                        /**< Sumless Killer */
     KIND_DARROW,                         /**< Double Arrow */
+    KIND_DIAGCONSEC,                     /**< Diagonal Consecutive */
+    KIND_TEN,                            /**< 10 Lines */
+    KIND_GIRANDOLA,                      /**< Girandola */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

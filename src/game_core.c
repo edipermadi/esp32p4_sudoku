@@ -118,13 +118,13 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
-    for (int c = 0; geo->diag_nc && c < 72; c++) {   /* Diagonal Non-Consecutive: corners 1 apart */
+    for (int c = 0; geo->diag_nc && c < 72; c++) {   /* Diagonal (Non-)Consecutive: corners 1 apart, or (marked) not */
         for (int k = 0; k < 2; k++) {
             int o = k ? c + 8 : c + 10;
             if ((k ? c % 9 == 0 : c % 9 == 8) || !val[c] || !val[o]) {
                 continue;
             }
-            if (abs(val[c] - val[o]) == 1) {
+            if ((abs(val[c] - val[o]) == 1) != is_sudoku_dmarked(geo, c, k ? 2 : 3)) {   /* (marked: must be) */
                 out[c] = out[o] = true;
             }
         }
@@ -340,6 +340,16 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
                         out[cell[0]] = out[cell[n - 1]] = true;
                     }
                 }
+            }
+            break;
+        }
+        case LINE_TEN: {                            /* no way left to split it into runs of 10 */
+            uint16_t m[9];
+            for (int i = 0; i < n; i++) {
+                m[i] = val[cell[i]] ? (uint16_t)(1u << val[cell[i]]) : 0x3FE;
+            }
+            for (int i = 0; !sudoku_ten_allow(m, n, -1) && i < n; i++) {
+                out[cell[i]] = val[cell[i]] != 0;
             }
             break;
         }

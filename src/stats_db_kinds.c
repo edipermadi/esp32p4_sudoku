@@ -15,7 +15,8 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "Entropic Lines", "Modular Lines", "Center Dot", "Outside Sudoku",
                                                          "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
                                                          "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner",
-                                                         "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow"
+                                                         "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
+                                                         "Diagonal Consecutive", "10 Lines", "Girandola"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -28,7 +29,8 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Entropic", "Modular", "Center Dot", "Outside", "Rossini",
                                                           "Diagonal Non-Consecutive", "Dutch Whispers", "Parity",
                                                           "Slow Thermo", "Fortress", "Argyle", "Nabner",
-                                                          "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow"
+                                                          "Numbered Rooms", "Sum Skyscrapers", "Lockout Lines", "Sumless Killer", "Double Arrow",
+                                                          "Diagonal Consecutive", "10 Lines", "Girandola"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -138,6 +140,12 @@ int stats_kind_of(int variant, bool daily)
         return KIND_SUMLESS;
     case VAR_DARROW:
         return KIND_DARROW;
+    case VAR_DIAGCONSEC:
+        return KIND_DIAGCONSEC;
+    case VAR_TEN:
+        return KIND_TEN;
+    case VAR_GIRANDOLA:
+        return KIND_GIRANDOLA;
     default:
         return KIND_NEW;
     }

@@ -232,6 +232,7 @@ typedef struct {
     uint8_t line_kind;                  /**< the kind of the thermo line: LINE_* (Arrow, Renban, Whispers) */
     int8_t lk_clue;                     /**< Little Killer: a sum above the top-left cell, the diagonal down-right; 0 none */
     const char *left_text;              /**< Outside Sudoku, Rossini: a clue left of the first row as text (left_clue -1), may be NULL */
+    const uint8_t *dmarks;              /**< Diagonal Consecutive: per mark a cell and its DMARK_*, ends with 0xFF; may be NULL */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound (the format: share_core.h) */
@@ -833,6 +834,16 @@ void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int c
  * @param[in] n  how many
  */
 void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n);
+/**
+ * @brief Diagonal Consecutive: a mark across the corner where two cells touch, an orange bar along their
+ * diagonal (the board, the rules card)
+ * @param[in] layer  where
+ * @param[in] cx  the corner, px
+ * @param[in] cy  px
+ * @param[in] dl  the pair runs down-left (top-right cell to bottom-left), else down-right
+ * @param[in] half  half the bar's length, px
+ */
+void draw_dmark(lv_layer_t *layer, int cx, int cy, bool dl, int half);
 /**
  * @brief A line through cell centres pts[0..n-1] (cs: the cell size), as its kind is drawn, under the
  * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey

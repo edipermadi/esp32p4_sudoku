@@ -73,6 +73,8 @@ static const char *unit_name(const sudoku_geom_t *G, int u, char *b)
         sprintf(b, "disjoint group %d", u - UNIT_GROUP + 1);
     } else if (u == UNIT_ASTERISK) {
         sprintf(b, "the asterisk");
+    } else if (u == UNIT_GIRANDOLA) {
+        sprintf(b, "the pinwheel");
     } else {
         sprintf(b, "the box centres");
     }
@@ -454,6 +456,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_XV:
     case VAR_GT:
     case VAR_FORTRESS:
+    case VAR_DIAGCONSEC:
         sudoku_marks_text(g, marks, len);
         break;
     case VAR_SANDWICH:
@@ -499,6 +502,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_NABNER:
     case VAR_LOCKOUT:
     case VAR_DARROW:
+    case VAR_TEN:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -616,10 +620,14 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
         printf(", \"rule\": \"rossini\", \"line\": %d", why == FIT_ROSSINI_ROW ? r : 9 + q);
         return;
     case FIT_DIAGNC:
-        for (int k = 0; k < 4; k++) {               /* the corner cell 1 away */
+        for (int k = 0; k < 4; k++) {               /* the corner cell 1 away (marked: not 1 away) */
             int rr = r + (k < 2 ? -1 : 1), cc = q + (k % 2 ? 1 : -1);
-            if (rr >= 0 && rr < 9 && cc >= 0 && cc < 9 && v[rr * 9 + cc] && abs(v[rr * 9 + cc] - d) == 1) {
-                printf(", \"rule\": \"diagnc\", \"with\": %d", rr * 9 + cc);
+            if (rr < 0 || rr > 8 || cc < 0 || cc > 8 || !v[rr * 9 + cc]) {
+                continue;
+            }
+            const bool marked = is_sudoku_dmarked(G, c, k);
+            if ((abs(v[rr * 9 + cc] - d) == 1) != marked) {
+                printf(", \"rule\": \"diagnc\", \"with\": %d, \"marked\": %s", rr * 9 + cc, marked ? "true" : "false");
                 return;
             }
         }
@@ -689,6 +697,10 @@ static void layout_json(const sudoku_geom_t *G)
     printf("],\n \"consec_on\": %s, \"consec\": [", G->consec_on ? "true" : "false");
     for (int i = 0; i < 81; i++) {
         printf("%s%d", i ? "," : "", G->consec[i]);
+    }
+    printf("],\n \"dmark\": [");
+    for (int i = 0; i < 81; i++) {
+        printf("%s%d", i ? "," : "", G->dmark[i]);
     }
     printf("],\n \"edge_kind\": %d, \"edge\": [", G->edge_kind);
     for (int i = 0; i < 81; i++) {

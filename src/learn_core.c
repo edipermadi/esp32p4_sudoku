@@ -37,12 +37,14 @@ static const learn_lesson_t LESSONS[] = {
     {"Disjoint groups", "The cells in the same place in each box hold 1-9 too: a digit can have one place left in a group.", VAR_DISJOINT, TECH_NONE, false},
     {"Asterisk", "The nine asterisk cells hold 1-9 too: a digit can have one place left among them.", VAR_ASTERISK, TECH_NONE, false},
     {"Center Dot", "The nine box centres hold 1-9 too: a digit can have one place left among them.", VAR_CENTERDOT, TECH_NONE, false},
+    {"Girandola", "The nine pinwheel cells hold 1-9 too: a digit can have one place left among them.", VAR_GIRANDOLA, TECH_NONE, false},
     {"Argyle lines", "No digit repeats on an argyle line: the cells along one see each other, like a row's.", VAR_ARGYLE, TECH_NONE, false},
     /* Marks: rules between cells */
     {"Anti-Knight", "Cells a knight's move apart can't hold the same digit: they see each other too.", VAR_KNIGHT, TECH_NONE, false},
     {"Anti-King", "Cells that touch, also at a corner, can't hold the same digit: they see each other too.", VAR_KING, TECH_NONE, false},
     {"Non-Consecutive", "Side-by-side cells are never 1 apart: a digit's neighbours rule out the digits next to it.", VAR_NONCONSEC, TECH_CONSEC, false},
     {"Diagonal Non-Consecutive", "Cells touching at a corner are never 1 apart: the corners rule out the digits next to theirs.", VAR_DIAGNC, TECH_DIAGNC, false},
+    {"Diagonal Consecutive", "Corner neighbours with a mark are 1 apart, without one they're not: a mark leaves two digits.", VAR_DIAGCONSEC, TECH_DIAGNC, false},
     {"Even-Odd cells", "A shaded cell is even, a ringed one odd: that alone can leave a digit one place.", VAR_EVENODD, TECH_NONE, false},
     {"Consecutive bars", "A bar: the two cells differ by 1. No bar: they don't. Both narrow down a cell's digits.", VAR_CONSEC, TECH_CONSEC, false},
     {"Kropki dots", "White dot: 1 apart; black dot: one is double the other; no dot: neither.", VAR_KROPKI, TECH_EDGE, false},
@@ -67,6 +69,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Nabner line", "No two digits on a brown line are the same or 1 apart: each digit rules out its neighbours.", VAR_NABNER, TECH_LINE, false},
     {"Lockout line", "The diamonds are 4+ apart, the digits between outside their range: never a 5 between.", VAR_LOCKOUT, TECH_LINE, false},
     {"Double Arrow", "The two circles add up to the digits between them: each end bounds the other.", VAR_DARROW, TECH_LINE, false},
+    {"10 Line", "The line splits into runs that each make 10: a big digit needs small ones beside it.", VAR_TEN, TECH_LINE, false},
     /* Clues */
     {"Killer cage", "A cage's sum allows only some sets of digits: with what's around it, its cells narrow down.", VAR_KILLER, TECH_CAGE, false},
     {"Sumless cage", "No digit repeats in a cage: its cells see each other, like a box's, across box borders.", VAR_SUMLESS, TECH_NONE, false},
@@ -122,12 +125,14 @@ int learn_group(int k)
     case VAR_DISJOINT:
     case VAR_ASTERISK:
     case VAR_CENTERDOT:
+    case VAR_GIRANDOLA:
     case VAR_ARGYLE:
         return LEARN_GRIDS;
     case VAR_KNIGHT:
     case VAR_KING:
     case VAR_NONCONSEC:
     case VAR_DIAGNC:
+    case VAR_DIAGCONSEC:
     case VAR_EVENODD:
     case VAR_CONSEC:
     case VAR_KROPKI:

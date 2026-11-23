@@ -534,9 +534,10 @@ bool gen_diagnc_logic(logic_t *L)
             }
             int o = r * 9 + c;
             uint16_t m = L->v[o] ? (uint16_t)(1u << L->v[o]) : L->cand[o];
+            const bool marked = is_sudoku_dmarked(L->G, i, k);   /* (Diagonal Consecutive: then 1 apart) */
             for (int d = 1; d <= 9 && m; d++) {
                 uint16_t near = (uint16_t)(((1u << (d + 1)) | (1u << (d - 1))) & 0x3FE);
-                if (!(m & ~near)) {
+                if (marked ? !(m & near) : !(m & ~near)) {
                     keep &= (uint16_t)~(1u << d);
                 }
             }
@@ -1094,6 +1095,9 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_NONCONSEC) {
         return 24;
     }
+    if (G->variant == VAR_DIAGCONSEC) {
+        return 22;    /* the marks say a lot */
+    }
     if (G->diag_nc) {
         return 30;
     }
@@ -1127,7 +1131,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->variant == VAR_KNIGHT || G->variant == VAR_KING || G->variant == VAR_DISJOINT || G->variant == VAR_ARGYLE) {
         return 32;
     }
-    if (G->variant == VAR_ASTERISK || G->variant == VAR_CENTERDOT) {
+    if (G->variant == VAR_ASTERISK || G->variant == VAR_CENTERDOT || G->variant == VAR_GIRANDOLA) {
         return 34;
     }
     if (G->nthermos) {

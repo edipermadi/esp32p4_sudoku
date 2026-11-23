@@ -232,7 +232,8 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_QUAD && buf && sudoku_geom_quad_text(cages, buf)) {
         return buf;    /* (its circles are in cages) */
     }
-    if ((v == VAR_EVENODD || v == VAR_CONSEC || v == VAR_KROPKI || v == VAR_XV || v == VAR_GT || v == VAR_FORTRESS) &&
+    if ((v == VAR_EVENODD || v == VAR_CONSEC || v == VAR_KROPKI || v == VAR_XV || v == VAR_GT || v == VAR_FORTRESS ||
+            v == VAR_DIAGCONSEC) &&
             buf &&
             sudoku_geom_marks(v, marks, buf)) {
         return buf;
@@ -240,7 +241,7 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER || v == VAR_PALINDROME ||
             v == VAR_REGIONSUM || v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR ||
             v == VAR_DUTCH || v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT ||
-            v == VAR_DARROW) &&
+            v == VAR_DARROW || v == VAR_TEN) &&
             buf &&
             sudoku_geom_lines_text(v, thermos, buf)) {
         return buf;

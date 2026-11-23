@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Nabner: variant-examples #43](../screenshots/variants/nabner-walkthrough/step-00.png)
+![Nabner: variant-examples #43](../screenshots/variants/nabner.png)
 
 ## The rules
 

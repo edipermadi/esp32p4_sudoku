@@ -50,7 +50,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "diagonal-non-consecutive": "Diagonal", "dutch-whispers": "Dutch", "parity-lines": "Parity",
          "slow-thermo": "Slow", "fortress": "Fortress", "argyle": "Argyle", "nabner": "Nabner",
          "numbered-rooms": "Numbered", "sum-skyscrapers": "Sum", "lockout-lines": "Lockout",
-         "sumless-killer": "Sumless", "double-arrow": "Double"}
+         "sumless-killer": "Sumless", "double-arrow": "Double", "diagonal-consecutive": "Diagonal C",
+         "10-lines": "10", "girandola": "Girandola"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -69,6 +70,7 @@ ENTROPIC, MODULAR = (239, 178, 108), (98, 192, 192)
 DUTCH, PARITY = (228, 190, 64), (230, 128, 128)
 NABNER = (196, 160, 118)                                    # Nabner's lines (the board's brown, on white)
 DARROW = (74, 127, 217)                                     # Double Arrow's lines and circles (the board's blue)
+TEN = (159, 209, 166)                                       # 10 Lines' green band (the board's, on white)
 GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
 
 
@@ -297,6 +299,18 @@ def rule_words(d, vals, c, v, r):
                         else "below %d or above %d" % (lo, hi))
                 return "it's between the diamonds %d and %d, so it's %s" % (lo, hi, side)
             return "it's between the diamonds of its line, and %s couldn't lie outside their range" % a_n(v)
+        if kind == 16:                                      # 10 Lines: runs of 10
+            i = cells.index(c)
+            left = [vals[x] for x in cells[:i]]
+            if all(left):
+                run = 0
+                for x in left:
+                    run = 0 if run + x == 10 else run + x
+                if run + v > 10:
+                    return ("on its green line the run before it adds up to %d, and %s would take it past 10" %
+                            (run, a_n(v)) if run else "with %s there, the rest of its green line couldn't split "
+                            "into runs of 10" % a_n(v))
+            return "with %s there, its green line couldn't split into runs that each add up to 10" % a_n(v)
         if kind == 15:                                      # Double Arrow: the two circles add up to the cells between
             ends = (cells[0], cells[-1])
             inner = [x for x in cells[1:-1] if x != c]
@@ -478,8 +492,15 @@ def rule_words(d, vals, c, v, r):
                 else "neither rise nor fall (%s has no arrow)" % name)
         return "the first three digits of %s %s, and %s here can't keep that" % (name, what, a_n(v))
     if rule == "diagnc":
+        if r.get("with", -1) >= 0 and r.get("marked"):
+            return "a mark joins it to the %d in %s at a corner, and %d isn't 1 away from it" % (w, at, v)
         if r.get("with", -1) >= 0:
+            if d["variant"] == "Diagonal Consecutive":
+                return "it touches the %d in %s at a corner with no mark between them, and %d is 1 away from it" % (
+                    w, at, v)
             return "it touches the %d in %s at a corner, and %d is 1 away from it" % (w, at, v)
+        if d["variant"] == "Diagonal Consecutive":
+            return "the cells touching it at its corners, marked or not, leave no room for %s" % a_n(v)
         return "a cell touching it at a corner would have to be 1 away from %s" % a_n(v)
     if rule == "nroom":
         lu = r["line"]
@@ -721,6 +742,11 @@ def make_drawer(d, fonts):
                 g.line(pts, fill=DUTCH if kind == 10 else PARITY, width=int(CELL * 0.12), joint="curve")
             elif kind == 13:                                # Nabner: a narrow brown line
                 g.line(pts, fill=NABNER, width=int(CELL * 0.12), joint="curve")
+            elif kind == 16:                                # 10 Lines: a wide soft green band
+                g.line(pts, fill=TEN, width=int(CELL * 0.2), joint="curve")
+                for px, py in (pts[0], pts[-1]):
+                    rr = CELL * 0.1
+                    g.ellipse([px - rr, py - rr, px + rr, py + rr], fill=TEN)
             elif kind in (14, 15):                          # Lockout: diamonds; Double Arrow: blue rings
                 r0, col = CELL * 0.4, ARROW if kind == 14 else DARROW
                 a0 = list(pts)
@@ -830,6 +856,12 @@ def make_drawer(d, fonts):
                     else:
                         pts = [(cx - 7, cy - 4 * s), (cx, cy + 4 * s), (cx + 7, cy - 4 * s)]
                     g.line(pts, fill=ORANGE, width=3, joint="curve")
+        for c in cells:                                     # Diagonal Consecutive: a bar across a marked corner
+            m, (x, y), h = d.get("dmark", [0] * 81)[c], xy(c), CELL / 7
+            if m & 1:
+                g.line([(x + CELL - h, y + CELL - h), (x + CELL + h, y + CELL + h)], fill=ORANGE, width=6)
+            if m & 2:
+                g.line([(x + h, y + CELL - h), (x - h, y + CELL + h)], fill=ORANGE, width=6)
         for q in d["quads"]:                                # circles where four cells meet
             x, y = xy(q["at"])
             cx, cy, rr = x + CELL, y + CELL, 15

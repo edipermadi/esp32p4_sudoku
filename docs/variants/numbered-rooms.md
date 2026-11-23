@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Numbered Rooms: variant-examples #44](../screenshots/variants/numbered-rooms-walkthrough/step-00.png)
+![Numbered Rooms: variant-examples #44](../screenshots/variants/numbered-rooms.png)
 
 ## The rules
 

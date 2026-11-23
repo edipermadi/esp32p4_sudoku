@@ -96,7 +96,7 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | Little Killer | 15 / 29 (29.7) | 471 / 692 (20.7) | 1102 / 2132 (18.8) | 1225 / 1638 (16.6) |
 | Palindrome | 11 / 20 (29.3) | 284 / 449 (15.2) | 905 / 2445 (13) | 756 / 1250 (12.2) |
 | Region Sum Lines | 21 / 47 (29.7) | 403 / 810 (20.1) | 1070 / 1731 (18) | 1206 / 1780 (15.4) |
-| X-Sums | 72 / 122 (29.7) | 835 / 1605 (11.3) | 3012 / 7914 (14.7) | 2360 / 4324 (11.6) |
+| X-Sums | 27 / 48 (29.7) | 314 / 591 (11.3) | 1181 / 3082 (14.7) | 875 / 1594 (11.6) |
 | Zipper Lines | 12 / 21 (29.2) | 86 / 97 (15.5) | 186 / 490 (12.6) | 946 / 1088 (12.9) |
 | Frame | 15 / 27 (30) | 112 / 230 (15.1) | 641 / 1895 (17.3) | 262 / 790 (13.3) |
 | Between Lines | 19 / 30 (29.8) | 88 / 112 (21.2) | 293 / 532 (19.7) | 1672 / 4862 (20.6) |
@@ -119,13 +119,21 @@ Nabner, Numbered Rooms and Sum Skyscrapers were added on 2026-11-23 and measured
 
 | Variant | Easy | Medium | Hard | Expert |
 |---|---|---|---|---|
-| Lockout Lines | 16 / 22 (30.3) | 80 / 106 (18.8) | 198 / 485 (16.6) | 2020 / 4492 (16.8) |
+| Lockout Lines | 14 / 19 (30.3) | 77 / 102 (18.8) | 187 / 458 (16.6) | 1570 / 3437 (16.8) |
 | Sumless Killer | 49 / 102 (27.8) | 395 / 1635 (24.7) | 292 / 731 (26.3) | 119 / 273 (25.3) |
 | Double Arrow | 11 / 13 (30.2) | 78 / 95 (19.8) | 218 / 350 (18.2) | 1172 / 2063 (15.6) |
 
 Lockout Lines, Sumless Killer and Double Arrow were added on 2026-11-23 too, measured the same way; all 120 came out at the level asked for.
 
-Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), X-Sums Hard (up to 7.9 s), Between Lines Expert (up to 4.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
+| Variant | Easy | Medium | Hard | Expert |
+|---|---|---|---|---|
+| Diagonal Consecutive | 11 / 14 (24.1) | 405 / 686 (7.8) | 1186 / 4528 (7.7) | 590 / 900 (5.4) |
+| 10 Lines | 12 / 22 (29.7) | 100 / 159 (17.2) | 156 / 409 (14.9) | 1806 / 2821 (13.6) |
+| Girandola | 6 / 11 (36.6) | 86 / 155 (25.2) | 214 / 416 (23.8) | 198 / 300 (24) |
+
+Diagonal Consecutive, 10 Lines and Girandola were added on 2026-11-23 too, measured the same way (`genbench 48`, `genbench 49`: "10" would be variant 10, Sandwich); all 120 came out at the level asked for. 10 Lines Expert was among the slowest at first (5.3 s, up to 7.6 s): 73 % of the time went to `sudoku_ten_allow()`, the rule that tries every way to split a line, called about 3 million times a puzzle on the PC. Worked out with bit shifts (a digit's step moves every running sum at once) instead of a loop per sum, it takes a third of the time (1.8 s, up to 2.8 s) for the same puzzles. Its loops go digit by digit on purpose: `__builtin_ctz()` is a library call (`__ctzsi2`) on the board's RISC-V core.
+
+Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), Between Lines Expert (up to 4.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. The board's RISC-V core has no ctz, clz or popcount instruction (`__builtin_ctz()` and the like become library calls), so a rule asked millions of times a puzzle looks digits up in tables instead (`s_mask_lo`, `s_mask_hi`, `s_mask_n`; X-Sums' first digits per clue in `sudoku_xsum_firsts()`). That, and not recomputing what depends only on the clue, took X-Sums Hard from 3.0 s (up to 7.9 s) to 1.2 s (up to 3.1 s) on 2026-11-23, and 10 Lines Expert from 5.3 s to 1.8 s; Lockout Lines Expert from 2.0 s to 1.6 s by capping each low diamond's partner once instead of checking all 81 pairs against the line. The puzzles stayed the same (`docs/variant-examples.sdx` unchanged byte for byte). Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
 ## The UI files
 

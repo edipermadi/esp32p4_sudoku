@@ -29,6 +29,8 @@ static const uint8_t PIC_GROUPS[] = {0, 1, 2, 3, 4, 0xFF};  /**< Entropic 2 9 4 
 static const uint8_t PIC_SLOW[] = {0, 1, 6, 7, 0xFF};       /**< 2 4, then 4 again across the boxes' corner, 7 */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
 static const uint8_t PIC_SUMLESS[] = {0, 1, 2, 5, 0xFE, 0xFF};   /**< a cage over the box border, no sum */
+static const uint8_t PIC_DMARKS[] = {0, DMARK_DR, 0xFF};   /**< 3 and 4 corner to corner: a mark; 8 and 4: none */
+static const uint8_t PIC_TEN[] = {0, 1, 2, 5, 4, 0xFF};    /**< 3 7 | 1 5 4: two runs of 10 */
 
 /** @brief Each variant's rules card picture. */
 static const rules_pic_t RULES_PIC[VAR_COUNT] = {
@@ -113,6 +115,16 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_LOCKOUT] = {5, 1, 0, 0, "28917", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_LOCKOUT},
     [VAR_SUMLESS] = {4, 2, 2, 2, "..8." "....", NULL, NULL, NULL, NULL, NULL, NULL, PIC_SUMLESS, -1},
     [VAR_DARROW] = {4, 1, 0, 0, "3546", NULL, NULL, NULL, NULL, NULL, PIC_RENBAN, NULL, -1, 0, NULL, NULL, LINE_DARROW},
+    [VAR_DIAGCONSEC] = {
+        3, 2, 0, 0, "3.8" ".42", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1, 0, NULL, NULL, 0, 0, NULL, PIC_DMARKS
+    },
+    [VAR_TEN] = {3, 2, 0, 0, "371" "945", NULL, NULL, NULL, NULL, NULL, PIC_TEN, NULL, -1, 0, NULL, NULL, LINE_TEN},
+    [VAR_GIRANDOLA] = {
+        9, 9, 3, 3, "4.......7" "....2...." "........." "........." ".9..5..1." "........." "........."
+        "....8...." "3.......6",
+        "100000001" "000010000" "000000000" "000000000" "010010010" "000000000" "000000000"
+        "000010000" "100000001", NULL, NULL, NULL, NULL, NULL, NULL, -1
+    },
     [VAR_SLOW] = {4, 2, 2, 2, "24.." "..47", NULL, NULL, NULL, NULL, NULL, PIC_SLOW, NULL, -1, 0, NULL, NULL, LINE_SLOW},
     [VAR_FORTRESS] = {3, 3, 0, 0, ".4." "685" ".2.", NULL, NULL, "..." ".f." "...", NULL, NULL, NULL, NULL, -1},
     [VAR_ARGYLE] = {9, 9, 3, 3, "....3...." ".....7..." "......1.." ".......9." "........4" "........." "........." "........." ".........", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
@@ -224,6 +236,12 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "reaches over a box border, so the 8 here rules out 8 in the cage's other cells, even in the next box.",
     [VAR_DARROW] = "Classic rules, and on a line the two circles at its ends add up to the digits between them: "
     "3 + 6 = 5 + 4. Digits may repeat along it where the rules allow.",
+    [VAR_DIAGCONSEC] = "Classic rules, and where two cells touching at a corner are joined by a mark, their "
+    "digits are 1 apart (3 and 4); where no mark joins them, they aren't (8 and 4).",
+    [VAR_TEN] = "Classic rules, and each green line splits into runs of cells next to each other along it that "
+    "each add up to 10: 3 + 7, then 1 + 5 + 4. Where it splits isn't shown.",
+    [VAR_GIRANDOLA] = "Classic rules, and the nine tinted cells in a pinwheel pattern, one in each box, also hold "
+    "1 to 9, each once.",
     [VAR_SLOW] = "Classic rules, and along each thermometer the digits rise from the round bulb or stay the same: "
     "2, 4, 4, 7. A digit can only stay the same where the two cells share no row, column or box, as across the "
     "corner between two boxes here.",
@@ -301,6 +319,10 @@ static void rules_pic_draw_cb(lv_event_t *e)
                              .x2 = x0 + (line[n - 1] % 9 + 1) * cs, .y2 = y0 + (line[n - 1] / 9 + 1) * cs
                             };
         draw_argyle_line(layer, &a, &b, k < ARGYLE_LINES / 2, 2);
+    }
+    for (int k = 0; p->dmarks && p->dmarks[k] != 0xFF; k += 2) {   /* Diagonal Consecutive's corner marks */
+        int c = p->dmarks[k], dl = p->dmarks[k + 1] == DMARK_DL;
+        draw_dmark(layer, x0 + (c % p->w + (dl ? 0 : 1)) * cs, y0 + (c / p->w + 1) * cs, dl, cs / 7);
     }
     if (p->thermo) {                                /* a thermometer (or an arrow, a Renban, Whispers, ... line) */
         lv_point_t pts[9];

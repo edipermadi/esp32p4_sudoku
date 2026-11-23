@@ -72,7 +72,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
         const bool newest_lines = G->nthermos && (G->line_kind == LINE_ZIPPER || G->line_kind == LINE_BETWEEN ||
                                   G->line_kind == LINE_ENTROPIC || G->line_kind == LINE_MODULAR ||
                                   G->line_kind == LINE_NABNER || G->line_kind == LINE_LOCKOUT ||
-                                  G->line_kind == LINE_DARROW);
+                                  G->line_kind == LINE_DARROW || G->line_kind == LINE_TEN);
         if (G->edge_kind || G->nquads || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
             int tier = gen_technique_tier(G, out);
             ok = tier <= max_tier && (tier < 3 || gen_count_bounded(G, out, 2, node_limit) == 1);
@@ -103,14 +103,15 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
     const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
-    const bool ends = variant == VAR_LOCKOUT || variant == VAR_DARROW, sumless = variant == VAR_SUMLESS;
+    const bool ends = variant == VAR_LOCKOUT || variant == VAR_DARROW || variant == VAR_TEN;
+    const bool sumless = variant == VAR_SUMLESS, dcons = variant == VAR_DIAGCONSEC;
     const bool grp = variant == VAR_ENTROPIC || variant == VAR_MODULAR;
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool fort = variant == VAR_FORTRESS;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
-                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless;
+                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -166,6 +167,21 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 } else {                            /* about a third of the cells say even or odd */
                     text[c] = rnd(&rng) % 3 ? '.' : (full[c] % 2 ? 'o' : 'e');
                 }
+            }
+            text[81] = 0;
+            sudoku_geom_marks(variant, text, jig);
+        } else if (dcons) {                         /* a grid, then a mark on every corner pair 1 apart */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            char text[82];
+            for (int c = 0; c < 81; c++) {
+                int m = 0;
+                if (c < 72 && c % 9 < 8 && abs(full[c] - full[c + 10]) == 1) {
+                    m |= DMARK_DR;
+                }
+                if (c < 72 && c % 9 > 0 && abs(full[c] - full[c + 8]) == 1) {
+                    m |= DMARK_DL;
+                }
+                text[c] = (char)('0' + m);
             }
             text[81] = 0;
             sudoku_geom_marks(variant, text, jig);

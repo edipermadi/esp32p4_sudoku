@@ -141,6 +141,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_XV:
     case VAR_GT:
     case VAR_FORTRESS:
+    case VAR_DIAGCONSEC:
         return strlen(p->marks) == 81 && sudoku_geom_marks(p->variant, p->marks, out);
     case VAR_THERMO:
     case VAR_ARROW:
@@ -158,6 +159,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_NABNER:
     case VAR_LOCKOUT:
     case VAR_DARROW:
+    case VAR_TEN:
         return sudoku_geom_lines_text(p->variant, p->thermos, out);   /* (lines go in thermos) */
     case VAR_SANDWICH:
         return sudoku_geom_sandwich_text(p->marks, out);

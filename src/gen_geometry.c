@@ -23,7 +23,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
                                                      "Parity Lines", "Slow Thermo", "Fortress", "Argyle",
                                                      "Nabner", "Numbered Rooms", "Sum Skyscrapers",
-                                                     "Lockout Lines", "Sumless Killer", "Double Arrow"
+                                                     "Lockout Lines", "Sumless Killer", "Double Arrow",
+                                                     "Diagonal Consecutive", "10 Lines", "Girandola"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -187,6 +188,9 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
         if (is_sudoku_geom_on_centerdot(g, cell)) {
             ids[nid++] = UNIT_CENTERDOT;
         }
+        if (is_sudoku_geom_on_girandola(g, cell)) {
+            ids[nid++] = UNIT_GIRANDOLA;
+        }
         for (int i = 0; i < nid; i++) {
             int u = ids[i];
             g->unit[u][fill[u]++] = (uint8_t)cell;
@@ -250,6 +254,7 @@ void sudoku_geom_init(void)
     geom_build(&g[VAR_DISJOINT], VAR_DISJOINT, 9, 3, 3, false, false, NULL);
     geom_build(&g[VAR_ASTERISK], VAR_ASTERISK, 9, 3, 3, false, false, NULL);
     geom_build(&g[VAR_CENTERDOT], VAR_CENTERDOT, 9, 3, 3, false, false, NULL);
+    geom_build(&g[VAR_GIRANDOLA], VAR_GIRANDOLA, 9, 3, 3, false, false, NULL);
     /* Anti-Knight: a knight's move away is a peer too; Anti-King: a touching cell (the diagonal
      * ones are new; side by side they share a row or column already) */
     static const int8_t KM[8][2] = {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}};
@@ -311,7 +316,8 @@ void sudoku_geom_init(void)
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
-                                  VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW
+                                  VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
+                                  VAR_DIAGCONSEC, VAR_TEN
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -334,7 +340,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI || variant == VAR_DUTCH ||
             variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS || variant == VAR_NABNER ||
             variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
-            variant == VAR_DARROW) {
+            variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -353,7 +359,8 @@ static int line_kind_of(int variant)
            variant == VAR_BETWEEN ? LINE_BETWEEN : variant == VAR_ENTROPIC ? LINE_ENTROPIC :
            variant == VAR_MODULAR ? LINE_MODULAR : variant == VAR_DUTCH ? LINE_DUTCH :
            variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : variant == VAR_NABNER ? LINE_NABNER :
-           variant == VAR_LOCKOUT ? LINE_LOCKOUT : variant == VAR_DARROW ? LINE_DARROW : LINE_THERMO;
+           variant == VAR_LOCKOUT ? LINE_LOCKOUT : variant == VAR_DARROW ? LINE_DARROW :
+           variant == VAR_TEN ? LINE_TEN : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -508,8 +515,12 @@ bool gen_geom_sky(const uint8_t clues[18], sudoku_geom_t *out)
     return true;
 }
 
-/* (documented in generator.h) */
-uint16_t sudoku_xsum_firsts(int clue)
+/**
+ * @brief X-Sums: the first digits a clue allows, worked out (sudoku_xsum_firsts() keeps them in a table)
+ * @param[in] clue  the clue, 0..45
+ * @return bit x = x can be first
+ */
+static uint16_t xsum_firsts_calc(int clue)
 {
     uint16_t m = 0;
     for (int x = 1; x <= 9; x++) {                  /* x, and x - 1 more digits from 1..9 without x */
@@ -531,6 +542,20 @@ uint16_t sudoku_xsum_firsts(int clue)
         }
     }
     return m;
+}
+
+/* (documented in generator.h) */
+uint16_t sudoku_xsum_firsts(int clue)
+{
+    static uint16_t table[46];                      /* (the solver asks millions of times a puzzle) */
+    static bool made;
+    if (!made) {                                    /* (two tasks making it at once write the same values) */
+        for (int c = 0; c < 46; c++) {
+            table[c] = xsum_firsts_calc(c);
+        }
+        made = true;
+    }
+    return clue >= 0 && clue < 46 ? table[clue] : 0;
 }
 
 /* (documented in gen_internal.h) */

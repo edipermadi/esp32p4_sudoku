@@ -130,6 +130,12 @@
  *                repeats in a cage (cage_sum 0)
  *   VAR_DARROW   Double Arrow: Classic rules, and on each line the two end circles
  *                add up to the digits between them
+ *   VAR_DIAGCONSEC Diagonal Consecutive: Classic rules, and two cells touching at a
+ *                corner are 1 apart where a mark joins them, and not where none does
+ *   VAR_TEN      10 Lines: Classic rules, and each line splits into runs of cells
+ *                that each add up to 10
+ *   VAR_GIRANDOLA Girandola: Classic rules, and nine cells in a pinwheel pattern
+ *                (is_sudoku_geom_on_girandola()) also hold 1-9
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -141,7 +147,7 @@
  * 6x6 board uses the top-left 6x6 of them and leaves the rest 0. Saved games,
  * move logs and the database then work the same for every variant.
  *
- * Units have fixed numbers whatever the variant (43: the Center Dot): 0..8 rows, 9..17 columns,
+ * Units have fixed numbers whatever the variant (43: the Center Dot, 44: the Girandola): 0..8 rows, 9..17 columns,
  * 18..26 boxes (left to right, top to bottom; on Jigsaw the regions), 27 the
  * main diagonal (top left to bottom right), 28 the other diagonal, 29..32
  * the Hyper windows (top left, top right, bottom left, bottom right), 33..41
@@ -235,6 +241,9 @@ typedef enum {
     VAR_LOCKOUT,                        /**< Lockout Lines */
     VAR_SUMLESS,                        /**< Sumless Killer */
     VAR_DARROW,                         /**< Double Arrow */
+    VAR_DIAGCONSEC,                     /**< Diagonal Consecutive */
+    VAR_TEN,                            /**< 10 Lines */
+    VAR_GIRANDOLA,                      /**< Girandola */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -248,7 +257,7 @@ typedef enum {
  *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
  *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
  *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner", "Numbered Rooms", "Sum Skyscrapers",
- *         "Lockout Lines", "Sumless Killer", "Double Arrow"
+ *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola"
  */
 const char *variant_name(int variant);
 
@@ -260,7 +269,8 @@ const char *variant_name(int variant);
 #define UNIT_GROUP     33               /**< Disjoint groups: 33..41 */
 #define UNIT_ASTERISK  42               /**< Asterisk's nine cells */
 #define UNIT_CENTERDOT 43               /**< Center Dot's nine box centres */
-#define UNITS_MAX      44               /**< units at most */
+#define UNIT_GIRANDOLA 44               /**< Girandola's nine cells */
+#define UNITS_MAX      45               /**< units at most */
 /** @} */
 #define CAGES_MAX      81               /**< Killer: cages per board (1 cell each at most) */
 #define CAGE_NONE      0xFF             /**< a cell in no cage */
@@ -283,7 +293,8 @@ enum {
     LINE_SLOW,                          /**< Slow Thermo: digits rise or stay the same from the bulb */
     LINE_NABNER,                        /**< Nabner: no two digits on the line the same or consecutive */
     LINE_LOCKOUT,                       /**< Lockout Lines: end diamonds 4+ apart, the digits between outside their range */
-    LINE_DARROW                         /**< Double Arrow: the two end circles add up to the digits between */
+    LINE_DARROW,                        /**< Double Arrow: the two end circles add up to the digits between */
+    LINE_TEN                            /**< 10 Lines: runs of cells along it that each add up to 10 */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -385,7 +396,10 @@ typedef struct {
     uint16_t outside_set[18];           /**< per row and column (as frame_sum), the digits among its first 3 (bit d = d), 0 = no clue */
     bool rossini;                       /**< Rossini: the arrows are rules (every row and column has one, or none: neither) */
     uint8_t rossini_dir[18];            /**< per row and column (as frame_sum), its first 3 digits: ROSSINI_* */
-    bool diag_nc;                       /**< Diagonal Non-Consecutive: cells touching at a corner aren't 1 apart */
+    bool diag_nc;                       /**< Diagonal Non-Consecutive: cells touching at a corner aren't 1 apart
+                                         *   (Diagonal Consecutive too, but where dmark joins them: there they are) */
+    uint8_t dmark[81];                  /**< Diagonal Consecutive: marks, bit DMARK_DR = with the cell down-right,
+                                         *   DMARK_DL = down-left (both 0 on Diagonal Non-Consecutive) */
     bool nrooms;                        /**< Numbered Rooms: the clues are rules */
     uint8_t nroom[18];                  /**< per row (0..8, from the left) and column (9..17, from the top), the digit in the
                                          *   X-th cell, X being the first digit; 0 = no clue */
@@ -422,6 +436,8 @@ enum {
 };
 #define CONSEC_RIGHT 1                  /**< Consecutive: a bar to the right */
 #define CONSEC_DOWN  2                  /**< Consecutive: a bar below */
+#define DMARK_DR     1                  /**< Diagonal Consecutive: a mark with the cell down and right */
+#define DMARK_DL     2                  /**< Diagonal Consecutive: a mark with the cell down and left */
 
 /** @brief Builds the tables (once); call early, before tasks use them. */
 void sudoku_geom_init(void);
@@ -462,8 +478,9 @@ bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len);
  * Consecutive '0'-'3' (bit 1 = a bar to the right, bit 2 = a bar below);
  * Kropki, XV, Greater-Than '0'-'8': the mark to the right + 3 x the mark below
  * (MARK_*); Fortress '.' or 'f' (a grey cell: bigger than each white cell side by side with it,
- * kept as EDGE_FORT marks). sudoku_marks_text() writes it (buf: at least 82).
- * @param[in] variant  VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT or VAR_FORTRESS
+ * kept as EDGE_FORT marks); Diagonal Consecutive '0'-'3' (bit 1 = a mark with the cell down-right,
+ * bit 2 = down-left). sudoku_marks_text() writes it (buf: at least 82).
+ * @param[in] variant  VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT, VAR_FORTRESS or VAR_DIAGCONSEC
  * @param[in] text  the marks
  * @param[out] out  gets the board
  * @return false if the text isn't one
@@ -850,6 +867,42 @@ static inline bool is_sudoku_geom_on_centerdot(const sudoku_geom_t *g, int cell)
 }
 
 /**
+ * @brief on the Girandola (r1c1, r1c9, r2c5, r5c2, r5c5, r5c8, r8c5, r9c1, r9c9: a pinwheel, one per box)
+ * @param[in] g  the board
+ * @param[in] cell  the cell
+ * @return true if so
+ */
+static inline bool is_sudoku_geom_on_girandola(const sudoku_geom_t *g, int cell)
+{
+    return g->variant == VAR_GIRANDOLA && (cell == 0 || cell == 8 || cell == 13 || cell == 37 || cell == 40 ||
+                                           cell == 43 || cell == 67 || cell == 72 || cell == 80);
+}
+
+/**
+ * @brief Diagonal Non-Consecutive, Diagonal Consecutive: is the pair of a cell and its corner
+ * neighbour k (0 up-left, 1 up-right, 2 down-left, 3 down-right) marked (then 1 apart, else not)?
+ * @param[in] g  the board
+ * @param[in] cell  the cell
+ * @param[in] k  which corner (the neighbour must be on the board)
+ * @return true if marked
+ */
+static inline bool is_sudoku_dmarked(const sudoku_geom_t *g, int cell, int k)
+{
+    return k == 0 ? (g->dmark[cell - 10] & DMARK_DR) != 0 : k == 1 ? (g->dmark[cell - 8] & DMARK_DL) != 0
+           : k == 2 ? (g->dmark[cell] & DMARK_DL) != 0 : (g->dmark[cell] & DMARK_DR) != 0;
+}
+
+/**
+ * @brief 10 Lines: the digits a place of a line may hold, given what every other place may (the line
+ * splits into runs that each add up to 10; where it splits is not given)
+ * @param[in] m  each place's digits (bit d = d), n of them
+ * @param[in] n  the line's length, 1..9
+ * @param[in] p  the place asked about, or -1: is there any way at all?
+ * @return the digits (p -1: non-zero if there's a way)
+ */
+uint16_t sudoku_ten_allow(const uint16_t *m, int n, int p);
+
+/**
  * @brief Entropic, Modular Lines: the group a digit belongs to (Entropic: 1-3, 4-6, 7-9; Modular:
  * its remainder mod 3)
  * @param[in] kind  LINE_ENTROPIC or LINE_MODULAR
@@ -875,7 +928,7 @@ static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
 }
 
 /**
- * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot
+ * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot, the Girandola
  * @param[in] g  the board
  * @param[in] cell  the cell
  * @return true if so
@@ -883,7 +936,7 @@ static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
 static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
 {
     return is_sudoku_geom_on_diag(g, cell) || sudoku_geom_window(g, cell) >= 0 || is_sudoku_geom_on_asterisk(g, cell) ||
-           is_sudoku_geom_on_centerdot(g, cell);
+           is_sudoku_geom_on_centerdot(g, cell) || is_sudoku_geom_on_girandola(g, cell);
 }
 
 /* ---------------------------------------------------------------- generating */

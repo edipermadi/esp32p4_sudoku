@@ -2,7 +2,7 @@
 
 [← All variants](README.md) · [Puzzles](../features-puzzles.md) · [How to play](../how-to-play.md)
 
-![Lockout Lines: variant-examples #46](../screenshots/variants/lockout-lines-walkthrough/step-00.png)
+![Lockout Lines: variant-examples #46](../screenshots/variants/lockout-lines.png)
 
 ## The rules
 

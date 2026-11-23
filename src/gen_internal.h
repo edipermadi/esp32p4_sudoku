@@ -527,11 +527,11 @@ bool gen_sumless_cages(const uint8_t full[81], uint32_t *rng, sudoku_geom_t *out
  */
 bool gen_between_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
 /**
- * @brief Lockout Lines, Double Arrow: up to want lines over the full grid, each a random walk of up to 6
- * cells kept at the longest length whose ends keep the rule (Lockout: the ends 4+ apart and every cell
- * between outside their range; Double Arrow: the ends add up to the cells between); a line never
- * crosses itself or another
- * @param[in] variant  VAR_LOCKOUT or VAR_DARROW
+ * @brief Lockout Lines, Double Arrow, 10 Lines: up to want lines over the full grid, each a random walk of
+ * up to 6 cells (10 Lines: 8) kept at the longest length that keeps the rule (Lockout: the ends 4+ apart and
+ * every cell between outside their range; Double Arrow: the ends add up to the cells between; 10 Lines:
+ * runs of 10 to the end); a line never crosses itself or another
+ * @param[in] variant  VAR_LOCKOUT, VAR_DARROW or VAR_TEN
  * @param[in] full  the solution
  * @param[in,out] rng  the random state
  * @param[in] want  lines wanted

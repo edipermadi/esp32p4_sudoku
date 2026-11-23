@@ -34,6 +34,8 @@ static void unit_name(const sudoku_geom_t *geo, int u, char *buf, size_t n)
         snprintf(buf, n, "the %s cells of the boxes", SPOT[(u - UNIT_GROUP) % 9]);
     } else if (u == UNIT_ASTERISK) {
         snprintf(buf, n, "the asterisk");
+    } else if (u == UNIT_GIRANDOLA) {
+        snprintf(buf, n, "the pinwheel");
     } else {
         snprintf(buf, n, "the box centres");
     }
@@ -75,6 +77,9 @@ static const char *units_word(const sudoku_geom_t *geo)
     }
     if (geo->variant == VAR_CENTERDOT) {
         return "row, column, box or the box centres";
+    }
+    if (geo->variant == VAR_GIRANDOLA) {
+        return "row, column, box or the pinwheel";
     }
     if (geo->nthermos)
         return geo->line_kind == LINE_THERMO || geo->line_kind == LINE_SLOW
@@ -243,6 +248,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  lk == LINE_LOCKOUT ? "The diamonds at this line's ends are 4 or more apart, and the digits between "
                  "them lie outside that range" :
                  lk == LINE_DARROW ? "The two circles at this line's ends add up to the digits between them" :
+                 lk == LINE_TEN ? "This line splits into runs of cells that each add up to 10" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -280,7 +286,10 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                 len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
             }
         }
-        snprintf(tech, sizeof(tech), "The cells touching row %d, column %d at its corners can't be 1 apart from it, "
+        snprintf(tech, sizeof(tech), geo->variant == VAR_DIAGCONSEC
+                 ? "The cells touching row %d, column %d at its corners are 1 apart from it where a mark joins them, "
+                 "and not where none does, which leaves it only %s. "
+                 : "The cells touching row %d, column %d at its corners can't be 1 apart from it, "
                  "which leaves it only %s. ", c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_CONSEC) {            /* Consecutive: the cell and its neighbours */
         int c = t->unit;

@@ -199,6 +199,19 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
                 }
             }
         }
+        if (g->line_kind == LINE_TEN) {             /* runs of 10, end to end */
+            int run = 0;
+            for (int i = 0; i < n; i++) {
+                run += sol[g->thermo_cell[t][i]];
+                run = run == 10 ? 0 : run;
+                if (run > 10) {
+                    return false;
+                }
+            }
+            if (run) {
+                return false;
+            }
+        }
         if (g->line_kind == LINE_LOCKOUT || g->line_kind == LINE_DARROW) {   /* the two ends' rule */
             int a = sol[g->thermo_cell[t][0]], b = sol[g->thermo_cell[t][n - 1]], lo2 = a < b ? a : b, hi2 = a < b ? b : a;
             int sum = 0;
@@ -240,11 +253,11 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
-    for (int c = 0; g->diag_nc && c < 81; c++) {    /* Diagonal Non-Consecutive: corners not 1 apart */
-        if (c % 9 < 8 && c < 72 && abs(sol[c] - sol[c + 10]) == 1) {
+    for (int c = 0; g->diag_nc && c < 81; c++) {    /* Diagonal (Non-)Consecutive: corners 1 apart just where marked */
+        if (c % 9 < 8 && c < 72 && (abs(sol[c] - sol[c + 10]) == 1) != ((g->dmark[c] & DMARK_DR) != 0)) {
             return false;
         }
-        if (c % 9 > 0 && c < 72 && abs(sol[c] - sol[c + 8]) == 1) {
+        if (c % 9 > 0 && c < 72 && (abs(sol[c] - sol[c + 8]) == 1) != ((g->dmark[c] & DMARK_DL) != 0)) {
             return false;
         }
     }
@@ -357,7 +370,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            a->xsums == b->xsums && !memcmp(a->xsum, b->xsum, 18) && a->frame == b->frame &&
            !memcmp(a->frame_sum, b->frame_sum, 18) && a->outside == b->outside &&
            !memcmp(a->outside_set, b->outside_set, sizeof(a->outside_set)) && a->rossini == b->rossini &&
-           !memcmp(a->rossini_dir, b->rossini_dir, 18) && a->diag_nc == b->diag_nc &&
+           !memcmp(a->rossini_dir, b->rossini_dir, 18) && a->diag_nc == b->diag_nc && !memcmp(a->dmark, b->dmark, 81) &&
            !memcmp(a->lk_sum, b->lk_sum, a->nlk) && !memcmp(a->lk_dir, b->lk_dir, a->nlk) &&
            !memcmp(a->lk_cell, b->lk_cell, sizeof(a->lk_cell[0]) * a->nlk) &&
            a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
@@ -391,6 +404,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_XV:
     case VAR_GT:
     case VAR_FORTRESS:
+    case VAR_DIAGCONSEC:
         sudoku_marks_text(g, marks, len);
         break;
     case VAR_SANDWICH:
@@ -436,6 +450,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_NABNER:
     case VAR_LOCKOUT:
     case VAR_DARROW:
+    case VAR_TEN:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -451,7 +466,7 @@ static void test_geometry(void)
         {VAR_CLASSIC, 9, 81, 27, 20}, {VAR_X, 9, 81, 29, 26}, {VAR_HYPER, 9, 81, 31, 20},
         {VAR_MINI, 6, 36, 18, 12},     {VAR_KIDS, 4, 16, 12, 7},
         {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
-        {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20},
+        {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -685,7 +700,8 @@ static void test_generate(void)
             }
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
             if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR || v == VAR_DUTCH ||
-                    v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT || v == VAR_DARROW) {
+                    v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT || v == VAR_DARROW ||
+                    v == VAR_TEN) {
                 CHECKF(!is_lines_crossing(&board), "%s %s: two lines cross", variant_name(v), gen_level_name(lv));
             }
             CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));

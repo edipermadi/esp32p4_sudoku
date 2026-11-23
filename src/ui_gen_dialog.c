@@ -19,7 +19,7 @@ static lv_obj_t *gen_pick_desc;                     /**< its line about the vari
 static int gen_pick_var = VAR_CLASSIC;              /**< variant chosen there (kept until power-off) */
 
 #define GEN_CATS     4                  /**< the dialog's tabs */
-#define GEN_CAT_SLOTS 16                /**< variant buttons per tab: 4 rows of 4 (the unused ones hidden) */
+#define GEN_CAT_SLOTS 20                /**< variant buttons per tab: 5 rows of 4 (the unused ones hidden) */
 #define GEN_CAT_END  0xFF               /**< after a tab's last variant */
 
 /** @brief the New puzzle dialog's tabs: their names */
@@ -29,16 +29,17 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
         VAR_CLASSIC, VAR_X, VAR_HYPER, VAR_JIGSAW, VAR_MINI, VAR_KIDS, VAR_DISJOINT, VAR_ASTERISK, VAR_CENTERDOT,
+        VAR_GIRANDOLA,
         VAR_ARGYLE, GEN_CAT_END
     },
     {
         VAR_KNIGHT, VAR_KING, VAR_NONCONSEC, VAR_DIAGNC, VAR_EVENODD, VAR_CONSEC, VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD,
-        VAR_FORTRESS, GEN_CAT_END
+        VAR_FORTRESS, VAR_DIAGCONSEC, GEN_CAT_END
     },
     {
         VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM, VAR_ZIPPER, VAR_BETWEEN,
         VAR_ENTROPIC, VAR_MODULAR, VAR_DUTCH, VAR_PARITY, VAR_SLOW, VAR_NABNER, VAR_LOCKOUT,
-        VAR_DARROW, GEN_CAT_END
+        VAR_DARROW, VAR_TEN, GEN_CAT_END
     },
     {
         VAR_KILLER, VAR_SANDWICH, VAR_SKY, VAR_LK, VAR_XSUM, VAR_FRAME, VAR_OUTSIDE, VAR_ROSSINI, VAR_NROOMS, VAR_SKYSUM,
@@ -59,6 +60,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_DUTCH] = "Dutch", [VAR_PARITY] = "Parity", [VAR_SLOW] = "Slow Thermo", [VAR_FORTRESS] = "Fortress",
     [VAR_ARGYLE] = "Argyle", [VAR_NABNER] = "Nabner", [VAR_NROOMS] = "Numbered", [VAR_SKYSUM] = "Sum Sky",
     [VAR_LOCKOUT] = "Lockout", [VAR_SUMLESS] = "Sumless", [VAR_DARROW] = "Double Arrow",
+    [VAR_DIAGCONSEC] = "Diagonal C.", [VAR_TEN] = "10 Lines", [VAR_GIRANDOLA] = "Girandola",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -111,6 +113,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_LOCKOUT] = "9x9 with lines: the end diamonds are 4+ apart, the digits between outside their range.",
     [VAR_SUMLESS] = "9x9 with cages (dashed) without sums: no digit repeats in a cage.",
     [VAR_DARROW] = "9x9 with blue lines: the two end circles add up to the digits between them.",
+    [VAR_DIAGCONSEC] = "9x9 with corner marks: marked corner neighbours are 1 apart, unmarked ones aren't.",
+    [VAR_TEN] = "9x9 with green lines: each splits into runs of cells that add up to 10.",
+    [VAR_GIRANDOLA] = "9x9, and the nine tinted pinwheel cells also hold 1-9 once each.",
     [VAR_SLOW] = "9x9 with thermometers: the digits rise from the bulb, or stay the same where they may.",
     [VAR_FORTRESS] = "9x9: each grey cell holds a bigger digit than every white cell side by side with it.",
     [VAR_ARGYLE] = "9x9, and no digit repeats along any of the eight diagonal lines of the argyle pattern.",
@@ -258,7 +263,7 @@ void new_puzzle_cb(lv_event_t *e)
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     gen_var_bm = vm;
     lv_buttonmatrix_set_one_checked(vm, true);
-    lv_obj_set_size(vm, LV_PCT(100), 200);          /* four rows */
+    lv_obj_set_size(vm, LV_PCT(100), 252);          /* five rows (44 px each) */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);

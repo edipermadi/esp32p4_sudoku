@@ -224,22 +224,25 @@ static bool is_ends_line(bool lockout, const uint8_t full[81], const uint8_t *on
 /* (documented in gen_internal.h) */
 bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
-    const bool lockout = variant == VAR_LOCKOUT;
+    const bool lockout = variant == VAR_LOCKOUT, ten = variant == VAR_TEN;
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
     int n = 0;
     for (int tries = 0; tries < 3000 && n < want; tries++) {
-        int c = (int)(rnd(rng) % 81), target = 3 + (int)(rnd(rng) % 4), len = 0, best = 0, nb[8], sum = 0;
+        int c = (int)(rnd(rng) % 81), target = ten ? 3 + (int)(rnd(rng) % 6) : 3 + (int)(rnd(rng) % 4);
+        int len = 0, best = 0, nb[8], sum = 0, run = 0;  /* (10 Lines: run, the open run's sum) */
         if (used[c]) {
             continue;
         }
         cells[n][len++] = (uint8_t)c;
+        run = full[c];
         while (len < target) {
             int cur = cells[n][len - 1], k = line_neighbours(cur, used, cells[n], len, nb), m = 0;
-            if (!lockout && sum + (len > 1 ? full[cur] : 0) > 17) {
+            if (!lockout && !ten && sum + (len > 1 ? full[cur] : 0) > 17) {
                 break;                              /* (Double Arrow: two circles make 17 at most) */
             }
             for (int j = 0; j < k; j++) {
-                if (!is_line_crossing(cells[n], len, cur, nb[j]) && !is_block_crossed(blocks, cur, nb[j])) {
+                if (!is_line_crossing(cells[n], len, cur, nb[j]) && !is_block_crossed(blocks, cur, nb[j]) &&
+                        (!ten || run + full[nb[j]] <= 10)) {   /* (10 Lines: the run can't pass 10) */
                     nb[m++] = nb[j];
                 }
             }
@@ -249,7 +252,12 @@ bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want
             int o = nb[rnd(rng) % (uint32_t)m];
             sum += len > 1 ? full[cells[n][len - 1]] : 0;   /* (the cells between: all but the first and o) */
             cells[n][len++] = (uint8_t)o;
-            if (len >= 3 && is_ends_line(lockout, full, cells[n], len)) {
+            if (ten) {
+                run = run + full[o] == 10 ? 0 : run + full[o];
+                if (!run) {
+                    best = len;                     /* every run so far makes 10 */
+                }
+            } else if (len >= 3 && is_ends_line(lockout, full, cells[n], len)) {
                 best = len;                         /* o as the other end */
             }
         }
