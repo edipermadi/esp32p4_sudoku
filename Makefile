@@ -8,6 +8,7 @@
 #   make site           the web flasher, docs and code docs site into site/ (tools/make_flasher_site.sh)
 #   make doxygen        the code's documentation (Doxyfile) into build/doxygen/html/index.html;
 #                       its warnings in build/doxygen/warnings.log
+#   make diagrams       the docs' flowcharts: docs/diagrams/*.dot rendered to .svg (Graphviz's dot)
 #   make clean          removes build/, dist/ and site/
 #
 #   make format         formats the C / C++ sources, headers and the sketch in place with astyle (.astylerc)
@@ -46,7 +47,7 @@ SOURCES := $(filter-out \
 
 ASTYLE_RUN = $(ASTYLE) --options=.astylerc --quiet
 
-.PHONY: all build upload avatars release site doxygen clean format format-check test
+.PHONY: all build upload avatars release site doxygen diagrams clean format format-check test
 
 all: build
 
@@ -67,6 +68,14 @@ release: build
 
 site: build
 	tools/make_flasher_site.sh $(BUILD) site $(VERSION)
+
+DIAGRAMS := $(patsubst %.dot,%.svg,$(wildcard docs/diagrams/*.dot))
+
+diagrams: $(DIAGRAMS)
+
+docs/diagrams/%.svg: docs/diagrams/%.dot
+	@command -v dot >/dev/null || { echo "no dot (apt install graphviz)"; exit 1; }
+	dot -Tsvg $< -o $@
 
 doxygen:
 	@command -v doxygen >/dev/null || { echo "no doxygen (apt install doxygen graphviz)"; exit 1; }

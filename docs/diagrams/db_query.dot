@@ -1,0 +1,24 @@
+// A question to sudoku.db and its answer: the stats_db pattern (tasks.md)
+digraph db_query {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    rankdir=LR;
+    subgraph cluster_ui { label="LVGL task (core 1)"; style="rounded"; color="#5B7DB1"; fontname="Helvetica";
+        ask  [label="stats_db_query_x()\nqueues a command,\nreturns at once"];
+        poll [label="A timer (sd_poll_cb, 100 ms,\nor the screen's own)"];
+        take [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="stats_db_take_x():\na new answer?"];
+        draw [label="Copy it out;\ndraw the screen"];
+    }
+    subgraph cluster_db { label="stats_db task (core 0)"; style="rounded"; color="#C48A1A"; fontname="Helvetica";
+        q    [label="Queue (16 commands)"];
+        run  [label="Run the SQL"];
+        put  [label="Answer into its buffer (PSRAM)\nunder the mutex; \"new\" flag set"];
+    }
+    ask -> q [style=dashed];
+    q -> run -> put;
+    poll -> take;
+    take -> draw [label="yes (once)"];
+    take -> poll [label="no: next tick"];
+    put -> take [style=dashed, label="read under\nthe mutex"];
+}

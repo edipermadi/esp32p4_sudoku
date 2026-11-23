@@ -11,6 +11,7 @@ Turns README.md and the Markdown under docs/ into HTML pages for GitHub Pages:
     OUT_DIR/internals.html              docs/internals/README.md, and
     OUT_DIR/internals-<name>.html       docs/internals/<name>.md (likewise)
     OUT_DIR/screenshots/...             docs/screenshots/
+    OUT_DIR/diagrams/*.svg              docs/diagrams/ (the flowcharts)
     OUT_DIR/variant-examples.sdx        the variant pages' example puzzles, to download
 
 The top bar links the code docs (OUT_DIR/../code/, Doxygen) when they are there.
@@ -115,7 +116,7 @@ def rewrite(url, src):
     target = posixpath.normpath(posixpath.join(posixpath.dirname(src), path)) if path else src
     if target in PAGE_OF:
         out = PAGE_OF[target]
-    elif target.startswith("docs/screenshots/"):
+    elif target.startswith("docs/screenshots/") or target.startswith("docs/diagrams/"):
         out = target[len("docs/"):]
     elif target in DOWNLOADS:
         out = posixpath.basename(target)
@@ -267,6 +268,10 @@ def main():
     shots = os.path.join(out, "screenshots")
     shutil.rmtree(shots, ignore_errors=True)
     shutil.copytree(os.path.join(HERE, "docs", "screenshots"), shots)
+    diagrams = os.path.join(out, "diagrams")         # the flowcharts (rendered by make diagrams)
+    shutil.rmtree(diagrams, ignore_errors=True)
+    shutil.copytree(os.path.join(HERE, "docs", "diagrams"), diagrams,
+                    ignore=lambda d, names: [n for n in names if not n.endswith(".svg")])
     for d in DOWNLOADS:
         shutil.copy(os.path.join(HERE, d), os.path.join(out, posixpath.basename(d)))
     check_links(out)

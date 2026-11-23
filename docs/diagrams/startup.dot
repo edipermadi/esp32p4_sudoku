@@ -1,0 +1,39 @@
+// Power-on to the Home screen: setup() and sudoku_ui_start()
+digraph startup {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, label="Power-on / RESET", fillcolor="#E3F2E1", color="#4A8A44"];
+    ext   [label="malloc() to PSRAM from 4 bytes\n(heap_caps_malloc_extmem_enable)"];
+    disp  [label="Display, touch, LVGL\n(bsp_lvgl_start)"];
+    store [label="Avatars mapped; settings in RAM\n(store_init: defaults, old NVS keys)"];
+    host  [label="SD card host set up\n(before Wi-Fi: they share SDMMC)"];
+    sfx   [label="Speaker and the sfx task"];
+    splash[label="Splash screen drawn"];
+    card  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Card\nfound?"];
+    open  [label="stats_db task opens sudoku.db:\ncreate / upgrade tables, select the player,\nload the cache, check achievements"];
+    wait  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Open within\n4 s?"];
+    take  [label="Settings and this player's\nstatistics into RAM"];
+    ram   [label="Defaults; everything kept\nin RAM until power-off"];
+    usb   [label="USB drive set up (empty)"];
+    wifi  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Wi-Fi left on\nand a network saved?"];
+    conn  [label="Connect; NTP sets the clock"];
+    apply [label="Sound, brightness, time zone,\nscreen timeout from the settings"];
+    build [label="apply_theme(): every screen built\n(the loading bar moves per screen)"];
+    timers[label="UI timers: clock 200 ms, poll 100 ms,\nsaver and Home 1 s, night mode 20 s"];
+    home  [shape=oval, label="Home; loop() runs LVGL", fillcolor="#E3F2E1", color="#4A8A44"];
+
+    start -> ext -> disp -> store -> host -> sfx -> splash -> card;
+    card -> open [label="yes"];
+    card -> ram  [label="no"];
+    open -> wait [style=dashed];
+    wait -> take [label="yes"];
+    wait -> ram  [label="no / failed"];
+    take -> usb;
+    ram -> wifi;
+    usb -> wifi;
+    wifi -> conn [label="yes"];
+    wifi -> apply [label="no"];
+    conn -> apply [style=dashed, label="(in its task)"];
+    apply -> build -> timers -> home;
+}

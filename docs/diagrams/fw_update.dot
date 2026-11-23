@@ -1,0 +1,34 @@
+// Settings > Data > Firmware update, and the new firmware's probation
+digraph fw_update {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, label="Update tapped", fillcolor="#E3F2E1", color="#4A8A44"];
+    file  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Usable update.bin\non the card?"];
+    no    [label="\"No usable update.bin\""];
+    ask   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Confirmed?\n(builds shown)"];
+    card  [label="A card over everything, 3 s"];
+    dark  [label="Screen dark (backlight off, panel asleep):\nflash writes would make it flicker"];
+    write [label="fwupdate task (core 0): erase the other slot,\nwrite update.bin, check the image"];
+    ok    [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Written and\nchecked?"];
+    fail  [label="Screen back; \"Update failed:\nthe running firmware stays\""];
+    boot  [label="Boot slot set; update.bin renamed\nupdate.done; restart"];
+    run   [label="New firmware starts on probation\n(verifyRollbackLater)"];
+    up    [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Runs 15 s\nwithout a crash?"];
+    keep  [shape=oval, label="Marked valid: it stays", fillcolor="#E3F2E1", color="#4A8A44"];
+    back  [shape=oval, label="Bootloader rolls back\nto the previous firmware", fillcolor="#FBE3E3", color="#B14A4A"];
+    end   [shape=oval, label="Nothing changed", fillcolor="#E3F2E1", color="#4A8A44"];
+
+    start -> file;
+    file -> no [label="no"]; no -> end;
+    file -> ask [label="yes"];
+    ask -> end [label="Cancel"];
+    ask -> card [label="Update"];
+    card -> dark -> write;
+    write -> ok [style=dashed, label="polled every 200 ms"];
+    ok -> fail [label="no"]; fail -> end;
+    ok -> boot [label="yes"];
+    boot -> run -> up;
+    up -> keep [label="yes"];
+    up -> back [label="no (crash, watchdog)"];
+}

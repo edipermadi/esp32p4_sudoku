@@ -1,0 +1,34 @@
+// The screen saver and power saving: saver_cb() in ui_saver.c, bsp_power_save()
+digraph saver {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    on    [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Screen on"];
+    idle  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="No touch for the\nscreen timeout?\n(checked each second)"];
+    pause [label="Game paused (clock stops, board hidden, saved)\nLock screen put under the cover, if on\nBlack cover on the system layer"];
+    clk   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Clock on?"];
+    dim   [label="Dim clock (12 % light),\nmoved each minute"];
+    tap1  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A tap within\n10 minutes?"];
+    dark  [label="Dark: backlight off, panel asleep,\nCPU at 180 MHz"];
+    tap2  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A tap?"];
+    wake  [label="On press: full speed, panel awake, light on\nOn release: the cover goes\n(the waking tap presses nothing)"];
+    lock  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Lock screen\non?"];
+    unlock[label="Swipe or PIN"];
+
+    on -> idle;
+    idle -> on [label="no"];
+    idle -> pause [label="yes"];
+    pause -> clk;
+    clk -> dim [label="yes"];
+    clk -> dark [label="no"];
+    dim -> tap1;
+    tap1 -> wake [label="yes"];
+    tap1 -> dark [label="no"];
+    dark -> tap2;
+    tap2 -> tap2 [label="no"];
+    tap2 -> wake [label="yes"];
+    wake -> lock;
+    lock -> unlock [label="yes"];
+    lock -> on [label="no"];
+    unlock -> on;
+}

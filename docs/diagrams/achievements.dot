@@ -1,0 +1,34 @@
+// Achievements: checked after a change (sdb_ach_sync), shown on Trophies (sdb_do_achievements)
+digraph achievements {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    subgraph cluster_sync { label="sdb_ach_sync(): after a solve, a first Learn practice, a time attack run; at start-up"; style="rounded"; color="#C48A1A"; fontname="Helvetica";
+        ev    [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Something that may\nunlock one happened"];
+        vals  [label="Every achievement's value worked out\n(its SQL; the daily streaks in C)"];
+        cache [label="Values written to achievement_progress\n(INSERT OR REPLACE, in a savepoint)"];
+        reach [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Value reached the goal and\nno achievements row yet?"];
+        ins   [label="INSERT OR IGNORE into achievements\n(with the time, or NULL at start-up)"];
+        ann   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Announce?\n(not at start-up)"];
+        tst   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Toast: \"Achievement unlocked\""];
+        quiet [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Recorded quietly", fillcolor="#F2F2F2", color="#999999"];
+    }
+    subgraph cluster_show { label="Trophies > Achievements opened"; style="rounded"; color="#5B7DB1"; fontname="Helvetica";
+        open  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="stats_db_query_achievements()"];
+        have  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A cached row for every\nachievement of this player?"];
+        sync2 [label="sdb_ach_sync() (fills the cache)"];
+        read  [label="Read the cache and the\nunlock dates: two queries"];
+        show  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Trophies, locks, progress bars"];
+    }
+    ev -> vals -> cache -> reach;
+    reach -> ins [label="yes"];
+    reach -> quiet [label="no"];
+    ins -> ann;
+    ann -> tst [label="yes"];
+    ann -> quiet [label="no"];
+    open -> have;
+    have -> read [label="yes"];
+    have -> sync2 [label="no (new player,\nnew firmware)"];
+    sync2 -> read;
+    read -> show;
+}

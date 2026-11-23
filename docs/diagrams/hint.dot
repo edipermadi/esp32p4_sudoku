@@ -1,0 +1,36 @@
+// The next step for a hint: sudoku_next_step() in gen_hints.c
+digraph hint {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Hint tapped\n(board as played, the solution)"];
+    wrong [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A digit that isn't\nthe solution's?"];
+    sw    [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="STEP_WRONG:\n\"check the highlighted cell\"", fillcolor="#FBE3E3", color="#B14A4A"];
+    load  [label="Candidates worked out\nfrom the board"];
+    full  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Any cell\nempty?"];
+    none  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Solved: no hint", fillcolor="#F2F2F2", color="#999999"];
+    hs    [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Hidden single?\n(boxes first)"];
+    shs   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="STEP_HIDDEN_SINGLE"];
+    ns    [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Naked single?"];
+    sns   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="STEP_NAKED_SINGLE"];
+    tech  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A technique removes a candidate?\nvariant rules first, then pointing/claiming,\npairs, naked triple, X-Wing, Swordfish, XY-Wing"];
+    rec   [label="The first technique used is\nkept with the step (its area, digits)"];
+    round [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="64 rounds\nused?"];
+    pick  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="STEP_NONE: the empty cell with the\nfewest candidates, its digit from the solution"];
+
+    start -> wrong;
+    wrong -> sw [label="yes"];
+    wrong -> load [label="no"];
+    load -> full;
+    full -> none [label="no"];
+    full -> hs [label="yes"];
+    hs -> shs [label="yes"];
+    hs -> ns [label="no"];
+    ns -> sns [label="yes"];
+    ns -> tech [label="no"];
+    tech -> pick [label="no"];
+    tech -> rec [label="yes"];
+    rec -> round;
+    round -> hs [label="no: look for\na single again"];
+    round -> pick [label="yes"];
+}

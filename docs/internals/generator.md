@@ -2,7 +2,7 @@
 
 [← Internals](README.md) · [README](../../README.md) · [Features](../features.md) · [Data & storage](../data.md) · [Development](../development.md) · [Variants](../variants/README.md)
 
-How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them, gives hints and finds Learn's positions. It is all in `src/gen_*.c` (`gen_geometry.c` the boards and texts, `gen_solver.c` the rules and the search, `gen_grade.c` the techniques, `gen_make.c` generating, `gen_regions.c` Jigsaw regions and Killer cages, `gen_lines.c` the line variants' lines, `gen_hints.c` hints; they share `gen_internal.h`) and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`.
+How **New puzzle** and the daily puzzle are made, how a puzzle is graded Easy to Expert, and how the same code solves puzzles, checks them, gives hints and finds Learn's positions. It is all in `src/gen_*.c` (`gen_geometry.c` the boards and texts, `gen_solver.c` the rules and the search, `gen_grade.c` the techniques, `gen_make.c` generating, `gen_regions.c` Jigsaw regions and Killer cages, `gen_lines.c` the line variants' lines, `gen_hints.c` hints; they share `gen_internal.h`) and `src/generator.h`: plain C with no ESP-IDF or LVGL in it, so the PC tests (`make -C tests`) and the docs tools build it unchanged. The firmware side (the task, the progress bar, saving) is in `src/ui_newpuzzle.c`; the daily puzzle's choice in `src/daily_core.c`.
 
 ## In one paragraph
 
@@ -111,6 +111,8 @@ The hints (`sudoku_next_step()`) use the same functions in the same order, plus 
 
 ## Generating: `sudoku_generate()`
 
+![Making a puzzle](../diagrams/generate.svg)
+
 ```
 for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
     make a full grid (and, for variants with clues, the clues from it)
@@ -123,35 +125,35 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
 ### 1. A full grid, and the variant's clues
 
 - **Fixed boards** (Classic, X, Hyper, Mini, Kids, Anti-Knight, Anti-King, Non-Consecutive, Diagonal Non-Consecutive, Disjoint, Asterisk, Center Dot, Argyle): `gen_random_full_grid()` on the variant's own board, i.e. `search()` with a shuffled digit order. Anti-Knight, Anti-King and the two Non-Consecutives sometimes run into a dead end, so they get a 20 000-node cap and a fresh try.
-- **Jigsaw**: `jigsaw_map()` reshapes the 3×3 boxes by swapping cells across region borders while every region stays in one piece. A new shape is made every 4 attempts; one that won't fill quickly is dropped.
+- **Jigsaw**: `gen_jigsaw_map()` reshapes the 3×3 boxes by swapping cells across region borders while every region stays in one piece. A new shape is made every 4 attempts; one that won't fill quickly is dropped.
 - **Variants with clues**: a random **Classic** grid first, then clues that are true of it, so the solution is known to fit:
 
   | Variant | Its clues |
   |---|---|
-  | Killer | `killer_cages()` grows cages of 2–3 cells (Hard/Expert: up to 5) with no repeated digit; the sums come from the grid |
+  | Killer | `gen_killer_cages()` grows cages of 2–3 cells (Hard/Expert: up to 5) with no repeated digit; the sums come from the grid |
   | Even-Odd | about a third of the cells marked even or odd |
   | Consecutive | every pair of neighbours 1 apart gets its bar, so a missing bar is information too |
   | Kropki, XV | every dot / mark the grid has, all of them, for the same reason |
   | Greater-Than | a sign between every pair of neighbours inside a box |
   | Quadruple | 14 circles (Hard/Expert 18) at random corners, each with 2–4 of its four digits |
-  | Thermo | `thermo_paths()`: 7 thermometers (Hard/Expert 10) along rising digits |
-  | Slow Thermo | `thermo_paths()` too: 7 thermometers (Hard/Expert 10) of 3 to 7 cells along digits that rise or stay the same (where a step can stay the same, it does half the time) |
+  | Thermo | `gen_thermo_paths()`: 7 thermometers (Hard/Expert 10) along rising digits |
+  | Slow Thermo | `gen_thermo_paths()` too: 7 thermometers (Hard/Expert 10) of 3 to 7 cells along digits that rise or stay the same (where a step can stay the same, it does half the time) |
   | Fortress | 18 to 24 grey cells, picked in a random order: a cell turns grey when its digit is bigger than every white neighbour's (turning a cell grey only drops signs, so the ones before stay kept) |
-  | Arrow, Renban, Whispers | `rule_paths()`: 8 lines (Hard/Expert 10) grown cell by cell (sideways or diagonally) through cells that keep the rule: a shaft that sums to its circle, a run of consecutive digits, neighbours 5 apart |
+  | Arrow, Renban, Whispers | `gen_rule_paths()`: 8 lines (Hard/Expert 10) grown cell by cell (sideways or diagonally) through cells that keep the rule: a shaft that sums to its circle, a run of consecutive digits, neighbours 5 apart |
   | Sandwich | all 18 sums |
   | Skyscraper | each line's count, kept for about 75 % of the lines (Hard/Expert 60 %) |
   | Little Killer | 8 diagonals (Hard/Expert 10) of 3+ cells, at most one clue per place on the border and per diagonal |
-  | Palindrome | `palindrome_paths()`: 8 lines (Hard/Expert 10) grown from the middle out, a cell at each end at a time, both with the same digit |
-  | Region Sum Lines | `regionsum_paths()`: 8 random walks (Hard/Expert 10) of up to 8 cells, each cut at the longest length where every box's part adds up the same |
+  | Palindrome | `gen_palindrome_paths()`: 8 lines (Hard/Expert 10) grown from the middle out, a cell at each end at a time, both with the same digit |
+  | Region Sum Lines | `gen_regionsum_paths()`: 8 random walks (Hard/Expert 10) of up to 8 cells, each cut at the longest length where every box's part adds up the same |
   | X-Sums | each line's sum of its first X digits, kept for about 75 % of the lines (Hard/Expert 60 %) |
-  | Zipper Lines | `zipper_paths()`: 8 lines (Hard/Expert 10) grown from the middle out, a pair at a time, each pair adding up to the middle digit (or the middle pair's sum) |
+  | Zipper Lines | `gen_zipper_paths()`: 8 lines (Hard/Expert 10) grown from the middle out, a pair at a time, each pair adding up to the middle digit (or the middle pair's sum) |
   | Frame | each line's sum of its first three digits, kept for about 75 % of the lines (Hard/Expert 60 %) |
   | Outside Sudoku | 1 to 3 of each line's first three digits, for about 85 % of the lines (Hard/Expert 70 %) |
   | Rossini | every line's arrow: rising, falling, or none |
-  | Between Lines | `between_paths()`: 8 walks (Hard/Expert 10) from a circle through digits on one side of it, cut at the longest length whose last cell lies beyond all the ones between |
+  | Between Lines | `gen_between_paths()`: 8 walks (Hard/Expert 10) from a circle through digits on one side of it, cut at the longest length whose last cell lies beyond all the ones between |
 
-  | Dutch Whispers, Parity Lines | `rule_paths()`, as German Whispers: 8 lines (Hard/Expert 10) of 3 to 6 (Parity 3 to 8) cells whose neighbours are 4 or more apart (one odd, one even) |
-  | Entropic, Modular Lines | `group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |
+  | Dutch Whispers, Parity Lines | `gen_rule_paths()`, as German Whispers: 8 lines (Hard/Expert 10) of 3 to 6 (Parity 3 to 8) cells whose neighbours are 4 or more apart (one odd, one even) |
+  | Entropic, Modular Lines | `gen_group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |
 
   The newest line kinds (Zipper, Between, Entropic, Modular, Dutch Whispers, Parity, Slow Thermo) never let a line cross itself or another diagonally (`is_line_crossing()`, and the 2x2 blocks earlier lines cross: `is_block_crossed()`); the older ones may (changing them would change their puzzles for a seed). Zipper, Between, Entropic and Modular also dig logic-first below Expert, like Kropki, XV, Greater-Than and Quadruple: a removal the grader's logic solves within the level is unique without a count. Between Lines also knows that its cells between the circles which share a row, column or box must differ (`between_need`: the circles at least that far apart), and its uniqueness counts give up after 1500 nodes (the others: 6000).
 
@@ -192,6 +194,9 @@ This is why `dig()` keeps a few special cases ("Classic digs as it always has"):
 ## Hints and Learn
 
 The same logic that grades a puzzle gives the hints (`sudoku_next_step()` in `src/gen_hints.c`). Given the board as the player has it and the solution, it finds the step a person would take next:
+
+![The next step for a hint](../diagrams/hint.svg)
+
 
 1. **A wrong digit first**: any cell whose digit isn't the solution's is the step (`STEP_WRONG`): the hint says to check it, then to erase it.
 2. **Then the logic, round by round** (at most 64 rounds), on the board's candidates:

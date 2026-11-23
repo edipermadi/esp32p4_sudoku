@@ -37,6 +37,9 @@ Everything on screen runs in one place: Arduino's `loop()` task on **core 1**, w
 
 The UI never waits on a task for long. The patterns, from the most common:
 
+![A question to sudoku.db](../diagrams/db_query.svg)
+
+
 - **A queue in, a "take" out** (`stats_db`): the UI calls `stats_db_query_*()`, which queues a command and returns at once. The worker runs it and leaves the answer in a buffer under a mutex with a "new" flag; an LVGL timer (`sd_poll_cb()`, every 100 ms, or the screen's own) calls `stats_db_take_*()`, which copies it out once. Writes (a solve, a saved game) are fire-and-forget; only the newest queued game save is written.
 - **A done flag and a timer** (`gen`, `learn`, `edcheck`, `pzcheck`, `screenshot`, `files`): the task fills static variables, sets a `volatile` done flag (or a state: idle, writing, done, failed) and deletes itself, or suspends and waits to be deleted; a short LVGL timer started with it polls the flag, takes the result and deletes the timer.
 - **Two buffers** (`media`): the worker decodes into the buffer not shown and hands it over (`s_pending`); the page's timer shows it and only then may the worker fill the other one. See [Replay and video](replay-video.md).

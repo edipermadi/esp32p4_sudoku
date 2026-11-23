@@ -1,0 +1,39 @@
+// A puzzle solved: on_solved() in ui_game.c, win_prepare() and solve_commit_cb() in ui_game_win.c
+digraph solved {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Last digit placed,\nno conflict"];
+    stop  [label="Solved: clock stops, digit lock off,\nfanfare"];
+    learn [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Learn's\npractice game?"];
+    lnote [label="\"Practice games aren't saved\nor counted\""];
+    atk   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Time attack\nrun?"];
+    arec  [label="Solve recorded; run's count,\ntime and mistakes add up"];
+    next  [label="Next Easy puzzle after 0.9 s"];
+    fill  [label="Solved dialog filled: time, best time\n(\"New best!\"), mistakes, hints,\nno-notes badge, Share for a daily"];
+    conf  [label="Confetti, then the dialog"];
+    commit[label="80 ms later: solve recorded\n(RAM copy and sudoku.db)"];
+    db    [label="stats_db: solves row + puzzle_stats upsert\n(one transaction); saved game deleted;\nachievements checked, cache refreshed"];
+    h2h   [label="Head-to-head line:\nwhere this leaves the player"];
+    daily [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A daily\npuzzle?"];
+    streak[label="\"Daily puzzle solved! Streak: n days.\nYou're 2nd of 3 today\""];
+    toast [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Achievement\nunlocked?"];
+    t2    [label="Toast at the top with a chime\n(any screen; the 100 ms poll)"];
+    end   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Dialog: Puzzles, Replay, Next"];
+    end2  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Done", fillcolor="#F2F2F2", color="#999999"];
+
+    start -> stop -> learn;
+    learn -> lnote [label="yes"]; lnote -> end2;
+    learn -> atk [label="no"];
+    atk -> arec [label="yes"]; arec -> next -> end2;
+    atk -> fill [label="no"];
+    fill -> conf -> commit;
+    commit -> db [style=dashed];
+    commit -> h2h;
+    h2h -> daily;
+    daily -> streak [label="yes"];
+    daily -> end [label="no"];
+    streak -> end;
+    db -> toast [style=dashed];
+    toast -> t2 [label="yes"];
+}

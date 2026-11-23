@@ -8,6 +8,9 @@ What happens from power-on to the Home screen, and back down: the screen saver, 
 
 `setup()` in `esp32p4_sudoku.ino`, then `sudoku_ui_start()` in `src/ui_sudoku.c`:
 
+![Power-on to Home](../diagrams/startup.svg)
+
+
 1. **`heap_caps_malloc_extmem_enable(4)`**: every `malloc()` of 4 bytes or more goes to PSRAM from here on (see [Memory](memory.md)). It comes first, before anything allocates.
 2. **Serial** at 115200, with a 2 KB receive buffer for devctl uploads. The reset reason is read now and shown as a notice later if it wasn't a normal start (a brownout, a panic, a watchdog).
 3. **Display and LVGL** (`bsp_lvgl_start()`): the MIPI-DSI panel (ST7703 or JD9365, detected), touch, the draw buffers.
@@ -31,6 +34,9 @@ Without a card the game starts on defaults and keeps everything in RAM until pow
 ## The screen saver and power saving
 
 After the screen timeout (Settings > Display) without a touch (`saver_cb()` in `src/ui_saver.c`, each second):
+
+![The screen saver](../diagrams/saver.svg)
+
 
 1. the game pauses, and a black cover goes over everything on LVGL's system layer;
 2. if **Clock** is on, a dim clock (12 % backlight) moves about for 10 minutes;
@@ -63,6 +69,8 @@ Settings > Data > USB drive > Connect (`src/usb_drive.c`, `src/usb_msc.cpp`):
 Meanwhile the board can't use the card itself: the panel covers the screen, and devctl commands that need the card answer that it's busy (`settings_card_busy()`, which also covers a firmware update or a format under way).
 
 ## A firmware update and its probation
+
+![A firmware update](../diagrams/fw_update.svg)
 
 Settings > Data > Firmware update writes `update.bin` from the card into the other app slot (`src/fw_update.c`, task `fwupdate`) and restarts into it. The new firmware starts **on probation**: `verifyRollbackLater()` tells the Arduino core not to accept it at once, and `loop()` marks it good (`fw_mark_running_ok()`) only after it has run for 15 s. If it crashes before, the bootloader goes back to the previous firmware at the next start. While the flash is written the screen is dark ([Display and the flash](display.md#flash-writes)).
 

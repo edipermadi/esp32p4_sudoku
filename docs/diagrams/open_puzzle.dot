@@ -1,0 +1,28 @@
+// Opening a puzzle: open_puzzle() in ui_continue_open.c
+digraph open_puzzle {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="A puzzle opened\n(Puzzles, Continue, Next, the daily ...)"];
+    cur   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Is it the game in progress,\nor is there none?"];
+    db1   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Another unfinished game of it\nin sudoku.db? (not the current one)"];
+    resume[label="Resumed from saved_game:\ndigits, marks, colours, clock, moves"];
+    start2[label="start_game(): from the givens\n(or the RAM copy if it is the current game)"];
+    card  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="sudoku.db open?\n(a card)"];
+    db2   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Started before?\n(a saved_game row)"];
+    slot  [label="No card: one slot only;\n\"Unfinished game\" dialog asks:\nresume that one, or discard it"];
+    note  [label="The current game stays in sudoku.db\n(saved after every move; 5 per player at most)"];
+    screen[shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Game screen"];
+
+    start -> cur;
+    cur -> db1 [label="yes"];
+    db1 -> resume [label="yes"];
+    db1 -> start2 [label="no"];
+    cur -> card [label="no: another game\nis in progress"];
+    card -> note [label="yes"];
+    note -> db2;
+    db2 -> resume [label="yes"];
+    db2 -> start2 [label="no"];
+    card -> slot [label="no"];
+    resume -> screen; start2 -> screen; slot -> screen;
+}

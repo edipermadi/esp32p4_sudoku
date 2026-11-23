@@ -1,0 +1,45 @@
+// A digit entered on the game screen: enter_digit() and after_move() in ui_game.c
+digraph move {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Pad key tapped\n(or a cell, with a digit locked)"];
+    edit  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A cell selected, not a given,\nnot solved, not paused?"];
+    nothing [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Nothing", fillcolor="#F2F2F2", color="#999999"];
+    notes [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Notes mode?"];
+    hasd  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Cell has\na digit?"];
+    mark  [label="Undo step kept;\npencil mark toggled"];
+    same  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Same digit\nas the cell's?"];
+    clear [label="Undo step kept;\ncell cleared; move logged"];
+    place [label="Undo step kept; digit placed;\nthis digit's marks cleared from its peers;\nmove logged"];
+    after [label="after_move(): hint closed, rules checked\n(game_conflicts)"];
+    full  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Every cell filled\nand no conflict?"];
+    solved[shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="on_solved()\n(see the Solved flow)"];
+    draw  [label="Board redrawn; game saved\n(sudoku.db, queued)"];
+    placed[shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A digit was\nplaced?"];
+    wrong [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Breaks a rule? (or, with Mistake\ncheck on Solution, not the solution's)"];
+    mist  [label="Mistakes + 1;\nbuzz unless the check is off"];
+    snd   [label="Chime if a row, column or box\nis complete, or all nine of the digit"];
+    end   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Done"];
+
+    start -> edit;
+    edit -> nothing [label="no"];
+    edit -> notes [label="yes"];
+    notes -> hasd [label="yes"];
+    hasd -> nothing [label="yes"];
+    hasd -> mark [label="no"];
+    notes -> same [label="no"];
+    same -> clear [label="yes"];
+    same -> place [label="no"];
+    mark -> after; clear -> after; place -> after;
+    after -> full;
+    full -> solved [label="yes"];
+    full -> draw [label="no"];
+    solved -> draw;
+    draw -> placed;
+    placed -> end [label="no, or solved"];
+    placed -> wrong [label="yes"];
+    wrong -> mist [label="yes"];
+    wrong -> snd [label="no"];
+    mist -> end; snd -> end;
+}

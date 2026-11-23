@@ -113,4 +113,6 @@ Which techniques a game's hints showed is kept with its solve. The no-notes chal
 
 ## For developers
 
+![How achievements are checked and shown](diagrams/achievements.svg)
+
 The list is `ACH` in `src/stats_db_achievements.c`: each entry has its key, title, description, goal, unit and the SQL that works out the player's progress (the daily streaks are worked out in C). Adding one is adding an entry; at most `STATS_ACH_MAX` (40, in `src/stats_db.h`) fit, and the build fails when the list is longer. Progress is cached in the `achievement_progress` table ([Database](internals/database.md)). Add the new one to this page too.

@@ -1,0 +1,43 @@
+// A puzzle received by sound: sudoku_ui_puzzle_part() and pz_take() in ui_share.c
+digraph pz_receive {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Gibberlink hears\n\"SU$pz <id> <i>/<n> <part>*<crc>\""];
+    crc   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="CRC right?"];
+    drop  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Ignored (\"ERR checksum\")", fillcolor="#FBE3E3", color="#B14A4A"];
+    read  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Part reads?\n(i in 1..n, n ≤ 16,\n≤ 110 characters)"];
+    err   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="\"ERR pz\"", fillcolor="#FBE3E3", color="#B14A4A"];
+    newp  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Same <id> and n,\nwithin 90 s of its first part?"];
+    reset [label="A new puzzle:\nforget the parts so far"];
+    keep  [label="Keep part i;\nno answer played (the next part comes)"];
+    all   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="All n parts in?"];
+    cnt   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Notice: \"part 2 of 3\""];
+    line  [label="Parts joined into the .sdx line"];
+    parse [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="sdx_parse and\nits board build?"];
+    bad   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="\"A puzzle came by sound, but\nit doesn't read as a puzzle\"", fillcolor="#FBE3E3", color="#B14A4A"];
+    grade [label="pzcheck task (core 0): grade it"];
+    one   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Exactly one\nsolution?"];
+    no1   [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="\"... doesn't have exactly\none solution: not kept\"", fillcolor="#FBE3E3", color="#B14A4A"];
+    store [label="generated row (source 'Received'),\nput in the saved collection Received"];
+    play  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="\"Puzzle received\": Later / Play"];
+
+    start -> crc;
+    crc -> drop [label="no"];
+    crc -> read [label="yes"];
+    read -> err [label="no"];
+    read -> newp [label="yes"];
+    newp -> keep [label="yes"];
+    newp -> reset [label="no"];
+    reset -> keep;
+    keep -> all;
+    all -> cnt [label="no"];
+    all -> line [label="yes"];
+    line -> parse;
+    parse -> bad [label="no"];
+    parse -> grade [label="yes"];
+    grade -> one [style=dashed];
+    one -> no1 [label="no"];
+    one -> store [label="yes"];
+    store -> play;
+}

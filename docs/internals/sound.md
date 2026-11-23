@@ -59,6 +59,9 @@ The game's ⋮ > Share > **Send by sound** (`src/ui_share.c`, the texts in `src/
 
 **Receiving** (`sudoku_ui_puzzle_part()`, devctl's `pz` command):
 
+![A puzzle received by sound](../diagrams/pz_receive.svg)
+
+
 1. Each part is checked (the CRC, by Gibberlink) and read (`share_pz_part_read()`). No answer is played for a part, so the next one isn't missed.
 2. Parts are kept until all `n` of the same `<id>` are in; a new `<id>`, or 90 s since the first part (`PZ_TIMEOUT_MS`), starts over. A notice counts them ("part 2 of 3").
 3. The whole line is parsed (`sdx_parse()`), its board built, and a task (`pzcheck`, core 0) grades it: a puzzle without exactly one solution is refused.

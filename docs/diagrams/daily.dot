@@ -1,0 +1,31 @@
+// The Daily puzzle button: daily_cb() in ui_newpuzzle.c, daily_today() in daily_core.c
+digraph daily {
+    graph [bgcolor="white", fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.35, pad=0.2];
+    node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#EEF3FB", color="#5B7DB1", margin="0.15,0.05"];
+    edge  [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.7];
+    start [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Daily puzzle tapped"];
+    clock [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Clock set?\n(Wi-Fi, NTP)"];
+    noclk [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="\"The daily puzzle needs today's date:\nconnect Wi-Fi\"", fillcolor="#FBE3E3", color="#B14A4A"];
+    today [label="Today's date; its variant and level\nby weekday (Mon Classic Easy ... Sun Classic Expert)"];
+    db    [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A generated row with\nthis day? (sudoku.db)"];
+    cache [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="In the RAM cache?\n(no card)"];
+    solv  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Solved today\nalready?"];
+    note  [label="\"Playing it again doesn't\nchange the streak\""];
+    open  [shape=oval, fillcolor="#E3F2E1", color="#4A8A44", label="Open it"];
+    make  [label="Generate it: seed = FNV-1a of the date\n(every board makes the same puzzle)"];
+    save  [label="Stored with its day\n(it stays what it was after an update)"];
+
+    start -> clock;
+    clock -> noclk [label="no"];
+    clock -> today [label="yes"];
+    today -> db;
+    db -> solv [label="yes"];
+    db -> cache [label="no"];
+    cache -> solv [label="yes"];
+    cache -> make [label="no"];
+    solv -> note [label="yes"];
+    solv -> open [label="no"];
+    note -> open;
+    make -> save [style=dashed, label="(task gen)"];
+    save -> open;
+}
