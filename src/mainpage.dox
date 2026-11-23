@@ -15,18 +15,22 @@
  * @section mp_what What the firmware does
  *
  * - **Puzzles**: 1600 built-in puzzles (the OpenSudoku collections), a generator for new ones at four
- *   levels, a daily puzzle, 23 variants besides Classic, puzzles typed in, imported from the card
- *   or saved into collections of one's own.
+ *   levels, a daily puzzle, 59 variants besides Classic, puzzles typed in, imported from the card
+ *   (81-digit lines or OpenSudoku's XML) or saved into collections of one's own; a search by name
+ *   and variant, and a puzzle played before is known again even turned, mirrored or renumbered.
  * - **Playing**: pencil marks, Auto notes, undo/redo, a mistake check, step-by-step hints (up to
- *   X-Wing, Swordfish and XY-Wing), a Learn mode, starred puzzles, a 10-minute time attack.
+ *   X-Wing, Swordfish and XY-Wing), a Learn mode, starred puzzles, a 10-minute time attack, a tour
+ *   of the game screen the first time; a puzzle shared as a QR code or sent to another board by
+ *   sound.
  * - **Players and progress**: per-player statistics and emoji avatars, a history calendar, charts,
- *   achievements, daily and weekly leaderboards, records; every solve can be replayed or exported
- *   as an H.264 MP4.
+ *   achievements, daily and weekly leaderboards, records, insights into one's mistakes; every solve
+ *   can be replayed or exported as an H.264 MP4.
  * - **Data**: everything kept in a SQLite database on the microSD card (`sudoku.db`), with CSV
  *   export, backups, a file manager with a Recycle bin, a USB drive mode and firmware updates from
  *   the card.
- * - **System**: a Wi-Fi clock, light and dark themes, sound effects, a lock screen, a system
- *   monitor, and remote control over the serial port (devctl) or by sound.
+ * - **System**: a Wi-Fi clock with time zones, light and dark themes, sound effects, a lock screen,
+ *   a system monitor, screenshots to the card, and remote control over the serial port (devctl) or
+ *   by sound.
  *
  * @section mp_topics Where to start: the topics
  *
@@ -36,15 +40,16 @@
  *
  * | Topic | The screen, and what its core does |
  * |-------|------------------------------------|
- * | @ref topic_game | the game screen, hints, New puzzle, the daily puzzle, Learn; the puzzle generator, solver and grader |
- * | @ref topic_puzzles | the collections, the grid of numbers or rows, Starred; selection, solved counts, the player's collections |
+ * | @ref topic_game | the game screen, hints, New puzzle, the daily puzzle, Learn, Share; the puzzle generator, solver and grader |
+ * | @ref topic_puzzles | the collections, the grid of numbers or rows, Starred, search; selection, solved counts, the player's collections, the canonical hash, import parsing |
+ * | @ref topic_continue | Home's Continue and the Unfinished games dialog; the current player's unfinished games |
  * | @ref topic_statistics | levels, the table and progress chart; the view from sudoku.db or RAM, totals, trends |
  * | @ref topic_history | the calendar and a day's games; the month asked for, the badges, the day picked |
  * | @ref topic_gameplays | recorded solves, the Replay screen, MP4 export; paging, the replay timeline, the video's frames |
  * | @ref topic_trophies | achievements, daily and weekly leaderboards, records; the day and week shown, the results |
  * | @ref topic_players | players, colours, the avatar picker; the list, switching, adding, renaming, deleting |
  * | @ref topic_files | the card's folders and files; reading a folder, rename, the Recycle bin, a puzzle file's preview |
- * | @ref topic_settings | the five Settings tabs; firmware update, the microSD card, factory reset, the USB drive |
+ * | @ref topic_settings | the five Settings tabs; firmware update (@ref fw_update), the microSD card (@ref sd_card), factory reset (@ref device_ops), the USB drive (@ref usb_drive) |
  * | @ref topic_sysmon | the system monitor's tabs; the chip, CPU load, memory, storage, tasks, the last hour |
  * | @ref topic_lock | the lock screen and PIN setup; the PIN, the tries and the wait |
  *
@@ -60,13 +65,14 @@
  * - @ref ui_sudoku : the UI's start-up, notices, the screen saver, and what devctl asks of it. Home
  *   is `ui_home.c`; what all the UI files share (the palette, layout, widgets, the game's state) is
  *   in `ui_internal.h` and `ui_common.c`.
- * - @ref media : the picture and video viewer, and MP4 files read and written (replay export).
+ * - @ref media : the picture and video viewer, MP4 files read and written (replay export), and
+ *   screenshots (@ref screenshot_core).
  * - @ref bsp : the board itself: display, touch, backlight, speaker and microphones, the microSD
  *   slot, power off.
  * - The RAM copy of the settings and statistics is in `store.cpp`, the `.sdx` puzzle format in
  *   `sdx.c`, Wi-Fi in `wifi_mgr.cpp` (its page: `ui_wifi.c`), sound effects in `sfx.c`, remote
  *   control by sound in `gibberlink.cpp`, the USB drive in `usb_msc.cpp`, SQLite's VFS in
- *   `sqlite/sqlite3_esp.c`.
+ *   `sqlite/sqlite3_esp.c`, the time zones offered in Settings in `timezones.c`.
  *
  * @ref screens draws every screen and how a tap leads from one to another (Graphviz).
  *
@@ -97,6 +103,17 @@
  *   function declared in a header is documented there, its definition says
  *   `(documented in X.h)`. `make doxygen` builds these pages and counts the warnings (kept at 0;
  *   they are in `build/doxygen/warnings.log`).
+ *
+ * @section mp_tests Testing
+ *
+ * - **On the computer**: `make test` builds `tests/` with AddressSanitizer and UBSan and runs it:
+ *   the generator, solver and grader (with golden hashes to catch an unintended change), the
+ *   built-in puzzles and their canonical hashes, the `.sdx` format, and the plain-C cores
+ *   (@ref canon_core, @ref search_core, @ref learn_core, @ref game_core, @ref hint_core,
+ *   @ref share_core, @ref daily_core, @ref import_parse). Anything kept free of LVGL and the card
+ *   can be added there.
+ * - **On the board**: @ref devctl drives the real UI over USB-UART (touches, screenshots, files,
+ *   SQL) from `tools/devctl.py`.
  *
  * @section mp_build Building
  *
