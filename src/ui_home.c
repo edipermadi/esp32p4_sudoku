@@ -1,8 +1,10 @@
 /**
  * @file ui_home.c
- * @brief Home: the clock, the menu, the solved line (its week: ui_home_week.c; Continue's button: ui_continue.c).
+ * @brief Home: the clock, the status icons, the menu, the solved line (its week: ui_home_week.c; Continue's button: ui_continue.c).
  */
 #include "ui_internal.h"
+#include "sd_card.h"
+#include "usb_msc.h"
 
 /* this file's own functions, in any order */
 static void daily_btn_update(void);
@@ -12,6 +14,10 @@ static void settings_cb(lv_event_t *e);
 static void stats_cb(lv_event_t *e);
 static void plays_cb(lv_event_t *e);
 static void profile_cb(lv_event_t *e);
+static void status_data_cb(lv_event_t *e);
+static void home_status_update(void);
+static void status_set(lv_obj_t *a, bool shown, lv_color_t c);
+static lv_obj_t *status_icon(lv_obj_t *parent, const char *sym, lv_event_cb_t cb);
 static lv_obj_t *home_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, lv_obj_t **sub);
 
 static lv_obj_t *h_menu;                  /**< the pages, side by side: swipe between them */
@@ -27,6 +33,9 @@ static lv_obj_t *h_daily_sub;             /**< Daily puzzle's line */
 static lv_obj_t *h_daily;                 /**< Daily puzzle */
 static lv_obj_t *h_player_title;          /**< the Players button's title */
 static lv_obj_t *h_player_avatar;         /**< its avatar (else the icon) */
+static lv_obj_t *h_st_wifi;               /**< status: Wi-Fi (hidden while it's switched off) */
+static lv_obj_t *h_st_card;               /**< status: the microSD card */
+static lv_obj_t *h_st_usb;                /**< status: a computer on the OTG port (hidden without one) */
 
 static unsigned h_total_n;              /**< puzzles solved */
 
@@ -93,6 +102,7 @@ void refresh_home(void)
     if (is_stats_db_ready()) {
         stats_db_query_achievements();    /* the Trophies line (trophy_poll) */
     }
+    home_status_update();
     home_layout();
 }
 
@@ -150,6 +160,7 @@ void clock_cb(lv_timer_t *t)
     if (act != screen_home()) {
         return;
     }
+    home_status_update();
 
     char c[8], d[64];
     time_t now = time(NULL);
@@ -242,6 +253,18 @@ void build_home(void)
     lv_obj_align(pw, LV_ALIGN_TOP_RIGHT, -12, 10);
     lv_obj_t *lk = make_btn(screen_home(), 0, 0, 64, 52, SYMBOL_LOCK, &font_icons_24, lock_now_cb, NULL);
     lv_obj_align(lk, LV_ALIGN_TOP_RIGHT, -12 - 64 - 10, 10);   /* left of the power button: lock now */
+
+    /* status icons, top left (home_status_update): a tap opens the Settings tab about it */
+    lv_obj_t *st = lv_obj_create(screen_home());
+    lv_obj_remove_style_all(st);
+    lv_obj_set_size(st, LV_SIZE_CONTENT, 52);
+    lv_obj_set_flex_flow(st, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(st, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(st, 4, 0);
+    lv_obj_align(st, LV_ALIGN_TOP_LEFT, 12, 10);
+    h_st_wifi = status_icon(st, LV_SYMBOL_WIFI, settings_cb);
+    h_st_card = status_icon(st, LV_SYMBOL_SD_CARD, status_data_cb);
+    h_st_usb = status_icon(st, LV_SYMBOL_USB, status_data_cb);
 
     lv_obj_t *col = lv_obj_create(screen_home());
     lv_obj_remove_style_all(col);
@@ -345,6 +368,71 @@ void build_home(void)
     lv_obj_t *src = make_label(screen_home(), &lv_font_montserrat_12, C_MUTED);
     lv_label_set_text(src, "Puzzles: opensudoku.gitlab.io");
     lv_obj_align(src, LV_ALIGN_BOTTOM_MID, 0, -8);
+}
+
+/**
+ * @brief A status icon on Home: a symbol in a tap area as tall as the lock button.
+ * @param[in] parent  the status row
+ * @param[in] sym  the symbol (Montserrat's built-in ones)
+ * @param[in] cb  a tap
+ * @return the tap area (its child 0: the symbol)
+ */
+static lv_obj_t *status_icon(lv_obj_t *parent, const char *sym, lv_event_cb_t cb)
+{
+    lv_obj_t *a = lv_obj_create(parent);
+    lv_obj_remove_style_all(a);
+    lv_obj_set_size(a, 44, 52);
+    lv_obj_set_clickable(a, true);
+    lv_obj_add_event_cb(a, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *l = make_label(a, &lv_font_montserrat_24, C_MUTED);
+    lv_label_set_text(l, sym);
+    lv_obj_center(l);
+    return a;
+}
+
+/**
+ * @brief Sets a status icon's colour and whether it shows, only when that changed.
+ * @param[in] a  the icon (status_icon())
+ * @param[in] shown  whether it shows
+ * @param[in] c  its colour
+ */
+static void status_set(lv_obj_t *a, bool shown, lv_color_t c)
+{
+    if (lv_obj_is_hidden(a) == shown) {
+        lv_obj_set_hidden(a, !shown);
+    }
+    lv_obj_t *l = lv_obj_get_child(a, 0);
+    if (!lv_color_eq(lv_obj_get_style_text_color(l, LV_PART_MAIN), c)) {
+        lv_obj_set_style_text_color(l, c, 0);
+    }
+}
+
+/**
+ * @brief The status icons: Wi-Fi (connected, joining, failed; none while switched off), the card
+ *        (sudoku.db open, opening, no card) and a computer on the OTG port (only while there is one).
+ */
+static void home_status_update(void)
+{
+    if (!h_st_wifi) {
+        return;
+    }
+    wifi_status_t ws;
+    wifi_mgr_get_status(&ws);
+    status_set(h_st_wifi, ws.state != WIFI_ST_OFF,
+               ws.state == WIFI_ST_CONNECTED ? C_TEXT
+               : (ws.state == WIFI_ST_FAILED || ws.state == WIFI_ST_NO_RADIO) ? C_RED : C_MUTED);
+    status_set(h_st_card, true, !is_sd_present() ? C_RED : is_stats_db_ready() ? C_TEXT : C_MUTED);
+    status_set(h_st_usb, is_usb_msc_host_connected(), C_TEXT);
+}
+
+/**
+ * @brief The card or USB status icon tapped: Settings > Data (the card, the USB drive).
+ * @param[in] e  the event
+ */
+static void status_data_cb(lv_event_t *e)
+{
+    settings_cb(e);
+    st_select_tab(ST_DATA);
 }
 
 /** @brief the Daily puzzle button: its line, and greyed out (not tappable) until
