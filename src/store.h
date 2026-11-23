@@ -149,7 +149,7 @@ typedef struct {
     uint8_t assist;                           /**< store_assist_t: what turns red */
     bool show_timer;                          /**< the game's clock is shown (it always runs) */
     uint8_t accent;                           /**< accent colour, ACCENT_* (0 = blue) */
-    uint32_t rules_seen;                      /**< bit v: variant v's rules card has been shown */
+    uint64_t rules_seen;                      /**< bit v: variant v's rules card has been shown */
     uint8_t lock_mode;                        /**< store_lock_t: the lock screen after a screen timeout */
     char lock_pin[8];                         /**< 4 digits (PIN mode), "" = none set */
     bool saver_clock;                         /**< a dim drifting clock before the screen goes dark */
@@ -321,12 +321,12 @@ void store_set_accent(uint8_t accent);
  * @brief Which variants' rules cards were shown already (bit = variant).
  * @return bit v: variant v's card was shown
  */
-uint32_t store_rules_seen(void);
+uint64_t store_rules_seen(void);
 /**
  * @brief Sets them.
  * @param[in] mask  bit v: variant v's card was shown
  */
-void store_set_rules_seen(uint32_t mask);
+void store_set_rules_seen(uint64_t mask);
 
 /** @brief Lock screen (Settings > Display): shown when the screen wakes from its
  * timeout. Not security: RESET starts the board unlocked. */

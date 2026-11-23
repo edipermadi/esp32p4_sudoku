@@ -21,7 +21,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Region Sum Lines", "X-Sums", "Zipper Lines", "Frame", "Between Lines",
                                                      "Entropic Lines", "Modular Lines", "Center Dot", "Outside Sudoku",
                                                      "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
-                                                     "Parity Lines", "Slow Thermo", "Fortress", "Argyle"
+                                                     "Parity Lines", "Slow Thermo", "Fortress", "Argyle",
+                                                     "Nabner", "Numbered Rooms", "Sum Skyscrapers"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -89,6 +90,33 @@ int sudoku_xsum_of(const uint8_t vals[81], int lu)
             return 0;
         }
         sum += vals[cells[k]];
+    }
+    return sum;
+}
+
+/* (documented in generator.h) */
+int sudoku_nroom_of(const uint8_t vals[81], int lu)
+{
+    int cells[9];
+    line_cells(lu, cells);
+    int x = vals[cells[0]];
+    return x ? vals[cells[x - 1]] : 0;
+}
+
+/* (documented in generator.h) */
+int sudoku_skysum_of(const uint8_t vals[81], int lu)
+{
+    int cells[9], sum = 0, top = 0;
+    line_cells(lu, cells);
+    for (int k = 0; k < 9 && top < 9; k++) {
+        int x = vals[cells[k]];
+        if (!x) {
+            return 0;
+        }
+        if (x > top) {
+            top = x;
+            sum += x;
+        }
     }
     return sum;
 }
@@ -282,7 +310,7 @@ void sudoku_geom_init(void)
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
-                                  VAR_FORTRESS
+                                  VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -303,7 +331,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
             variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN || variant == VAR_ENTROPIC ||
             variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI || variant == VAR_DUTCH ||
-            variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS) {
+            variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS || variant == VAR_NABNER ||
+            variant == VAR_NROOMS || variant == VAR_SKYSUM) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -321,7 +350,8 @@ static int line_kind_of(int variant)
            variant == VAR_REGIONSUM ? LINE_REGIONSUM : variant == VAR_ZIPPER ? LINE_ZIPPER :
            variant == VAR_BETWEEN ? LINE_BETWEEN : variant == VAR_ENTROPIC ? LINE_ENTROPIC :
            variant == VAR_MODULAR ? LINE_MODULAR : variant == VAR_DUTCH ? LINE_DUTCH :
-           variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : LINE_THERMO;
+           variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : variant == VAR_NABNER ? LINE_NABNER :
+           LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -380,6 +410,9 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
                     return false;
                 }
             }
+        }
+        if (out->line_kind == LINE_NABNER && lens[t] > 5) {
+            return false;                           /* (no six digits are all 2 or more apart) */
         }
         if ((out->line_kind == LINE_BETWEEN || out->line_kind == LINE_ENTROPIC || out->line_kind == LINE_MODULAR) &&
                 lens[t] < 3) {
@@ -567,6 +600,59 @@ bool gen_geom_rossini(const uint8_t dirs[18], sudoku_geom_t *out)
         for (int k = 0; k < 3; k++) {               /* rising: the k-th is k+1 .. 7+k; falling: the other way */
             int at = dirs[lu] == ROSSINI_UP ? k : 2 - k;
             out->allow[cells[k]] &= (uint16_t)(((1u << (8 + at)) - 1) & ~((1u << (at + 1)) - 1));
+        }
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_nroom(const uint8_t clues[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_NROOMS;
+    out->nrooms = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int c = clues[lu], cells[9];
+        if (c > 9) {
+            return false;
+        }
+        out->nroom[lu] = (uint8_t)c;
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        /* the first digit X points at the clue's cell: X = 1 only for a clue of 1 (the first cell is it),
+         * and never the clue itself otherwise (the X-th cell holds it, not the first) */
+        out->allow[cells[0]] &= c == 1 ? (uint16_t)0x3FE : (uint16_t)~((1u << 1) | (1u << c));
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_skysum(const uint8_t clues[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_SKYSUM;
+    out->skysum = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int c = clues[lu], cells[9];
+        if (c && (c < 9 || c > 45)) {
+            return false;                           /* (the 9 alone .. 1 + 2 + ... + 9) */
+        }
+        out->sky_sum[lu] = (uint8_t)c;
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        if (c == 9) {                               /* only the 9 seen: it's first */
+            out->allow[cells[0]] &= (uint16_t)(1u << 9);
+        } else {
+            out->allow[cells[0]] &= (uint16_t)~(1u << 9);   /* a 9 first would be all that's seen */
+            if (c - 9 < 9) {                        /* the first is seen: at most the clue less the 9 */
+                out->allow[cells[0]] &= (uint16_t)((1u << (c - 9 + 1)) - 1);
+            }
         }
     }
     return true;

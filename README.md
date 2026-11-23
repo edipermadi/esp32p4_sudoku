@@ -50,7 +50,7 @@ Also online, as web pages, with the code documentation next to them: see [Online
 |------|--------------|
 | [Features](docs/features.md) | Everything the game does, by topic: puzzles, playing, players & progress, settings & system |
 | [How to play](docs/how-to-play.md) | Which button does what, as a table |
-| [Variants](docs/variants/README.md) | Each of the 42 variants on its own page: rules, tips, a worked example with a screenshot, and the whole puzzle solved step by step |
+| [Variants](docs/variants/README.md) | Each of the 45 variants on its own page: rules, tips, a worked example with a screenshot, and the whole puzzle solved step by step |
 | [Data & storage](docs/data.md) | `sudoku.db` and its tables, backups, firmware update, USB drive, format, factory reset, saving |
 | [Internals](docs/internals/README.md) | How the game works inside: [puzzle generator](docs/internals/generator.md), [database design](docs/internals/database.md) (tables, how they connect, upgrades) |
 | [Building and releases](docs/building.md) | Arduino settings, `arduino-cli`, GitHub Actions releases, the web flasher |

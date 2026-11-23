@@ -8,7 +8,7 @@ static store_prefs_t s_prefs_out;       /**< the settings read at open (stats_db
 static bool s_prefs_new;                /**< they are new */
 
 /* (documented in stats_db_internal.h) */
-void sdb_set_setting(const char *key, bool is_text, int ival, const char *text)
+void sdb_set_setting(const char *key, bool is_text, int64_t ival, const char *text)
 {
     sqlite3_stmt *st;
     if (sqlite3_prepare_v2(sdb_db(), "INSERT INTO settings(key, value) VALUES(?1, ?2)"
@@ -19,7 +19,7 @@ void sdb_set_setting(const char *key, bool is_text, int ival, const char *text)
     if (is_text) {
         sqlite3_bind_text(st, 2, text, -1, SQLITE_STATIC);
     } else {
-        sqlite3_bind_int(st, 2, ival);
+        sqlite3_bind_int64(st, 2, ival);
     }
     sdb_step_done(st, "setting");
     sqlite3_finalize(st);
@@ -54,7 +54,8 @@ void sdb_load_prefs(store_prefs_t *p)
             } else if (!strcmp(k, "accent")) {
                 p->accent = v >= 0 && v < ACCENT_COUNT ? v : 0;
             } else if (!strcmp(k, "rules_seen")) {
-                p->rules_seen = (uint32_t)sqlite3_column_int64(st, 1);
+                int64_t m = sqlite3_column_int64(st, 1);   /* (older builds kept 32 bits, as an int) */
+                p->rules_seen = m < 0 ? (uint64_t)m & 0xFFFFFFFFu : (uint64_t)m;
             } else if (!strcmp(k, "lock_mode")) {
                 p->lock_mode = v >= LOCK_OFF && v <= LOCK_PIN ? v : LOCK_OFF;
             } else if (!strcmp(k, "lock_pin") && t) {
@@ -110,7 +111,7 @@ void sdb_migrate_prefs(const store_prefs_t *p)
     sdb_set_setting("assist", false, p->assist, NULL);
     sdb_set_setting("show_timer", false, p->show_timer, NULL);
     sdb_set_setting("accent", false, p->accent, NULL);
-    sdb_set_setting("rules_seen", false, (int)p->rules_seen, NULL);
+    sdb_set_setting("rules_seen", false, (int64_t)p->rules_seen, NULL);
     sdb_set_setting("lock_mode", false, p->lock_mode, NULL);
     sdb_set_setting("lock_pin", true, 0, p->lock_pin);
     sdb_set_setting("saver_clock", false, p->saver_clock, NULL);
@@ -151,7 +152,7 @@ bool stats_db_take_prefs(store_prefs_t *out)
 }
 
 /* (documented in stats_db.h) */
-void stats_db_set_int(const char *key, int value)
+void stats_db_set_int(const char *key, int64_t value)
 {
     cmd_t c = {.type = CMD_SET, .is_text = false, .ival = value};
     snprintf(c.key, sizeof(c.key), "%s", key);

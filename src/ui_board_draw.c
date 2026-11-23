@@ -308,6 +308,11 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;
+    case LINE_NABNER:
+        ld.color = lv_color_hex(0xA0703C);
+        ld.opa = LV_OPA_80;
+        ld.width = cs * 12 / 100;
+        break;
     case LINE_PALINDROME:
         ld.color = lv_color_hex(0x8A8F98);
         ld.opa = LV_OPA_60;

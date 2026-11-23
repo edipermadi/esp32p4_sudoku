@@ -450,6 +450,12 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_XSUM:
         sudoku_xsum_text(g, marks, len);
         break;
+    case VAR_NROOMS:
+        sudoku_nroom_text(g, marks, len);
+        break;
+    case VAR_SKYSUM:
+        sudoku_skysum_text(g, marks, len);
+        break;
     case VAR_FRAME:
         sudoku_frame_text(g, marks, len);
         break;
@@ -475,6 +481,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_DUTCH:
     case VAR_PARITY:
     case VAR_SLOW:
+    case VAR_NABNER:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -545,6 +552,12 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
                     o = G->thermo_cell[t][q];
                 }
             }
+            for (int q = 0; G->line_kind == LINE_NABNER && o < 0 && q < G->thermo_n[t]; q++) {   /* Nabner: any cell on it */
+                int x = q != p ? v[G->thermo_cell[t][q]] : 0;
+                if (x && abs(x - d) < 2) {
+                    o = G->thermo_cell[t][q];
+                }
+            }
             printf(", \"rule\": \"line\", \"line\": %d, \"pos\": %d, \"with\": %d", t, p, o);
             return;
         }
@@ -598,6 +611,14 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_XSUM_ROW:
     case FIT_XSUM_COL:
         printf(", \"rule\": \"xsum\", \"line\": %d", why == FIT_XSUM_ROW ? r : 9 + q);
+        return;
+    case FIT_NROOM_ROW:
+    case FIT_NROOM_COL:
+        printf(", \"rule\": \"nroom\", \"line\": %d", why == FIT_NROOM_ROW ? r : 9 + q);
+        return;
+    case FIT_SKYSUM_ROW:
+    case FIT_SKYSUM_COL:
+        printf(", \"rule\": \"skysum\", \"line\": %d", why == FIT_SKYSUM_ROW ? r : 9 + q);
         return;
     case FIT_LK:
         for (int s = 0; s < 2; s++) {               /* the diagonal whose sum says no */
@@ -695,6 +716,26 @@ static void layout_json(const sudoku_geom_t *G)
         printf("[");
         for (int lu = 0; lu < 18; lu++) {
             printf("%s%d", lu ? "," : "", G->xsum[lu]);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"nroom\": ");
+    if (G->nrooms) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->nroom[lu]);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"skysum\": ");
+    if (G->skysum) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->sky_sum[lu]);
         }
         printf("]");
     } else {

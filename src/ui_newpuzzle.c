@@ -69,6 +69,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {11, 188, 696, 535},    /* Slow Thermo */
     {13, 82, 212, 1005},    /* Fortress (2026-11-22) */
     {673, 472, 758, 944},   /* Argyle */
+    {29, 80, 202, 799},     /* Nabner (2026-11-23) */
+    {26, 382, 1147, 1081},  /* Numbered Rooms */
+    {25, 154, 548, 822},    /* Sum Skyscrapers */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */

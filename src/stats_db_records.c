@@ -67,7 +67,13 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Slow Thermo", OF_VARIANT(39)},
     {"Fastest Fortress", OF_VARIANT(40)},
     {"Fastest Argyle", OF_VARIANT(41)},
+    {"Fastest Nabner", OF_VARIANT(42)},
+    {"Fastest Numbered Rooms", OF_VARIANT(43)},
+    {"Fastest Sum Skyscrapers", OF_VARIANT(44)},
 };
+
+#define REC_OTHERS 5                    /**< the records after the fastest ones (a day, a run, a streak, solved, time) */
+_Static_assert(sizeof(REC_FAST) / sizeof(REC_FAST[0]) + REC_OTHERS <= STATS_MAX_RECORDS, "raise STATS_MAX_RECORDS");
 
 /* (documented in stats_db_internal.h) */
 void sdb_records_fill(int32_t player, stats_records_t *R)

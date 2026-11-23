@@ -150,6 +150,9 @@ typedef enum {
     KIND_SLOW,                           /**< Slow Thermo */
     KIND_FORTRESS,                       /**< Fortress */
     KIND_ARGYLE,                         /**< Argyle */
+    KIND_NABNER,                         /**< Nabner */
+    KIND_NROOMS,                         /**< Numbered Rooms */
+    KIND_SKYSUM,                         /**< Sum Skyscrapers */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**
@@ -239,7 +242,7 @@ bool stats_db_take_prefs(store_prefs_t *out);
  * @param[in] key    the settings key
  * @param[in] value  its value
  */
-void stats_db_set_int(const char *key, int value);
+void stats_db_set_int(const char *key, int64_t value);
 /**
  * @brief Stores a text setting (queued; dropped without a database).
  * @param[in] key    the settings key
@@ -988,7 +991,7 @@ typedef enum {
     REC_DAYS,                            /**< days */
     REC_MINUTES                          /**< minutes */
 } rec_unit_t;
-#define STATS_MAX_RECORDS 54             /**< records at most */
+#define STATS_MAX_RECORDS 64             /**< records at most */
 /** @brief A personal record. */
 typedef struct {
     const char *title;                   /**< static string */

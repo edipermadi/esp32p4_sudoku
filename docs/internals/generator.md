@@ -150,12 +150,15 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
   | Frame | each line's sum of its first three digits, kept for about 75 % of the lines (Hard/Expert 60 %) |
   | Outside Sudoku | 1 to 3 of each line's first three digits, for about 85 % of the lines (Hard/Expert 70 %) |
   | Rossini | every line's arrow: rising, falling, or none |
+  | Numbered Rooms | each line's digit in its X-th cell (X: the first), kept for about 75 % of the lines (Hard/Expert 60 %) |
+  | Sum Skyscrapers | each line's sum of the buildings seen, kept for about 75 % of the lines (Hard/Expert 60 %) |
   | Between Lines | `gen_between_paths()`: 8 walks (Hard/Expert 10) from a circle through digits on one side of it, cut at the longest length whose last cell lies beyond all the ones between |
 
   | Dutch Whispers, Parity Lines | `gen_rule_paths()`, as German Whispers: 8 lines (Hard/Expert 10) of 3 to 6 (Parity 3 to 8) cells whose neighbours are 4 or more apart (one odd, one even) |
+  | Nabner | `gen_rule_paths()`: 8 lines (Hard/Expert 10) of 3 to 5 cells grown through cells 2 or more away from every digit on the line so far |
   | Entropic, Modular Lines | `gen_group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |
 
-  The newest line kinds (Zipper, Between, Entropic, Modular, Dutch Whispers, Parity, Slow Thermo) never let a line cross itself or another diagonally (`is_line_crossing()`, and the 2x2 blocks earlier lines cross: `is_block_crossed()`); the older ones may (changing them would change their puzzles for a seed). Zipper, Between, Entropic and Modular also dig logic-first below Expert, like Kropki, XV, Greater-Than and Quadruple: a removal the grader's logic solves within the level is unique without a count. Between Lines also knows that its cells between the circles which share a row, column or box must differ (`between_need`: the circles at least that far apart), and its uniqueness counts give up after 1500 nodes (the others: 6000).
+  The newest line kinds (Zipper, Between, Entropic, Modular, Dutch Whispers, Parity, Slow Thermo, Nabner) never let a line cross itself or another diagonally (`is_line_crossing()`, and the 2x2 blocks earlier lines cross: `is_block_crossed()`); the older ones may (changing them would change their puzzles for a seed). Zipper, Between, Entropic, Modular and Nabner also dig logic-first below Expert, like Kropki, XV, Greater-Than and Quadruple: a removal the grader's logic solves within the level is unique without a count. Between Lines also knows that its cells between the circles which share a row, column or box must differ (`between_need`: the circles at least that far apart), and its uniqueness counts give up after 1500 nodes (the others: 6000).
 
   These boards go in `jig`, a geometry allocated once in PSRAM. The one that wins is copied out to the caller with the givens.
 
@@ -216,22 +219,22 @@ The search runs on core 0 (task `learn`) from a seed, and the PC tests check eve
 
 ## Adding a variant
 
-The usual path, roughly in the order it was done for the last few:
+The usual path, roughly in the order it was done for the last few (Nabner, Numbered Rooms and Sum Skyscrapers, 2026-11-23, touched every file below):
 
-1. **`generator.h`**: append to `sudoku_variant_t` (never reorder: the number is stored in the database), add its name, its geometry fields and text functions, and new `FIT_*` / `TECH_*` codes at the end of their enums.
+1. **`generator.h`**: append to `sudoku_variant_t` (never reorder: the number is stored in the database), add its name, its geometry fields and text functions, and new `LINE_*`, `FIT_*` and `TECH_*` codes at the end of their enums.
 2. **The `gen_*.c` files**:
-   - building the geometry and its text form (`gen_geometry.c`);
-   - the rule in `grid_free()` with a `WHY()` checkpoint (`gen_solver.c`);
+   - its name in `VARIANT_NAMES`, its board in `sudoku_geom_init()`'s own-board list and `sudoku_geom()`, its builder (`gen_geom_*()`, `gen_geometry.c`) and text form (`gen_texts.c`, and `sudoku_layout_texts()`);
+   - the rule in `grid_free()` with an `R_*` bit and a `WHY()` checkpoint (`gen_solver.c`; a line kind: `gen_line_allow()`);
    - a `gen_*_logic()` step, added to `gen_technique_tier()` (`gen_grade.c`) and `sudoku_next_step()` (`gen_hints.c`);
    - `gen_easy_min_clues()` (`gen_grade.c`);
    - a branch in `sudoku_generate()` that derives the clues from a full grid (`gen_make.c`; a new line kind's paths in `gen_lines.c`).
 3. **Elsewhere**:
-   - `sdx.c` (import/export);
-   - `ui_common.c` (rebuilding the board from the database);
-   - the UI: drawing, conflicts, hints, rules card, New puzzle button, `GEN_EXPECT_MS`;
-   - `stats_db` (its kind and record);
-   - the tests;
-   - `tools/variant_examples.c` and the docs tools.
+   - `sdx.c` (import/export), `share_core.c` (Share, Send by sound), `puzzles_lookup.c` (`puzzle_geom()`: the board back from the database);
+   - `game_core.c` (the rules check), `hint_core.c` (the hint's words), `learn_core.c` (a lesson);
+   - the UI: drawing (`ui_board_draw.c`, clues in `ui_game_layout.c`), the rules card (`ui_rules_card.c`), the New puzzle dialog's tab, label and description (`ui_gen_dialog.c`), `GEN_EXPECT_MS` (`ui_newpuzzle.c`);
+   - `stats_db`: its kind (`stats_db.h`, `stats_db_kinds.c`) and record (`stats_db_records.c`);
+   - the tests (`tests/test_main.c`: the solution check, the layout comparison and texts);
+   - `tools/variant_examples.c` (then `make -C tests examples`), `tools/walkthrough.py`, `tools/variant_shots.py`, and its page in `docs/variants/`.
 4. **Check**:
    - `make -C tests`;
    - a PC timing run of every level;

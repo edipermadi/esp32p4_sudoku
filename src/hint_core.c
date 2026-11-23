@@ -148,7 +148,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
         snprintf(tech, sizeof(tech), "In %s the digits between the 1 and the 9 add up to %d: that leaves the 1 and "
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? geo->sandwich_sum[t->unit] : 0);
     } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM || t->kind == TECH_FRAME ||
-               t->kind == TECH_OUTSIDE || t->kind == TECH_ROSSINI) {
+               t->kind == TECH_OUTSIDE || t->kind == TECH_ROSSINI || t->kind == TECH_NROOM || t->kind == TECH_SKYSUM) {
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         char digs[24] = "";
         size_t len = 0;
@@ -169,6 +169,18 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             snprintf(tech, sizeof(tech), "The clue of %s is %d: the first digit from there says how many digits add up "
                      "to it. Of the ways that can work out, only those leave row %d, column %d %s. ", u1,
                      geo->xsum[k], c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_NROOM && k >= 0 && k < 18) {
+            mark_unit(geo, mark, k, 1);
+            unit_name(geo, k, u1, sizeof(u1));
+            snprintf(tech, sizeof(tech), "The clue of %s is %d: the first digit from there, X, says the X-th cell holds "
+                     "it. Of the first digits that can do that, only those leave row %d, column %d %s. ", u1,
+                     geo->nroom[k], c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_SKYSUM && k >= 0 && k < 18) {
+            mark_unit(geo, mark, k, 1);
+            unit_name(geo, k, u1, sizeof(u1));
+            snprintf(tech, sizeof(tech), "From the clue of %s, the buildings seen add up to %d: of the ways its empty "
+                     "cells can be filled, only those leave row %d, column %d %s. ", u1, geo->sky_sum[k], c / 9 + 1,
+                     c % 9 + 1, digs);
         } else if (t->kind == TECH_FRAME && k >= 0 && k < 18) {
             mark_unit(geo, mark, k, 1);
             unit_name(geo, k, u1, sizeof(u1));
@@ -227,6 +239,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  "of 3 6 9" :
                  lk == LINE_DUTCH ? "Along this line, neighbours are 4 or more apart" :
                  lk == LINE_PARITY ? "Along this line, neighbours are one odd and one even digit" :
+                 lk == LINE_NABNER ? "No two digits on this line are the same or 1 apart" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */

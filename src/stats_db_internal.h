@@ -173,7 +173,7 @@ typedef struct {
     open_seed_t *seed;          /**< CMD_OPEN */
     char key[24];               /**< CMD_SET */
     bool is_text;               /**< CMD_SET: text holds the value (else ival) */
-    int ival;                   /**< CMD_SET value; player id for the player commands; CMD_IMPORT_FILE: its ticket */
+    int64_t ival;               /**< CMD_SET value; player id for the player commands; CMD_IMPORT_FILE: its ticket */
     char text[STORE_TZ_LEN];    /**< CMD_SET text; player name */
     game_spill_t *spill;        /**< CMD_GAME_SPILL */
 } cmd_t;
@@ -392,7 +392,7 @@ void sdb_migrate_prefs(const store_prefs_t *p);
  * @param[in] ival     a number value
  * @param[in] text     a text value
  */
-void sdb_set_setting(const char *key, bool is_text, int ival, const char *text);
+void sdb_set_setting(const char *key, bool is_text, int64_t ival, const char *text);
 
 /* ---- stats_db_players.c */
 /**

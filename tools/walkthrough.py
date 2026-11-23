@@ -48,7 +48,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "frame": "Frame", "between-lines": "Between", "entropic-lines": "Entropic", "modular-lines": "Modular",
          "center-dot": "Center", "outside-sudoku": "Outside", "rossini": "Rossini",
          "diagonal-non-consecutive": "Diagonal", "dutch-whispers": "Dutch", "parity-lines": "Parity",
-         "slow-thermo": "Slow", "fortress": "Fortress", "argyle": "Argyle"}
+         "slow-thermo": "Slow", "fortress": "Fortress", "argyle": "Argyle", "nabner": "Nabner",
+         "numbered-rooms": "Numbered", "sum-skyscrapers": "Sum"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -65,6 +66,7 @@ ARROW, RENBAN, WHISPER = (140, 146, 158), (222, 200, 245), (120, 205, 150)   # (
 PALINDROME, REGIONSUM, ZIPPER = (178, 181, 187), (119, 173, 241), (234, 149, 185)
 ENTROPIC, MODULAR = (239, 178, 108), (98, 192, 192)
 DUTCH, PARITY = (228, 190, 64), (230, 128, 128)
+NABNER = (196, 160, 118)                                    # Nabner's lines (the board's brown, on white)
 GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
 
 
@@ -78,6 +80,9 @@ SPOTS = ["top-left", "top", "top-right", "left", "centre", "right", "bottom-left
 
 def rc(c):
     return "r%dc%d" % (c // 9 + 1, c % 9 + 1)
+
+
+ORD = ("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth")
 
 
 def listing(items, word="and"):
@@ -178,6 +183,28 @@ def rule_words(d, vals, c, v, r):
                             "only %s" % listing(map(str, ok), "and"))
                     return ("it's among the first three digits after a clue of %d, and three different digits adding up "
                             "to %d can hold %s" % (k, k, what))
+        if d.get("nroom"):                                  # Numbered Rooms: a first digit can't be 1, or the clue
+            r_, c_ = c // 9, c % 9
+            clues = [d["nroom"][r_]] if c_ == 0 and d["nroom"][r_] else []
+            clues += [d["nroom"][9 + c_]] if r_ == 0 and d["nroom"][9 + c_] else []
+            for k in clues:
+                if v == 1 and k != 1:
+                    return "it's the first cell after a clue of %d: a 1 there would make the clue itself 1" % k
+                if v == k:
+                    return ("it's the first cell after a clue of %d: a %d there would point at another cell to hold "
+                            "the %d, while it's here" % (k, k, k))
+        if d.get("skysum"):                                 # Sum Skyscrapers: the first building is seen
+            r_, c_ = c // 9, c % 9
+            clues = [d["skysum"][r_]] if c_ == 0 and d["skysum"][r_] else []
+            clues += [d["skysum"][9 + c_]] if r_ == 0 and d["skysum"][9 + c_] else []
+            for k in clues:
+                if k == 9:
+                    return "it's the first cell after a clue of 9: only the 9 is seen there, so it's first"
+                if v == 9:
+                    return "it's the first cell after a clue of %d: a 9 first would be all that's seen, 9" % k
+                if v > k - 9:
+                    return ("it's the first cell after a clue of %d: it's seen, and so is the 9 later, so it's at "
+                            "most %d" % (k, k - 9))
         if d.get("xsum"):                                   # X-Sums: a clue allows only some first digits
             if r["lo"] == r["hi"]:
                 return "it's the first cell after a clue, and that clue can only start with %s" % a_n(r["lo"])
@@ -241,6 +268,10 @@ def rule_words(d, vals, c, v, r):
             return "it's next to the %d in %s on an amber line, and %d is less than 4 away from it" % (w, at, v)
         if kind == 11:                                      # Parity Lines
             return "it's next to the %d in %s on a red line, and %d is %s too" % (w, at, v, "odd" if v % 2 else "even")
+        if kind == 13:                                      # Nabner: any digit on the line, not just a neighbour
+            if w == v:
+                return "the %d in %s is on its brown line already, and no digit repeats on it" % (w, at)
+            return "the %d in %s is on its brown line too, and %d is 1 away from it" % (w, at, v)
         if kind == 4:                                       # Palindrome: the cell mirroring it
             return "it mirrors the %d in %s on its grey line, which reads the same from both ends" % (w, at)
         if kind == 6:                                       # Zipper: mirrored cells add up to the line's total
@@ -405,6 +436,52 @@ def rule_words(d, vals, c, v, r):
         if r.get("with", -1) >= 0:
             return "it touches the %d in %s at a corner, and %d is 1 away from it" % (w, at, v)
         return "a cell touching it at a corner would have to be 1 away from %s" % a_n(v)
+    if rule == "nroom":
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["nroom"][lu]
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        if c == line[0]:
+            if v == 1:
+                return "%s's clue %d can't start with 1: that would make the clue itself 1" % (cap(name), clue)
+            o = line[v - 1]
+            if x[v - 1] and x[v - 1] != clue:
+                return ("with %s first, the %s cell of %s would have to hold its clue %d, but it's %d" % (
+                    a_n(v), ORD[v - 1], name, clue, x[v - 1]))
+            return ("with %s first, the %s cell of %s (%s) would have to hold its clue %d, which can't go there" % (
+                a_n(v), ORD[v - 1], name, rc(o), clue))
+        if x[0]:
+            if v == clue:
+                return ("%s starts with %s, so its clue %d is in its %s cell, not here" % (
+                    cap(name), a_n(x[0]), clue, ORD[x[0] - 1]))
+            return "%s starts with %s, so its %s cell is its clue %d" % (cap(name), a_n(x[0]), ORD[x[0] - 1], clue)
+        return ("with %s here, no first digit of %s could point at a cell holding its clue %d" % (a_n(v), name, clue))
+    if rule == "skysum":
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["skysum"][lu]
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        got, top, k = 0, 0, 0
+        while k < 9 and x[k]:
+            if x[k] > top:
+                top, got = x[k], got + x[k]
+            k += 1
+        side = "the left" if lu < 9 else "the top"
+        shown = [x[j] for j in range(k) if x[j] > max(x[:j] or [0])]
+        if got > clue:
+            return "seen from %s of %s, %s would already add up to %d, more than its clue %d" % (
+                side, name, listing(map(str, shown)), got, clue)
+        if top == 9 or k == 9:
+            return "seen from %s of %s, %s would add up to %d with %s there, not its clue %d" % (
+                side, name, listing(map(str, shown)), got, a_n(v), clue)
+        if got + 9 > clue:
+            return ("seen from %s of %s, %s and the 9 still to come would add up to more than its clue %d" % (
+                side, name, listing(map(str, shown)), clue))
+        return "seen from %s of %s, %s there would leave too little to make its clue %d" % (side, name, a_n(v), clue)
     if rule == "xsum":
         lu = r["line"]
         name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
@@ -504,7 +581,7 @@ def step_text(d, vals, s):
 
 def make_drawer(d, fonts):
     n, band = d["n"], BAND if (d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame")
-                              or d.get("outside") or d.get("rossini")) else 0
+                              or d.get("outside") or d.get("rossini") or d.get("nroom") or d.get("skysum")) else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -593,6 +670,8 @@ def make_drawer(d, fonts):
                 g.line(pts, fill=REGIONSUM, width=int(CELL * 0.12), joint="curve")
             elif kind in (10, 11):                          # Dutch Whispers, Parity Lines: a narrow amber / red line
                 g.line(pts, fill=DUTCH if kind == 10 else PARITY, width=int(CELL * 0.12), joint="curve")
+            elif kind == 13:                                # Nabner: a narrow brown line
+                g.line(pts, fill=NABNER, width=int(CELL * 0.12), joint="curve")
             elif kind in (8, 9):                            # Entropic, Modular Lines: a narrow orange / teal line
                 g.line(pts, fill=ENTROPIC if kind == 8 else MODULAR, width=int(CELL * 0.12), joint="curve")
             elif kind == 6:                                 # Zipper Lines: a narrow pink line
@@ -708,8 +787,8 @@ def make_drawer(d, fonts):
             g.line([(ax, ay), (ax + 6 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 2 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 6 * dx, ay + 2 * dy)], fill=SUM_FG, width=2)
-        clues = d.get("sky") or d.get("xsum") or d.get("frame")
-        if clues:                                           # Skyscraper, X-Sums, Frame: the clues (none: nothing drawn)
+        clues = d.get("sky") or d.get("xsum") or d.get("frame") or d.get("nroom") or d.get("skysum")
+        if clues:                                           # Skyscraper, X-Sums, Frame, ...: the clues (0: none drawn)
             for i in range(9):
                 x, y = xy(i * 9)
                 if clues[i]:

@@ -333,12 +333,19 @@ bool gen_quad_logic(logic_t *L)
     return false;
 }
 
-/* (documented in gen_internal.h) */
-bool gen_sky_logic(logic_t *L)
+/**
+ * @brief Skyscraper, Sum Skyscrapers: once a line with a clue has 4 empty cells or fewer, every order of its
+ *        missing digits is tried against the clue; candidates no order keeps are taken out.
+ * @param[in,out] L      the state
+ * @param[in] clues      the 18 clues (0: none)
+ * @param[in] is_ok      does a line's digits keep its clue (is_gen_sky_line_ok(), is_gen_skysum_line_ok())
+ * @param[in] tech       the technique it is (TECH_SKY, TECH_SKYSUM)
+ * @return true if it changed anything
+ */
+static bool sky_orders_logic(logic_t *L, const uint8_t clues[18], bool (*is_ok)(const uint8_t x[9], int c), int tech)
 {
-    const sudoku_geom_t *G = L->G;
     for (int lu = 0; lu < 18; lu++) {
-        int c = G->sky[lu], cells[9], emp[9], ne = 0, miss[9], nm = 0;
+        int c = clues[lu], cells[9], emp[9], ne = 0, miss[9], nm = 0;
         if (!c) {
             continue;
         }
@@ -395,7 +402,7 @@ bool gen_sky_logic(logic_t *L)
             for (int j = 0; j < ne; j++) {
                 x[emp[j]] = (uint8_t)miss[idx[j]];
             }
-            if (is_gen_sky_line_ok(x, c)) {
+            if (is_ok(x, c)) {
                 for (int j = 0; j < ne; j++) {
                     ok[j] |= (uint16_t)(1u << miss[idx[j]]);
                 }
@@ -410,12 +417,24 @@ bool gen_sky_logic(logic_t *L)
             if (L->cand[cell] & ~ok[j]) {
                 uint16_t keep = (uint16_t)(L->cand[cell] & ok[j]);
                 eliminate(L, cell, (uint16_t)(L->cand[cell] & ~ok[j]));
-                trace(TECH_SKY, lu, -1, keep, 0, cell, -1);
+                trace(tech, lu, -1, keep, 0, cell, -1);
                 return true;
             }
         }
     }
     return false;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_sky_logic(logic_t *L)
+{
+    return sky_orders_logic(L, L->G->sky, is_gen_sky_line_ok, TECH_SKY);
+}
+
+/* (documented in gen_internal.h) */
+bool gen_skysum_logic(logic_t *L)
+{
+    return sky_orders_logic(L, L->G->sky_sum, is_gen_skysum_line_ok, TECH_SKYSUM);
 }
 
 /* (documented in gen_internal.h) */
@@ -437,6 +456,32 @@ bool gen_xsum_logic(logic_t *L)
             if (keep != L->cand[cell]) {
                 eliminate(L, cell, (uint16_t)(L->cand[cell] & ~keep));
                 trace(TECH_XSUM, lu, -1, keep, 0, cell, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_nroom_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int lu = 0; lu < 18; lu++) {
+        int cells[9];
+        if (!G->nroom[lu]) {
+            continue;
+        }
+        line_cells(lu, cells);
+        for (int k = 0; k < 9; k++) {
+            int cell = cells[k];
+            if (L->v[cell]) {
+                continue;
+            }
+            uint16_t keep = (uint16_t)(L->cand[cell] & gen_nroom_allow(G, lu, k, L->v, L->cand));
+            if (keep != L->cand[cell]) {
+                eliminate(L, cell, (uint16_t)(L->cand[cell] & ~keep));
+                trace(TECH_NROOM, lu, -1, keep, 0, cell, -1);
                 return true;
             }
         }
@@ -1013,6 +1058,12 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->xsums && gen_xsum_logic(&L)) {
             continue;    /* X-Sums: the clues */
         }
+        if (G->nrooms && gen_nroom_logic(&L)) {
+            continue;    /* Numbered Rooms: the clues */
+        }
+        if (G->skysum && gen_skysum_logic(&L)) {
+            continue;    /* Sum Skyscrapers: the clues' lines */
+        }
         if ((G->frame || G->outside || G->rossini) && gen_first3_logic(&L)) {
             continue;    /* Frame, Outside Sudoku, Rossini: the clues */
         }
@@ -1058,7 +1109,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->nthermos && G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {
         return 28;
     }
-    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini) {
+    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum) {
         return 28;
     }
     if (G->consec_on) {

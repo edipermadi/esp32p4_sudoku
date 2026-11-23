@@ -205,14 +205,14 @@ In short here; each name links to the table's own page.
 - **Daily puzzle**: `day` = its date `YYYY-MM-DD`. There is one per day, made the first time it's opened that day; later opens find it by `day`.
 - **Imported**: `source` = the collection's name, `number` = its place in it.
 
-`variant` says which rules apply (0 Classic ... 41 Argyle, the `VAR_*` order in `src/generator.h`, append-only). The four text columns `regions`, `cages`, `marks` and `thermos` hold whatever the variant needs beyond the givens; columns a variant doesn't use are NULL:
+`variant` says which rules apply (0 Classic ... 44 Sum Skyscrapers, the `VAR_*` order in `src/generator.h`, append-only). The four text columns `regions`, `cages`, `marks` and `thermos` hold whatever the variant needs beyond the givens; columns a variant doesn't use are NULL:
 
 | Column | Used by |
 |---|---|
 | `regions` | Jigsaw (81 digits, the region of each cell) |
 | `cages` | Killer cages; Quadruple circles; Little Killer diagonals |
-| `marks` | Even-Odd, Consecutive, Kropki, XV, Greater-Than, Fortress (81 characters); Sandwich sums, Skyscraper, X-Sums and Frame clues (18 numbers); Outside Sudoku clues (18 digit sets); Rossini arrows (18 numbers) |
-| `thermos` | Thermo bulbs-first; Arrow (circle first), Renban, German Whispers, Palindrome, Region Sum, Zipper, Between, Entropic, Modular Lines, Dutch Whispers and Parity Lines lines; Slow Thermo bulbs-first |
+| `marks` | Even-Odd, Consecutive, Kropki, XV, Greater-Than, Fortress (81 characters); Sandwich sums, Skyscraper, X-Sums, Frame, Numbered Rooms and Sum Skyscrapers clues (18 numbers); Outside Sudoku clues (18 digit sets); Rossini arrows (18 numbers) |
+| `thermos` | Thermo bulbs-first; Arrow (circle first), Renban, German Whispers, Palindrome, Region Sum, Zipper, Between, Entropic, Modular Lines, Dutch Whispers, Parity Lines and Nabner lines; Slow Thermo bulbs-first |
 
 The same four fields make up a `.sdx` line (`src/sdx.c`), so sharing, importing and exporting all use one format. The rules (Classic, X-Sudoku, Hyper, Mini ...) aren't stored: they come from `variant`. `puzzle_geom()` in `src/puzzles_lookup.c` rebuilds a board from `variant` and these columns.
 

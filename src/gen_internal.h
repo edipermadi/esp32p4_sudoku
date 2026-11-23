@@ -161,6 +161,23 @@ bool is_gen_sky_line_ok(const uint8_t x[9], int c);
  */
 uint16_t gen_xsum_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand);
 /**
+ * @brief The digits the cell at a place of a Numbered Rooms row or column may hold, by its clue.
+ * @param[in] G          the board
+ * @param[in] lu         the row (0..8) or column (9..17), with a clue
+ * @param[in] at         the cell's place along it, from the clue
+ * @param[in] v          the digits (0: empty)
+ * @param[in] cand       the candidates of the empty ones, or NULL (then any digit not on the line yet)
+ * @return a candidate mask
+ */
+uint16_t gen_nroom_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand);
+/**
+ * @brief Whether a row or column's digits so far can still add up to its Sum Skyscrapers clue (the buildings seen).
+ * @param[in] x          the digits along it, from the clue (0: empty)
+ * @param[in] c          the clue
+ * @return true: still possible
+ */
+bool is_gen_skysum_line_ok(const uint8_t x[9], int c);
+/**
  * @brief The digits the cell at a place of a row or column may hold, by its clue about the first three
  *        cells (Frame: their sum; Outside Sudoku: digits among them; Rossini: rising, falling or neither).
  * @param[in] G          the board
@@ -270,6 +287,18 @@ bool gen_sky_logic(logic_t *L);
  * @return true if it changed anything
  */
 bool gen_xsum_logic(logic_t *L);
+/**
+ * @brief A technique: Numbered Rooms: what the clues leave, candidates taken out.
+ * @param[in,out] L          the state
+ * @return true if it changed anything
+ */
+bool gen_nroom_logic(logic_t *L);
+/**
+ * @brief A technique: Sum Skyscrapers: what the clues leave, candidates taken out.
+ * @param[in,out] L          the state
+ * @return true if it changed anything
+ */
+bool gen_skysum_logic(logic_t *L);
 /**
  * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
  *        candidates taken out.
@@ -431,6 +460,22 @@ bool gen_geom_rossini(const uint8_t dirs[18], sudoku_geom_t *out);
  */
 bool gen_geom_xsum(const uint8_t clues[18], sudoku_geom_t *out);
 /**
+ * @brief Builds a board from its decorations: Numbered Rooms, a classic board with clues beside the rows
+ *        and columns.
+ * @param[in] clues      the rows' clues, then the columns' (0: none)
+ * @param[out] out        gets the board
+ * @return false if a clue can't be met
+ */
+bool gen_geom_nroom(const uint8_t clues[18], sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Sum Skyscrapers, a classic board with clues beside the rows
+ *        and columns.
+ * @param[in] clues      the rows' clues, then the columns' (0: none)
+ * @param[out] out        gets the board
+ * @return false if a clue can't be met
+ */
+bool gen_geom_skysum(const uint8_t clues[18], sudoku_geom_t *out);
+/**
  * @brief Builds a board from its decorations: Skyscraper, a classic board with clues beside the rows and
  *        columns.
  * @param[in] clues      the rows' clues, then the columns' (0: none)
@@ -508,8 +553,8 @@ bool gen_regionsum_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
  * side or diagonal, not crossing), each kept only if the grid keeps its rule: an arrow's shaft
  * (1-3 cells) adds up to its circle, a Renban (3-5 cells) is a run of consecutive digits, along a
  * German (Dutch) Whispers line (3-6 cells) neighbours are 5 (4) or more apart, along a Parity line (3-8
- * cells) one odd, one even
- * @param[in] variant  VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_DUTCH or VAR_PARITY
+ * cells) one odd, one even, on a Nabner line (3-5 cells) every two digits 2 or more apart
+ * @param[in] variant  VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_DUTCH, VAR_PARITY or VAR_NABNER
  * @param[in] full  the solution
  * @param[in,out] rng  the random state
  * @param[in] want  lines wanted

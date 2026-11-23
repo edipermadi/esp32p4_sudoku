@@ -184,6 +184,23 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
             free &= ok;
         }
         break;
+    case LINE_NABNER:                               /* 2 or more away from every other digit on the line */
+        for (int k = 0; k < n; k++) {
+            uint16_t m = k == p ? 0 : LMASK(cell[k]), ok = 0;
+            if (!m) {
+                continue;
+            }
+            for (int d = 1; d <= 9; d++) {
+                for (int w = 1; w <= 9; w++) {
+                    if ((m >> w & 1) && abs(d - w) >= 2) {
+                        ok |= (uint16_t)(1u << d);
+                        break;
+                    }
+                }
+            }
+            free &= ok;
+        }
+        break;
     case LINE_RENBAN: {                             /* different digits, all within a window of n */
         int lo = 10, hi = 0;
         for (int k = 0; k < n; k++) {
@@ -452,6 +469,8 @@ typedef struct {
 #define R_SANDWICH (1u << 9)            /**< Sandwich */
 #define R_LINE    (1u << 10)            /**< the lines */
 #define R_CAGE    (1u << 11)            /**< Killer */
+#define R_NROOM   (1u << 12)            /**< Numbered Rooms */
+#define R_SKYSUM  (1u << 13)            /**< Sum Skyscrapers */
 /** @} */
 
 /**
@@ -692,6 +711,77 @@ bool is_gen_sky_line_ok(const uint8_t x[9], int c)
     return seen < c && seen + more >= c;            /* (the 9, still to come, is seen) */
 }
 
+/* (documented in gen_internal.h) */
+bool is_gen_skysum_line_ok(const uint8_t x[9], int c)
+{
+    int sum = 0, top = 0, k = 0;
+    for (; k < 9 && x[k]; k++) {
+        if (x[k] > top) {
+            top = x[k];
+            sum += top;
+        }
+    }
+    if (sum > c) {
+        return false;
+    }
+    if (top == 9 || k == 9) {
+        return sum == c;    /* the 9 hides the rest; or the line is full */
+    }
+    int rest = 9 - k, more = 0;                     /* at most: the tallest still to come, each one seen */
+    for (int d = 9, n = 0; d > top && n < rest; d--, n++) {
+        more += d;
+    }
+    return sum + 9 <= c && c <= sum + more;         /* (the 9, still to come, is seen) */
+}
+
+/**
+ * @brief Can a row's or column's candidates still keep its Numbered Rooms clue: a first digit X whose X-th
+ *        cell can hold the clue?
+ * @param[in] m  each cell's candidates, from the clue
+ * @param[in] c  the clue
+ * @return true: still possible
+ */
+static bool is_nroom_ok(const uint16_t m[9], int c)
+{
+    for (int x = 1; x <= 9; x++) {
+        if (!(m[0] >> x & 1)) {
+            continue;
+        }
+        if (x == 1 ? c == 1 : (x != c && (m[x - 1] >> c & 1))) {   /* (X = 1: the first cell is the clue itself) */
+            return true;
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+uint16_t gen_nroom_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *v, const uint16_t *cand)
+{
+    int cells[9], c = G->nroom[lu];
+    line_cells(lu, cells);
+    uint16_t placed = 0, m[9];
+    for (int k = 0; k < 9; k++) {
+        placed |= v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : 0;
+    }
+    for (int k = 0; k < 9; k++) {
+        m[k] = v[cells[k]] ? (uint16_t)(1u << v[cells[k]]) : cand ? cand[cells[k]] : (uint16_t)(0x3FE & ~placed);
+    }
+    uint16_t free = 0;
+    for (int d = 1; d <= 9; d++) {
+        if (!(m[at] >> d & 1)) {
+            continue;
+        }
+        uint16_t t[9];                              /* d here, and nowhere else on the line */
+        for (int k = 0; k < 9; k++) {
+            t[k] = k == at ? (uint16_t)(1u << d) : (uint16_t)(m[k] & ~(1u << d));
+        }
+        if (is_nroom_ok(t, c)) {
+            free |= (uint16_t)(1u << d);
+        }
+    }
+    return free;
+}
+
 /** @brief sudoku_fits_why(): which rule took the digit asked about out of grid_free()'s result (NULL:
  * nobody asks, the usual case: one predictable branch per rule) */
 typedef struct {
@@ -804,6 +894,35 @@ static uint16_t grid_free(const grid_t *g, int i)
             free &= gen_xsum_allow(G, lu, line ? i / 9 : i % 9, g->v, NULL);
         }
         WHY(line ? FIT_XSUM_COL : FIT_XSUM_ROW);
+    }
+    for (int line = 0; (rules & R_NROOM) && free && line < 2; line++) {   /* Numbered Rooms: its row's, its column's clue */
+        int lu = line ? 9 + i % 9 : i / 9;
+        if (G->nroom[lu]) {
+            free &= gen_nroom_allow(G, lu, line ? i / 9 : i % 9, g->v, NULL);
+        }
+        WHY(line ? FIT_NROOM_COL : FIT_NROOM_ROW);
+    }
+    for (int line = 0; (rules & R_SKYSUM) && free && line < 2; line++) {   /* Sum Skyscrapers: its row's, column's clue */
+        int lu = line ? 9 + i % 9 : i / 9, c = G->sky_sum[lu], cells[9];
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        uint8_t x[9];
+        for (int k = 0; k < 9; k++) {
+            x[k] = g->v[cells[k]];
+        }
+        int at = line ? i / 9 : i % 9;
+        for (int d = 1; d <= 9; d++) {
+            if (!(free >> d & 1)) {
+                continue;
+            }
+            x[at] = (uint8_t)d;
+            if (!is_gen_skysum_line_ok(x, c)) {
+                free &= (uint16_t)~(1u << d);
+            }
+        }
+        WHY(line ? FIT_SKYSUM_COL : FIT_SKYSUM_ROW);
     }
     for (int line = 0; (rules & R_FIRST3) && free && line < 2; line++) {
         int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;   /* its row's, its column's clue */
@@ -971,7 +1090,7 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->nquads ? R_QUAD : 0) | (G->skyscraper ? R_SKY : 0) | (G->xsums ? R_XSUM : 0) |
                (G->frame || G->outside || G->rossini ? R_FIRST3 : 0) | (G->diag_nc ? R_DIAGNC : 0) |
                (G->nlk ? R_LK : 0) | (G->sandwich ? R_SANDWICH : 0) | (G->nthermos ? R_LINE : 0) |
-               (G->ncages ? R_CAGE : 0);
+               (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

@@ -111,6 +111,11 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 | Slow Thermo | 11 / 23 (29.9) | 188 / 496 (21.8) | 696 / 1934 (17.6) | 535 / 1216 (17.7) |
 | Fortress | 13 / 38 (27.9) | 82 / 148 (19.4) | 212 / 433 (18) | 1005 / 1732 (17.8) |
 | Argyle | 673 / 1164 (34.9) | 472 / 753 (21.3) | 758 / 1110 (19) | 944 / 1184 (17.1) |
+| Nabner | 29 / 68 (29.5) | 80 / 104 (22.5) | 202 / 384 (20.6) | 799 / 937 (18.7) |
+| Numbered Rooms | 26 / 52 (30.1) | 382 / 856 (13.9) | 1147 / 2591 (16) | 1081 / 3165 (16.6) |
+| Sum Skyscrapers | 25 / 69 (29.6) | 154 / 361 (21.8) | 548 / 1486 (23.3) | 822 / 2397 (16.5) |
+
+Nabner, Numbered Rooms and Sum Skyscrapers were added on 2026-11-23 and measured the same way; all 120 came out at the level asked for.
 
 Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), X-Sums Hard (up to 7.9 s), Between Lines Expert (up to 4.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 

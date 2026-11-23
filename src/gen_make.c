@@ -70,7 +70,8 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
         /* (and the newest line kinds, below Expert: there the logic never solves the last steps, so
          * it would only add to the count) */
         const bool newest_lines = G->nthermos && (G->line_kind == LINE_ZIPPER || G->line_kind == LINE_BETWEEN ||
-                                  G->line_kind == LINE_ENTROPIC || G->line_kind == LINE_MODULAR);
+                                  G->line_kind == LINE_ENTROPIC || G->line_kind == LINE_MODULAR ||
+                                  G->line_kind == LINE_NABNER);
         if (G->edge_kind || G->nquads || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
             int tier = gen_technique_tier(G, out);
             ok = tier <= max_tier && (tier < 3 || gen_count_bounded(G, out, 2, node_limit) == 1);
@@ -97,7 +98,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
     const bool thermo = variant == VAR_THERMO || variant == VAR_SLOW, sandwich = variant == VAR_SANDWICH;
     const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_DUTCH ||
-                       variant == VAR_PARITY;
+                       variant == VAR_PARITY || variant == VAR_NABNER;
     const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
     const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
@@ -105,8 +106,9 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool fort = variant == VAR_FORTRESS;
+    const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
-                     pal || rsum || frame || zip || betw || grp || outs || ross;
+                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -267,6 +269,19 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_xsum_of(full, lu) : 0;
             }
             gen_geom_xsum(clues, jig);
+        } else if (nroom || skysum) {               /* a grid, then some of its 18 clues */
+            if (!gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0)) {
+                continue;
+            }
+            uint8_t clues[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                int c = nroom ? sudoku_nroom_of(full, lu) : sudoku_skysum_of(full, lu);
+                clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)c : 0;
+            }
+            if (!(nroom ? gen_geom_nroom(clues, jig) : gen_geom_skysum(clues, jig))) {
+                continue;
+            }
         } else if (frame) {                         /* a grid, then some of its 18 clues */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             uint8_t clues[18];

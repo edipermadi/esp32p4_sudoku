@@ -106,6 +106,9 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_DIAGNC] = {3, 3, 0, 0, "248" "651" "937", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
     [VAR_DUTCH] = {4, 1, 0, 0, "2738", NULL, NULL, NULL, NULL, NULL, PIC_WHISPER, NULL, -1, 0, NULL, NULL, LINE_DUTCH},
     [VAR_PARITY] = {5, 1, 0, 0, "38167", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_PARITY},
+    [VAR_NABNER] = {4, 1, 0, 0, "1486", NULL, NULL, NULL, NULL, NULL, PIC_RENBAN, NULL, -1, 0, NULL, NULL, LINE_NABNER},
+    [VAR_NROOMS] = {5, 1, 0, 0, "37594", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5, 0, NULL, NULL, 0, 0},
+    [VAR_SKYSUM] = {5, 1, 0, 0, "25198", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 16, 0, NULL, NULL, 0, 0},
     [VAR_SLOW] = {4, 2, 2, 2, "24.." "..47", NULL, NULL, NULL, NULL, NULL, PIC_SLOW, NULL, -1, 0, NULL, NULL, LINE_SLOW},
     [VAR_FORTRESS] = {3, 3, 0, 0, ".4." "685" ".2.", NULL, NULL, "..." ".f." "...", NULL, NULL, NULL, NULL, -1},
     [VAR_ARGYLE] = {9, 9, 3, 3, "....3...." ".....7..." "......1.." ".......9." "........4" "........." "........." "........." ".........", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
@@ -203,6 +206,13 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "doesn't count.",
     [VAR_ARGYLE] = "Classic rules, and no digit repeats along any of the eight diagonal lines of the argyle pattern: "
     "3 7 1 9 4 on a short one here. The lines have 5 or 8 cells, so they don't hold every digit.",
+    [VAR_NABNER] = "Classic rules, and no two digits on a brown line are the same or 1 apart, anywhere on the line, "
+    "not just side by side: 1, 4, 8, 6 is fine (8 and 6 are 2 apart). A line has 5 cells at most.",
+    [VAR_NROOMS] = "Classic rules, and a clue left of a row or above a column is the digit in the X-th cell from "
+    "there, where X is the first digit: here X is 3, and the third cell holds the clue, 5.",
+    [VAR_SKYSUM] = "Classic rules, and a clue left of a row or above a column is the sum of the buildings seen from "
+    "there: each digit is a building that tall, and a taller one hides the shorter ones behind it. Here 2, 5 "
+    "and 9 are seen: 2 + 5 + 9 = 16.",
     [VAR_SLOW] = "Classic rules, and along each thermometer the digits rise from the round bulb or stay the same: "
     "2, 4, 4, 7. A digit can only stay the same where the two cells share no row, column or box, as across the "
     "corner between two boxes here.",
@@ -474,13 +484,15 @@ void rules_cb(lv_event_t *e)
     rules_show(game_var());
 }
 
+_Static_assert(VAR_COUNT <= 64, "store_prefs_t.rules_seen has a bit per variant: widen it");
+
 /* (documented in ui_internal.h) */
 void rules_first_time(void)
 {
-    uint32_t seen = store_rules_seen();
+    uint64_t seen = store_rules_seen();
     if (game_var() == VAR_CLASSIC || (seen >> game_var() & 1)) {
         return;
     }
-    store_set_rules_seen(seen | (1u << game_var()));
+    store_set_rules_seen(seen | (1ull << game_var()));
     rules_show(game_var());
 }

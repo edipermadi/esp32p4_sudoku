@@ -147,6 +147,40 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int lu = 0; geo->nrooms && lu < 18; lu++) {   /* Numbered Rooms: the X-th cell holds another digit */
+        int c = geo->nroom[lu], cells[9];
+        for (int j = 0; j < 9; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        }
+        int x = val[cells[0]];
+        if (!c || !x) {
+            continue;
+        }
+        int at = cells[x - 1];
+        if (val[at] && val[at] != c) {
+            out[cells[0]] = out[at] = true;
+        }
+    }
+    for (int lu = 0; geo->skysum && lu < 18; lu++) {   /* Sum Skyscrapers: more seen than the clue, or (full) not it */
+        int c = geo->sky_sum[lu], sum = 0, top = 0, k = 0, cells[9];
+        if (!c) {
+            continue;
+        }
+        for (int j = 0; j < 9; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        }
+        for (; k < 9 && val[cells[k]] && top < 9; k++) {
+            if (val[cells[k]] > top) {
+                top = val[cells[k]];
+                sum += top;
+            }
+        }
+        if (sum > c || (top == 9 && sum != c)) {
+            for (int j = 0; j < k; j++) {
+                out[cells[j]] = true;
+            }
+        }
+    }
     for (int lu = 0; geo->xsums && lu < 18; lu++) {   /* X-Sums: the first X digits over the clue, or (full) not it */
         int c = geo->xsum[lu], cells[9], sum = 0, empty = 0;
         for (int j = 0; j < 9; j++) {
@@ -201,6 +235,16 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
                            : abs(x - y) < (k == LINE_DUTCH ? 4 : 5);
                 if (bad) {
                     out[a] = out[b] = true;
+                }
+            }
+            break;
+        case LINE_NABNER:                           /* two digits on it the same or 1 apart */
+            for (int i = 0; i < n; i++) {
+                for (int j = i + 1; j < n; j++) {
+                    int a = val[cell[i]], b = val[cell[j]];
+                    if (a && b && abs(a - b) < 2) {
+                        out[cell[i]] = out[cell[j]] = true;
+                    }
                 }
             }
             break;

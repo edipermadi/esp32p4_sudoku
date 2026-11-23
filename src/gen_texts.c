@@ -190,6 +190,12 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_XSUM:
         sudoku_xsum_text(g, marks, 82);
         break;
+    case VAR_NROOMS:
+        sudoku_nroom_text(g, marks, 82);
+        break;
+    case VAR_SKYSUM:
+        sudoku_skysum_text(g, marks, 82);
+        break;
     case VAR_FRAME:
         sudoku_frame_text(g, marks, 82);
         break;
@@ -397,6 +403,80 @@ bool sudoku_frame_text(const sudoku_geom_t *g, char *buf, int len)
         pos += w;
     }
     return true;
+}
+
+/**
+ * @brief 18 comma-separated numbers (the clues of the rows, then the columns).
+ * @param[in] text  the text
+ * @param[in] max   the largest a clue may be
+ * @param[out] out  gets them
+ * @return false if the text isn't 18 numbers 0..max
+ */
+static bool read_clues18(const char *text, int max, uint8_t out[18])
+{
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        char *end;
+        long v = p ? strtol(p, &end, 10) : -1;
+        if (!p || end == p || v < 0 || v > max) {
+            return false;
+        }
+        out[i] = (uint8_t)v;
+        p = end;
+        if (i < 17) {
+            if (*p != ',') {
+                return false;
+            }
+            p++;
+        }
+    }
+    return *p == 0;
+}
+
+/**
+ * @brief 18 clues as comma-separated numbers.
+ * @param[in] clues  the clues
+ * @param[out] buf   gets the text
+ * @param[in] len    its size
+ * @return false: buf too small
+ */
+static bool write_clues18(const uint8_t clues[18], char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d", i ? "," : "", clues[i]);
+        if (w < 0 || w >= len - pos) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_nroom_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t clues[18];
+    return read_clues18(text, 9, clues) && gen_geom_nroom(clues, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_nroom_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    return write_clues18(g->nroom, buf, len);
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_skysum_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t clues[18];
+    return read_clues18(text, 45, clues) && gen_geom_skysum(clues, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_skysum_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    return write_clues18(g->sky_sum, buf, len);
 }
 
 /* (documented in generator.h) */

@@ -145,6 +145,11 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             if (i && g->line_kind == LINE_SLOW && x < sol[g->thermo_cell[t][i - 1]]) {
                 return false;
             }
+            for (int j = 0; g->line_kind == LINE_NABNER && j < i; j++) {   /* Nabner: every two 2 or more apart */
+                if (abs(x - sol[g->thermo_cell[t][j]]) < 2) {
+                    return false;
+                }
+            }
             if (g->line_kind == LINE_RENBAN && (seen >> x & 1)) {
                 return false;
             }
@@ -243,6 +248,28 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int lu = 0; g->nrooms && lu < 18; lu++) {   /* Numbered Rooms: the X-th cell's digit */
+        int cells[9];
+        for (int k = 0; k < 9; k++) {
+            cells[k] = lu < 9 ? lu * 9 + k : k * 9 + lu - 9;
+        }
+        if (g->nroom[lu] && sol[cells[sol[cells[0]] - 1]] != g->nroom[lu]) {
+            return false;
+        }
+    }
+    for (int lu = 0; g->skysum && lu < 18; lu++) {   /* Sum Skyscrapers: the buildings seen, added up */
+        int sum = 0, top = 0;
+        for (int k = 0; g->sky_sum[lu] && k < 9; k++) {
+            int x = sol[lu < 9 ? lu * 9 + k : k * 9 + lu - 9];
+            if (x > top) {
+                top = x;
+                sum += x;
+            }
+        }
+        if (g->sky_sum[lu] && sum != g->sky_sum[lu]) {
+            return false;
+        }
+    }
     for (int lu = 0; g->skyscraper && lu < 18; lu++) {   /* Skyscraper: the buildings seen */
         int seen = 0, top = 0;
         for (int k = 0; g->sky[lu] && k < 9; k++) {
@@ -315,7 +342,8 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            a->line_kind == b->line_kind && a->sandwich == b->sandwich && !memcmp(a->sandwich_sum, b->sandwich_sum, 18) &&
            a->edge_kind == b->edge_kind && !memcmp(a->edge, b->edge, 81) && a->nquads == b->nquads &&
            !memcmp(a->quad_at, b->quad_at, a->nquads) && !memcmp(a->quad_n, b->quad_n, a->nquads) &&
-           !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads);
+           !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads) && a->nrooms == b->nrooms &&
+           !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18);
 }
 
 /* the layout texts of a board, as the game keeps them (sudoku_db's generated table) */
@@ -352,6 +380,12 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_XSUM:
         sudoku_xsum_text(g, marks, len);
         break;
+    case VAR_NROOMS:
+        sudoku_nroom_text(g, marks, len);
+        break;
+    case VAR_SKYSUM:
+        sudoku_skysum_text(g, marks, len);
+        break;
     case VAR_FRAME:
         sudoku_frame_text(g, marks, len);
         break;
@@ -377,6 +411,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_DUTCH:
     case VAR_PARITY:
     case VAR_SLOW:
+    case VAR_NABNER:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:

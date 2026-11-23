@@ -13,7 +13,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
 {
     lv_obj_set_user_data(grid, (void *)geo);
     const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums || geo->frame || geo->outside ||
-                       geo->rossini;                /* clues outside the grid */
+                       geo->rossini || geo->nrooms || geo->skysum;   /* clues outside the grid */
     for (int i = 0; clues && i < BOARD_CLUES; i++) {
         lv_obj_set_hidden(clues[i], true);
     }
@@ -52,10 +52,11 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     const int gx = x0 + band + (size - w) / 2, gy = y0 + band + (size - h) / 2;
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
-    for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums || geo->frame || geo->outside || geo->rossini) &&
-            clues && i < 18; i++) {                 /* left of the rows, above the columns */
+    for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums || geo->frame || geo->outside || geo->rossini ||
+                     geo->nrooms || geo->skysum) && clues && i < 18; i++) {   /* left of the rows, above the columns */
         int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->skyscraper ? geo->sky[i] : geo->xsums ? geo->xsum[i]
-                           : geo->frame ? geo->frame_sum[i] : geo->outside ? geo->outside_set[i] : geo->rossini_dir[i];
+                           : geo->frame ? geo->frame_sum[i] : geo->outside ? geo->outside_set[i]
+                           : geo->nrooms ? geo->nroom[i] : geo->skysum ? geo->sky_sum[i] : geo->rossini_dir[i];
         int mid = LINE_THICK + (k / 3) * (box_w + LINE_THICK) + (k % 3) * (cs + LINE_THIN) + cs / 2;
         char t[12];
         if (geo->outside) {                         /* its digits, side by side */
@@ -143,16 +144,10 @@ void game_layout(void)
         game_set_geo(sudoku_geom(game_var()));
     }
     const bool left = is_store_left_hand();           /* Settings > Game > Left-handed: the pad on the left */
-    if (game_layout_var() == game_var() && g_layout_left == left && game_var() != VAR_JIGSAW && game_var() != VAR_KILLER &&
-            game_var() != VAR_EVENODD && game_var() != VAR_CONSEC && game_var() != VAR_THERMO && game_var() != VAR_SANDWICH &&
-            game_var() != VAR_KROPKI && game_var() != VAR_XV && game_var() != VAR_GT && game_var() != VAR_QUAD &&
-            game_var() != VAR_ARROW && game_var() != VAR_RENBAN && game_var() != VAR_WHISPER &&
-            game_var() != VAR_SKY && game_var() != VAR_LK && game_var() != VAR_PALINDROME &&
-            game_var() != VAR_REGIONSUM && game_var() != VAR_XSUM && game_var() != VAR_ZIPPER &&
-            game_var() != VAR_FRAME && game_var() != VAR_BETWEEN && game_var() != VAR_OUTSIDE &&
-            game_var() != VAR_ROSSINI && game_var() != VAR_ENTROPIC && game_var() != VAR_MODULAR &&
-            game_var() != VAR_DUTCH && game_var() != VAR_PARITY && game_var() != VAR_SLOW &&
-            game_var() != VAR_FORTRESS) {
+    /* (a variant whose board comes with each puzzle, cages, lines, clues: sudoku_geom() has no board of its own
+     * for it, and every puzzle is laid out again) */
+    const bool own_board = sudoku_geom(game_var())->variant != game_var();
+    if (game_layout_var() == game_var() && g_layout_left == left && !own_board) {
         lv_obj_invalidate(game_grid());
         return;
     }

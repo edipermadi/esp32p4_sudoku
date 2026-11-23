@@ -116,6 +116,13 @@
  *                than each white cell side by side with it; every puzzle has its own
  *   VAR_ARGYLE   Argyle: Classic rules, and no digit repeats along any of eight
  *                diagonal lines in an argyle pattern (sudoku_argyle_line())
+ *   VAR_NABNER   Nabner: Classic rules, and along each line no two digits are the
+ *                same or consecutive (anywhere on the line, not just neighbours)
+ *   VAR_NROOMS   Numbered Rooms: Classic rules, and a clue left of a row or above a
+ *                column is the digit in the X-th cell from there, X being the first digit
+ *   VAR_SKYSUM   Sum Skyscrapers: Classic rules, and a clue left of a row or above a
+ *                column is the sum of the buildings seen from there (a digit is a
+ *                building that tall; a taller one hides the shorter ones behind it)
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -215,6 +222,9 @@ typedef enum {
     VAR_SLOW,                           /**< Slow Thermo */
     VAR_FORTRESS,                       /**< Fortress */
     VAR_ARGYLE,                         /**< Argyle */
+    VAR_NABNER,                         /**< Nabner */
+    VAR_NROOMS,                         /**< Numbered Rooms */
+    VAR_SKYSUM,                         /**< Sum Skyscrapers */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -227,7 +237,7 @@ typedef enum {
  *         "Renban", "German Whispers", "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
  *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
  *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
- *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle"
+ *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner", "Numbered Rooms", "Sum Skyscrapers"
  */
 const char *variant_name(int variant);
 
@@ -259,7 +269,8 @@ enum {
     LINE_MODULAR,                       /**< Modular Lines: any three in a row: one of each remainder mod 3 */
     LINE_DUTCH,                         /**< Dutch Whispers: neighbours differ by 4 or more */
     LINE_PARITY,                        /**< Parity Lines: neighbours are one odd, one even */
-    LINE_SLOW                           /**< Slow Thermo: digits rise or stay the same from the bulb */
+    LINE_SLOW,                          /**< Slow Thermo: digits rise or stay the same from the bulb */
+    LINE_NABNER                         /**< Nabner: no two digits on the line the same or consecutive */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -362,6 +373,12 @@ typedef struct {
     bool rossini;                       /**< Rossini: the arrows are rules (every row and column has one, or none: neither) */
     uint8_t rossini_dir[18];            /**< per row and column (as frame_sum), its first 3 digits: ROSSINI_* */
     bool diag_nc;                       /**< Diagonal Non-Consecutive: cells touching at a corner aren't 1 apart */
+    bool nrooms;                        /**< Numbered Rooms: the clues are rules */
+    uint8_t nroom[18];                  /**< per row (0..8, from the left) and column (9..17, from the top), the digit in the
+                                         *   X-th cell, X being the first digit; 0 = no clue */
+    bool skysum;                        /**< Sum Skyscrapers: the clues are rules */
+    uint8_t sky_sum[18];                /**< per row (0..8, seen from the left) and column (9..17, from the top), the sum of
+                                         *   the buildings seen, 0 = no clue */
     /* Little Killer: diagonals, each from its first cell (on the top row or the left column) in
      * its direction (LK_*), with the sum of its cells; a cell is on two at most (lk_of: the
      * down-right one, then the other way) */
@@ -614,6 +631,56 @@ uint16_t sudoku_xsum_firsts(int clue);
  * @return the sum, 0 if the first X aren't all filled
  */
 int sudoku_xsum_of(const uint8_t vals[81], int lu);
+/**
+ * @brief A Numbered Rooms board from its clues as text: 18 digits 0..9 (0: no clue), the rows from the
+ * left top to bottom, then the columns from the top left to right, comma-separated (kept in marks,
+ * like Skyscraper's); sudoku_nroom_text() writes it.
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_nroom_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Numbered Rooms board's clues as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_nroom_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief Numbered Rooms: the clue of a row or column with these digits in it (the digit in the X-th
+ * cell from the clue's side, X being the first).
+ * @param[in] vals  the cells
+ * @param[in] lu  the row (0..8, from the left) or column (9..17, from the top)
+ * @return the digit, 0 if the first or the X-th cell is empty
+ */
+int sudoku_nroom_of(const uint8_t vals[81], int lu);
+/**
+ * @brief A Sum Skyscrapers board from its clues as text: 18 numbers, 0 (no clue) or 9..45, the rows from
+ * the left top to bottom, then the columns from the top left to right, comma-separated (kept in marks,
+ * like Skyscraper's); sudoku_skysum_text() writes it.
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_skysum_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Sum Skyscrapers board's clues as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_skysum_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief Sum Skyscrapers: the clue of a row or column with these digits in it (the sum of the buildings
+ * seen from the clue's side, up to and with the 9).
+ * @param[in] vals  the cells
+ * @param[in] lu  the row (0..8, from the left) or column (9..17, from the top)
+ * @return the sum, 0 if a cell before the 9 is empty
+ */
+int sudoku_skysum_of(const uint8_t vals[81], int lu);
 /**
  * @brief A Little Killer board from its clues as text: "top|left index,direction,sum;..." e.g.
  * "t3,r,21;l5,u,14" (t: above column 0..8, l: left of row 0..8; r down-right, l down-left
@@ -902,7 +969,11 @@ enum {
     FIT_OUTSIDE_COL,                    /**< Outside Sudoku: the column's clue */
     FIT_ROSSINI_ROW,                    /**< Rossini: the row's arrow (or none) */
     FIT_ROSSINI_COL,                    /**< Rossini: the column's arrow (or none) */
-    FIT_DIAGNC                          /**< Diagonal Non-Consecutive: a cell touching it at a corner */
+    FIT_DIAGNC,                         /**< Diagonal Non-Consecutive: a cell touching it at a corner */
+    FIT_NROOM_ROW,                      /**< Numbered Rooms: the row's clue */
+    FIT_NROOM_COL,                      /**< Numbered Rooms: the column's clue */
+    FIT_SKYSUM_ROW,                     /**< Sum Skyscrapers: the row's clue */
+    FIT_SKYSUM_COL                      /**< Sum Skyscrapers: the column's clue */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -959,7 +1030,9 @@ typedef enum {
     TECH_FRAME,              /**< Frame: a clue */
     TECH_OUTSIDE,            /**< Outside Sudoku: a clue */
     TECH_ROSSINI,            /**< Rossini: an arrow (or none) */
-    TECH_DIAGNC              /**< Diagonal Non-Consecutive: the cells touching at a corner */
+    TECH_DIAGNC,             /**< Diagonal Non-Consecutive: the cells touching at a corner */
+    TECH_NROOM,              /**< Numbered Rooms: a clue */
+    TECH_SKYSUM              /**< Sum Skyscrapers: a clue */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {

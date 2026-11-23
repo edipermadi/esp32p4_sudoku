@@ -425,16 +425,16 @@ void store_set_night_brightness(uint8_t percent)
 }
 
 /* (documented in store.h) */
-uint32_t store_rules_seen(void)
+uint64_t store_rules_seen(void)
 {
     return s_p.rules_seen;
 }
 
 /* (documented in store.h) */
-void store_set_rules_seen(uint32_t mask)
+void store_set_rules_seen(uint64_t mask)
 {
     s_p.rules_seen = mask;
-    stats_db_set_int("rules_seen", (int)mask);
+    stats_db_set_int("rules_seen", (int64_t)mask);
 }
 
 /* (documented in store.h) */
