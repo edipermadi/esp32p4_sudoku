@@ -5,7 +5,8 @@
  *
  * | File            | What                                                                       |
  * |-----------------|----------------------------------------------------------------------------|
- * | gen_geometry.c  | the names, each variant's board, the variants' texts read and written      |
+ * | gen_geometry.c  | the names, each variant's board                                            |
+ * | gen_texts.c     | the variants' layouts as text, read and written                            |
  * | gen_solver.c    | counting and filling: every variant's rules (grid_free()), the search       |
  * | gen_grade.c     | human-style grading: the techniques and the level they give                 |
  * | gen_make.c      | generating: digging to a level, each variant's decorations asked for        |

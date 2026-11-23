@@ -215,3 +215,14 @@ lv_obj_t *settings_slider(lv_obj_t *row, int min, int max, int value, lv_event_c
     return sl;
 }
 
+/* (documented in ui_internal.h) */
+void settings_tick(void)
+{
+    st_wifi_update();
+    char sd[64];
+    stats_db_status(sd, sizeof(sd));
+    if (strcmp(lv_label_get_text(settings_sd_hint()), sd) != 0) {
+        lv_label_set_text(settings_sd_hint(), sd);
+    }
+    usb_btn_update();
+}

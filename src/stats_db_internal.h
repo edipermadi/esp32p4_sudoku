@@ -13,15 +13,19 @@
  * | stats_db_schema.c        | the tables, and upgrades                                    |
  * | stats_db_prefs.c         | settings                                                    |
  * | stats_db_players.c       | players: list, add, rename, delete, switch                  |
- * | stats_db_games.c         | unfinished games and their moves; replays                   |
+ * | stats_db_games.c         | unfinished games and their moves                            |
+ * | stats_db_replay.c        | a solve's replay loaded                                     |
  * | stats_db_solves.c        | logging a solve; statistics per level                       |
  * | stats_db_kinds.c         | puzzle kinds and level names                                |
- * | stats_db_generated.c     | generated puzzles; the daily puzzle                         |
+ * | stats_db_generated.c     | generated puzzles                                           |
+ * | stats_db_daily.c         | the daily puzzle's status and streak                        |
  * | stats_db_rank.c          | daily rank, leaderboard, head-to-head                       |
  * | stats_db_achievements.c  | achievements                                                |
- * | stats_db_import.c        | collections imported from the card                          |
+ * | stats_db_import.c        | collections imported from the card (parsing: import_parse.c) |
  * | stats_db_saved.c         | saved collections, and their export                         |
- * | stats_db_history.c       | month, day, plays, week, insights                           |
+ * | stats_db_history.c       | month, day, plays                                           |
+ * | stats_db_weekly.c        | the weekly challenge, this week / last week                 |
+ * | stats_db_insights.c      | mistake insights                                            |
  * | stats_db_records.c       | personal records                                            |
  * | stats_db_export.c        | CSV export, backup                                          |
  * | stats_db_small.c         | bookmarks, seen tips, time attack, techniques learned       |

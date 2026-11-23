@@ -62,5 +62,81 @@ void hint_render(void)
 }
 
 
+/* ------------------------------------------------------------- the card's buttons */
+/* (documented in ui_internal.h) */
+void hint_act_cb(lv_event_t *e)
+{
+    if (!hint_step() || is_game_solved() || is_game_paused()) {
+        return;
+    }
+    if (hint_step() == 1 && is_hint_nudge()) {
+        return;
+    }
+    if (hint_step() == 1) {
+        hint_set_step(2);
+        hint_render();
+        return;
+    }
+    int i = hint_info()->cell, d = hint_info()->digit;
+    bool wrong = hint_info()->kind == STEP_WRONG;
+    push_undo();
+    if (wrong) {
+        record_move(i, 0, MOVE_ERASE);
+        game_board()->val[i] = 0;
+    } else {
+        place_digit(i, d);
+        record_move(i, d, MOVE_FILL);
+        if (game_practice() >= 0) {
+            stats_db_learned(game_practice());    /* Learn: this technique practised (Graduate) */
+        }
+    }
+    game_set_sel(i);
+    after_move();                                   /* closes the hint */
+    if (!wrong && !is_game_solved()) {
+        placed_sounds(i, d);
+    }
+}
+
+/* (documented in ui_internal.h) */
+void hint_close_cb(lv_event_t *e)
+{
+    hint_drop();
+    refresh_board();
+}
+
+/* (documented in ui_internal.h) */
+void hint_cb(lv_event_t *e)
+{
+    if (is_game_solved() || is_game_paused() || !is_game_sol_ok()) {
+        return;
+    }
+    if (is_game_attack()) {
+        sudoku_ui_notice("Fill and Hint are off in a time attack.", 2500);
+        return;
+    }
+    if (hint_step()) {                                   /* already open: same as More / Place it */
+        if (is_hint_nudge()) {
+            return;    /* (a nudge goes no further) */
+        }
+        hint_act_cb(e);
+        return;
+    }
+    sudoku_step_t st;
+    if (!sudoku_next_step(game_geo(), game_b()->val, game_sol(), &st) || st.cell < 0) {
+        return;
+    }
+    hint_set_info(&st);
+    if (game_hints() < 0xFFFF) {
+        game_set_hints(game_hints() + 1);    /* every hint opened counts once */
+    }
+    if (hint_info()->tech.kind > 0 && hint_info()->tech.kind < 16) {
+        game_set_flags(game_flags() | 1u << hint_info()->tech.kind);    /* (achievements) */
+    }
+    refresh_board();                                /* the hint count on the Fill button */
+    save_current();
+    hint_set_step(1);
+    hint_render();
+}
+
 /* ---- accessors: the other UI files reach this file's state through these */
 const uint8_t *hint_mark(void) { return h_mark; }

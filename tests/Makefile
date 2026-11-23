@@ -8,7 +8,7 @@ SRC      = ../src
 CFLAGS  ?= -O2 -g -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -std=gnu11 \
            -fsanitize=address,undefined -fno-omit-frame-pointer
 CPPFLAGS = -I$(SRC) -DSTATS_CAGES_LEN_T=1024
-GEN      = $(SRC)/gen_geometry.c $(SRC)/gen_solver.c $(SRC)/gen_grade.c $(SRC)/gen_make.c $(SRC)/gen_regions.c $(SRC)/gen_lines.c $(SRC)/gen_hints.c
+GEN      = $(SRC)/gen_geometry.c $(SRC)/gen_texts.c $(SRC)/gen_solver.c $(SRC)/gen_grade.c $(SRC)/gen_make.c $(SRC)/gen_regions.c $(SRC)/gen_lines.c $(SRC)/gen_hints.c
 CORES    = $(SRC)/learn_core.c $(SRC)/game_core.c $(SRC)/hint_core.c $(SRC)/share_core.c $(SRC)/daily_core.c $(SRC)/import_parse.c
 OBJS     = test_main.c $(GEN) $(SRC)/puzzles_data.c $(SRC)/sdx.c $(CORES)
 

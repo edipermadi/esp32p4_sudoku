@@ -129,19 +129,25 @@ esp32p4_sudoku.ino      setup/loop
 src/ui_sudoku.c         the UI's start-up: the card and sudoku.db read, the settings applied, the screens and timers
 src/ui_notice.c         notices: a banner for a while, or one that stays while something runs (a file from the computer)
 src/ui_saver.c          the screen saver: the dim clock, dark, power saving, the waking tap
-src/ui_lock.c           the lock screen (Swipe or PIN) and Settings' PIN setup
+src/ui_lock.c           the lock screen (Swipe or PIN) and the keypad it shares
+src/ui_pin_setup.c      Settings' PIN setup: a new PIN typed twice
 src/lock_core.c         the lock's PIN without LVGL: right or wrong, tries, the wait, setting a new one
 src/ui_remote.c         what serial control asks of the UI: fill, state, the screen's name, what uses the card, Benchmarking
 src/ui_internal.h       what the UI files share: includes, macros, types, and the functions and variables used by more than one
-src/ui_common.c         palette, widgets and helpers, context menus, dialogs (make_msgbox())
-src/ui_game.c           the game: its state, saving, the board drawn, building its screen; restart, back, the clock
+src/ui_common.c         widgets and helpers, dialogs (make_msgbox())
+src/ui_palette.c        the colours: dark and light schemes, accents, colour-blind colours; the brightness in effect
+src/ui_ctx_menu.c       icon buttons and the ⋮ context menus
+src/ui_player_badge.c   a player shown small: colour, dot, avatar
+src/ui_game.c           the game: its state, starting and saving it, a move made, building its screen
+src/ui_game_board.c     the board drawn: cells, highlights, the header and the timer
+src/ui_game_controls.c  the ⋮ menu, Back, Pause, Restart, the clock's tick
 src/ui_game_input.c     its input: a cell tapped, the pad (digit-first), Notes, Auto notes, Erase, Undo, Redo, Fill
 src/ui_game_colors.c    a cell long pressed: its colour menu (and a Killer cage's digit sets)
 src/ui_game_win.c       the Solved dialog and its confetti, the solve recorded, head-to-head
 src/ui_game_layout.c    the game screen's layout for the variant and the hand (Left-handed)
 src/ui_board_draw.c     the board's variant overlays: cages, marks, lines, regions, outside clues
 src/game_core.c         without LVGL: the rules check (which digits break a rule, every variant), the undo history
-src/ui_hints.c          the hint card
+src/ui_hints.c          the hint card and its buttons
 src/ui_tour.c           the game screen's tour
 src/hint_core.c         a hint's words and highlights without LVGL, from the hint engine's step
 src/ui_attack.c         time attack: the run, its leaderboard, its end
@@ -154,12 +160,13 @@ src/ui_replay_export.c  a replay exported as an MP4: the invisible display, the 
 src/ui_screenshot.c     the camera buttons and their notice
 src/screenshot_core.c   the screen copied, compressed by the hardware JPEG encoder and written (a task)
 src/ui_insights.c       mistake insights (Statistics)
-src/ui_newpuzzle.c      New puzzle (the generator and its dialog), the daily puzzle's button, the Puzzles ⋮ menu
+src/ui_newpuzzle.c      New puzzle's generator: the task, its progress, the benchmark; the daily puzzle's button
+src/ui_gen_dialog.c     the New puzzle dialog: variants in four tabs, the levels
 src/ui_enter_puzzle.c   Enter a puzzle: typed in, checked for one solution, graded, saved
 src/daily_core.c        the daily puzzle without LVGL: today's variant and level, its seed, its name
 src/ui_learn.c          Learn: the lessons in tabs, the search for a lesson's puzzle (on the worker core), the practice game
 src/learn_core.c        Learn's lessons without LVGL: the ten techniques and a variant rule each, and the search for a position to practise one
-src/ui_list.c           Puzzles: the screen, tabs, collection column, panel, grid of numbers (ui_list_part.h)
+src/ui_list.c           Puzzles: the screen, tabs, collection column, panel, grid of numbers, the ⋮ menu (ui_list_part.h)
 src/ui_list_rows.c      its rows: a saved or imported collection's puzzles
 src/ui_list_starred.c   its Starred: the bookmarks
 src/ui_list_manage.c    its Export and Delete of a collection
@@ -171,7 +178,8 @@ src/puzzles_select.c    the tab, the collection shown, Starred
 src/puzzles_solved.c    solved counts, the panel's numbers
 src/puzzles_starred.c   the starred puzzles
 src/puzzles_colls.c     delete or export a collection, take a puzzle out
-src/ui_home.c           Home: the week, the clock, the menu
+src/ui_home.c           Home: the clock, the menu, the solved line
+src/ui_home_week.c      Home's week: this week on the solved line, and this week against last
 src/ui_continue.c       Home's Continue button: its line, its tap, a game resumed (ui_continue_part.h)
 src/ui_continue_games.c the Unfinished games dialog: each game, to resume or discard
 src/ui_continue_open.c  open_puzzle(): the game in progress, an unfinished one resumed, or a new start (without a card: the "Unfinished game" dialog first)
@@ -187,7 +195,10 @@ src/ui_settings_network.c  Settings > Network: Wi-Fi, time zone
 src/ui_settings_display.c  Settings > Display: theme, accent, brightness, screen off, lock screen, night mode
 src/ui_settings_sound.c    Settings > Sound: sound effects, volume, Gibberlink
 src/ui_settings_game.c     Settings > Game: timer, mistake check, no-notes, left-handed, hints, tour
-src/ui_settings_data.c     Settings > Data: microSD card, USB drive, firmware update, import, export, backup, factory reset
+src/ui_settings_data.c     Settings > Data: the tab, import, export, backup, factory reset
+src/ui_settings_card.c     its microSD card row: status, Format
+src/ui_settings_usb.c      its USB drive row: the card lent to a computer
+src/ui_settings_update.c   its Firmware update row
 src/settings_core.h     what those do, without LVGL (a header for the four below)
 src/fw_update.c         firmware update from the card: update.bin into the other app slot
 src/sd_card.c           the microSD card: probe and format
@@ -230,12 +241,14 @@ src/store_stats.cpp     RAM copy of the statistics: best time, fewest mistakes, 
 src/store_game.cpp      RAM copy of the game in progress and its move log
 src/stats_db.c          sudoku.db on the microSD card: the worker task, opening, the calls the parts share
 src/stats_db_*.c        its parts, one per subject: schema, prefs, players, games, solves, kinds, generated,
-                        rank, achievements, import, saved, history, records, export, small, sql
+                        daily, rank, achievements, import, saved, history, weekly, insights, replay, records,
+                        export, small, sql
                         (stats_db_internal.h lists them; the game uses stats_db.h)
 src/usb_msc.cpp         the microSD card as a USB drive (TinyUSB MSC)
 src/sqlite/             SQLite 3.54.1 amalgamation + ESP-IDF file layer (sqlite3_esp.c)
 src/wifi_mgr.cpp        Wi-Fi worker task (ESP-Hosted / C6), saved network, starts SNTP
-src/ui_wifi.c           Wi-Fi screen: networks, password keyboard
+src/ui_wifi.c           Wi-Fi screen: status, networks (ui_wifi_part.h)
+src/ui_wifi_dialog.c    its password dialog
 src/ui_file.c           Files screen: the page around its parts, the poll, shared widgets (ui_file_part.h)
 src/ui_file_list.c      its list, path, count; Refresh, Up, Empty; a tap on a row
 src/ui_file_dialog.c    its dialog: rename, delete into the Recycle bin, delete for good, empty the bin
@@ -273,7 +286,7 @@ src/ui_palette.h        light/dark colour schemes shared by the UI files
 src/sfx.c               sound effects: note tables + 4-voice mixer task
 src/sdx.c               the puzzle line format (Import puzzles, the Files preview, Send by sound): parse, pack, format; plain C, tested on a PC
 src/import_parse.c      the other puzzle files imported (a puzzle per line, OpenSudoku's XML); plain C, tested on a PC
-src/gen_*.c             the puzzle generator (gen_internal.h, split by what it does: gen_geometry.c boards and texts, gen_solver.c the rules and search, gen_grade.c the techniques, gen_make.c generating, gen_regions.c Jigsaw regions and Killer cages, gen_lines.c the line variants' lines, gen_hints.c hints), for the variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Kids 4x4, Anti-Knight, Anti-King, Even-Odd, Consecutive, Non-Consecutive, Disjoint Groups, Asterisk, Kropki, XV, Greater-Than, Quadruple, Arrow, Renban, German Whispers, Skyscraper, Little Killer, Thermo, Sandwich): generator, grader, solver (Fill) and hints
+src/gen_*.c             the puzzle generator (gen_internal.h, split by what it does: gen_geometry.c boards, gen_texts.c the layouts as text, gen_solver.c the rules and search, gen_grade.c the techniques, gen_make.c generating, gen_regions.c Jigsaw regions and Killer cages, gen_lines.c the line variants' lines, gen_hints.c hints), for the variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Kids 4x4, Anti-Knight, Anti-King, Even-Odd, Consecutive, Non-Consecutive, Disjoint Groups, Asterisk, Kropki, XV, Greater-Than, Quadruple, Arrow, Renban, German Whispers, Skyscraper, Little Killer, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
 src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code, camera, vertical-dots (menu), undo, redo and 3x3-grid (the Built-in tab) icons at 24/20 px (lv_font_conv)

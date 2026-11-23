@@ -23,7 +23,10 @@
  * | ui_settings_display.c | dark mode, accent, colour-blind colours, digit size, brightness, screen off, lock screen and PIN, screen-saver clock, night mode |
  * | ui_settings_sound.c   | sound effects, volume, Gibberlink |
  * | ui_settings_game.c    | timer, mistake check, no-notes challenge, left-handed, hints, tour |
- * | ui_settings_data.c    | microSD card (Format), USB drive, firmware update, import, export to CSV, back up, factory reset (what those do to the board: settings_core.h) |
+ * | ui_settings_data.c    | the Data tab: import, export to CSV, back up, factory reset (what those do to the board: settings_core.h) |
+ * | ui_settings_card.c    | its microSD card row (Format) |
+ * | ui_settings_usb.c     | its USB drive row |
+ * | ui_settings_update.c  | its firmware update row |
  *
  * A tab's file builds its rows into the pane it's given (settings_tab_network() and the others), and
  * keeps its widgets and callbacks to itself. A row is settings_row() with a control on its right:
@@ -123,3 +126,23 @@ void settings_data_poll_card(void);
 /** @brief Sets the Settings screen (build_settings(); ui_screens.c). @param[in] v  the screen */
 void screen_set_settings(lv_obj_t *v);
 
+/**
+ * @brief Settings > Data: the microSD card row (ui_settings_card.c).
+ * @param[in] col  the tab's pane
+ */
+void settings_card_row(lv_obj_t *col);
+/**
+ * @brief Settings > Data: the USB drive row (ui_settings_usb.c).
+ * @param[in] col  the tab's pane
+ */
+void settings_usb_row(lv_obj_t *col);
+/**
+ * @brief Settings > Data: the Firmware update row (ui_settings_update.c).
+ * @param[in] col  the tab's pane
+ */
+void settings_update_row(lv_obj_t *col);
+
+/** @brief Is a firmware update being written (ui_settings_update.c)? @return true if so */
+bool is_settings_update_busy(void);
+/** @brief Is the card lent to a computer (ui_settings_usb.c)? @return true if so */
+bool is_settings_usb_lent(void);

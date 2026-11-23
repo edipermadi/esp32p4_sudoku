@@ -2,7 +2,7 @@
  * @file ui_lock.c
  * @ingroup ui_lock
  * @brief The lock screen (Swipe, or a 4-digit PIN with a keypad) under the screen saver's black cover, and
- *        Settings' PIN setup. The PIN itself: lock_core.h.
+ *        the keypad it shares with the PIN setup (ui_pin_setup.c). The PIN itself: lock_core.h.
  */
 #include "ui_internal.h"
 #include "lock_core.h"
@@ -26,68 +26,6 @@ static lv_obj_t *lk_pad;                  /**< the keypad (PIN; NULL: Swipe) */
 static lv_timer_t *lk_timer;              /**< the clock and the wait, each second */
 static int32_t lk_press_y;                /**< where a swipe started */
 
-static lv_obj_t *ps_ovl;                  /**< the PIN setup screen (NULL: not shown) */
-static lv_obj_t *ps_hint;                 /**< what to do */
-static lv_obj_t *ps_dots[4];              /**< the PIN's dots */
-static bool ps_from_dd;                   /**< opened by choosing PIN (cancel: back to the old mode) */
-
-/**
- * @brief A 3 x 4 keypad: 1-9, (blank), 0, backspace.
- * @param[in] parent  where
- * @param[in] cb      a key (user data: '0'..'9', '<')
- * @return it
- */
-static lv_obj_t *pin_pad(lv_obj_t *parent, lv_event_cb_t cb)
-{
-    static const char KEYS[12] = {'1', '2', '3', '4', '5', '6', '7', '8', '9', ' ', '0', '<'};
-    lv_obj_t *pad = lv_obj_create(parent);
-    lv_obj_remove_style_all(pad);
-    lv_obj_set_size(pad, 3 * 110 + 2 * 12, 4 * 72 + 3 * 12);
-    for (int i = 0; i < 12; i++) {
-        if (KEYS[i] == ' ') {
-            continue;
-        }
-        char t[4] = {KEYS[i], 0};
-        lv_obj_t *b = make_btn(pad, (i % 3) * 122, (i / 3) * 84, 110, 72, KEYS[i] == '<' ? LV_SYMBOL_BACKSPACE : t,
-                               &lv_font_montserrat_28, cb, (void *)(intptr_t)KEYS[i]);
-        lv_obj_set_style_bg_color(b, C_CARD2, 0);
-    }
-    return pad;
-}
-
-/**
- * @brief Fills the PIN's dots: the first n in a colour, the rest empty.
- * @param[in] dots  the four dots
- * @param[in] n     how many are filled
- * @param[in] on    their colour
- */
-static void pin_dots(lv_obj_t *const *dots, int n, lv_color_t on)
-{
-    for (int i = 0; i < 4; i++) {
-        lv_obj_set_style_bg_color(dots[i], i < n ? on : C_CARD2, 0);
-    }
-}
-
-/**
- * @brief Makes the PIN's four dots, in a row.
- * @param[in] parent  where
- * @param[out] dots    gets them
- */
-static void pin_dots_make(lv_obj_t *parent, lv_obj_t **dots)
-{
-    lv_obj_t *row = lv_obj_create(parent);
-    lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, 4 * 22 + 3 * 18, 22);
-    for (int i = 0; i < 4; i++) {
-        dots[i] = lv_obj_create(row);
-        lv_obj_remove_style_all(dots[i]);
-        lv_obj_set_size(dots[i], 22, 22);
-        lv_obj_set_pos(dots[i], i * 40, 0);
-        lv_obj_set_style_radius(dots[i], LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_opa(dots[i], LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(dots[i], C_CARD2, 0);
-    }
-}
 
 /**
  * @brief Each second: the time and date, and the wait after too many wrong PINs.
@@ -247,113 +185,48 @@ void ui_lock_show(bool force)
     lk_timer = lv_timer_create(lock_tick, 1000, NULL);
 }
 
-/**
- * @brief Closes the PIN setup screen.
- * @param[in] done  a PIN was set (else: cancelled; opened from the dropdown, it goes back to the old mode)
- */
-static void pin_setup_close(bool done)
-{
-    if (ps_ovl) {
-        lv_obj_delete_async(ps_ovl);
-    }
-    ps_ovl = NULL;
-    if (!done && ps_from_dd && settings_lock_dd()) {
-        lv_dropdown_set_selected(settings_lock_dd(), store_lock_mode());
-    }
-    if (settings_pin_btn()) {
-        lv_obj_set_state(settings_pin_btn(), LV_STATE_DISABLED, store_lock_mode() != LOCK_PIN);
-    }
-}
-
-/**
- * @brief A key on the PIN setup screen's pad: the PIN typed twice, then set.
- * @param[in] e  the event (user data: the key)
- */
-static void pin_setup_key_cb(lv_event_t *e)
-{
-    pin_setup_t r = pin_setup_key((char)(intptr_t)lv_event_get_user_data(e));
-    pin_dots(ps_dots, pin_setup_len(), C_ACCENT);
-    switch (r) {
-    case PIN_SETUP_MORE:
-        break;
-    case PIN_SETUP_AGAIN:                           /* once more, to be sure */
-        lv_label_set_text(ps_hint, "Enter it again");
-        break;
-    case PIN_SETUP_MISMATCH:
-        pin_dots(ps_dots, 4, C_RED);
-        sfx_play(SFX_ERROR);
-        lv_label_set_text(ps_hint, "They didn't match: enter a new PIN");
-        break;
-    case PIN_SETUP_SET:
-        pin_setup_close(true);
-        sudoku_ui_notice("PIN set: the screen locks with it after the screen timeout.", 3000);
-        break;
-    }
-}
-
-/**
- * @brief The PIN setup screen's Cancel.
- * @param[in] e  the event
- */
-static void pin_setup_cancel_cb(lv_event_t *e)
-{
-    pin_setup_close(false);
-}
-
-/**
- * @brief Opens the PIN setup screen.
- * @param[in] from_dd  opened by choosing PIN in the dropdown
- */
-static void pin_setup_open(bool from_dd)
-{
-    if (ps_ovl) {
-        return;
-    }
-    ps_from_dd = from_dd;
-    pin_setup_begin();
-    ps_ovl = lv_obj_create(lv_layer_top());
-    lv_obj_remove_style_all(ps_ovl);
-    lv_obj_set_size(ps_ovl, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(ps_ovl, C_BG, 0);
-    lv_obj_set_style_bg_opa(ps_ovl, LV_OPA_COVER, 0);
-    lv_obj_set_clickable(ps_ovl, true);
-    lv_obj_t *t = make_label(ps_ovl, &lv_font_montserrat_28, C_TEXT);
-    lv_label_set_text(t, "Lock screen PIN");
-    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 40);
-    ps_hint = make_label(ps_ovl, &lv_font_montserrat_20, C_MUTED);
-    lv_label_set_text(ps_hint, "Enter a new 4-digit PIN");
-    lv_obj_align(ps_hint, LV_ALIGN_TOP_MID, 0, 100);
-    pin_dots_make(ps_ovl, ps_dots);
-    lv_obj_align(lv_obj_get_parent(ps_dots[0]), LV_ALIGN_TOP_MID, 0, 150);
-    lv_obj_t *pad = pin_pad(ps_ovl, pin_setup_key_cb);
-    lv_obj_align(pad, LV_ALIGN_TOP_MID, 0, 200);
-    lv_obj_t *c = make_btn(ps_ovl, 0, 0, 240, 56, "Cancel", &lv_font_montserrat_20, pin_setup_cancel_cb, NULL);
-    lv_obj_set_style_bg_color(c, C_CARD2, 0);
-    lv_obj_align(c, LV_ALIGN_BOTTOM_MID, 0, -30);
-}
-
-/**
- * @brief Settings' Lock screen dropdown: Off, Swipe, or PIN (a PIN set first).
- * @param[in] e  the event
- */
-void lock_dd_cb(lv_event_t *e)
-{
-    uint32_t sel = lv_dropdown_get_selected(settings_lock_dd());
-    if (sel == LOCK_PIN) {                          /* a PIN first */
-        pin_setup_open(true);
-        return;
-    }
-    store_set_lock_mode((uint8_t)sel);
-    lv_obj_set_state(settings_pin_btn(), LV_STATE_DISABLED, true);
-}
-
-/**
- * @brief Settings' Change PIN.
- * @param[in] e  the event
- */
-void pin_change_cb(lv_event_t *e)
-{
-    pin_setup_open(false);
-}
-
 /** @} */
+
+/* (documented in ui_internal.h) */
+void pin_dots(lv_obj_t *const *dots, int n, lv_color_t on)
+{
+    for (int i = 0; i < 4; i++) {
+        lv_obj_set_style_bg_color(dots[i], i < n ? on : C_CARD2, 0);
+    }
+}
+
+/* (documented in ui_internal.h) */
+void pin_dots_make(lv_obj_t *parent, lv_obj_t **dots)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, 4 * 22 + 3 * 18, 22);
+    for (int i = 0; i < 4; i++) {
+        dots[i] = lv_obj_create(row);
+        lv_obj_remove_style_all(dots[i]);
+        lv_obj_set_size(dots[i], 22, 22);
+        lv_obj_set_pos(dots[i], i * 40, 0);
+        lv_obj_set_style_radius(dots[i], LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(dots[i], LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(dots[i], C_CARD2, 0);
+    }
+}
+
+/* (documented in ui_internal.h) */
+lv_obj_t *pin_pad(lv_obj_t *parent, lv_event_cb_t cb)
+{
+    static const char KEYS[12] = {'1', '2', '3', '4', '5', '6', '7', '8', '9', ' ', '0', '<'};
+    lv_obj_t *pad = lv_obj_create(parent);
+    lv_obj_remove_style_all(pad);
+    lv_obj_set_size(pad, 3 * 110 + 2 * 12, 4 * 72 + 3 * 12);
+    for (int i = 0; i < 12; i++) {
+        if (KEYS[i] == ' ') {
+            continue;
+        }
+        char t[4] = {KEYS[i], 0};
+        lv_obj_t *b = make_btn(pad, (i % 3) * 122, (i / 3) * 84, 110, 72, KEYS[i] == '<' ? LV_SYMBOL_BACKSPACE : t,
+                               &lv_font_montserrat_28, cb, (void *)(intptr_t)KEYS[i]);
+        lv_obj_set_style_bg_color(b, C_CARD2, 0);
+    }
+    return pad;
+}

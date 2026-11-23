@@ -6,6 +6,7 @@
  *
  */
 #include "ui_wifi.h"
+#include "ui_wifi_part.h"
 #include "wifi_mgr.h"
 #include "ui_palette.h"
 #include <stdio.h>
@@ -31,29 +32,8 @@ static uint32_t s_shown_scan = UINT32_MAX;  /**< the scan shown (wifi_status_t.s
 static wifi_state_t s_shown_state = (wifi_state_t)-1;  /**< the state shown */
 static char s_shown_ssid[33];           /**< the network shown */
 
-/* the password dialog */
-static lv_obj_t *s_dlg;                         /**< the password dialog (hidden when not used) */
-static lv_obj_t *s_dlg_title;                   /**< its title: "Join <network>" */
-static lv_obj_t *s_ta;                          /**< the password */
-static lv_obj_t *s_eye;                         /**< show / hide it */
-static char s_dlg_ssid[33];             /**< the network the dialog joins */
 
 static char s_summary[48];              /**< wifi_ui_summary()'s text */
-
-/**
- * @brief A transparent full-width row.
- * @param[in] parent  where
- * @return it
- */
-static lv_obj_t *plain_row(lv_obj_t *parent)
-{
-    lv_obj_t *row = lv_obj_create(parent);
-    lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    return row;
-}
 
 /**
  * @brief A card (rounded, the card colour, a column).
@@ -77,54 +57,6 @@ static lv_obj_t *card(lv_obj_t *parent)
 }
 
 /**
- * @brief A rounded text button.
- * @param[in] parent  where
- * @param[in] txt  its text
- * @param[in] primary  in the accent colour
- * @param[in] cb  a tap
- * @return it
- */
-static lv_obj_t *pill_btn(lv_obj_t *parent, const char *txt, bool primary, lv_event_cb_t cb)
-{
-    lv_obj_t *b = lv_button_create(parent);
-    lv_obj_set_height(b, 56);
-    lv_obj_set_style_pad_hor(b, 26, 0);
-    lv_obj_set_style_radius(b, 28, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_bg_color(b, primary ? C_ACCENT : C_CARD2, 0);
-    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l = lv_label_create(b);
-    lv_label_set_text(l, txt);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(l, C_TEXT, 0);
-    lv_obj_center(l);
-    return b;
-}
-
-/**
- * @brief A round icon button.
- * @param[in] parent  where
- * @param[in] sym  its icon
- * @param[in] cb  a tap
- * @return it
- */
-static lv_obj_t *round_btn(lv_obj_t *parent, const char *sym, lv_event_cb_t cb)
-{
-    lv_obj_t *b = lv_button_create(parent);
-    lv_obj_set_size(b, 52, 52);
-    lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_bg_color(b, C_CARD2, 0);
-    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l = lv_label_create(b);
-    lv_label_set_text(l, sym);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(l, C_TEXT, 0);
-    lv_obj_center(l);
-    return b;
-}
-
-/**
  * @brief A signal's colour: strong green, fair the text's, weak muted.
  * @param[in] rssi  dBm
  * @return the colour
@@ -142,167 +74,6 @@ static lv_color_t signal_color(int rssi)
 static void set_hidden(lv_obj_t *o, bool hidden)
 {
     lv_obj_set_hidden(o, hidden);
-}
-
-/**
- * @brief Closes the password dialog (and clears the password).
- */
-static void dlg_close(void)
-{
-    if (s_dlg) {
-        lv_textarea_set_text(s_ta, "");             /* don't leave the password in RAM */
-        lv_obj_set_hidden(s_dlg, true);
-    }
-}
-
-/**
- * @brief Joins the dialog's network with the password typed (8 characters at least).
- */
-static void dlg_join(void)
-{
-    const char *pass = lv_textarea_get_text(s_ta);
-    if (strlen(pass) < 8) {                         /* WPA2/3 minimum */
-        lv_label_set_text_fmt(s_dlg_title, "Join %s\nPassword needs 8+ characters", s_dlg_ssid);
-        return;
-    }
-    wifi_mgr_connect(s_dlg_ssid, pass);
-    dlg_close();
-}
-
-/**
- * @brief The dialog's Cancel.
- * @param[in] e  the event
- */
-static void on_dlg_cancel(lv_event_t *e) { dlg_close(); }
-/**
- * @brief The dialog's Join.
- * @param[in] e  the event
- */
-static void on_dlg_join(lv_event_t *e)   { dlg_join(); }
-
-/**
- * @brief The keyboard: its Enter joins, its close cancels.
- * @param[in] e  the event
- */
-static void on_kb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_READY) {
-        dlg_join();
-    } else if (code == LV_EVENT_CANCEL) {
-        dlg_close();
-    }
-}
-
-/**
- * @brief Shows or hides the password.
- * @param[in] e  the event
- */
-static void on_eye(lv_event_t *e)
-{
-    bool hide = !lv_textarea_get_password_mode(s_ta);
-    lv_textarea_set_password_mode(s_ta, hide);
-    lv_label_set_text(lv_obj_get_child(s_eye, 0), hide ? LV_SYMBOL_EYE_OPEN : LV_SYMBOL_EYE_CLOSE);
-}
-
-/**
- * @brief Builds the password dialog (hidden) on the top layer.
- */
-static void build_dialog(void)
-{
-    /* On the top layer so the page's scrolling doesn't move it (the screen
-     * saver is on the system layer, above it). */
-    s_dlg = lv_obj_create(lv_layer_top());
-    lv_obj_remove_style_all(s_dlg);
-    lv_obj_set_size(s_dlg, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(s_dlg, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(s_dlg, LV_OPA_70, 0);
-    lv_obj_set_clickable(s_dlg, true);              /* block touches to the page */
-    lv_obj_move_background(s_dlg);
-
-    lv_obj_t *panel = lv_obj_create(s_dlg);
-    lv_obj_set_size(panel, LV_PCT(92), LV_SIZE_CONTENT);
-    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, 40);
-    lv_obj_set_style_bg_color(panel, C_CARD, 0);
-    lv_obj_set_style_border_width(panel, 0, 0);
-    lv_obj_set_style_radius(panel, 20, 0);
-    lv_obj_set_style_pad_all(panel, 22, 0);
-    lv_obj_set_style_pad_row(panel, 16, 0);
-    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_scrollable(panel, false);
-    lv_obj_set_style_text_color(panel, C_TEXT, 0);
-
-    s_dlg_title = lv_label_create(panel);
-    lv_obj_set_width(s_dlg_title, LV_PCT(100));
-    lv_label_set_long_mode(s_dlg_title, LV_LABEL_LONG_MODE_WRAP);
-    lv_obj_set_style_text_font(s_dlg_title, &lv_font_montserrat_24, 0);
-
-    lv_obj_t *row = plain_row(panel);
-    lv_obj_set_style_pad_column(row, 12, 0);
-    s_ta = lv_textarea_create(row);
-    lv_obj_set_flex_grow(s_ta, 1);
-    lv_textarea_set_one_line(s_ta, true);
-    lv_textarea_set_password_mode(s_ta, true);
-    lv_textarea_set_max_length(s_ta, 63);
-    lv_textarea_set_placeholder_text(s_ta, "Password");
-    lv_obj_set_style_text_font(s_ta, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(s_ta, C_TEXT, 0);
-    lv_obj_set_style_text_color(s_ta, C_MUTED, LV_PART_TEXTAREA_PLACEHOLDER);
-    lv_obj_set_style_bg_color(s_ta, C_BG, 0);
-    lv_obj_set_style_border_color(s_ta, C_CARD2, 0);
-    lv_obj_set_style_border_color(s_ta, C_ACCENT, LV_STATE_FOCUSED);
-    lv_obj_set_style_radius(s_ta, 12, 0);
-    lv_obj_set_style_pad_all(s_ta, 14, 0);
-    lv_obj_set_style_bg_color(s_ta, C_ACCENT, LV_PART_CURSOR | LV_STATE_FOCUSED);
-    lv_obj_set_style_border_color(s_ta, C_ACCENT, LV_PART_CURSOR | LV_STATE_FOCUSED);
-    s_eye = round_btn(row, LV_SYMBOL_EYE_OPEN, on_eye);
-    lv_obj_set_size(s_eye, 60, 60);
-
-    lv_obj_t *btns = plain_row(panel);
-    lv_obj_set_flex_align(btns, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(btns, 14, 0);
-    pill_btn(btns, "Cancel", false, on_dlg_cancel);
-    pill_btn(btns, "Join", true, on_dlg_join);
-
-    lv_obj_t *kb = lv_keyboard_create(s_dlg);
-    lv_obj_set_size(kb, LV_PCT(100), 330);
-    lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_keyboard_set_textarea(kb, s_ta);
-    lv_obj_set_style_bg_color(kb, C_BG, 0);
-    lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(kb, 0, 0);
-    lv_obj_set_style_pad_all(kb, 8, 0);
-    lv_obj_set_style_pad_bottom(kb, 30, 0);         /* clear of the bezel */
-    lv_obj_set_style_pad_gap(kb, 8, 0);
-    lv_obj_set_style_bg_color(kb, C_CARD2, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(kb, C_CARD, LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(kb, C_ACCENT, LV_PART_ITEMS | LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(kb, C_TEXT, LV_PART_ITEMS);
-    /* control keys (backspace, ABC/abc, OK, arrows) are CHECKED buttons, and the light
-     * theme's checked-key style sets near-black text: override it for that state too */
-    lv_obj_set_style_text_color(kb, C_TEXT, LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_text_font(kb, &lv_font_montserrat_22, LV_PART_ITEMS);
-    lv_obj_set_style_radius(kb, 10, LV_PART_ITEMS);
-    lv_obj_set_style_shadow_width(kb, 0, LV_PART_ITEMS);
-    lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
-    lv_obj_add_event_cb(kb, on_kb, LV_EVENT_ALL, NULL);
-
-    lv_obj_set_hidden(s_dlg, true);
-}
-
-/**
- * @brief Opens the password dialog for a network.
- * @param[in] ssid  the network
- */
-static void dlg_open(const char *ssid)
-{
-    strlcpy(s_dlg_ssid, ssid, sizeof(s_dlg_ssid));
-    lv_label_set_text_fmt(s_dlg_title, "Join %s", ssid);
-    lv_textarea_set_text(s_ta, "");
-    lv_textarea_set_password_mode(s_ta, true);
-    lv_label_set_text(lv_obj_get_child(s_eye, 0), LV_SYMBOL_EYE_OPEN);
-    lv_obj_add_state(s_ta, LV_STATE_FOCUSED);
-    lv_obj_set_hidden(s_dlg, false);
 }
 
 /**
@@ -344,7 +115,7 @@ static void on_ap(lv_event_t *e)
     if (!ap->secure || strcmp(ap->ssid, st.saved_ssid) == 0) {
         wifi_mgr_connect(ap->ssid, "");             /* open, or remembered password */
     } else {
-        dlg_open(ap->ssid);
+        wifi_dlg_open(ap->ssid);
     }
 }
 
@@ -498,11 +269,7 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
         lv_timer_delete(s_timer);
         s_timer = NULL;
     }
-    if (s_dlg) {
-        lv_textarea_set_text(s_ta, "");
-        lv_obj_delete(s_dlg);
-        s_dlg = NULL;
-    }
+    wifi_dlg_drop();
     s_shown_scan = UINT32_MAX;
     s_shown_state = (wifi_state_t)-1;
 
@@ -527,7 +294,7 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_style_text_font(h, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(h, C_TEXT, 0);
     lv_obj_set_pos(h, 180, 20);
-    s_refresh = round_btn(scr, LV_SYMBOL_REFRESH, on_refresh);
+    s_refresh = wifi_round_btn(scr, LV_SYMBOL_REFRESH, on_refresh);
     lv_obj_align(s_refresh, LV_ALIGN_TOP_RIGHT, -12, 10);
 
     /* scrolling body */
@@ -544,7 +311,7 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
 
     /* on/off + current connection */
     lv_obj_t *c = card(s_body);
-    lv_obj_t *row = plain_row(c);
+    lv_obj_t *row = wifi_plain_row(c);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_t *l = lv_label_create(row);
     lv_label_set_text(l, "Wi-Fi");
@@ -554,7 +321,7 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_style_bg_color(s_switch, C_ACCENT, LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(s_switch, on_switch, LV_EVENT_VALUE_CHANGED, NULL);
 
-    row = plain_row(c);
+    row = wifi_plain_row(c);
     lv_obj_set_style_pad_column(row, 16, 0);
     lv_obj_set_style_pad_top(row, 6, 0);
     s_state_icon = lv_label_create(row);
@@ -574,10 +341,10 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_width(s_state_sub, LV_PCT(100));
     lv_label_set_long_mode(s_state_sub, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_style_text_font(s_state_sub, &lv_font_montserrat_16, 0);
-    s_forget = pill_btn(row, "Forget", false, on_forget);
+    s_forget = wifi_pill_btn(row, "Forget", false, on_forget);
 
     /* nearby networks */
-    s_list_hdr = plain_row(s_body);
+    s_list_hdr = wifi_plain_row(s_body);
     lv_obj_set_flex_align(s_list_hdr, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(s_list_hdr, 8, 0);
     lv_obj_set_style_margin_top(s_list_hdr, 6, 0);
@@ -594,7 +361,7 @@ void wifi_ui_create(lv_obj_t *scr, lv_event_cb_t back_cb)
     lv_obj_set_style_pad_all(s_list, 8, 0);
     lv_obj_set_style_pad_row(s_list, 0, 0);
 
-    build_dialog();
+    wifi_dlg_build();
     s_timer = lv_timer_create(tick, 400, NULL);
     lv_timer_pause(s_timer);
 }
@@ -613,7 +380,7 @@ void wifi_ui_set_shown(bool shown)
         tick(NULL);
     } else {
         lv_timer_pause(s_timer);
-        dlg_close();
+        wifi_dlg_close();
     }
 }
 
@@ -641,4 +408,50 @@ const char *wifi_ui_summary(void)
     default:
         return "Not connected";
     }
+}
+
+/* (documented in ui_wifi_part.h) */
+lv_obj_t *wifi_pill_btn(lv_obj_t *parent, const char *txt, bool primary, lv_event_cb_t cb)
+{
+    lv_obj_t *b = lv_button_create(parent);
+    lv_obj_set_height(b, 56);
+    lv_obj_set_style_pad_hor(b, 26, 0);
+    lv_obj_set_style_radius(b, 28, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_bg_color(b, primary ? C_ACCENT : C_CARD2, 0);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, txt);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(l, C_TEXT, 0);
+    lv_obj_center(l);
+    return b;
+}
+
+/* (documented in ui_wifi_part.h) */
+lv_obj_t *wifi_plain_row(lv_obj_t *parent)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    return row;
+}
+
+/* (documented in ui_wifi_part.h) */
+lv_obj_t *wifi_round_btn(lv_obj_t *parent, const char *sym, lv_event_cb_t cb)
+{
+    lv_obj_t *b = lv_button_create(parent);
+    lv_obj_set_size(b, 52, 52);
+    lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_bg_color(b, C_CARD2, 0);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, sym);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(l, C_TEXT, 0);
+    lv_obj_center(l);
+    return b;
 }

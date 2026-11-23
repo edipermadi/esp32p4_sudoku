@@ -153,6 +153,37 @@ void settings_tab_network(lv_obj_t *pane)
     lv_obj_add_event_cb(lv_obj_get_screen(pane), st_close_lists_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 }
 
+/* ------------------------------------------------------------- the network's name, hidden or shown */
+static bool st_wifi_reveal;                         /**< name shown; hidden again each time Settings opens */
+
+/* (documented in ui_internal.h) */
+void st_wifi_update(void)
+{
+    wifi_status_t ws;
+    wifi_mgr_get_status(&ws);
+    bool connected = ws.state == WIFI_ST_CONNECTED;
+    const char *w = connected && !st_wifi_reveal ? "Connected  ******" : wifi_ui_summary();
+    if (strcmp(lv_label_get_text(settings_wifi_lbl()), w) != 0) {
+        lv_label_set_text(settings_wifi_lbl(), w);
+    }
+    lv_obj_set_hidden(settings_wifi_eye(), !connected);
+    lv_label_set_text(lv_obj_get_child(settings_wifi_eye(), 0), st_wifi_reveal ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
+}
+
+/* (documented in ui_internal.h) */
+void st_wifi_eye_cb(lv_event_t *e)
+{
+    st_wifi_reveal = !st_wifi_reveal;
+    st_wifi_update();
+}
+
+/* (documented in ui_internal.h) */
+void st_wifi_hide(void)
+{
+    st_wifi_reveal = false;
+    st_wifi_update();
+}
+
 /* ---- accessors */
 /** @return the Wi-Fi row's label (the network's name) */
 lv_obj_t *settings_wifi_lbl(void) { return st_wifi_lbl; }

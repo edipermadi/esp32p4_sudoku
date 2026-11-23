@@ -1596,3 +1596,131 @@ void stats_menu_cb(lv_event_t *e);
 void chart_build(int px, int pw);
 /** @brief Does Statistics show the chart rather than the table (ui_stats.c)? @return true if so */
 bool is_stats_chart_mode(void);
+
+/* ---- ui_game_board.c */
+/**
+ * @brief How many of cell i's units (row, column, box, diagonals) were just completed.
+ * @param[in] i  the cell
+ * @return how many
+ */
+int units_completed_by(int i);
+/**
+ * @brief Draws a cell's pencil marks.
+ * @param[in] e  the draw event (user data: the cell)
+ */
+void cell_draw_cb(lv_event_t *e);
+/**
+ * @brief The digits on the board.
+ * @return how many
+ */
+int filled_count(void);
+/**
+ * @brief Cells a and b share a unit of the puzzle being played (row, column, box, diagonal).
+ * @param[in] a  a cell
+ * @param[in] b  another
+ * @return true if so
+ */
+bool is_peer(int a, int b);
+
+/* ---- ui_game_controls.c */
+/**
+ * @brief the ⋮ menu of the second row: the variant's rules, Share (a QR code), Star (Puzzles > Starred), Save
+ * (into a collection: Puzzles > Saved), Auto notes, Restart
+ * @param[in] e  the event
+ */
+void game_menu_cb(lv_event_t *e);
+/**
+ * @brief The timer: pauses or resumes.
+ * @param[in] e  the event
+ */
+void pause_cb(lv_event_t *e);
+/** @brief The game screen: the best time label (ui_game.c). @return it */
+lv_obj_t *game_best_lbl(void);
+/** @brief The game screen: the ⋮ menu's Save applies (a puzzle made on the board) (ui_game.c). @return it */
+bool is_game_saveable(void);
+/** @brief The game screen: the puzzle can be starred (ui_game.c). @return it */
+bool is_game_starable(void);
+/** @brief The game screen: the puzzle is in a saved collection (ui_game.c). @return it */
+bool is_game_in_saved(void);
+/** @brief The game screen: 81 flags: the digit breaks a rule (compute_conflicts()) (ui_game.c). @return it */
+const bool *game_conflict_marks(void);
+/** @brief The game screen: the hints count on the Fill button (ui_game.c). @return it */
+lv_obj_t *game_hint_cnt_lbl(void);
+/** @brief The game screen: each key's count left (ui_game.c). @return it */
+lv_obj_t *const *game_pad_cnt(void);
+/** @brief The game screen: Redo (ui_game.c). @return it */
+lv_obj_t *game_redo_btn(void);
+/** @brief The game screen: the status line (ui_game.c). @return it */
+lv_obj_t *game_status_lbl(void);
+/** @brief The game screen: the clock (ui_game.c). @return it */
+lv_obj_t *game_timer_lbl(void);
+/** @brief The game screen: the clock's icon (ui_game.c). @return it */
+lv_obj_t *game_timer_icon(void);
+/** @brief The game screen: the title (ui_game.c). @return it */
+lv_obj_t *game_title_lbl(void);
+/** @brief The game screen: the star after the title (ui_game.c). @return it */
+lv_obj_t *game_title_star(void);
+/**
+ * @brief What the ⋮ menu's Star and Save may do with the puzzle played (update_header(); ui_game.c).
+ * @param[in] can_star  it can be starred
+ * @param[in] can_save  it can go in a saved collection
+ * @param[in] saved     it is in one
+ */
+void game_set_save_state(bool can_star, bool can_save, bool saved);
+/* ---- ui_hints.c */
+/**
+ * @brief The hint card's button: More (the reason), Place it, or OK.
+ * @param[in] e  the event
+ */
+void hint_act_cb(lv_event_t *e);
+/**
+ * @brief Closes the hint card.
+ * @param[in] e  the event
+ */
+void hint_close_cb(lv_event_t *e);
+/**
+ * @brief Hint: where to look; again: why, then the digit.
+ * @param[in] e  the event
+ */
+void hint_cb(lv_event_t *e);
+/**
+ * @brief New puzzle: the dialog (a variant, then a level; ui_gen_dialog.c).
+ * @param[in] e  the event
+ */
+void new_puzzle_cb(lv_event_t *e);
+
+/* ---- ui_pin_setup.c */
+/**
+ * @brief Fills the PIN's dots: the first n in a colour, the rest empty.
+ * @param[in] dots  the four dots
+ * @param[in] n     how many are filled
+ * @param[in] on    their colour
+ */
+void pin_dots(lv_obj_t *const *dots, int n, lv_color_t on);
+/**
+ * @brief Makes the PIN's four dots, in a row.
+ * @param[in] parent  where
+ * @param[out] dots    gets them
+ */
+void pin_dots_make(lv_obj_t *parent, lv_obj_t **dots);
+/**
+ * @brief A 3 x 4 keypad: 1-9, (blank), 0, backspace.
+ * @param[in] parent  where
+ * @param[in] cb      a key (user data: '0'..'9', '<')
+ * @return it
+ */
+lv_obj_t *pin_pad(lv_obj_t *parent, lv_event_cb_t cb);
+/** @brief The "puzzles solved" line tapped: this week against last (ui_home_week.c). @param[in] e  the event */
+void week_cb(lv_event_t *e);
+/**
+ * @brief Takes this week and last from sudoku.db, if they came (ui_home_week.c).
+ * @param[in] clock_valid  the clock is set (without it the week means nothing)
+ * @return true if they came (redraw the line)
+ */
+bool home_week_poll(bool clock_valid);
+/** @brief This week and last (ui_home_week.c). @return them, NULL until known with the clock set */
+const stats_weeksum_t *home_week(void);
+/** @brief Hides the network's name again on Settings' Wi-Fi row (ui_settings_network.c). */
+void st_wifi_hide(void);
+/** @brief Settings' rows kept current while it is shown: the network, the card, the USB drive (each second; ui_settings.c). */
+void settings_tick(void);

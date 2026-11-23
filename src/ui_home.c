@@ -1,14 +1,12 @@
 /**
  * @file ui_home.c
- * @brief Home: the week, the clock, the menu (Continue's button: ui_continue.c).
+ * @brief Home: the clock, the menu, the solved line (its week: ui_home_week.c; Continue's button: ui_continue.c).
  */
 #include "ui_internal.h"
 
 /* this file's own functions, in any order */
 static void daily_btn_update(void);
 static void home_total_text(void);
-static void week_row(lv_obj_t *parent, const char *name, const char *a, const char *b, bool head);
-static void week_cb(lv_event_t *e);
 static void puzzles_cb(lv_event_t *e);
 static void settings_cb(lv_event_t *e);
 static void stats_cb(lv_event_t *e);
@@ -29,13 +27,7 @@ static lv_obj_t *h_daily_sub;             /**< Daily puzzle's line */
 static lv_obj_t *h_daily;                 /**< Daily puzzle */
 static lv_obj_t *h_player_title;          /**< the Players button's title */
 static lv_obj_t *h_player_avatar;         /**< its avatar (else the icon) */
-static bool      st_wifi_reveal;            /**< name shown; hidden again each time Settings opens */
 
-/* ------------------------------------------------------------- the week (Home) */
-/** @brief The "puzzles solved" line also says how this week is going; a tap compares it
- * with last week (stats_db_query_weeksum: needs the clock, so only once it's set). */
-static stats_weeksum_t h_week;
-static bool h_week_ok;                  /**< h_week holds this week and last (once the clock is set) */
 static unsigned h_total_n;              /**< puzzles solved */
 
 /**
@@ -45,109 +37,16 @@ static void home_total_text(void)
 {
     char t[16], line[128];
     int len = snprintf(line, sizeof(line), "%u of %u puzzles solved", h_total_n, (unsigned)PUZZLE_COUNT);
-    if (h_week_ok) {
-        len += snprintf(line + len, sizeof(line) - len, "   -   this week: %d", h_week.n[0]);
-        if (h_week.n[0]) {
-            fmt_time(t, sizeof(t), h_week.best[0]);
+    const stats_weeksum_t *w = home_week();
+    if (w) {
+        len += snprintf(line + len, sizeof(line) - len, "   -   this week: %d", w->n[0]);
+        if (w->n[0]) {
+            fmt_time(t, sizeof(t), w->best[0]);
             len += snprintf(line + len, sizeof(line) - len, ", best %s", t);
         }
         snprintf(line + len, sizeof(line) - len, "  " LV_SYMBOL_RIGHT);
     }
     lv_label_set_text(h_total, line);
-}
-
-/**
- * @brief A row of the week's comparison.
- * @param[in] parent  where
- * @param[in] name  the row's name
- * @param[in] a  this week
- * @param[in] b  last week
- * @param[in] head  the header row
- */
-static void week_row(lv_obj_t *parent, const char *name, const char *a, const char *b, bool head)
-{
-    lv_obj_t *r = lv_obj_create(parent);
-    lv_obj_remove_style_all(r);
-    lv_obj_set_size(r, LV_PCT(100), 34);
-    const lv_font_t *f = &lv_font_montserrat_18;
-    lv_obj_t *l = make_label(r, f, head ? C_MUTED : C_TEXT);
-    lv_label_set_text(l, name);
-    lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_t *x = make_label(r, f, head ? C_MUTED : C_TEXT);
-    lv_label_set_text(x, a);
-    lv_obj_align(x, LV_ALIGN_RIGHT_MID, -150, 0);
-    lv_obj_t *y = make_label(r, f, C_MUTED);
-    lv_label_set_text(y, b);
-    lv_obj_align(y, LV_ALIGN_RIGHT_MID, 0, 0);
-}
-
-/**
- * @brief The solved line tapped: this week against last.
- * @param[in] e  the event
- */
-static void week_cb(lv_event_t *e)
-{
-    if (!h_week_ok) {
-        return;
-    }
-    const stats_weeksum_t *w = &h_week;
-    lv_obj_t *m = make_msgbox(SYMBOL_CALENDAR "  This week", NULL);
-    lv_obj_set_width(m, 600);
-    lv_obj_set_style_text_font(lv_msgbox_get_header(m), &font_icons_20, 0);
-    lv_obj_t *c = lv_msgbox_get_content(m);
-    lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
-    char a[24], b[24];
-    week_row(c, "", "This week", "Last week", true);
-    snprintf(a, sizeof(a), "%d", w->n[0]);
-    snprintf(b, sizeof(b), "%d", w->n[1]);
-    week_row(c, "Solved", a, b, false);
-    for (int k = 0; k < 2; k++) {
-        char *o = k ? b : a;
-        if (w->n[k]) {
-            fmt_time(o, 24, w->best[k]);
-        } else {
-            snprintf(o, 24, "-");
-        }
-    }
-    week_row(c, "Fastest", a, b, false);
-    for (int k = 0; k < 2; k++) {
-        char *o = k ? b : a;
-        if (w->n[k]) {
-            fmt_time(o, 24, w->avg[k]);
-        } else {
-            snprintf(o, 24, "-");
-        }
-    }
-    week_row(c, "Average time", a, b, false);
-    for (int k = 0; k < 2; k++) {
-        char *o = k ? b : a;
-        if (w->n[k]) {
-            snprintf(o, 24, "%u.%u", w->mist10[k] / 10, w->mist10[k] % 10);
-        } else {
-            snprintf(o, 24, "-");
-        }
-    }
-    week_row(c, "Mistakes per puzzle", a, b, false);
-    snprintf(a, sizeof(a), "%lu", (unsigned long)w->hints[0]);
-    snprintf(b, sizeof(b), "%lu", (unsigned long)w->hints[1]);
-    week_row(c, "Hints", a, b, false);
-    char verdict[128] = "";
-    if (w->n[0] && w->n[1]) {
-        int dm = (int)w->mist10[1] - (int)w->mist10[0];
-        int dt = (int)w->avg[1] - (int)w->avg[0];
-        char t[16];
-        fmt_time(t, sizeof(t), (uint32_t)(dt < 0 ? -dt : dt));
-        snprintf(verdict, sizeof(verdict), "%s%d.%d %s mistakes per puzzle, and %s %s on average than last week.",
-                 "", (dm < 0 ? -dm : dm) / 10, (dm < 0 ? -dm : dm) % 10, dm >= 0 ? "fewer" : "more",
-                 t, dt >= 0 ? "faster" : "slower");
-    } else if (w->n[0]) {
-        snprintf(verdict, sizeof(verdict), "Nothing solved last week to compare with.");
-    } else {
-        snprintf(verdict, sizeof(verdict), "Nothing solved yet this week: the week starts on Monday.");
-    }
-    lv_obj_t *v = make_wrap_text(c, &lv_font_montserrat_18, C_ACCENT, verdict);
-    lv_obj_set_style_margin_top(v, 10, 0);
-    msgbox_button(m, "Close", mbox_close_cb, false);
 }
 
 /* (documented in ui_internal.h) */
@@ -221,35 +120,13 @@ static void puzzles_cb(lv_event_t *e)
     lv_screen_load(screen_list());
 }
 
-/* (documented in ui_internal.h) */
-void st_wifi_update(void)
-{
-    wifi_status_t ws;
-    wifi_mgr_get_status(&ws);
-    bool connected = ws.state == WIFI_ST_CONNECTED;
-    const char *w = connected && !st_wifi_reveal ? "Connected  ******" : wifi_ui_summary();
-    if (strcmp(lv_label_get_text(settings_wifi_lbl()), w) != 0) {
-        lv_label_set_text(settings_wifi_lbl(), w);
-    }
-    lv_obj_set_hidden(settings_wifi_eye(), !connected);
-    lv_label_set_text(lv_obj_get_child(settings_wifi_eye(), 0), st_wifi_reveal ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
-}
-
-/* (documented in ui_internal.h) */
-void st_wifi_eye_cb(lv_event_t *e)
-{
-    st_wifi_reveal = !st_wifi_reveal;
-    st_wifi_update();
-}
-
 /**
  * @brief Home > Settings (the Network tab, the network's name hidden).
  * @param[in] e  the event
  */
 static void settings_cb(lv_event_t *e)
 {
-    st_wifi_reveal = false;                         /* the network's name hidden again */
-    st_wifi_update();
+    st_wifi_hide();                                 /* the network's name hidden again */
     st_select_tab(0);                               /* Network */
     lv_screen_load(screen_settings());
 }
@@ -267,13 +144,7 @@ void clock_cb(lv_timer_t *t)
     static char last_clock[8], last_date[64];
     lv_obj_t *act = lv_screen_active();
     if (act == screen_settings()) {
-        st_wifi_update();
-        char sd[64];
-        stats_db_status(sd, sizeof(sd));
-        if (strcmp(lv_label_get_text(settings_sd_hint()), sd) != 0) {
-            lv_label_set_text(settings_sd_hint(), sd);
-        }
-        usb_btn_update();
+        settings_tick();                            /* (ui_settings.c) */
         return;
     }
     if (act != screen_home()) {
@@ -299,8 +170,7 @@ void clock_cb(lv_timer_t *t)
             stats_db_query_weeksum();    /* the clock is set, or a new day */
         }
     }
-    if (stats_db_take_weeksum(&h_week)) {
-        h_week_ok = valid;
+    if (home_week_poll(valid)) {                    /* (ui_home_week.c) */
         home_total_text();
     }
     if (valid) {

@@ -394,6 +394,27 @@ void build_list(void)
     /* (the puzzles' source, opensudoku.gitlab.io, is credited on Home) */
 }
 
+/* ------------------------------------------------------------- the ⋮ menu */
+/* (documented in ui_internal.h) */
+void new_menu_cb(lv_event_t *e)
+{
+    bool can_export, can_delete;
+    list_coll_actions(&can_export, &can_delete);
+    const ctx_item_t ITEMS[] = {
+        {LV_SYMBOL_PLUS, "New puzzle", new_puzzle_cb, false, false},
+        {LV_SYMBOL_KEYBOARD, "Enter puzzle", enter_cb, false, false},      /* type one in from a book */
+        {LV_SYMBOL_EYE_OPEN, "Learn", learn_cb, false, false},             /* practise a technique */
+        {
+            is_puzzles_starred() ? LV_SYMBOL_LIST : SYMBOL_STAR, is_puzzles_starred() ? "All puzzles" : "Starred puzzles",
+            list_star_cb, false, false
+        },                                      /* the starred ones in the right pane, or back */
+        /* the collection shown: dimmed where they don't apply (Built-in, Starred; Export: saved ones only) */
+        {LV_SYMBOL_UPLOAD, "Export collection", list_export_cb, !can_export, false},
+        {LV_SYMBOL_TRASH, "Delete collection", list_del_cb, !can_delete, true},
+    };
+    ctx_menu_toggle(list_new_btn(), ITEMS, (int)(sizeof(ITEMS) / sizeof(ITEMS[0])));
+}
+
 /* ---- accessors: the other UI files reach this file's state through these */
 /** @brief The title row's ⋮ menu button (its menu opens under it). @return it */
 lv_obj_t *list_new_btn(void) { return l_new_btn; }
