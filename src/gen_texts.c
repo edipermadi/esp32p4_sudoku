@@ -173,6 +173,7 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     cages[0] = marks[0] = thermos[0] = 0;
     switch (g->variant) {
     case VAR_KILLER:
+    case VAR_SUMLESS:
         sudoku_cages_text(g, cages, cages_len);
         break;
     case VAR_QUAD:
@@ -710,7 +711,7 @@ bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out)
         }
         char *end;
         long sum = strtol(p, &end, 10);
-        if (end == p || *end != ':' || sum < 1 || sum > 45) {
+        if (end == p || *end != ':' || sum < 0 || sum > 45) {     /* (0: Sumless Killer's) */
             return false;
         }
         p = end + 1;

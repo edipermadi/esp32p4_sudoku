@@ -198,7 +198,7 @@ void cell_draw_cb(lv_event_t *e)
     const bool big = is_store_big_digits();            /* (Digit size: Large) */
     d.font = size >= 80 ? (big ? &lv_font_montserrat_24 : &lv_font_montserrat_22)
              : (big ? &lv_font_montserrat_18 : &lv_font_montserrat_16);
-    if (game_geo()->ncages) {                            /* Killer: smaller, below the cage sum in the corner */
+    if (game_geo()->ncages && game_geo()->cage_sum[0]) {   /* Killer: smaller, below the cage sum in the corner */
         d.font = &lv_font_montserrat_12;
         y0 = 13;
         vpitch = (size - 15) / 3;

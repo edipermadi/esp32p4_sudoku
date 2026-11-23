@@ -838,7 +838,8 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
  * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey
  * ring (the circle) and a thin shaft from its edge with an arrowhead at the end; LINE_RENBAN a
  * wide purple band; LINE_WHISPER a narrow green line, LINE_DUTCH an amber one, LINE_PARITY a red one,
- * LINE_NABNER a brown one;
+ * LINE_NABNER a brown one; LINE_BETWEEN a thin grey line between two rings, LINE_DARROW the same in blue,
+ * LINE_LOCKOUT a thin grey one between two diamonds;
  * LINE_SLOW as LINE_THERMO. Also the rules card's picture.
  * @param[in] layer  where
  * @param[in] kind  LINE_*

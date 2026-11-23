@@ -127,6 +127,65 @@ static __attribute__((noinline)) uint16_t group_line_allow(const sudoku_geom_t *
     return ok;
 }
 
+/**
+ * @brief Lockout Lines, Double Arrow: the digits the cell at a place of a line may hold (gen_line_allow()'s
+ * cases, kept apart like group_line_allow())
+ * @param[in] G     the board
+ * @param[in] t     the line
+ * @param[in] p     the place on it
+ * @param[in] v     the digits (0: empty)
+ * @param[in] cand  the candidates of the empty ones, or NULL
+ * @return a candidate mask
+ */
+static __attribute__((noinline)) uint16_t ends_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v,
+        const uint16_t *cand)
+{
+    const int n = G->thermo_n[t];
+    const uint8_t *cell = G->thermo_cell[t];
+    const uint16_t ma = LMASK(cell[0]), mb = LMASK(cell[n - 1]);
+    if (!ma || !mb) {
+        return 0;
+    }
+    uint16_t ok = 0;
+    if (G->line_kind == LINE_LOCKOUT) {             /* diamonds 4+ apart, every digit between outside their range */
+        for (int a = 1; a <= 9; a++) {
+            for (int b = 1; b <= 9; b++) {
+                int lo = a < b ? a : b, hi = a < b ? b : a;
+                if (!(ma >> a & 1) || !(mb >> b & 1) || hi - lo < 4) {
+                    continue;
+                }
+                const uint16_t out = (uint16_t)(RANGE(1, lo - 1) | RANGE(hi + 1, 9));
+                bool fits = true;
+                for (int k = 1; k < n - 1 && fits; k++) {
+                    fits = k == p || (LMASK(cell[k]) & out) != 0;
+                }
+                if (fits) {
+                    ok |= p == 0 ? (uint16_t)(1u << a) : p == n - 1 ? (uint16_t)(1u << b) : out;
+                }
+            }
+        }
+        return ok;
+    }
+    /* Double Arrow: the two circles add up to the cells between them */
+    int smin = 0, smax = 0;                         /* the cells between, the place asked about left out */
+    for (int k = 1; k < n - 1; k++) {
+        if (k == p) {
+            continue;
+        }
+        uint16_t m = LMASK(cell[k]);
+        if (!m) {
+            return 0;
+        }
+        smin += LO(m);
+        smax += HI(m);
+    }
+    if (p == 0 || p == n - 1) {
+        const uint16_t mo = p ? ma : mb;            /* the other circle */
+        return RANGE(smin - HI(mo), smax - LO(mo));
+    }
+    return RANGE(LO(ma) + LO(mb) - smax, HI(ma) + HI(mb) - smin);
+}
+
 /* (documented in gen_internal.h) */
 uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, const uint16_t *cand)
 {
@@ -352,6 +411,10 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
     case LINE_ENTROPIC:
     case LINE_MODULAR:                              /* any three in a row: one digit of each group */
         free &= group_line_allow(G, t, p, v, cand);
+        break;
+    case LINE_LOCKOUT:                              /* the ends: diamonds (4+ apart), or circles (Double Arrow) */
+    case LINE_DARROW:
+        free &= ends_line_allow(G, t, p, v, cand);
         break;
     case LINE_ARROW: {                              /* the circle (place 0) is the shaft's sum */
         int smin = 0, smax = 0;                     /* the shaft's sum, the place asked about left out */
@@ -1040,6 +1103,10 @@ static uint16_t grid_free(const grid_t *g, int i)
     int c = (rules & R_CAGE) ? G->cage_of[i] : CAGE_NONE;
     if (c != CAGE_NONE && free) {                    /* Killer: what the cage's sum still allows */
         free &= (uint16_t)~g->cage_used[c];
+        if (!G->cage_sum[c]) {
+            WHY(FIT_CAGE);
+            return free;                            /* (Sumless Killer: no repeat, and no sum) */
+        }
         int left = g->cage_left[c], others = g->cage_empty[c] - 1;
         uint16_t ok = 0;
         for (int d = 1; d <= 9; d++) {

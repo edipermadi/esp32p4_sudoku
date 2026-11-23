@@ -72,6 +72,9 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {29, 80, 202, 799},     /* Nabner (2026-11-23) */
     {26, 382, 1147, 1081},  /* Numbered Rooms */
     {25, 154, 548, 822},    /* Sum Skyscrapers */
+    {16, 80, 198, 2020},    /* Lockout Lines (2026-11-23) */
+    {49, 395, 292, 119},    /* Sumless Killer */
+    {11, 78, 218, 1172},    /* Double Arrow */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -148,7 +151,7 @@ static void gen_poll_cb(lv_timer_t *t)
     gen_bar = NULL;                                 /* (went with the box) */
     uint16_t id;
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
-    const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ? gen_cages : NULL;
+    const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_SUMLESS || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = is_stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,

@@ -115,6 +115,13 @@ static void why(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, char 
             return;
         }
     }
+    for (int i = 0; G->variant == VAR_SUMLESS && G->cage_of[c] != CAGE_NONE && i < G->cage_n[G->cage_of[c]]; i++) {
+        int o = G->cage_cell[G->cage_of[c]][i];     /* Sumless Killer: a cage-mate in another row, column and box */
+        if (o != c && v[o] == d) {
+            sprintf(b, "r%dc%d is %d (in the same cage)", o / 9 + 1, o % 9 + 1, d);
+            return;
+        }
+    }
     if ((G->parity[c] == PARITY_EVEN || G->parity[c] == PARITY_ODD) && !(G->allow[c] >> d & 1)) {
         sprintf(b, "the cell is %s", G->parity[c] == PARITY_EVEN ? "even" : "odd");
         return;
@@ -144,6 +151,13 @@ static int blocker(const sudoku_geom_t *G, const uint8_t v[81], int c, int d, ch
         if (v[o] == d) {
             strcpy(via, G->variant == VAR_KNIGHT ? "a knight's move" : G->variant == VAR_ARGYLE ? "an argyle line"
                    : "a touching cell");
+            return o;
+        }
+    }
+    for (int i = 0; G->variant == VAR_SUMLESS && G->cage_of[c] != CAGE_NONE && i < G->cage_n[G->cage_of[c]]; i++) {
+        int o = G->cage_cell[G->cage_of[c]][i];
+        if (o != c && v[o] == d) {
+            strcpy(via, "the same cage");
             return o;
         }
     }
@@ -428,6 +442,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         regions[81] = 0;
         break;
     case VAR_KILLER:
+    case VAR_SUMLESS:
         sudoku_cages_text(g, cages, len);
         break;
     case VAR_QUAD:
@@ -482,6 +497,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_PARITY:
     case VAR_SLOW:
     case VAR_NABNER:
+    case VAR_LOCKOUT:
+    case VAR_DARROW:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:

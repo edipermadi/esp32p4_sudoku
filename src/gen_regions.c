@@ -187,3 +187,33 @@ bool gen_killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudok
     }
     return gen_geom_killer(cage_of, sums, m, out);
 }
+
+/* (documented in gen_internal.h) */
+bool gen_sumless_cages(const uint8_t full[81], uint32_t *rng, sudoku_geom_t *out)
+{
+    if (!gen_killer_cages(full, 4, rng, out)) {
+        return false;
+    }
+    uint8_t cage_of[81], sums[CAGES_MAX] = {0}, map[CAGES_MAX];
+    memset(map, CAGE_NONE, sizeof(map));
+    int m = 0;
+    for (int c = 0; c < 81; c++) {
+        cage_of[c] = CAGE_NONE;
+        const int k = out->cage_of[c], n = out->cage_n[k];
+        bool row = true, col = true, box = true;    /* in one row, column or box: the cage says nothing more */
+        for (int i = 1; i < n; i++) {
+            int a = out->cage_cell[k][0], b = out->cage_cell[k][i];
+            row &= a / 9 == b / 9;
+            col &= a % 9 == b % 9;
+            box &= out->region[a] == out->region[b];
+        }
+        if (n < 2 || row || col || box) {
+            continue;
+        }
+        if (map[k] == CAGE_NONE) {
+            map[k] = (uint8_t)m++;
+        }
+        cage_of[c] = map[k];
+    }
+    return m >= 4 && gen_geom_killer(cage_of, sums, m, out);
+}

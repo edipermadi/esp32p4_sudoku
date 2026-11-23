@@ -64,9 +64,12 @@ static const learn_lesson_t LESSONS[] = {
     {"Dutch Whispers", "Neighbours on an amber line are 4 or more apart: a 5 only between a 1 and a 9.", VAR_DUTCH, TECH_LINE, false},
     {"Parity line", "Neighbours on a red line are one odd, one even: one digit sets the whole line's parity.", VAR_PARITY, TECH_LINE, false},
     {"Slow Thermometer", "Digits rise or stay the same: they only rise where two neighbours share a row, column or box.", VAR_SLOW, TECH_THERMO, false},
-    {"Nabner line", "No two digits on a teal line are the same or 1 apart: each digit rules out its neighbours.", VAR_NABNER, TECH_LINE, false},
+    {"Nabner line", "No two digits on a brown line are the same or 1 apart: each digit rules out its neighbours.", VAR_NABNER, TECH_LINE, false},
+    {"Lockout line", "The diamonds are 4+ apart, the digits between outside their range: never a 5 between.", VAR_LOCKOUT, TECH_LINE, false},
+    {"Double Arrow", "The two circles add up to the digits between them: each end bounds the other.", VAR_DARROW, TECH_LINE, false},
     /* Clues */
     {"Killer cage", "A cage's sum allows only some sets of digits: with what's around it, its cells narrow down.", VAR_KILLER, TECH_CAGE, false},
+    {"Sumless cage", "No digit repeats in a cage: its cells see each other, like a box's, across box borders.", VAR_SUMLESS, TECH_NONE, false},
     {"Sandwich clue", "The sum between a row's 1 and 9 leaves the 1 and the 9 only a few places in that row or column.", VAR_SANDWICH, TECH_SANDWICH, false},
     {"Skyscraper clue", "How many buildings are seen: a 1 means the 9 is first, a 9 that they rise 1 to 9.", VAR_SKY, TECH_SKY, false},
     {"Little Killer clue", "A diagonal's sum, repeats allowed: what's left of it bounds its empty cells.", VAR_LK, TECH_LK, false},
@@ -134,6 +137,7 @@ int learn_group(int k)
     case VAR_FORTRESS:
         return LEARN_MARKS;
     case VAR_KILLER:
+    case VAR_SUMLESS:
     case VAR_SANDWICH:
     case VAR_SKY:
     case VAR_LK:
@@ -141,6 +145,8 @@ int learn_group(int k)
     case VAR_FRAME:
     case VAR_OUTSIDE:
     case VAR_ROSSINI:
+    case VAR_NROOMS:
+    case VAR_SKYSUM:
         return LEARN_CLUES;
     default:
         return LEARN_LINES;                         /* (Thermo, Arrow, ... Slow Thermo) */

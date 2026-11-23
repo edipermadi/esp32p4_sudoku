@@ -41,7 +41,7 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
          * the lines run on to the next cell so the outline stays joined */
         int x1 = left ? a.x1 - 1 : a.x1 + in, x2 = right ? a.x2 + 1 : a.x2 - in;
         int y1 = up ? a.y1 - 1 : a.y1 + in, y2 = down ? a.y2 + 1 : a.y2 - in;
-        bool label = geo->cage_cell[k][0] == i;
+        bool label = geo->cage_cell[k][0] == i && geo->cage_sum[k];   /* (Sumless Killer: none) */
         if (!up) {
             ld.p1.x = label ? a.x1 + in + 18 : x1;      /* room for the sum */
             ld.p1.y = ld.p2.y = a.y1 + in;
@@ -339,7 +339,9 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.width = cs * 12 / 100;
         break;
     case LINE_BETWEEN:                              /* from circle edge to circle edge */
-        ld.color = C_MUTED;
+    case LINE_LOCKOUT:                              /* (from diamond to diamond) */
+    case LINE_DARROW:
+        ld.color = kind == LINE_DARROW ? lv_color_hex(0x4A7FD9) : C_MUTED;
         ld.opa = LV_OPA_80;
         ld.width = 4;
         for (int e = 0; e < 2 && n > 1; e++) {
@@ -374,9 +376,21 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         d.bg_color = C_MUTED;
         d.bg_opa = LV_OPA_40;
         lv_draw_rect(layer, &d, &b);
-    } else if (kind == LINE_BETWEEN) {              /* a circle at each end */
+    } else if (kind == LINE_LOCKOUT) {              /* a diamond at each end */
+        for (int e = 0; e < 2; e++) {
+            const lv_point_t c = e ? pts[n - 1] : pts[0];
+            const int dx[4] = {0, r, 0, -r}, dy[4] = {-r, 0, r, 0};
+            for (int k = 0; k < 4; k++) {
+                ld.p1.x = c.x + dx[k];
+                ld.p1.y = c.y + dy[k];
+                ld.p2.x = c.x + dx[(k + 1) % 4];
+                ld.p2.y = c.y + dy[(k + 1) % 4];
+                lv_draw_line(layer, &ld);
+            }
+        }
+    } else if (kind == LINE_BETWEEN || kind == LINE_DARROW) {   /* a circle at each end */
         d.bg_opa = LV_OPA_TRANSP;
-        d.border_color = C_MUTED;
+        d.border_color = kind == LINE_DARROW ? lv_color_hex(0x4A7FD9) : C_MUTED;
         d.border_opa = LV_OPA_80;
         d.border_width = 3;
         lv_draw_rect(layer, &d, &b);

@@ -153,6 +153,9 @@ typedef enum {
     KIND_NABNER,                         /**< Nabner */
     KIND_NROOMS,                         /**< Numbered Rooms */
     KIND_SKYSUM,                         /**< Sum Skyscrapers */
+    KIND_LOCKOUT,                        /**< Lockout Lines */
+    KIND_SUMLESS,                        /**< Sumless Killer */
+    KIND_DARROW,                         /**< Double Arrow */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

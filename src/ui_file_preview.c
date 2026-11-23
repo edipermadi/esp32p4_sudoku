@@ -97,7 +97,7 @@ static void pv_draw_cb(lv_event_t *e)
         }
     }
     /* Killer cages: a dashed line just inside each cage edge, the sum in its first cell */
-    if (s_pv_var == VAR_KILLER) {
+    if (s_pv_var == VAR_KILLER || s_pv_var == VAR_SUMLESS) {
         lv_draw_line_dsc_t d;
         lv_draw_line_dsc_init(&d);
         d.color = C_ACCENT;
@@ -143,7 +143,7 @@ static void pv_draw_cb(lv_event_t *e)
                     d.p2.y = yb;
                     lv_draw_line(layer, &d);
                 }
-                if (g->cage_cell[k][0] == cell) {   /* the top-left cell: the sum */
+                if (g->cage_cell[k][0] == cell && g->cage_sum[k]) {   /* the top-left cell: the sum */
                     char t[4];
                     snprintf(t, sizeof(t), "%d", g->cage_sum[k]);
                     lv_draw_label_dsc_t sd;

@@ -37,7 +37,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 
 | Fields | Variants |
 |---|---|
-| `cage_*` | Killer cages (their cells are also peers) |
+| `cage_*` | Killer cages (their cells are also peers); Sumless Killer's have sum 0 |
 | `consec` | Consecutive bars; with `consec_on` and no bars: Non-Consecutive |
 | `edge_kind`, `edge` | Kropki dots, XV marks, Greater-Than signs, on each cell's right and lower edge; Fortress' grey-white sides as signs (`EDGE_FORT`, not drawn: `parity` says which cells are grey, `PARITY_FORT`) |
 | `quad_*` | Quadruple circles |
@@ -57,7 +57,7 @@ Every variant is described by one struct, the **geometry**: which cells are in u
 
 The exact solver is a depth-first search over a `grid_t`: the digits so far, a bitmask per unit of the digits it already has, and per cage the digits used, the sum left and the cells left.
 
-- **`grid_free(g, cell)`**: the digits a cell can still take. It starts from `allow[cell]` minus what its units hold, then removes whatever each variant rule forbids given the digits placed so far. Examples: a knight's-move twin, a bar's neighbour that isn't 1 apart, a dot or sign broken, a line's rule, a Sandwich row whose 1 and 9 can no longer frame its sum, a Skyscraper line that already shows too many buildings, a Little Killer diagonal that can't reach its sum, a cage that can't make its total. **Every rule of every variant lives here once**, and everything else gets it for free.
+- **`grid_free(g, cell)`**: the digits a cell can still take. It starts from `allow[cell]` minus what its units hold, then removes whatever each variant rule forbids given the digits placed so far. Examples: a knight's-move twin, a bar's neighbour that isn't 1 apart, a dot or sign broken, a line's rule, a Sandwich row whose 1 and 9 can no longer frame its sum, a Skyscraper line that already shows too many buildings, a Little Killer diagonal that can't reach its sum, a cage that can't make its total (or, Sumless Killer, only a repeat in a cage). **Every rule of every variant lives here once**, and everything else gets it for free.
 - **`search()`**: picks the empty cell with the **fewest** free digits (stopping early at 0 or 1), tries each, and recurses. It counts solutions up to a `limit` (2 is enough to tell "unique" from "not"). Given a random generator, it shuffles the digit order and leaves the grid holding the first solution found, which is how random full grids are made.
 - **`node_limit`**: an optional cap on search steps. When reached, the search gives up (`aborted`), so one unlucky layout can't hold the generator for seconds.
 
@@ -100,7 +100,7 @@ The exact search says *whether* a puzzle has one solution but not *how hard* it 
 
 | Level | Rule |
 |---|---|
-| **Easy** | tier 1, and at least `gen_easy_min_clues()` givens (36 for Classic; fewer where the variant's clues carry information, e.g. Killer 8, Kropki 14, Sandwich 24) |
+| **Easy** | tier 1, and at least `gen_easy_min_clues()` givens (36 for Classic; fewer where the variant's clues carry information, e.g. Killer 8, Kropki 14, Sandwich 24, Sumless Killer 26) |
 | **Medium** | tier 1, fewer givens |
 | **Hard** | tier 2 |
 | **Expert** | tier 3: needs more than pairs (triples, X-Wing, Swordfish, XY-Wing, or trial and error) |
@@ -156,6 +156,7 @@ for each attempt (60 Easy/Medium, 200 Hard, 400 Expert):
 
   | Dutch Whispers, Parity Lines | `gen_rule_paths()`, as German Whispers: 8 lines (Hard/Expert 10) of 3 to 6 (Parity 3 to 8) cells whose neighbours are 4 or more apart (one odd, one even) |
   | Nabner | `gen_rule_paths()`: 8 lines (Hard/Expert 10) of 3 to 5 cells grown through cells 2 or more away from every digit on the line so far |
+  | Lockout Lines, Double Arrow | `gen_ends_paths()`: 8 lines (Hard/Expert 10), random walks of up to 6 cells kept at the longest length whose ends keep the rule |
   | Entropic, Modular Lines | `gen_group_paths()`: 8 walks (Hard/Expert 10) of 3 to 8 cells, each of the first three in a group of its own and every later one in the group of the cell three back |
 
   The newest line kinds (Zipper, Between, Entropic, Modular, Dutch Whispers, Parity, Slow Thermo, Nabner) never let a line cross itself or another diagonally (`is_line_crossing()`, and the 2x2 blocks earlier lines cross: `is_block_crossed()`); the older ones may (changing them would change their puzzles for a seed). Zipper, Between, Entropic, Modular and Nabner also dig logic-first below Expert, like Kropki, XV, Greater-Than and Quadruple: a removal the grader's logic solves within the level is unique without a count. Between Lines also knows that its cells between the circles which share a row, column or box must differ (`between_need`: the circles at least that far apart), and its uniqueness counts give up after 1500 nodes (the others: 6000).

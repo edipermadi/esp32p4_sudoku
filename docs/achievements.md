@@ -74,7 +74,7 @@ Puzzles of a variant come from **New puzzle**, the daily puzzle or an imported c
 | **Rule bender** | Solve an Anti-Knight, an Even-Odd and a Consecutive. | 3 | `rule_bender` |
 | **Collector** | Solve each of the six original kinds: Classic, X-Sudoku, Hyper, Jigsaw, Killer and Mini 6×6. | 6 | `variety_5` |
 | **Globetrotter** | Solve 10 different variants (Classic counts as one). | 10 | `variants_10` |
-| **Rule book** | Solve every variant at least once. | 45 | `variants_all` |
+| **Rule book** | Solve every variant at least once. | 48 | `variants_all` |
 
 The goal of **Rule book** is the number of variants the firmware has, so it grows when a variant is added.
 

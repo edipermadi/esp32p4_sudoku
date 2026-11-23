@@ -381,10 +381,11 @@ bool gen_fish(logic_t *L, int size);
  * @brief Builds a board from its decorations: Killer, a classic board plus cages. Cage-mates become
  *        peers.
  * @param[in] cage_of    the cage of each cell (CAGE_NONE: none)
- * @param[in] sums       each cage's sum
+ * @param[in] sums       each cage's sum; all 0: a Sumless Killer board (no sums)
  * @param[in] ncages     how many cages
  * @param[out] out        gets the board
  * @return false if a cage is empty, has more than 9 cells, or its sum can't be made of distinct digits
+ *         (or only some sums are 0)
  */
 bool gen_geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncages, sudoku_geom_t *out);
 /**
@@ -505,6 +506,15 @@ void gen_jigsaw_map(uint8_t map[81], uint32_t *rng);
  */
 bool gen_killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out);
 /**
+ * @brief Sumless Killer: cages of 2-5 cells drawn over the full grid as for Killer, kept where they reach
+ *        over more than one row, column and box (one inside a box says nothing the box doesn't), no sums
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
+ * @return false: fewer than 4 cages left
+ */
+bool gen_sumless_cages(const uint8_t full[81], uint32_t *rng, sudoku_geom_t *out);
+/**
  * @brief Between Lines: up to want lines over the full grid, from a circle, a random walk of up to 7
  * cells whose digits all lie on one side of it (above it, or below), kept at the longest length
  * whose last cell (the other circle) lies beyond all the cells between; a line never crosses itself
@@ -516,6 +526,19 @@ bool gen_killer_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudok
  * @return false: fewer than 3
  */
 bool gen_between_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+/**
+ * @brief Lockout Lines, Double Arrow: up to want lines over the full grid, each a random walk of up to 6
+ * cells kept at the longest length whose ends keep the rule (Lockout: the ends 4+ apart and every cell
+ * between outside their range; Double Arrow: the ends add up to the cells between); a line never
+ * crosses itself or another
+ * @param[in] variant  VAR_LOCKOUT or VAR_DARROW
+ * @param[in] full  the solution
+ * @param[in,out] rng  the random state
+ * @param[in] want  lines wanted
+ * @param[out] out  gets the lines
+ * @return false: fewer than 3
+ */
+bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
 /**
  * @brief Entropic, Modular Lines: up to want lines over the full grid, random walks of 3 to 8 cells
  * through cells whose digit keeps the rule: each of the first three in a group of its own, every one

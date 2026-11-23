@@ -49,7 +49,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "center-dot": "Center", "outside-sudoku": "Outside", "rossini": "Rossini",
          "diagonal-non-consecutive": "Diagonal", "dutch-whispers": "Dutch", "parity-lines": "Parity",
          "slow-thermo": "Slow", "fortress": "Fortress", "argyle": "Argyle", "nabner": "Nabner",
-         "numbered-rooms": "Numbered", "sum-skyscrapers": "Sum"}
+         "numbered-rooms": "Numbered", "sum-skyscrapers": "Sum", "lockout-lines": "Lockout",
+         "sumless-killer": "Sumless", "double-arrow": "Double"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -67,6 +68,7 @@ PALINDROME, REGIONSUM, ZIPPER = (178, 181, 187), (119, 173, 241), (234, 149, 185
 ENTROPIC, MODULAR = (239, 178, 108), (98, 192, 192)
 DUTCH, PARITY = (228, 190, 64), (230, 128, 128)
 NABNER = (196, 160, 118)                                    # Nabner's lines (the board's brown, on white)
+DARROW = (74, 127, 217)                                     # Double Arrow's lines and circles (the board's blue)
 GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
 
 
@@ -215,6 +217,8 @@ def rule_words(d, vals, c, v, r):
             return "it's next to a grey cell, which is bigger, so it isn't 9"
         if d.get("line_kind") == 3 and v == 5:              # German Whispers: no 5 on a line
             return "it's on a green line, and nothing is 5 or more away from a 5"
+        if d.get("line_kind") == 14 and v == 5:             # Lockout: never a 5 between the diamonds
+            return "it's between the diamonds of a lockout line, and 5 is inside any two digits 4 or more apart"
         if d["thermos"]:
             return "its place on its thermometer keeps it between %d and %d" % (r["lo"], r["hi"])
         return "the chains of signs in its box keep it between %d and %d" % (r["lo"], r["hi"])
@@ -272,6 +276,47 @@ def rule_words(d, vals, c, v, r):
             if w == v:
                 return "the %d in %s is on its brown line already, and no digit repeats on it" % (w, at)
             return "the %d in %s is on its brown line too, and %d is 1 away from it" % (w, at, v)
+        if kind == 14:                                      # Lockout: diamonds 4+ apart, the cells between outside them
+            ends = (cells[0], cells[-1])
+            a, b = vals[ends[0]], vals[ends[1]]
+            if c in ends:
+                other = vals[ends[1] if c == ends[0] else ends[0]]
+                if other and abs(v - other) < 4:
+                    return "it's a diamond, and %s is less than 4 away from the %d in the other diamond" % (a_n(v), other)
+                inner = [vals[x] for x in cells[1:-1] if vals[x]]
+                if other and inner:
+                    return ("it's a diamond, and with %s and the %d in the other, %s between them wouldn't be outside "
+                            "their range" % (a_n(v), other, listing(map(str, inner))))
+                return "it's a diamond, and with %s there its line's cells couldn't all lie outside the diamonds' range" % (
+                    a_n(v))
+            if v == 5:
+                return "it's between the diamonds of a lockout line, and 5 is inside any two digits 4 or more apart"
+            if a and b:
+                lo, hi = min(a, b), max(a, b)
+                side = ("above %d" % hi if lo == 1 else "below %d" % lo if hi == 9
+                        else "below %d or above %d" % (lo, hi))
+                return "it's between the diamonds %d and %d, so it's %s" % (lo, hi, side)
+            return "it's between the diamonds of its line, and %s couldn't lie outside their range" % a_n(v)
+        if kind == 15:                                      # Double Arrow: the two circles add up to the cells between
+            ends = (cells[0], cells[-1])
+            inner = [x for x in cells[1:-1] if x != c]
+            known = sum(vals[x] for x in inner)
+            gaps = sum(1 for x in inner if not vals[x])
+            if c in ends:
+                other = vals[ends[1] if c == ends[0] else ends[0]]
+                if other and not gaps:
+                    return "it's a circle: the cells between add up to %d and the other circle is %d, so it's %d" % (
+                        known, other, known - other)
+                return "it's a circle, and with %s there the two circles couldn't add up to the cells between them" % (
+                    a_n(v))
+            a, b = vals[ends[0]], vals[ends[1]]
+            if a and b and not gaps:
+                return "the circles %d and %d add up to %d, and the other cells between make %d, so it's %d" % (
+                    a, b, a + b, known, a + b - known)
+            if a and b:
+                return "the circles %d and %d add up to %d, and %s between them wouldn't leave room for the rest" % (
+                    a, b, a + b, a_n(v))
+            return "with %s there, the cells between the circles couldn't add up to the two circles" % a_n(v)
         if kind == 4:                                       # Palindrome: the cell mirroring it
             return "it mirrors the %d in %s on its grey line, which reads the same from both ends" % (w, at)
         if kind == 6:                                       # Zipper: mirrored cells add up to the line's total
@@ -547,6 +592,8 @@ def step_text(d, vals, s):
                 out.append("%s: the %d in %s is a knight's move away." % (where, v, rc(by)))
             elif via == "an argyle line":
                 out.append("%s: the %d in %s is on the same argyle line." % (where, v, rc(by)))
+            elif via == "the same cage":
+                out.append("%s: the %d in %s is in the same cage." % (where, v, rc(by)))
             elif via == "a touching cell":
                 out.append("%s: %s the %d in %s at a corner." % (where, "touches" if len(cells) == 1 else "touch",
                                                                     v, rc(by)))
@@ -565,6 +612,8 @@ def step_text(d, vals, s):
             extra.append("Not %d: the %d in %s is a knight's move away." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] == "an argyle line":
             extra.append("Not %d: the %d in %s is on the same argyle line." % (r["digit"], r["digit"], rc(r["by"])))
+        elif r["via"] == "the same cage":
+            extra.append("Not %d: the %d in %s is in the same cage." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] == "a touching cell":
             extra.append("Not %d: the %d in %s touches it at a corner." % (r["digit"], r["digit"], rc(r["by"])))
         elif r["via"] in ("even", "odd"):
@@ -672,6 +721,20 @@ def make_drawer(d, fonts):
                 g.line(pts, fill=DUTCH if kind == 10 else PARITY, width=int(CELL * 0.12), joint="curve")
             elif kind == 13:                                # Nabner: a narrow brown line
                 g.line(pts, fill=NABNER, width=int(CELL * 0.12), joint="curve")
+            elif kind in (14, 15):                          # Lockout: diamonds; Double Arrow: blue rings
+                r0, col = CELL * 0.4, ARROW if kind == 14 else DARROW
+                a0 = list(pts)
+                for e, (cc, nx) in enumerate(((pts[0], pts[1]), (pts[-1], pts[-2]))):
+                    ln = ((nx[0] - cc[0]) ** 2 + (nx[1] - cc[1]) ** 2) ** 0.5
+                    k0 = r0 * (0.75 if kind == 14 and nx[0] != cc[0] and nx[1] != cc[1] else 1)
+                    p_ = (cc[0] + (nx[0] - cc[0]) * k0 / ln, cc[1] + (nx[1] - cc[1]) * k0 / ln)
+                    a0[0 if e == 0 else -1] = p_
+                g.line(a0, fill=col, width=4, joint="curve")
+                for px, py in (pts[0], pts[-1]):
+                    if kind == 14:
+                        g.polygon([(px, py - r0), (px + r0, py), (px, py + r0), (px - r0, py)], outline=col, width=3)
+                    else:
+                        g.ellipse([px - r0, py - r0, px + r0, py + r0], outline=col, width=3)
             elif kind in (8, 9):                            # Entropic, Modular Lines: a narrow orange / teal line
                 g.line(pts, fill=ENTROPIC if kind == 8 else MODULAR, width=int(CELL * 0.12), joint="curve")
             elif kind == 6:                                 # Zipper Lines: a narrow pink line
@@ -723,7 +786,8 @@ def make_drawer(d, fonts):
                     if cage_of.get(o) != k:
                         dashed(g, a, b)
             x, y = xy(cage["cells"][0])
-            g.text((x + 3, y + 1), str(cage["sum"]), font=tiny, fill=GIVEN_FG)
+            if cage["sum"]:                                 # (Sumless Killer: none)
+                g.text((x + 3, y + 1), str(cage["sum"]), font=tiny, fill=GIVEN_FG)
         for c in cells:                                     # odd rings, the digits, the step's marks
             x, y = xy(c)
             if d["parity"][c] == 2:

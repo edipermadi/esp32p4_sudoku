@@ -70,6 +70,9 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Nabner", OF_VARIANT(42)},
     {"Fastest Numbered Rooms", OF_VARIANT(43)},
     {"Fastest Sum Skyscrapers", OF_VARIANT(44)},
+    {"Fastest Lockout Lines", OF_VARIANT(45)},
+    {"Fastest Sumless Killer", OF_VARIANT(46)},
+    {"Fastest Double Arrow", OF_VARIANT(47)},
 };
 
 #define REC_OTHERS 5                    /**< the records after the fastest ones (a day, a run, a streak, solved, time) */

@@ -162,6 +162,9 @@ bool gen_cage_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
     for (int k = 0; k < G->ncages; k++) {
+        if (!G->cage_sum[k]) {
+            continue;                               /* (Sumless Killer: no sum, its cells are only peers) */
+        }
         int left = G->cage_sum[k], n = 0, empty[9];
         uint16_t used = 0, avail = 0;
         for (int i = 0; i < G->cage_n[k]; i++) {
@@ -1082,6 +1085,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
 /* (documented in gen_internal.h) */
 int gen_easy_min_clues(const sudoku_geom_t *G)
 {
+    if (G->variant == VAR_SUMLESS) {
+        return 26;
+    }
     if (G->ncages) {
         return 8;
     }

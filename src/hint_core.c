@@ -240,6 +240,9 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  lk == LINE_DUTCH ? "Along this line, neighbours are 4 or more apart" :
                  lk == LINE_PARITY ? "Along this line, neighbours are one odd and one even digit" :
                  lk == LINE_NABNER ? "No two digits on this line are the same or 1 apart" :
+                 lk == LINE_LOCKOUT ? "The diamonds at this line's ends are 4 or more apart, and the digits between "
+                 "them lie outside that range" :
+                 lk == LINE_DARROW ? "The two circles at this line's ends add up to the digits between them" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */

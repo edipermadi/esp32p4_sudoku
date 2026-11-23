@@ -131,6 +131,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_jigsaw(reg, out);
     }
     case VAR_KILLER:
+    case VAR_SUMLESS:
         return sudoku_geom_killer_text(p->cages, out);
     case VAR_QUAD:
         return sudoku_geom_quad_text(p->cages, out);   /* (its circles go where cages do) */
@@ -155,6 +156,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_PARITY:
     case VAR_SLOW:
     case VAR_NABNER:
+    case VAR_LOCKOUT:
+    case VAR_DARROW:
         return sudoku_geom_lines_text(p->variant, p->thermos, out);   /* (lines go in thermos) */
     case VAR_SANDWICH:
         return sudoku_geom_sandwich_text(p->marks, out);

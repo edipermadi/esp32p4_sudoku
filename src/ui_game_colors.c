@@ -66,7 +66,7 @@ void cell_long_cb(lv_event_t *e)
         }
     }
     int k = game_geo()->cage_of[i];
-    if (k != CAGE_NONE) {                           /* Killer helper */
+    if (k != CAGE_NONE && game_geo()->cage_sum[k]) {   /* Killer helper (Sumless: no sum to help with) */
         char sets[240];
         int n = cage_sets_text(k, sets, sizeof(sets));
         lv_obj_t *h = make_label(card, &lv_font_montserrat_16, C_MUTED);

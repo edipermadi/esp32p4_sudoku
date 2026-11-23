@@ -123,6 +123,13 @@
  *   VAR_SKYSUM   Sum Skyscrapers: Classic rules, and a clue left of a row or above a
  *                column is the sum of the buildings seen from there (a digit is a
  *                building that tall; a taller one hides the shorter ones behind it)
+ *   VAR_LOCKOUT  Lockout Lines: Classic rules, and on each line the two end diamonds
+ *                differ by 4 or more, and every digit between them on the line lies
+ *                outside the range from one diamond's digit to the other's
+ *   VAR_SUMLESS  Sumless Killer: Classic rules, plus cages without sums: no digit
+ *                repeats in a cage (cage_sum 0)
+ *   VAR_DARROW   Double Arrow: Classic rules, and on each line the two end circles
+ *                add up to the digits between them
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -225,6 +232,9 @@ typedef enum {
     VAR_NABNER,                         /**< Nabner */
     VAR_NROOMS,                         /**< Numbered Rooms */
     VAR_SKYSUM,                         /**< Sum Skyscrapers */
+    VAR_LOCKOUT,                        /**< Lockout Lines */
+    VAR_SUMLESS,                        /**< Sumless Killer */
+    VAR_DARROW,                         /**< Double Arrow */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -237,7 +247,8 @@ typedef enum {
  *         "Renban", "German Whispers", "Skyscraper", "Little Killer", "Palindrome", "Region Sum Lines",
  *         "X-Sums", "Zipper Lines", "Frame", "Between Lines", "Entropic Lines", "Modular Lines",
  *         "Center Dot", "Outside Sudoku", "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
- *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner", "Numbered Rooms", "Sum Skyscrapers"
+ *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner", "Numbered Rooms", "Sum Skyscrapers",
+ *         "Lockout Lines", "Sumless Killer", "Double Arrow"
  */
 const char *variant_name(int variant);
 
@@ -270,7 +281,9 @@ enum {
     LINE_DUTCH,                         /**< Dutch Whispers: neighbours differ by 4 or more */
     LINE_PARITY,                        /**< Parity Lines: neighbours are one odd, one even */
     LINE_SLOW,                          /**< Slow Thermo: digits rise or stay the same from the bulb */
-    LINE_NABNER                         /**< Nabner: no two digits on the line the same or consecutive */
+    LINE_NABNER,                        /**< Nabner: no two digits on the line the same or consecutive */
+    LINE_LOCKOUT,                       /**< Lockout Lines: end diamonds 4+ apart, the digits between outside their range */
+    LINE_DARROW                         /**< Double Arrow: the two end circles add up to the digits between */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -338,7 +351,7 @@ typedef struct {
     /* Killer: cages (their cells are peers too: no digit twice in a cage) */
     uint8_t ncages;                     /**< Killer: cages */
     uint8_t cage_of[81];                /**< each cell's cage, CAGE_NONE = not in a cage */
-    uint8_t cage_sum[CAGES_MAX];        /**< each cage's sum */
+    uint8_t cage_sum[CAGES_MAX];        /**< each cage's sum (Sumless Killer: 0, none) */
     uint8_t cage_n[CAGES_MAX];          /**< each cage's cells: how many */
     uint8_t cage_cell[CAGES_MAX][9];    /**< cells of each cage, the top-left one first */
     uint16_t allow[81];                 /**< digits each cell may hold (candidate bits; Even-Odd narrows its marked cells) */
@@ -429,7 +442,7 @@ bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
 /**
  * @brief A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
  * (cells 0..80 row by row, each in one cage at most), into out; false if
- * the text isn't one. sudoku_cages_text() writes it (false: buf too small).
+ * the text isn't one. Every sum 0 ("0:cell,...;0:...") is a Sumless Killer board. sudoku_cages_text() writes it (false: buf too small).
  * @param[in] text  the cages
  * @param[out] out  gets the board
  * @return false if the text isn't one

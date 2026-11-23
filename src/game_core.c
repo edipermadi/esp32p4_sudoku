@@ -327,6 +327,37 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
             break;
         }
+        case LINE_LOCKOUT: {                        /* diamonds under 4 apart, or a digit between them inside their range */
+            int a = val[cell[0]], b = val[cell[n - 1]], lo = a < b ? a : b, hi = a < b ? b : a;
+            if (a && b && hi - lo < 4) {
+                out[cell[0]] = out[cell[n - 1]] = true;
+            }
+            for (int i = 1; i < n - 1; i++) {
+                int x = val[cell[i]];
+                if (x == 5 || (a && b && x && x >= lo && x <= hi)) {   /* (5: inside any two 4+ apart) */
+                    out[cell[i]] = true;
+                    if (a && b && x != 5) {
+                        out[cell[0]] = out[cell[n - 1]] = true;
+                    }
+                }
+            }
+            break;
+        }
+        case LINE_DARROW: {                         /* the cells between over the two circles, or (all filled) not equal */
+            int sum = 0, empty = 0, a = val[cell[0]], b = val[cell[n - 1]];
+            for (int i = 1; i < n - 1; i++) {
+                sum += val[cell[i]];
+                empty += !val[cell[i]];
+            }
+            if (a && b && (sum + empty > a + b || (!empty && sum != a + b))) {
+                for (int i = 0; i < n; i++) {
+                    if (val[cell[i]]) {
+                        out[cell[i]] = true;
+                    }
+                }
+            }
+            break;
+        }
         case LINE_REGIONSUM: {                      /* two boxes' full parts that differ, or a part over a full one */
             int sum[9], np, target = -1;
             bool full[9], bad = false;
@@ -386,7 +417,7 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
-    for (int k = 0; k < geo->ncages; k++) {       /* Killer: a cage over its sum, or full and short of it */
+    for (int k = 0; k < geo->ncages && geo->cage_sum[0]; k++) {   /* Killer: a cage over its sum, or full and short of it */
         int sum = 0, filled = 0, n = geo->cage_n[k];
         for (int i = 0; i < n; i++) {
             int c = geo->cage_cell[k][i];

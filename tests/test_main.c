@@ -199,6 +199,20 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
                 }
             }
         }
+        if (g->line_kind == LINE_LOCKOUT || g->line_kind == LINE_DARROW) {   /* the two ends' rule */
+            int a = sol[g->thermo_cell[t][0]], b = sol[g->thermo_cell[t][n - 1]], lo2 = a < b ? a : b, hi2 = a < b ? b : a;
+            int sum = 0;
+            for (int i = 1; i < n - 1; i++) {
+                int x = sol[g->thermo_cell[t][i]];
+                sum += x;
+                if (g->line_kind == LINE_LOCKOUT && x >= lo2 && x <= hi2) {
+                    return false;
+                }
+            }
+            if (g->line_kind == LINE_LOCKOUT ? hi2 - lo2 < 4 : sum != a + b) {
+                return false;
+            }
+        }
         if (g->line_kind == LINE_REGIONSUM) {
             int part[9], np;
             bool full[9];
@@ -303,8 +317,15 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
         for (int j = 0; j < g->cage_n[k]; j++) {
             sum += sol[g->cage_cell[k][j]];
         }
-        if (sum != g->cage_sum[k]) {
+        if (g->cage_sum[k] && sum != g->cage_sum[k]) {   /* (Sumless Killer: none) */
             return false;
+        }
+        for (int i = 0; i < g->cage_n[k]; i++) {   /* and no repeat in a cage */
+            for (int j = 0; j < i; j++) {
+                if (sol[g->cage_cell[k][i]] == sol[g->cage_cell[k][j]]) {
+                    return false;
+                }
+            }
         }
     }
     return true;
@@ -358,6 +379,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         regions[81] = 0;
         break;
     case VAR_KILLER:
+    case VAR_SUMLESS:
         sudoku_cages_text(g, cages, len);
         break;
     case VAR_QUAD:
@@ -412,6 +434,8 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_PARITY:
     case VAR_SLOW:
     case VAR_NABNER:
+    case VAR_LOCKOUT:
+    case VAR_DARROW:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -661,7 +685,7 @@ static void test_generate(void)
             }
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
             if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR || v == VAR_DUTCH ||
-                    v == VAR_PARITY || v == VAR_SLOW) {
+                    v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT || v == VAR_DARROW) {
                 CHECKF(!is_lines_crossing(&board), "%s %s: two lines cross", variant_name(v), gen_level_name(lv));
             }
             CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));

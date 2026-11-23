@@ -28,7 +28,8 @@ PAGES = ["classic", "x-sudoku", "mini-6x6", "hyper", "jigsaw", "killer", "anti-k
          "skyscraper", "little-killer", "palindrome", "region-sum-lines", "x-sums",
          "zipper-lines", "frame", "between-lines", "entropic-lines", "modular-lines", "center-dot",
          "outside-sudoku", "rossini", "diagonal-non-consecutive", "dutch-whispers", "parity-lines", "slow-thermo",
-         "fortress", "argyle", "nabner", "numbered-rooms", "sum-skyscrapers"]
+         "fortress", "argyle", "nabner", "numbered-rooms", "sum-skyscrapers",
+         "lockout-lines", "sumless-killer", "double-arrow"]
 
 
 def read_png(path):

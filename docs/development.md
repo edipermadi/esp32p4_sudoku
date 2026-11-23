@@ -117,6 +117,14 @@ Each cell: average / slowest time in ms (average givens in brackets). Every one 
 
 Nabner, Numbered Rooms and Sum Skyscrapers were added on 2026-11-23 and measured the same way; all 120 came out at the level asked for.
 
+| Variant | Easy | Medium | Hard | Expert |
+|---|---|---|---|---|
+| Lockout Lines | 16 / 22 (30.3) | 80 / 106 (18.8) | 198 / 485 (16.6) | 2020 / 4492 (16.8) |
+| Sumless Killer | 49 / 102 (27.8) | 395 / 1635 (24.7) | 292 / 731 (26.3) | 119 / 273 (25.3) |
+| Double Arrow | 11 / 13 (30.2) | 78 / 95 (19.8) | 218 / 350 (18.2) | 1172 / 2063 (15.6) |
+
+Lockout Lines, Sumless Killer and Double Arrow were added on 2026-11-23 too, measured the same way; all 120 came out at the level asked for.
+
 Most take well under a second. The slow ones (seconds) are the variants whose rules prune the search least, at the levels where a puzzle has to be dug close to its minimum: Non-Consecutive (Hard up to 7 s), X-Sums Hard (up to 7.9 s), Between Lines Expert (up to 4.9 s), XV Expert (up to 5.4 s), Killer Expert (4.3 s), Sandwich Hard (4.2 s), Jigsaw Expert and Non-Consecutive Easy (3 s). The generator yields now and then (`sudoku_gen_yield`), so even those don't trip the task watchdog (5 s on core 0's idle task), which a 15 s Greater-Than Expert once did. The solver's innermost function, `grid_free()` in `src/gen_solver.c`, runs for every cell at every step of every search: keep it lean. Which rules a board has beyond its units is worked out once per search (`grid_t.rules`, a bitmask); `grid_free()` tests that word, not the board's flags (the board is in PSRAM on the board, its flags far apart: a cache miss each), and returns at once for a board without extra rules. With a dozen flags tested instead, Classic got 45 % slower on the board (2026-11-22). Big rule code goes in a function of its own (`group_line_allow()`): inside `gen_line_allow()` the Entropic and Modular case made every other line kind 15-20 % slower. The averages are also `GEN_EXPECT_MS` in `src/ui_newpuzzle.c`, which the New puzzle dialog's progress bar is estimated from: update it with the table. Re-run `genbench` (or just the variant changed: `genbench xv expert 20`) after any generator change and compare; the PC tests check that the puzzles are right, this checks that they're quick.
 
 ## The UI files

@@ -37,11 +37,12 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     },
     {
         VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM, VAR_ZIPPER, VAR_BETWEEN,
-        VAR_ENTROPIC, VAR_MODULAR, VAR_DUTCH, VAR_PARITY, VAR_SLOW, VAR_NABNER, GEN_CAT_END
+        VAR_ENTROPIC, VAR_MODULAR, VAR_DUTCH, VAR_PARITY, VAR_SLOW, VAR_NABNER, VAR_LOCKOUT,
+        VAR_DARROW, GEN_CAT_END
     },
     {
         VAR_KILLER, VAR_SANDWICH, VAR_SKY, VAR_LK, VAR_XSUM, VAR_FRAME, VAR_OUTSIDE, VAR_ROSSINI, VAR_NROOMS, VAR_SKYSUM,
-        GEN_CAT_END
+        VAR_SUMLESS, GEN_CAT_END
     },
 };
 /** @brief each variant's button text (shorter than variant_name() where four across need it) */
@@ -57,6 +58,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_CENTERDOT] = "Center Dot", [VAR_OUTSIDE] = "Outside", [VAR_ROSSINI] = "Rossini", [VAR_DIAGNC] = "Diagonal NC",
     [VAR_DUTCH] = "Dutch", [VAR_PARITY] = "Parity", [VAR_SLOW] = "Slow Thermo", [VAR_FORTRESS] = "Fortress",
     [VAR_ARGYLE] = "Argyle", [VAR_NABNER] = "Nabner", [VAR_NROOMS] = "Numbered", [VAR_SKYSUM] = "Sum Sky",
+    [VAR_LOCKOUT] = "Lockout", [VAR_SUMLESS] = "Sumless", [VAR_DARROW] = "Double Arrow",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -106,6 +108,9 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_NABNER] = "9x9 with brown lines: no two digits on a line are the same or 1 apart.",
     [VAR_NROOMS] = "9x9 with clues outside: a clue is the digit in the X-th cell, X being the first digit.",
     [VAR_SKYSUM] = "9x9 with clues outside: the sum of the buildings seen from there (taller ones hide the rest).",
+    [VAR_LOCKOUT] = "9x9 with lines: the end diamonds are 4+ apart, the digits between outside their range.",
+    [VAR_SUMLESS] = "9x9 with cages (dashed) without sums: no digit repeats in a cage.",
+    [VAR_DARROW] = "9x9 with blue lines: the two end circles add up to the digits between them.",
     [VAR_SLOW] = "9x9 with thermometers: the digits rise from the bulb, or stay the same where they may.",
     [VAR_FORTRESS] = "9x9: each grey cell holds a bigger digit than every white cell side by side with it.",
     [VAR_ARGYLE] = "9x9, and no digit repeats along any of the eight diagonal lines of the argyle pattern.",

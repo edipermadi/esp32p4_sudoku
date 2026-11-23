@@ -38,6 +38,7 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
         key = "regions";
         break;
     case VAR_KILLER:
+    case VAR_SUMLESS:
         key = sudoku_cages_text(G, extra, sizeof(extra)) ? "cages" : NULL;
         break;
     case VAR_QUAD:
@@ -67,6 +68,8 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     case VAR_DUTCH:
     case VAR_PARITY:
     case VAR_NABNER:
+    case VAR_LOCKOUT:
+    case VAR_DARROW:
         key = sudoku_thermos_text(G, extra, sizeof(extra)) ? "lines" : NULL;
         break;
     case VAR_SANDWICH:
@@ -120,6 +123,7 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
         regions[81] = 0;
         break;
     case VAR_KILLER:
+    case VAR_SUMLESS:
         if (sudoku_cages_text(G, extra, sizeof(extra))) {
             cages = extra;
         }
@@ -198,6 +202,8 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
     case VAR_PARITY:
     case VAR_SLOW:
     case VAR_NABNER:
+    case VAR_LOCKOUT:
+    case VAR_DARROW:
         if (sudoku_thermos_text(G, extra, sizeof(extra))) {
             thermos = extra;
         }

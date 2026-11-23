@@ -28,6 +28,7 @@ static const uint8_t PIC_BETWEEN[] = {0, 1, 2, 3, 0xFF};    /**< (3) 6 5 (8) */
 static const uint8_t PIC_GROUPS[] = {0, 1, 2, 3, 4, 0xFF};  /**< Entropic 2 9 4 1 8; Modular 1 5 3 7 2; Parity 3 8 1 6 7 */
 static const uint8_t PIC_SLOW[] = {0, 1, 6, 7, 0xFF};       /**< 2 4, then 4 again across the boxes' corner, 7 */
 static const uint8_t PIC_CAGES[] = {11, 0, 1, 0xFE, 8, 2, 3, 6, 0xFE, 0xFF};   /**< 9 + 2 = 11, and an empty 8 */
+static const uint8_t PIC_SUMLESS[] = {0, 1, 2, 5, 0xFE, 0xFF};   /**< a cage over the box border, no sum */
 
 /** @brief Each variant's rules card picture. */
 static const rules_pic_t RULES_PIC[VAR_COUNT] = {
@@ -109,6 +110,9 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_NABNER] = {4, 1, 0, 0, "1486", NULL, NULL, NULL, NULL, NULL, PIC_RENBAN, NULL, -1, 0, NULL, NULL, LINE_NABNER},
     [VAR_NROOMS] = {5, 1, 0, 0, "37594", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5, 0, NULL, NULL, 0, 0},
     [VAR_SKYSUM] = {5, 1, 0, 0, "25198", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 16, 0, NULL, NULL, 0, 0},
+    [VAR_LOCKOUT] = {5, 1, 0, 0, "28917", NULL, NULL, NULL, NULL, NULL, PIC_GROUPS, NULL, -1, 0, NULL, NULL, LINE_LOCKOUT},
+    [VAR_SUMLESS] = {4, 2, 2, 2, "..8." "....", NULL, NULL, NULL, NULL, NULL, NULL, PIC_SUMLESS, -1},
+    [VAR_DARROW] = {4, 1, 0, 0, "3546", NULL, NULL, NULL, NULL, NULL, PIC_RENBAN, NULL, -1, 0, NULL, NULL, LINE_DARROW},
     [VAR_SLOW] = {4, 2, 2, 2, "24.." "..47", NULL, NULL, NULL, NULL, NULL, PIC_SLOW, NULL, -1, 0, NULL, NULL, LINE_SLOW},
     [VAR_FORTRESS] = {3, 3, 0, 0, ".4." "685" ".2.", NULL, NULL, "..." ".f." "...", NULL, NULL, NULL, NULL, -1},
     [VAR_ARGYLE] = {9, 9, 3, 3, "....3...." ".....7..." "......1.." ".......9." "........4" "........." "........." "........." ".........", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
@@ -213,6 +217,13 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_SKYSUM] = "Classic rules, and a clue left of a row or above a column is the sum of the buildings seen from "
     "there: each digit is a building that tall, and a taller one hides the shorter ones behind it. Here 2, 5 "
     "and 9 are seen: 2 + 5 + 9 = 16.",
+    [VAR_LOCKOUT] = "Classic rules, and on a line the two diamonds at its ends are 4 or more apart, and every digit "
+    "between them on the line lies outside their range: with 2 and 7 at the ends, 8, 9 and 1 fit, 3 to 6 don't. "
+    "So a 5 is never between.",
+    [VAR_SUMLESS] = "Classic rules, plus cages (dashed outlines) without sums: no digit repeats in a cage. A cage "
+    "reaches over a box border, so the 8 here rules out 8 in the cage's other cells, even in the next box.",
+    [VAR_DARROW] = "Classic rules, and on a line the two circles at its ends add up to the digits between them: "
+    "3 + 6 = 5 + 4. Digits may repeat along it where the rules allow.",
     [VAR_SLOW] = "Classic rules, and along each thermometer the digits rise from the round bulb or stay the same: "
     "2, 4, 4, 7. A digit can only stay the same where the two cells share no row, column or box, as across the "
     "corner between two boxes here.",
@@ -384,6 +395,9 @@ static void rules_pic_draw_cb(lv_event_t *e)
                     l.p1.x = l.p2.x = x + cs - 4;
                     lv_draw_line(layer, &l);
                 }
+            }
+            if (!sum) {
+                continue;                           /* (Sumless Killer: no sum) */
             }
             char t[4];
             snprintf(t, sizeof(t), "%d", sum);

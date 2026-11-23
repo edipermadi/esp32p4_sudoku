@@ -22,7 +22,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Entropic Lines", "Modular Lines", "Center Dot", "Outside Sudoku",
                                                      "Rossini", "Diagonal Non-Consecutive", "Dutch Whispers",
                                                      "Parity Lines", "Slow Thermo", "Fortress", "Argyle",
-                                                     "Nabner", "Numbered Rooms", "Sum Skyscrapers"
+                                                     "Nabner", "Numbered Rooms", "Sum Skyscrapers",
+                                                     "Lockout Lines", "Sumless Killer", "Double Arrow"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -310,7 +311,7 @@ void sudoku_geom_init(void)
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
                                   VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
-                                  VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM
+                                  VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -332,7 +333,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN || variant == VAR_ENTROPIC ||
             variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI || variant == VAR_DUTCH ||
             variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS || variant == VAR_NABNER ||
-            variant == VAR_NROOMS || variant == VAR_SKYSUM) {
+            variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
+            variant == VAR_DARROW) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -351,7 +353,7 @@ static int line_kind_of(int variant)
            variant == VAR_BETWEEN ? LINE_BETWEEN : variant == VAR_ENTROPIC ? LINE_ENTROPIC :
            variant == VAR_MODULAR ? LINE_MODULAR : variant == VAR_DUTCH ? LINE_DUTCH :
            variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : variant == VAR_NABNER ? LINE_NABNER :
-           LINE_THERMO;
+           variant == VAR_LOCKOUT ? LINE_LOCKOUT : variant == VAR_DARROW ? LINE_DARROW : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -414,9 +416,14 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
         if (out->line_kind == LINE_NABNER && lens[t] > 5) {
             return false;                           /* (no six digits are all 2 or more apart) */
         }
-        if ((out->line_kind == LINE_BETWEEN || out->line_kind == LINE_ENTROPIC || out->line_kind == LINE_MODULAR) &&
-                lens[t] < 3) {
+        if ((out->line_kind == LINE_BETWEEN || out->line_kind == LINE_ENTROPIC || out->line_kind == LINE_MODULAR ||
+                out->line_kind == LINE_LOCKOUT || out->line_kind == LINE_DARROW) && lens[t] < 3) {
             return false;                           /* (two circles and something between them) */
+        }
+        if (out->line_kind == LINE_LOCKOUT) {       /* the diamonds 4+ apart always enclose 5: never between them */
+            for (int i = 1; i < lens[t] - 1; i++) {
+                out->allow[cells[t][i]] &= (uint16_t)~(1u << 5);
+            }
         }
         if (out->line_kind == LINE_BETWEEN) {       /* the most cells between the circles in one row, column or box */
             int need = 1;
@@ -785,7 +792,8 @@ bool gen_geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncages,
     }
     sudoku_geom_init();
     *out = s_geom[VAR_CLASSIC];
-    out->variant = VAR_KILLER;
+    const bool sumless = !sums[0];                  /* every sum 0: Sumless Killer */
+    out->variant = sumless ? VAR_SUMLESS : VAR_KILLER;
     out->ncages = (uint8_t)ncages;
     memcpy(out->cage_of, cage_of, 81);
     memset(out->cage_n, 0, sizeof(out->cage_n));
@@ -801,7 +809,7 @@ bool gen_geom_killer(const uint8_t cage_of[81], const uint8_t *sums, int ncages,
     }
     for (int k = 0; k < ncages; k++) {
         int n = out->cage_n[k];
-        if (!n || sums[k] < n * (n + 1) / 2 || sums[k] > n * (19 - n) / 2) {
+        if (!n || (sumless ? sums[k] != 0 : sums[k] < n * (n + 1) / 2 || sums[k] > n * (19 - n) / 2)) {
             return false;
         }
         out->cage_sum[k] = sums[k];
