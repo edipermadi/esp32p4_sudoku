@@ -75,6 +75,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Docs' lists of variants
+        run: python3 tools/doc_lists.py --check   # (made from the code: python3 tools/doc_lists.py)
+
       - name: Web flasher site
         env:
           REQUIRE_CODE_DOCS: 1                  # the code docs (/code/) must be there

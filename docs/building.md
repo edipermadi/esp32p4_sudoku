@@ -64,7 +64,7 @@ The app is about 2.6 MB. With the **Custom** scheme the IDE accepts up to 16 MB,
 
 ## Builds and releases (GitHub Actions)
 
-`.github/workflows/firmware.yml` builds the firmware on every push to `main` and every pull request, with the versions pinned in it (arduino-cli 1.6.0, esp32 core 3.3.12, LVGL 9.6.0, `extras/lv_conf.h`, the FQBN above). The run's summary shows the size and checksums, and the files are kept as the run's artifact for 30 days.
+`.github/workflows/firmware.yml` builds the firmware on every push to `main` and every pull request, with the versions pinned in it (arduino-cli 1.6.0, esp32 core 3.3.12, LVGL 9.6.0, `extras/lv_conf.h`, the FQBN above). The run's summary shows the size and checksums, and the files are kept as the run's artifact for 30 days. It also fails when the docs' lists of variants are out of date (`python3 tools/doc_lists.py --check`; see [Development](development.md#tests)).
 
 Pushing a tag that starts with `v` also publishes a GitHub release with them (a tag with a `-`, like `v1.1.0-rc1`, makes a pre-release):
 

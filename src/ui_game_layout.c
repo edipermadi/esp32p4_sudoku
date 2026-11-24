@@ -36,7 +36,8 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
             if (!geo->used[i]) {
                 continue;
             }
-            lv_obj_set_pos(cells[i], LINE_THICK + (i % 9) * (cs + LINE_THIN), LINE_THICK + (i / 9) * (cs + LINE_THIN));
+            /* (from inside the frame: LVGL places a child past its parent's border already) */
+            lv_obj_set_pos(cells[i], (i % 9) * (cs + LINE_THIN), (i / 9) * (cs + LINE_THIN));
             lv_obj_set_size(cells[i], cs, cs);
         }
         lv_obj_invalidate(grid);

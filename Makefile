@@ -13,7 +13,8 @@
 #
 #   make format         formats the C / C++ sources, headers and the sketch in place with astyle (.astylerc)
 #   make format-check   lists the files that need it, and fails if any do (changes nothing)
-#   make test           the PC tests (tests/Makefile)
+#   make test           the PC tests (tests/Makefile), and checks the docs' lists of variants are up to date
+#   make doc-lists      rewrites the docs' lists of variants from the code (tools/doc_lists.py)
 #
 # arduino-cli: from PATH, else the one inside the Arduino IDE (/opt/arduino-ide); or
 # ARDUINO_CLI=... Needs the esp32 core 3.3.x and LVGL 9.6.0 set up as docs/building.md says.
@@ -47,7 +48,7 @@ SOURCES := $(filter-out \
 
 ASTYLE_RUN = $(ASTYLE) --options=.astylerc --quiet
 
-.PHONY: all build upload avatars release site doxygen diagrams clean format format-check test
+.PHONY: all build upload avatars release site doxygen diagrams clean format format-check test doc-lists
 
 all: build
 
@@ -106,3 +107,7 @@ format-check:
 
 test:
 	@$(MAKE) -C tests
+	@$(PYTHON) tools/doc_lists.py --check
+
+doc-lists:
+	@$(PYTHON) tools/doc_lists.py
