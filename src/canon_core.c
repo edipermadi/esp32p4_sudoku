@@ -136,6 +136,8 @@ uint8_t canon_symmetries(int variant)
     case VAR_NONCONSEC:
     case VAR_DIAGNC:
     case VAR_MAGIC:                     /* (the centre box turns onto itself) */
+    case VAR_QUADRO:                    /* (2x2 blocks onto 2x2 blocks) */
+    case VAR_AQ9:                       /* (diagonals onto diagonals) */
         return 0xFF;
     default:
         return 0;                       /* (digits that matter, or a layout of its own) */
@@ -156,6 +158,10 @@ int canon_digits(int variant)
         return CANON_FLATMATES;
     case VAR_159:
         return CANON_159;
+    case VAR_QUADRO:
+        return CANON_PARITY;
+    case VAR_AQ9:
+        return CANON_FIX9;
     default:
         return CANON_ANY;
     }
@@ -538,7 +544,7 @@ uint64_t canon_hash(int variant, const uint8_t givens[81])
         }
         for (int flip = 0; flip < (mode == CANON_FLIP ? 2 : 1); flip++) {   /* (Flip: as it is, and 10 - d) */
             uint8_t name[10] = {0};         /* the renumbering: name[d] = what digit d becomes */
-            int next = 1;
+            int next = 1, next_odd = 1, next_even = 2;
             static const uint8_t FREE[] = {2, 3, 4, 6, 7, 8};   /* Flatmates: the digits renumbered, in order */
             const bool upside = t == 2 || t == 5;   /* (the half turn, the top-bottom mirror) */
             const bool sideways = t == 2 || t == 4; /* (the half turn, the left-right mirror: column c to 10 - c) */
@@ -559,6 +565,18 @@ uint64_t canon_hash(int variant, const uint8_t givens[81])
                         name[d] = FREE[next++ - 1];
                     }
                     cur[k] = name[d];
+                } else if (mode == CANON_PARITY) {   /* odd ones 1, 3, 5 ...; even ones 2, 4 ... */
+                    if (!name[d]) {
+                        name[d] = (uint8_t)(d & 1 ? next_odd : next_even);
+                        if (d & 1) {
+                            next_odd += 2;
+                        } else {
+                            next_even += 2;
+                        }
+                    }
+                    cur[k] = name[d];
+                } else if (mode == CANON_FIX9 && d == 9) {
+                    cur[k] = 9;
                 } else {
                     if (!name[d]) {             /* Pairs: d's pair takes the next one, and 10 - d its partner */
                         name[d] = (uint8_t)next;

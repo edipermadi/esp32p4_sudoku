@@ -205,7 +205,7 @@ In short here; each name links to the table's own page.
 - **Daily puzzle**: `day` = its date `YYYY-MM-DD`. There is one per day, made the first time it's opened that day; later opens find it by `day`.
 - **Imported**: `source` = the collection's name, `number` = its place in it.
 
-`variant` says which rules apply (0 Classic ... 63 Before Nine, the `VAR_*` order in `src/generator.h`, append-only). The four text columns `regions`, `cages`, `marks` and `thermos` hold whatever the variant needs beyond the givens; columns a variant doesn't use are NULL:
+`variant` says which rules apply (0 Classic ... 65 Anti-Queen 9s, the `VAR_*` order in `src/generator.h`, append-only). The four text columns `regions`, `cages`, `marks` and `thermos` hold whatever the variant needs beyond the givens; columns a variant doesn't use are NULL:
 
 | Column | Used by |
 |---|---|

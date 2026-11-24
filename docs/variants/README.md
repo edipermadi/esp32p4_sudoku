@@ -4,7 +4,7 @@
 
 Every Sudoku variant the board can make, each on its own page: the rules, what it looks like on the board, how to solve it, and a worked example step by step. Make any of them with **Puzzles → ⋮ → New puzzle**, at Easy, Medium, Hard or Expert (Kids 4×4: Easy and Medium).
 
-The worked examples use the 64 puzzles in [`variant-examples.sdx`](../variant-examples.sdx), one per variant, and each page's screenshot is that puzzle on the board. To follow along, copy the file to the `puzzles` folder on the card (over **USB drive**, or the card in a computer), then **Files → puzzles → variant-examples.sdx → Import**: they land in **Puzzles → Imported → variant-examples**, numbered as below. The file is made by `make -C tests examples` ([tools/variant_examples.c](../../tools/variant_examples.c)), which picks each puzzle so that its first steps need the variant's own rule, and prints the steps with their reasons. The screenshots come from `python3 tools/variant_shots.py --port /dev/ttyACM1` (all of them, or `... kropki` for one), with the file imported. Every page also has the whole puzzle solved step by step to the end: a list of its steps, each on a page of its own with a picture and **Previous** / **Next** links (in `docs/variants/<page>/`), written and drawn by `python3 tools/walkthrough.py --all`.
+The worked examples use the 66 puzzles in [`variant-examples.sdx`](../variant-examples.sdx), one per variant, and each page's screenshot is that puzzle on the board. To follow along, copy the file to the `puzzles` folder on the card (over **USB drive**, or the card in a computer), then **Files → puzzles → variant-examples.sdx → Import**: they land in **Puzzles → Imported → variant-examples**, numbered as below. The file is made by `make -C tests examples` ([tools/variant_examples.c](../../tools/variant_examples.c)), which picks each puzzle so that its first steps need the variant's own rule, and prints the steps with their reasons. The screenshots come from `python3 tools/variant_shots.py --port /dev/ttyACM1` (all of them, or `... kropki` for one), with the file imported. Every page also has the whole puzzle solved step by step to the end: a list of its steps, each on a page of its own with a picture and **Previous** / **Next** links (in `docs/variants/<page>/`), written and drawn by `python3 tools/walkthrough.py --all`.
 
 | # | Variant | The extra rule |
 |---|---|---|
@@ -72,5 +72,7 @@ The worked examples use the 64 puzzles in [`variant-examples.sdx`](../variant-ex
 | 62 | [Mathrax](mathrax.md) | A circle's clue: both diagonal pairs of its four cells add, differ, multiply or divide to it |
 | 63 | [Point Symmetry](point-symmetry.md) | Cells mirrored through the centre add up to 10 |
 | 64 | [Before Nine](before-nine.md) | A clue is the sum of the digits between it and the 9 |
+| 65 | [Quadro](quadro.md) | Every 2×2 block holds an odd and an even digit |
+| 66 | [Anti-Queen 9s](anti-queen-9s.md) | No two 9s share a diagonal |
 
 Cells are written r*row*c*column*, counted from the top left: r1c3 is row 1, column 3.

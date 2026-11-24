@@ -40,6 +40,7 @@ static const store_prefs_t DEFAULT_PREFS = {
     .show_timer = true,
     .accent = 0,
     .rules_seen = 0,
+    .rules_seen_hi = 0,
     .lock_mode = LOCK_OFF,
     .lock_pin = "",
     .saver = SAVER_MODE_DARK,
@@ -439,16 +440,27 @@ void store_set_night_brightness(uint8_t percent)
 }
 
 /* (documented in store.h) */
-uint64_t store_rules_seen(void)
+bool is_store_rules_seen(int variant)
 {
-    return s_p.rules_seen;
+    if (variant < 0 || variant > 127) {
+        return false;
+    }
+    return ((variant < 64 ? s_p.rules_seen : s_p.rules_seen_hi) >> (variant & 63) & 1) != 0;
 }
 
 /* (documented in store.h) */
-void store_set_rules_seen(uint64_t mask)
+void store_set_rules_seen(int variant)
 {
-    s_p.rules_seen = mask;
-    stats_db_set_int("rules_seen", (int64_t)mask);
+    if (variant < 0 || variant > 127) {
+        return;
+    }
+    if (variant < 64) {                             /* (variants 0..63 in rules_seen, 64..127 in rules_seen_hi) */
+        s_p.rules_seen |= 1ull << variant;
+        stats_db_set_int("rules_seen", (int64_t)s_p.rules_seen);
+    } else {
+        s_p.rules_seen_hi |= 1ull << (variant - 64);
+        stats_db_set_int("rules_seen_hi", (int64_t)s_p.rules_seen_hi);
+    }
 }
 
 /* (documented in store.h) */

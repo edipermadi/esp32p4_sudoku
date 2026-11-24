@@ -546,7 +546,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             gen_geom_sandwich(sums, jig);
         } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC || variant == VAR_DIAGNC ||
                    variant == VAR_ARGYLE || variant == VAR_CHESS || variant == VAR_MAGIC || variant == VAR_FLATMATES ||
-                   variant == VAR_PSYM) {
+                   variant == VAR_PSYM || variant == VAR_QUADRO || variant == VAR_AQ9) {
             /* not every fill works out quickly: try again */
             if (!gen_random_full_grid(G, full, &rng, 20000)) {
                 continue;

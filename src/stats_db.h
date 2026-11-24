@@ -172,6 +172,8 @@ typedef enum {
     KIND_MATHRAX,                        /**< Mathrax */
     KIND_PSYM,                           /**< Point Symmetry */
     KIND_B9,                             /**< Before Nine */
+    KIND_QUADRO,                         /**< Quadro */
+    KIND_AQ9,                            /**< Anti-Queen 9s */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

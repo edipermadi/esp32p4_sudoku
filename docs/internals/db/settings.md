@@ -24,7 +24,8 @@ The board's settings, as key-value pairs: one set for the board, not per player.
 | `saver_minutes` | Screen saver for: minutes before the saver goes dark, 0 = until a touch (10, 20, 30) |
 | `saver_clock` | Screen saver: 0 Dark, 1 Digital clock, 2 Life, 3 Analog clock, 4 Rain, 5 Attractor, 6 Boids, 7 Lissajous, 8 Pendulum, 9 Langton's ant, 10 Brian's Brain, 11 Cyclic spirals, 12 Rock paper scissors, 13 Excitable medium, 14 Day & Night, 15 Seeds, 16 Maze, 17 Star Wars, 18 Forest fire, 19 3D Crystal growth, 20 3D Diamond growth, 21 3D Pyroclastic, 22 3D Builder, 23 Starfield (named from when it was the clock or not) |
 | `accent` | 0 Blue … 4 Pink |
-| `rules_seen` | a bit per variant: its rules card was shown |
+| `rules_seen` | a bit per variant 0–63: its rules card was shown (a 64-bit integer; one older builds kept in 32 bits comes back negative with its top 32 bits set, and only its low 32 are kept) |
+| `rules_seen_hi` | the same for variants 64–127 (bit = variant − 64) |
 | `lock_mode`, `lock_pin` | the lock screen: 0 Off, 1 Swipe, 2 PIN; the PIN |
 | `night_start`, `night_end` | hours 0–23 |
 | `time_zone` | an IANA name, e.g. `Europe/Berlin` |

@@ -58,7 +58,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "10-lines": "10", "girandola": "Girandola", "159-sudoku": "159", "product-killer": "Product",
          "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd",
          "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average",
-         "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before"}
+         "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before",
+         "quadro": "Quadro", "anti-queen-9s": "Anti-Q"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -697,6 +698,25 @@ def rule_words(d, vals, c, v, r):
             if len(have) >= 3 and v not in have:
                 return "its long diagonal holds %s already, three different digits at most" % listing(map(str, have))
         return "a long diagonal can't take a fourth different digit"
+    if rule == "quadro":                                    # Quadro: a 2x2 block with three of one parity
+        r_, c_ = c // 9, c % 9
+        for dr in (0, -1):
+            for dc in (0, -1):
+                tl = (r_ + dr) * 9 + c_ + dc
+                if r_ + dr < 0 or r_ + dr > 7 or c_ + dc < 0 or c_ + dc > 7:
+                    continue
+                others = [x for x in (tl, tl + 1, tl + 9, tl + 10) if x != c]
+                ds = [vals[x] for x in others]
+                if all(ds) and len({x % 2 for x in ds} | {v % 2}) == 1:
+                    return "%s are %s too, so its 2x2 block would hold no %s digit" % (
+                        listing("%d in %s" % (vals[x], rc(x)) for x in others), "odd" if v % 2 else "even",
+                        "even" if v % 2 else "odd")
+        return "a 2x2 block it's in would be all %s" % ("odd" if v % 2 else "even")
+    if rule == "aq9":                                       # Anti-Queen 9s: a 9 on its diagonal
+        for o in range(81):
+            if vals[o] == 9 and o != c and abs(o // 9 - c // 9) == abs(o % 9 - c % 9):
+                return "the 9 in %s is on a diagonal with it" % rc(o)
+        return "a 9 is on one of its diagonals"
     if rule == "psym":                                      # Point Symmetry: its mirror through the centre
         if w:
             return "its mirror through the centre, %s, is %d: a %d there wouldn't make 10" % (at, w, v)

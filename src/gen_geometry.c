@@ -28,7 +28,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal",
                                                      "Pill Arrows", "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square",
                                                      "Average Lines", "Dutch Flatmates", "Mathrax",
-                                                     "Point Symmetry", "Before Nine"
+                                                     "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -350,6 +350,12 @@ void sudoku_geom_init(void)
             g[VAR_MAGIC].allow[r * 9 + q] = mid ? (uint16_t)(1u << 5) : corner ? (uint16_t)0x154 : (uint16_t)0x28A;
         }
     }
+    g[VAR_QUADRO] = g[VAR_CLASSIC];                 /* every 2x2 block: an odd and an even digit */
+    g[VAR_QUADRO].variant = VAR_QUADRO;
+    g[VAR_QUADRO].quadro = true;
+    g[VAR_AQ9] = g[VAR_CLASSIC];                    /* no two 9s on a diagonal */
+    g[VAR_AQ9].variant = VAR_AQ9;
+    g[VAR_AQ9].aq9 = true;
     g[VAR_PSYM] = g[VAR_CLASSIC];                   /* cells mirrored through the centre add up to 10 */
     g[VAR_PSYM].variant = VAR_PSYM;
     g[VAR_PSYM].psym = true;

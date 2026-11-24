@@ -545,6 +545,61 @@ bool gen_b9_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_quadro_logic(logic_t *L)
+{
+    for (int tl = 0; tl < 72; tl++) {               /* each 2x2 block, by its top-left cell */
+        if (tl % 9 == 8) {
+            continue;
+        }
+        const int four[4] = {tl, tl + 1, tl + 9, tl + 10};
+        for (int k = 0; k < 4; k++) {
+            const int c = four[k];
+            if (L->v[c]) {
+                continue;
+            }
+            bool all_odd = true, all_even = true;   /* the other three: certainly odd, certainly even? */
+            for (int j = 0; j < 4; j++) {
+                if (j == k) {
+                    continue;
+                }
+                const uint16_t m = L->v[four[j]] ? (uint16_t)(1u << L->v[four[j]]) : L->cand[four[j]];
+                all_odd &= !(m & 0x154);
+                all_even &= !(m & 0x2AA);
+            }
+            const uint16_t out = all_odd ? (uint16_t)0x2AA : all_even ? (uint16_t)0x154 : 0;
+            if (L->cand[c] & out) {
+                eliminate(L, c, (uint16_t)(L->cand[c] & out));
+                trace(TECH_QUADRO, tl, -1, L->cand[c], 0, c, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_aq9_logic(logic_t *L)
+{
+    static const int8_t DR[4] = {-1, -1, 1, 1}, DC[4] = {-1, 1, -1, 1};
+    for (int n = 0; n < 81; n++) {                  /* each 9: no 9 along its diagonals */
+        if (L->v[n] != 9) {
+            continue;
+        }
+        for (int k = 0; k < 4; k++) {
+            for (int r = n / 9 + DR[k], c = n % 9 + DC[k]; r >= 0 && r < 9 && c >= 0 && c < 9; r += DR[k], c += DC[k]) {
+                const int o = r * 9 + c;
+                if (!L->v[o] && (L->cand[o] >> 9 & 1)) {
+                    eliminate(L, o, (uint16_t)(1u << 9));
+                    trace(TECH_AQ9, n, -1, L->cand[o], 0, o, -1);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
 bool gen_psym_logic(logic_t *L)
 {
     for (int c = 0; c < 81; c++) {
@@ -1334,6 +1389,12 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         }
         if (G->psym && gen_psym_logic(&L)) {
             continue;    /* Point Symmetry: the mirrors */
+        }
+        if (G->quadro && gen_quadro_logic(&L)) {
+            continue;    /* Quadro: the 2x2 blocks */
+        }
+        if (G->aq9 && gen_aq9_logic(&L)) {
+            continue;    /* Anti-Queen 9s: the diagonals */
         }
         if (G->b9 && gen_b9_logic(&L)) {
             continue;    /* Before Nine: the clues */

@@ -35,7 +35,7 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     },
     {
         VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_MATHRAX, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
-        VAR_CHESS, VAR_FLATMATES, VAR_DIAGCONSEC, VAR_NONCONSEC, VAR_DIAGNC, GEN_CAT_END
+        VAR_CHESS, VAR_AQ9, VAR_FLATMATES, VAR_QUADRO, VAR_DIAGCONSEC, VAR_NONCONSEC, VAR_DIAGNC, GEN_CAT_END
     },
     {
         VAR_THERMO, VAR_SLOW, VAR_ARROW, VAR_AVG, VAR_PILL, VAR_PALINDROME, VAR_RENBAN, VAR_PARITY, VAR_WHISPER, VAR_DUTCH, VAR_DARROW,
@@ -65,6 +65,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_ANTIDIAG] = "Anti-Diagonal", [VAR_PILL] = "Pill Arrow", [VAR_PSKY] = "Odd/Even Sky",
     [VAR_CHESS] = "Chess", [VAR_MAGIC] = "Magic Square", [VAR_AVG] = "Average", [VAR_FLATMATES] = "Flatmates",
     [VAR_MATHRAX] = "Mathrax", [VAR_PSYM] = "Point Sym.", [VAR_B9] = "Before Nine",
+    [VAR_QUADRO] = "Quadro", [VAR_AQ9] = "Anti-Queen 9",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -124,6 +125,8 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_MAGIC] = "9x9, and the tinted centre box is a magic square: its lines add up to 15.",
     [VAR_AVG] = "9x9 with teal lines: the circled digit is the average of the line's other digits.",
     [VAR_ANTIDIAG] = "9x9, and each tinted long diagonal holds at most three different digits.",
+    [VAR_QUADRO] = "9x9: every 2x2 block of cells holds an odd and an even digit.",
+    [VAR_AQ9] = "9x9: no two 9s share a diagonal, of any length.",
     [VAR_PSYM] = "9x9: two cells mirrored through the centre add up to 10 (the tinted centre is 5).",
     [VAR_B9] = "9x9 with clues outside: the sum of the digits from there up to the 9.",
     [VAR_FLATMATES] = "9x9: every 5 has a 1 right above it or a 9 right below it (or both).",

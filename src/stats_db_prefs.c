@@ -54,8 +54,12 @@ void sdb_load_prefs(store_prefs_t *p)
             } else if (!strcmp(k, "accent")) {
                 p->accent = v >= 0 && v < ACCENT_COUNT ? v : 0;
             } else if (!strcmp(k, "rules_seen")) {
-                int64_t m = sqlite3_column_int64(st, 1);   /* (older builds kept 32 bits, as an int) */
-                p->rules_seen = m < 0 ? (uint64_t)m & 0xFFFFFFFFu : (uint64_t)m;
+                /* (older builds kept 32 bits, as an int: a negative one comes back with its top 32 bits all set.
+                 * A 64-bit mask with variant 63's bit is negative too, but keeps its own top bits) */
+                int64_t m = sqlite3_column_int64(st, 1);
+                p->rules_seen = m < 0 && (uint64_t)m >> 32 == 0xFFFFFFFFu ? (uint64_t)m & 0xFFFFFFFFu : (uint64_t)m;
+            } else if (!strcmp(k, "rules_seen_hi")) {
+                p->rules_seen_hi = (uint64_t)sqlite3_column_int64(st, 1);
             } else if (!strcmp(k, "lock_mode")) {
                 p->lock_mode = v >= LOCK_OFF && v <= LOCK_PIN ? v : LOCK_OFF;
             } else if (!strcmp(k, "lock_pin") && t) {
@@ -114,6 +118,7 @@ void sdb_migrate_prefs(const store_prefs_t *p)
     sdb_set_setting("show_timer", false, p->show_timer, NULL);
     sdb_set_setting("accent", false, p->accent, NULL);
     sdb_set_setting("rules_seen", false, (int64_t)p->rules_seen, NULL);
+    sdb_set_setting("rules_seen_hi", false, (int64_t)p->rules_seen_hi, NULL);
     sdb_set_setting("lock_mode", false, p->lock_mode, NULL);
     sdb_set_setting("lock_pin", true, 0, p->lock_pin);
     sdb_set_setting("saver_clock", false, p->saver, NULL);

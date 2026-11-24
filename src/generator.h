@@ -163,6 +163,9 @@
  *                add up to 10 (so the centre is 5)
  *   VAR_B9       Before Nine: Classic rules, and a clue left of a row or above a column
  *                is the sum of the digits between it and the 9
+ *   VAR_QUADRO   Quadro: Classic rules, and every 2x2 block of cells holds an odd and an even
+ *                digit (never four of one parity)
+ *   VAR_AQ9      Anti-Queen 9s: Classic rules, and no two 9s share a diagonal (of any length)
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -284,6 +287,8 @@ typedef enum {
     VAR_MATHRAX,                        /**< Mathrax */
     VAR_PSYM,                           /**< Point Symmetry */
     VAR_B9,                             /**< Before Nine */
+    VAR_QUADRO,                         /**< Quadro */
+    VAR_AQ9,                            /**< Anti-Queen 9s */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -300,7 +305,7 @@ typedef enum {
  *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola",
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
- *         "Mathrax", "Point Symmetry", "Before Nine"
+ *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s"
  */
 const char *variant_name(int variant);
 
@@ -459,6 +464,8 @@ typedef struct {
     bool magic;                         /**< Magic Square: the centre box's rows, columns and diagonals add up to 15 */
     bool flatmates;                     /**< Dutch Flatmates: every 5 has a 1 right above it or a 9 right below it */
     bool psym;                          /**< Point Symmetry: cells i and 80 - i add up to 10 (the centre: allow 5) */
+    bool quadro;                        /**< Quadro: every 2x2 block of cells holds an odd and an even digit */
+    bool aq9;                           /**< Anti-Queen 9s: no two 9s on one diagonal */
     bool b9;                            /**< Before Nine: the clues are rules */
     uint8_t b9_sum[18];                 /**< per row (0..8, from the left) and column (9..17, from the top), the sum of
                                          *   the digits before the 9, 0 = no clue */
@@ -1251,7 +1258,9 @@ enum {
     FIT_MATHRAX,                        /**< Mathrax: a circle's operation */
     FIT_PSYM,                           /**< Point Symmetry: the cell mirrored through the centre */
     FIT_B9_ROW,                         /**< Before Nine: the row's clue */
-    FIT_B9_COL                          /**< Before Nine: the column's clue */
+    FIT_B9_COL,                         /**< Before Nine: the column's clue */
+    FIT_QUADRO,                         /**< Quadro: a 2x2 block with three of one parity already */
+    FIT_AQ9                             /**< Anti-Queen 9s: a 9 on one of its diagonals */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1318,7 +1327,9 @@ typedef enum {
     TECH_FLATMATES,          /**< Dutch Flatmates: a 5 and the cells above and below it */
     TECH_MATHRAX,            /**< Mathrax: a circle */
     TECH_PSYM,               /**< Point Symmetry: a cell and its mirror through the centre */
-    TECH_B9                  /**< Before Nine: a clue */
+    TECH_B9,                 /**< Before Nine: a clue */
+    TECH_QUADRO,             /**< Quadro: a 2x2 block whose other three are one parity */
+    TECH_AQ9                 /**< Anti-Queen 9s: a 9 and its diagonals */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {

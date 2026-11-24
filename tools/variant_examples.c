@@ -704,6 +704,12 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_B9_COL:
         printf(", \"rule\": \"b9\", \"line\": %d", why == FIT_B9_ROW ? r : 9 + q);
         return;
+    case FIT_QUADRO:
+        printf(", \"rule\": \"quadro\"");
+        return;
+    case FIT_AQ9:
+        printf(", \"rule\": \"aq9\"");
+        return;
     case FIT_PSYM:
         printf(", \"rule\": \"psym\", \"with\": %d", 80 - c);
         return;

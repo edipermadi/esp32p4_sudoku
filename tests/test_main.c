@@ -307,6 +307,22 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int tl = 0; g->quadro && tl < 72; tl++) {   /* Quadro: every 2x2 block mixed */
+        if (tl % 9 == 8) {
+            continue;                               /* (no block starts in the last column) */
+        }
+        const int p = sol[tl] % 2 + sol[tl + 1] % 2 + sol[tl + 9] % 2 + sol[tl + 10] % 2;
+        if (p == 0 || p == 4) {
+            return false;
+        }
+    }
+    for (int a = 0; g->aq9 && a < 81; a++) {        /* Anti-Queen 9s: no 9s on one diagonal */
+        for (int b = a + 1; sol[a] == 9 && b < 81; b++) {
+            if (sol[b] == 9 && abs(a / 9 - b / 9) == abs(a % 9 - b % 9)) {
+                return false;
+            }
+        }
+    }
     for (int c = 0; g->psym && c < 81; c++) {       /* Point Symmetry: mirrored cells make 10 */
         if (sol[c] + sol[80 - c] != 10) {
             return false;
@@ -485,7 +501,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->quad_at, b->quad_at, a->nquads) && !memcmp(a->quad_n, b->quad_n, a->nquads) &&
            !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads) && a->nrooms == b->nrooms &&
            !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18) &&
-           a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
+           a->quadro == b->quadro && a->aq9 == b->aq9 && a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
            a->flatmates == b->flatmates && a->nmx == b->nmx && !memcmp(a->mx_at, b->mx_at, a->nmx) &&
            !memcmp(a->mx_op, b->mx_op, a->nmx) && !memcmp(a->mx_val, b->mx_val, a->nmx) &&
            !memcmp(a->mx_of, b->mx_of, sizeof(a->mx_of));
@@ -799,6 +815,29 @@ static void test_canon(void)
                 perm[d] = perm[j];
                 perm[j] = x;
             }
+            /* Quadro: odd among odd, even among even; Anti-Queen 9s: 1-8 any way, 9 kept */
+            if (mode == CANON_PARITY || mode == CANON_FIX9) {
+                for (int pass = 0; pass < 2; pass++) {
+                    const uint8_t ODD[5] = {1, 3, 5, 7, 9}, EVEN[4] = {2, 4, 6, 8}, LOW[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+                    const uint8_t *set = mode == CANON_FIX9 ? LOW : pass ? EVEN : ODD;
+                    const int n = mode == CANON_FIX9 ? 8 : pass ? 4 : 5;
+                    if (mode == CANON_FIX9 && pass) {
+                        break;
+                    }
+                    uint8_t sh[8];
+                    memcpy(sh, set, (size_t)n);
+                    for (int i = n - 1; i > 0; i--) {
+                        rng = rng * 1103515245u + 12345u;
+                        const int j = (int)(rng >> 16) % (i + 1);
+                        const uint8_t x = sh[i];
+                        sh[i] = sh[j];
+                        sh[j] = x;
+                    }
+                    for (int i = 0; i < n; i++) {
+                        perm[set[i]] = sh[i];
+                    }
+                }
+            }
             for (int d = 1; mode == CANON_159 && d <= 9; d++) {      /* 159: 10 - d where the columns are mirrored */
                 perm[d] = (uint8_t)(t == 2 || t == 4 ? 10 - d : d);
             }
@@ -844,7 +883,14 @@ static void test_canon(void)
             }
             CHECK(canon_hash(v, q) != h);
         }
-        if (mode != CANON_ANY) {                    /* a renumbering its rules don't allow (1 and 2 swapped): another */
+        if (mode == CANON_FIX9) {                   /* Anti-Queen 9s: 8 and 9 swapped: another */
+            uint8_t sw[81];
+            for (int c = 0; c < 81; c++) {
+                sw[c] = giv[c] == 8 ? 9 : giv[c] == 9 ? 8 : giv[c];
+            }
+            CHECK(canon_hash(v, sw) != h);
+        }
+        if (mode != CANON_ANY && mode != CANON_FIX9) {   /* a renumbering its rules don't allow (1 and 2 swapped): another */
             uint8_t sw[81];
             for (int c = 0; c < 81; c++) {
                 sw[c] = giv[c] == 1 ? 2 : giv[c] == 2 ? 1 : giv[c];
@@ -1086,7 +1132,7 @@ static void test_geometry(void)
         {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
         {VAR_159, 9, 81, 27, 20}, {VAR_ANTIDIAG, 9, 81, 27, 20},
         {VAR_CHESS, 9, 81, 27, 20},     {VAR_MAGIC, 9, 81, 27, 20}, {VAR_FLATMATES, 9, 81, 27, 20},
-        {VAR_PSYM, 9, 81, 27, 20},
+        {VAR_PSYM, 9, 81, 27, 20},      {VAR_QUADRO, 9, 81, 27, 20}, {VAR_AQ9, 9, 81, 27, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -1515,6 +1561,34 @@ static void test_psym_b9(void)
     v[2] = 2;
     v[3] = 9;
     CHECK(game_conflicts(&b, v, out) == 0);
+}
+
+/* Quadro: three of one parity in a 2x2 block leave the fourth the other, four turn red; Anti-Queen 9s: a 9 rules
+ * 9 out along its diagonals, two 9s on one turn red, other digits may share one */
+static void test_quadro_aq9(void)
+{
+    const sudoku_geom_t *Q = sudoku_geom(VAR_QUADRO), *A = sudoku_geom(VAR_AQ9);
+    uint8_t v[81] = {0};
+    bool out[81];
+    v[0] = 1;
+    v[1] = 3;
+    v[9] = 5;                                       /* three odd: r2c2 is even */
+    CHECK(sudoku_fits_why(Q, v, 10, 7) == FIT_QUADRO && is_sudoku_fits(Q, v, 10, 4));
+    CHECK(game_conflicts(Q, v, out) == 0);
+    v[10] = 7;
+    CHECK(game_conflicts(Q, v, out) > 0 && out[0] && out[1] && out[9] && out[10]);
+    v[10] = 4;
+    CHECK(game_conflicts(Q, v, out) == 0);
+    memset(v, 0, 81);
+    v[40] = 9;                                      /* the centre: no 9 on either diagonal through it */
+    CHECK(sudoku_fits_why(A, v, 0, 9) == FIT_AQ9 && sudoku_fits_why(A, v, 72, 9) == FIT_AQ9);
+    CHECK(sudoku_fits_why(A, v, 30, 9) == FIT_UNIT);   /* (r4c4: its box has it) */
+    CHECK(is_sudoku_fits(A, v, 1, 9) && is_sudoku_fits(A, v, 0, 8));
+    v[0] = 8;
+    v[80] = 8;                                      /* 8s may share a diagonal */
+    CHECK(game_conflicts(A, v, out) == 0);
+    v[8] = 9;                                       /* r1c9: on the other diagonal of the centre's 9 */
+    CHECK(game_conflicts(A, v, out) > 0 && out[8] && out[40] && !out[0]);
 }
 
 static void test_sdx_edges(void)
@@ -2612,7 +2686,7 @@ int main(int argc, char **argv)
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},
         {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},
-        {"Point Symmetry and Before Nine", test_psym_b9},     {"hint words", test_hint_words},
+        {"Point Symmetry and Before Nine", test_psym_b9}, {"Quadro and Anti-Queen 9s", test_quadro_aq9},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},

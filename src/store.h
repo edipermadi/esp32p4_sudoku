@@ -149,7 +149,8 @@ typedef struct {
     uint8_t assist;                           /**< store_assist_t: what turns red */
     bool show_timer;                          /**< the game's clock is shown (it always runs) */
     uint8_t accent;                           /**< accent colour, ACCENT_* (0 = blue) */
-    uint64_t rules_seen;                      /**< bit v: variant v's rules card has been shown */
+    uint64_t rules_seen;                      /**< bit v: variant v's rules card has been shown (variants 0..63) */
+    uint64_t rules_seen_hi;                   /**< the same for variants 64..127 (bit v - 64) */
     uint8_t lock_mode;                        /**< store_lock_t: the lock screen after a screen timeout */
     char lock_pin[8];                         /**< 4 digits (PIN mode), "" = none set */
     uint8_t saver;                            /**< store_saver_t: what shows before the screen goes dark */
@@ -319,15 +320,16 @@ uint8_t store_accent(void);
 void store_set_accent(uint8_t accent);
 
 /**
- * @brief Which variants' rules cards were shown already (bit = variant).
- * @return bit v: variant v's card was shown
+ * @brief Was a variant's rules card shown already?
+ * @param[in] variant  sudoku_variant_t (0..127)
+ * @return true if so
  */
-uint64_t store_rules_seen(void);
+bool is_store_rules_seen(int variant);
 /**
- * @brief Sets them.
- * @param[in] mask  bit v: variant v's card was shown
+ * @brief Notes that a variant's rules card was shown (saved).
+ * @param[in] variant  sudoku_variant_t (0..127)
  */
-void store_set_rules_seen(uint64_t mask);
+void store_set_rules_seen(int variant);
 
 /** @brief Lock screen (Settings > Display): shown when the screen wakes from its
  * timeout. Not security: RESET starts the board unlocked. */

@@ -136,6 +136,8 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_AVG] = {4, 1, 0, 0, "5384", NULL, NULL, NULL, NULL, NULL, PIC_AVG, NULL, -1, 0, NULL, NULL, LINE_AVG},
     [VAR_FLATMATES] = {.w = 2, .h = 3, .digits = "1." "55" ".9", .left_clue = -1},
     [VAR_MATHRAX] = {.w = 2, .h = 2, .digits = "24" "57", .left_clue = -1, .mathrax = "9+"},
+    [VAR_QUADRO] = {.w = 3, .h = 2, .digits = "472" "915", .left_clue = -1},
+    [VAR_AQ9] = {.w = 5, .h = 5, .digits = "....." "....." "..9.." "....." ".....", .cross = "x...x" ".x.x." "....." ".x.x." "x...x", .left_clue = -1},
     [VAR_PSYM] = {.w = 3, .h = 3, .digits = "2.7" ".5." "3.8", .tint = "000" "010" "000", .left_clue = -1},
     [VAR_B9] = {.w = 6, .h = 1, .digits = "352914", .left_clue = 10},
     [VAR_PILL] = {5, 1, 0, 0, "12345", NULL, NULL, NULL, NULL, NULL, PIC_PILL, NULL, -1, 0, NULL, NULL, LINE_PILL},
@@ -276,6 +278,10 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_AVG] = "Classic rules, and on each teal line, the digit in the circle is the average of the line's other "
     "digits: they add up to it times how many they are, 3 + 8 + 4 = 3 x 5. Digits may repeat along a line where the "
     "rules allow.",
+    [VAR_QUADRO] = "Classic rules, and every 2x2 block of cells holds at least one odd and one even digit: never four "
+    "odd or four even together. Here 4 7 / 9 1 has the even 4, and 7 2 / 1 5 the even 2.",
+    [VAR_AQ9] = "Classic rules, and no two 9s share a diagonal, of any length: a 9 rules out every crossed cell along "
+    "both its diagonals, as a chess queen would. The other digits may repeat on diagonals.",
     [VAR_PSYM] = "Classic rules, and two cells mirrored through the centre (turned half a turn round it) add up to "
     "10: here 2 and 8, 7 and 3. So the tinted centre is always 5, and every digit gives its mirror away.",
     [VAR_B9] = "Classic rules, and a clue left of a row or above a column is the sum of the digits between it and "
@@ -589,15 +595,14 @@ void rules_cb(lv_event_t *e)
     rules_show(game_var());
 }
 
-_Static_assert(VAR_COUNT <= 64, "store_prefs_t.rules_seen has a bit per variant: widen it");
+_Static_assert(VAR_COUNT <= 128, "store_prefs_t.rules_seen and rules_seen_hi: a bit per variant: widen them");
 
 /* (documented in ui_internal.h) */
 void rules_first_time(void)
 {
-    uint64_t seen = store_rules_seen();
-    if (game_var() == VAR_CLASSIC || (seen >> game_var() & 1)) {
+    if (game_var() == VAR_CLASSIC || is_store_rules_seen(game_var())) {
         return;
     }
-    store_set_rules_seen(seen | (1ull << game_var()));
+    store_set_rules_seen(game_var());
     rules_show(game_var());
 }

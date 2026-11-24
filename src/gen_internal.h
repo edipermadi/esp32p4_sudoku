@@ -323,6 +323,18 @@ bool gen_b9_logic(logic_t *L);
  */
 bool gen_psym_logic(logic_t *L);
 /**
+ * @brief Quadro: a 2x2 block whose three other cells can only be odd (or even) takes the other parity in the fourth
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_quadro_logic(logic_t *L);
+/**
+ * @brief Anti-Queen 9s: a 9 rules 9 out along both its diagonals
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_aq9_logic(logic_t *L);
+/**
  * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
  *        candidates taken out.
  * @param[in,out] L          the state

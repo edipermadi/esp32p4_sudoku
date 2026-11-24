@@ -91,6 +91,8 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {9, 92, 195, 1089},    /* Mathrax */
     {21, 128, 827, 121},   /* Point Symmetry (2026-11-24) */
     {29, 143, 584, 943},   /* Before Nine */
+    {22, 232, 622, 419},   /* Quadro (2026-11-24) */
+    {374, 267, 1828, 901}, /* Anti-Queen 9s */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */

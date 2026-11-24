@@ -343,6 +343,20 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                      "can't be, so the cell %s it must be %d. ", u1, below ? 1 : 9, below ? "above it" : "below it",
                      below ? "below" : "above", below ? 9 : 1);
         }
+    } else if (t->kind == TECH_QUADRO) {           /* Quadro: the 2x2 block */
+        const int tl = t->unit >= 0 && t->unit < 81 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : tl;
+        mark[tl] = mark[tl + 1] = mark[tl + 9] = mark[tl + 10] = 1;
+        const bool odd = (t->digit & 0x2AA) != 0;
+        snprintf(u1, sizeof(u1), "the 2x2 block with row %d, column %d", c / 9 + 1, c % 9 + 1);
+        snprintf(tech, sizeof(tech), "Every 2x2 block holds an odd and an even digit. The other three cells of %s "
+                 "can only be %s, so row %d, column %d is %s. ", u1, odd ? "even" : "odd", c / 9 + 1, c % 9 + 1,
+                 odd ? "odd" : "even");
+    } else if (t->kind == TECH_AQ9) {              /* Anti-Queen 9s: the 9 and its diagonals */
+        const int n = t->unit >= 0 && t->unit < 81 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : n;
+        mark[n] = mark[c] = 1;
+        snprintf(u1, sizeof(u1), "the 9 in row %d, column %d", n / 9 + 1, n % 9 + 1);
+        snprintf(tech, sizeof(tech), "No two 9s share a diagonal, and row %d, column %d is on a diagonal of %s, so it "
+                 "isn't 9. ", c / 9 + 1, c % 9 + 1, u1);
     } else if (t->kind == TECH_PSYM) {             /* Point Symmetry: the cell and its mirror */
         const int c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : 0, p = 80 - c;
         mark[c] = mark[p] = mark[40] = 1;

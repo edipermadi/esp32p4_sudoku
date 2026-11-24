@@ -740,6 +740,8 @@ typedef struct {
 #define R_MATHRAX (1u << 19)            /**< Mathrax */
 #define R_PSYM    (1u << 20)            /**< Point Symmetry */
 #define R_B9      (1u << 21)            /**< Before Nine */
+#define R_QUADRO  (1u << 22)            /**< Quadro */
+#define R_AQ9     (1u << 23)            /**< Anti-Queen 9s */
 /** @} */
 
 /**
@@ -1589,6 +1591,37 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_PSYM);
+    for (int q = 0; (rules & R_QUADRO) && free && q < 4; q++) {   /* Quadro: each 2x2 block it's in */
+        const int tl = i - (q & 1) - (q >> 1) * 9;
+        if (tl < 0 || tl % 9 > 7 || tl / 9 > 7 || (q & 1 && i % 9 == 0)) {
+            continue;
+        }
+        const int four[4] = {tl, tl + 1, tl + 9, tl + 10};
+        int odd = 0, even = 0;
+        for (int k = 0; k < 4; k++) {
+            const int w = four[k] == i ? 0 : g->v[four[k]];
+            odd += w && (w & 1);
+            even += w && !(w & 1);
+        }
+        if (odd == 3) {
+            free &= (uint16_t)0x154;                /* three odd: it's even */
+        } else if (even == 3) {
+            free &= (uint16_t)0x2AA;                /* three even: it's odd */
+        }
+    }
+    WHY(FIT_QUADRO);
+    if ((rules & R_AQ9) && (free >> 9 & 1)) {       /* Anti-Queen 9s: a 9 already on one of its diagonals */
+        static const int8_t DR[4] = {-1, -1, 1, 1}, DC[4] = {-1, 1, -1, 1};
+        for (int k = 0; k < 4 && (free >> 9 & 1); k++) {
+            for (int r = i / 9 + DR[k], c = i % 9 + DC[k]; r >= 0 && r < 9 && c >= 0 && c < 9; r += DR[k], c += DC[k]) {
+                if (g->v[r * 9 + c] == 9) {
+                    free &= (uint16_t)~(1u << 9);
+                    break;
+                }
+            }
+        }
+    }
+    WHY(FIT_AQ9);
     for (int line = 0; (rules & R_B9) && free && line < 2; line++) {   /* Before Nine: its row's, column's clue */
         int lu = line ? 9 + i % 9 : i / 9, c = G->b9_sum[lu], cells[9];
         if (!c) {
@@ -1791,7 +1824,7 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0) |
                (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0) |
                (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0) |
-               (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0);
+               (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0) | (G->quadro ? R_QUADRO : 0) | (G->aq9 ? R_AQ9 : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

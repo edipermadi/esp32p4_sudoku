@@ -31,7 +31,9 @@ extern "C" {
  * - Dutch Flatmates: only the turns that keep up up or down (its rule is about the cells above and below); 5
  *   kept, 1 and 9 swapped where the board is turned upside down, the rest any way;
  * - 159 Sudoku: no quarter turns, and every digit d to 10 - d exactly when the columns are mirrored (its
- *   columns 1, 5 and 9 hold column numbers).
+ *   columns 1, 5 and 9 hold column numbers);
+ * - Quadro: odd digits renumbered among the odd, even ones among the even;
+ * - Anti-Queen 9s: 9 kept, the rest any way.
  *
  * With their layout turned with the givens (canon_hash_geom(); digits as they are but where said):
  * - Jigsaw: its regions, relabelled in reading order (digits any way);
@@ -67,14 +69,16 @@ enum {
                                          *   three that's 15 stays 15) */
     CANON_FLATMATES,                    /**< 5 as it is; 1 and 9 as they are, swapped where the board is turned upside
                                          *   down (a 1 above a 5 becomes one below it: a 9 there); the rest any way */
-    CANON_159                           /**< as they are, or every digit d to 10 - d where the columns are mirrored
+    CANON_159,                          /**< as they are, or every digit d to 10 - d where the columns are mirrored
                                          *   (159 Sudoku: its digits in columns 1, 5 and 9 are column numbers) */
+    CANON_PARITY,                       /**< odd to odd, even to even, each in reading order (Quadro) */
+    CANON_FIX9                          /**< 9 as it is, the rest any way (Anti-Queen 9s) */
 };
 
 /**
  * @brief How a variant's puzzles are renumbered for the hash.
  * @param[in] variant  sudoku_variant_t
- * @return CANON_ANY, CANON_PAIRS, CANON_FLIP, CANON_FLATMATES or CANON_159
+ * @return CANON_ANY, CANON_PAIRS, CANON_FLIP, CANON_FLATMATES, CANON_159, CANON_PARITY or CANON_FIX9
  */
 int canon_digits(int variant);
 

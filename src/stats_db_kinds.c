@@ -20,7 +20,7 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "159 Sudoku", "Product Killer", "Extra Regions",
                                                          "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers",
                                                          "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates", "Mathrax",
-                                                         "Point Symmetry", "Before Nine"
+                                                         "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -38,7 +38,7 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "159 Sudoku", "Product Killer", "Extra Regions",
                                                           "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers",
                                                           "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates", "Mathrax",
-                                                          "Point Symmetry", "Before Nine"
+                                                          "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -180,6 +180,10 @@ int stats_kind_of(int variant, bool daily)
         return KIND_PSYM;
     case VAR_B9:
         return KIND_B9;
+    case VAR_QUADRO:
+        return KIND_QUADRO;
+    case VAR_AQ9:
+        return KIND_AQ9;
     default:
         return KIND_NEW;
     }

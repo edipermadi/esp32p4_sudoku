@@ -52,6 +52,8 @@ static const learn_lesson_t LESSONS[] = {
     {"Diagonal Non-Consecutive", "Cells touching at a corner are never 1 apart: the corners rule out the digits next to theirs.", VAR_DIAGNC, TECH_DIAGNC, false},
     {"Diagonal Consecutive", "Corner neighbours with a mark are 1 apart, without one they're not: a mark leaves two digits.", VAR_DIAGCONSEC, TECH_DIAGNC, false},
     {"Dutch Flatmates", "Every 5 has a 1 right above it or a 9 right below: a 5 can't go where neither can.", VAR_FLATMATES, TECH_FLATMATES, true},
+    {"Quadro", "Every 2x2 block holds an odd and an even digit: three of one parity leave the fourth the other.", VAR_QUADRO, TECH_QUADRO, true},
+    {"Anti-Queen 9s", "No two 9s share a diagonal: each 9 rules 9 out along both its diagonals.", VAR_AQ9, TECH_AQ9, true},
     {"Even-Odd cells", "A shaded cell is even, a ringed one odd: that alone can leave a digit one place.", VAR_EVENODD, TECH_NONE, false},
     {"Consecutive bars", "A bar: the two cells differ by 1. No bar: they don't. Both narrow down a cell's digits.", VAR_CONSEC, TECH_CONSEC, false},
     {"Kropki dots", "White dot: 1 apart; black dot: one is double the other; no dot: neither.", VAR_KROPKI, TECH_EDGE, false},
@@ -161,6 +163,8 @@ int learn_group(int k)
     case VAR_FORTRESS:
     case VAR_FLATMATES:
     case VAR_MATHRAX:
+    case VAR_QUADRO:
+    case VAR_AQ9:
         return LEARN_MARKS;
     case VAR_KILLER:
     case VAR_SUMLESS:

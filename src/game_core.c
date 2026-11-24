@@ -496,6 +496,26 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int tl = 0; geo->quadro && tl < 72; tl++) {   /* Quadro: a full 2x2 block all odd or all even */
+        const int four[4] = {tl, tl + 1, tl + 9, tl + 10};
+        int odd = 0, even = 0;
+        for (int k = 0; tl % 9 < 8 && k < 4; k++) {
+            odd += val[four[k]] && (val[four[k]] & 1);
+            even += val[four[k]] && !(val[four[k]] & 1);
+        }
+        if (odd == 4 || even == 4) {
+            for (int k = 0; k < 4; k++) {
+                out[four[k]] = true;
+            }
+        }
+    }
+    for (int a = 0; geo->aq9 && a < 81; a++) {      /* Anti-Queen 9s: two 9s on one diagonal */
+        for (int b = a + 1; val[a] == 9 && b < 81; b++) {
+            if (val[b] == 9 && abs(a / 9 - b / 9) == abs(a % 9 - b % 9)) {
+                out[a] = out[b] = true;
+            }
+        }
+    }
     for (int c = 0; geo->psym && c <= 40; c++) {   /* Point Symmetry: a mirrored pair not making 10 (the centre: not 5) */
         const int a = val[c], b = val[80 - c];
         if (c == 40 ? a && a != 5 : a && b && a + b != 10) {
