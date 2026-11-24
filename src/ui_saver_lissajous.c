@@ -1,14 +1,14 @@
 /**
  * @file ui_saver_lissajous.c
  * @ingroup ui_sudoku
- * @brief The Lissajous screen saver: an oscilloscope's figure (lissajous_core.c) in 3Blue1Brown's blue
+ * @brief The Lissajous screen saver: an oscilloscope's figure (saver_lissajous_core.c) in 3Blue1Brown's blue
  *        on black, turning as its phase drifts, a yellow dot tracing it with a tail fading into the blue; every so often it shrinks away and grows back with another ratio.
  *
  * Each frame the last frame's figure and beam are painted black and the new ones drawn with the savers'
  * pen (ui_saver_pic.c), which redraws only what changed.
  */
 #include "ui_internal.h"
-#include "lissajous_core.h"
+#include "saver_lissajous_core.h"
 
 #define LJ_FRAME_MS     40                      /**< a frame each, ms (25 a second) */
 #define LJ_TAIL         40                      /**< the beam's places drawn, a segment apart (its tail) */

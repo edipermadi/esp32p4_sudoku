@@ -1,12 +1,12 @@
 /**
- * @file automata3d_core.c
- * @ingroup automata3d_core
+ * @file saver_automata3d_core.c
+ * @ingroup saver_automata3d_core
  * @brief 3D cellular automata for the screen saver, without LVGL (drawn by ui_saver_automata3d.c).
  *
  * The 26 neighbours' live count is a 3 x 3 x 3 box sum, worked out in three passes of three (along x, then
  * y, then z) less the cell itself: some 10 additions a cell rather than 26.
  */
-#include "automata3d_core.h"
+#include "saver_automata3d_core.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -83,7 +83,7 @@ static void seed_start(void)
     s_still = 0;
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 bool a3_start(uint32_t seed, int rule)
 {
     s_rng = seed ? seed : 1;
@@ -101,7 +101,7 @@ bool a3_start(uint32_t seed, int rule)
     return true;
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 void a3_free(void)
 {
     free(s_cur);
@@ -111,7 +111,7 @@ void a3_free(void)
     s_cur = s_next = s_a = s_b = NULL;
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 void a3_set_rule(int rule)
 {
     s_rule = rule >= 0 && rule < A3_R_COUNT ? rule : 0;
@@ -120,7 +120,7 @@ void a3_set_rule(int rule)
     }
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 void a3_clear(void)
 {
     if (s_cur) {
@@ -131,7 +131,7 @@ void a3_clear(void)
     s_still = 0;
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 void a3_set(int x, int y, int z, int st)
 {
     if (!s_cur || (unsigned)x >= A3_N || (unsigned)y >= A3_N || (unsigned)z >= A3_N) {
@@ -176,7 +176,7 @@ static void count_live(void)
     }
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 bool a3_step(void)
 {
     if (!s_cur) {
@@ -215,7 +215,7 @@ bool a3_step(void)
     return false;
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 int a3_state(int x, int y, int z)
 {
     if (!s_cur || (unsigned)x >= A3_N || (unsigned)y >= A3_N || (unsigned)z >= A3_N) {
@@ -224,17 +224,17 @@ int a3_state(int x, int y, int z)
     return s_cur[(z * A3_N + y) * A3_N + x];
 }
 
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 const uint8_t *a3_cells(void) { return s_cur; }
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 int a3_rule(void) { return s_rule; }
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 const char *a3_rule_name(int rule) { return rule >= 0 && rule < A3_R_COUNT ? RULES[rule].name : ""; }
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 int a3_states(void) { return RULES[s_rule].states; }
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 int a3_population(void) { return s_pop; }
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 int a3_step_ms(void) { return RULES[s_rule].ms; }
-/* (documented in automata3d_core.h) */
+/* (documented in saver_automata3d_core.h) */
 uint32_t a3_generation(void) { return s_gen; }

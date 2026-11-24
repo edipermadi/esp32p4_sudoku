@@ -1,10 +1,10 @@
 /**
- * @file automata_core.c
- * @ingroup automata_core
+ * @file saver_automata_core.c
+ * @ingroup saver_automata_core
  * @brief Cellular automata (and Langton's ant) for the screen savers, without LVGL (drawn by
  *        ui_saver_automata.c).
  */
-#include "automata_core.h"
+#include "saver_automata_core.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -167,7 +167,7 @@ static bool settled(void)
     return false;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 void auto_set_rule(int rule)
 {
     s_rule = rule >= 0 && rule < AUTO_R_COUNT ? rule : AUTO_R_LIFE;
@@ -198,7 +198,7 @@ void auto_set_rule(int rule)
     }
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 bool auto_start(uint32_t seed, int rule)
 {
     if (!s_cur) {
@@ -215,7 +215,7 @@ bool auto_start(uint32_t seed, int rule)
     return true;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 void auto_free(void)
 {
     free(s_cur);
@@ -224,7 +224,7 @@ void auto_free(void)
     s_cur = s_next = s_key = NULL;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 void auto_clear(void)
 {
     if (s_cur) {
@@ -237,7 +237,7 @@ void auto_clear(void)
     s_adir = 0;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 void auto_set(int x, int y, int st)
 {
     if (s_cur) {
@@ -304,7 +304,7 @@ static void ant_steps(void)
     s_key[s_ay * AUTO_N + s_ax] = AUTO_KEY_ANT;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 bool auto_step(void)
 {
     if (!s_cur) {
@@ -344,56 +344,56 @@ bool auto_step(void)
     return false;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 int auto_state(int x, int y)
 {
     return s_cur ? s_cur[y * AUTO_N + x] : 0;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 int auto_key(int x, int y)
 {
     return s_key ? s_key[y * AUTO_N + x] : 0;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 void auto_ant(int *x, int *y)
 {
     *x = s_ax;
     *y = s_ay;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 int auto_rule(void)
 {
     return s_rule;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 const char *auto_rule_name(int rule)
 {
     return RULES[rule >= 0 && rule < AUTO_R_COUNT ? rule : AUTO_R_LIFE].name;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 int auto_kind(void)
 {
     return RULES[s_rule].kind;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 int auto_states(void)
 {
     return RULES[s_rule].states;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 int auto_step_ms(void)
 {
     return RULES[s_rule].ms;
 }
 
-/* (documented in automata_core.h) */
+/* (documented in saver_automata_core.h) */
 uint32_t auto_generation(void)
 {
     return s_gen;

@@ -1,9 +1,9 @@
 /**
- * @file lissajous_core.c
- * @ingroup lissajous_core
+ * @file saver_lissajous_core.c
+ * @ingroup saver_lissajous_core
  * @brief Lissajous figures for the screen saver, without LVGL (drawn by ui_saver_lissajous.c).
  */
-#include "lissajous_core.h"
+#include "saver_lissajous_core.h"
 #include <math.h>
 
 #define TURN            6.28318530718f        /**< 2 pi */
@@ -34,7 +34,7 @@ static uint32_t rnd(void)
     return x;
 }
 
-/* (documented in lissajous_core.h) */
+/* (documented in saver_lissajous_core.h) */
 void liss_start(uint32_t seed)
 {
     s_rng = seed ? seed : 0x9E3779B9u;
@@ -44,7 +44,7 @@ void liss_start(uint32_t seed)
     s_t = LISS_FADE;                                /* (it starts full size) */
 }
 
-/* (documented in lissajous_core.h) */
+/* (documented in saver_lissajous_core.h) */
 void liss_step(void)
 {
     s_phase += LISS_DRIFT;
@@ -62,7 +62,7 @@ void liss_step(void)
     }
 }
 
-/* (documented in lissajous_core.h) */
+/* (documented in saver_lissajous_core.h) */
 float liss_size(void)
 {
     float u = 1;
@@ -74,7 +74,7 @@ float liss_size(void)
     return u * u * (3 - 2 * u);                     /* (eased) */
 }
 
-/* (documented in lissajous_core.h) */
+/* (documented in saver_lissajous_core.h) */
 int liss_segs(void)
 {
     int n = LISS_SEGS_PER * (RATIOS[s_ratio][0] + RATIOS[s_ratio][1]);
@@ -94,20 +94,20 @@ static void at(float t, int *x, int *y)
     *y = LISS_W / 2 + (int)lroundf(r * sinf(RATIOS[s_ratio][1] * t * TURN));
 }
 
-/* (documented in lissajous_core.h) */
+/* (documented in saver_lissajous_core.h) */
 void liss_point(int i, int *x, int *y)
 {
     at((float)i / liss_segs(), x, y);
 }
 
-/* (documented in lissajous_core.h) */
+/* (documented in saver_lissajous_core.h) */
 void liss_beam(int age, int *x, int *y)
 {
     float t = s_beam - (float)age / liss_segs();    /* (back along the figure, a segment an age) */
     at(t < 0 ? t + 1 : t, x, y);
 }
 
-/* (documented in lissajous_core.h) */
+/* (documented in saver_lissajous_core.h) */
 void liss_ratio(int *a, int *b)
 {
     *a = RATIOS[s_ratio][0];

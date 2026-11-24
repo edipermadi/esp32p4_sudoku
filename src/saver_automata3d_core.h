@@ -1,6 +1,6 @@
 /**
- * @file automata3d_core.h
- * @ingroup automata3d_core
+ * @file saver_automata3d_core.h
+ * @ingroup saver_automata3d_core
  * @brief 3D cellular automata for the screen saver, without LVGL (drawn by ui_saver_automata3d.c).
  */
 #pragma once
@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 /**
- * @defgroup automata3d_core 3D automata core
+ * @defgroup saver_automata3d_core 3D automata core
  * @ingroup ui_sudoku
  * @brief The 3D cellular automata screen savers, each one Generations rule in a cube of A3_N x A3_N x A3_N cells
  *        whose faces are walls (outside is dead). A cell is dead (0), alive (1) or dying

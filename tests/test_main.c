@@ -29,13 +29,14 @@
 #include "share_core.h"
 #include "daily_core.h"
 #include "import_parse.h"
-#include "rain_core.h"
-#include "attractor_core.h"
-#include "boids_core.h"
-#include "lissajous_core.h"
-#include "pendulum_core.h"
-#include "automata_core.h"
-#include "automata3d_core.h"
+#include "saver_rain_core.h"
+#include "saver_attractor_core.h"
+#include "saver_boids_core.h"
+#include "saver_lissajous_core.h"
+#include "saver_pendulum_core.h"
+#include "saver_automata_core.h"
+#include "saver_automata3d_core.h"
+#include "saver_stars_core.h"
 
 static int s_checks, s_failed;
 
@@ -1925,7 +1926,7 @@ static void test_automata(void)
 }
 
 /*
- * The 3D automata (automata3d_core.c): births and survival by the 6 or the 26 neighbours, the walls dead,
+ * The 3D automata (saver_automata3d_core.c): births and survival by the 6 or the 26 neighbours, the walls dead,
  * dying states, a crystal held before it starts again, each rule starting again (itself) within its run,
  * every rule running in range,
  * and the same seed giving the same runs.
@@ -2006,6 +2007,61 @@ static void test_automata3d(void)
     CHECK(!a3_step() && a3_state(0, 0, 0) == 0 && !a3_cells());
 }
 
+/*
+ * The starfield (saver_stars_core.c): the stars come nearer by the speed and come back far away once past,
+ * their streaks point out from the middle, brightness and colours in range, the speed's waves, and the
+ * same seed giving the same flights.
+ */
+static void test_stars(void)
+{
+    CHECK(stars_start(5));
+    int x0, y0, x1, y1, bright, tone;
+    CHECK(!stars_get(0, &x0, &y0, &x1, &y1, &bright, &tone));   /* (just placed: no streak yet) */
+    static float z[STARS_N];
+    bool in = true, outward = true, nearer = true, back = false;
+    float lo = 1e9f, hi = 0;
+    for (int f = 0; f < STARS_WAVE; f++) {
+        for (int i = 0; i < STARS_N; i++) {
+            z[i] = stars_depth(i);
+        }
+        stars_step();
+        float v = stars_speed();
+        lo = v < lo ? v : lo;
+        hi = v > hi ? v : hi;
+        for (int i = 0; i < STARS_N; i++) {
+            float d = stars_depth(i);
+            in &= d >= STARS_NEAR && d <= STARS_FAR;
+            if (d == STARS_FAR) {
+                back = true;                        /* passed, back far away */
+                continue;
+            }
+            nearer &= fabsf(z[i] - v - d) < 1e-5f;
+            if (stars_get(i, &x0, &y0, &x1, &y1, &bright, &tone)) {
+                int r0 = (x0 - STARS_W / 2) * (x0 - STARS_W / 2) + (y0 - STARS_W / 2) * (y0 - STARS_W / 2);
+                int r1 = (x1 - STARS_W / 2) * (x1 - STARS_W / 2) + (y1 - STARS_W / 2) * (y1 - STARS_W / 2);
+                outward &= r1 + 2 * STARS_W >= r0;  /* (the tail nearer the middle, give or take rounding) */
+                in &= bright >= 0 && bright <= 255 && tone >= 0 && tone < STARS_TONES;
+            }
+        }
+    }
+    CHECK(in && nearer && back);
+    CHECK(outward);
+    CHECKF(lo > 0.1f * STARS_SPEED && lo < 0.25f * STARS_SPEED && hi > 1.6f * STARS_SPEED && hi < 2.0f * STARS_SPEED,
+           "stars: speed %.4f .. %.4f", lo, hi);
+    float d[2];                                     /* the same seed, the same flights */
+    for (int k = 0; k < 2; k++) {
+        CHECK(stars_start(99));
+        for (int f = 0; f < 300; f++) {
+            stars_step();
+        }
+        d[k] = stars_depth(17) + stars_depth(300);
+    }
+    CHECK(d[0] == d[1]);
+    stars_free();
+    CHECK(!stars_get(0, &x0, &y0, &x1, &y1, &bright, &tone) && stars_depth(0) == 0);
+    stars_step();                                   /* (nothing, with no stars) */
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -2020,6 +2076,7 @@ int main(int argc, char **argv)
         {"attractor (screen saver)", test_attractor}, {"boids (screen saver)", test_boids},
         {"lissajous (screen saver)", test_lissajous}, {"pendulum (screen saver)", test_pendulum},
         {"automata (screen saver)", test_automata}, {"3D automata (screen saver)", test_automata3d},
+        {"stars (screen saver)", test_stars},
     };
     sudoku_geom_init();
     int failed_tests = 0;

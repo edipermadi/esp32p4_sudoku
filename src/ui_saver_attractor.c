@@ -1,7 +1,7 @@
 /**
  * @file ui_saver_attractor.c
  * @ingroup ui_sudoku
- * @brief The strange attractor screen saver: a Clifford or de Jong attractor (attractor_core.c) drawn
+ * @brief The strange attractor screen saver: a Clifford or de Jong attractor (saver_attractor_core.c) drawn
  *        point by point in 3Blue1Brown's colours, each new point a white spark for a frame, the shape
  *        going from deep blue through blue, green and yellow to white where it is denser; once drawn the screen clears and
  *        the next one is drawn from nothing.
@@ -12,7 +12,7 @@
  * (ui_saver_pic.c): a pixel's colour comes from how many points it has had, on a log scale.
  */
 #include "ui_internal.h"
-#include "attractor_core.h"
+#include "saver_attractor_core.h"
 #include <math.h>
 
 #define ATTR_FRAME_MS       100                 /**< a frame each, ms */

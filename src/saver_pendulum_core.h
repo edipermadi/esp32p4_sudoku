@@ -1,6 +1,6 @@
 /**
- * @file pendulum_core.h
- * @ingroup pendulum_core
+ * @file saver_pendulum_core.h
+ * @ingroup saver_pendulum_core
  * @brief Double pendulums for the screen saver, without LVGL (drawn by ui_saver_pendulum.c).
  */
 #pragma once
@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 /**
- * @defgroup pendulum_core Pendulum core
+ * @defgroup saver_pendulum_core Pendulum core
  * @ingroup ui_sudoku
  * @brief PEND_N double pendulums: two equal rods and bobs each, swinging under gravity without friction,
  *        their equations of motion integrated with Runge-Kutta (RK4) in PEND_SUBSTEPS small steps a

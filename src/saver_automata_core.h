@@ -1,6 +1,6 @@
 /**
- * @file automata_core.h
- * @ingroup automata_core
+ * @file saver_automata_core.h
+ * @ingroup saver_automata_core
  * @brief Cellular automata (and Langton's ant) for the screen savers, without LVGL (drawn by
  *        ui_saver_automata.c).
  */
@@ -13,7 +13,7 @@ extern "C" {
 #endif
 
 /**
- * @defgroup automata_core Automata core
+ * @defgroup saver_automata_core Automata core
  * @ingroup ui_sudoku
  * @brief The cellular automata screen savers, each one rule on an AUTO_N x AUTO_N board whose edges wrap
  *        around, started again from its own random start when its run ends (and when it dies out,

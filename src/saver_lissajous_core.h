@@ -1,6 +1,6 @@
 /**
- * @file lissajous_core.h
- * @ingroup lissajous_core
+ * @file saver_lissajous_core.h
+ * @ingroup saver_lissajous_core
  * @brief Lissajous figures for the screen saver, without LVGL (drawn by ui_saver_lissajous.c).
  */
 #pragma once
@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 /**
- * @defgroup lissajous_core Lissajous core
+ * @defgroup saver_lissajous_core Lissajous core
  * @ingroup ui_sudoku
  * @brief The figure an oscilloscope draws from two sine waves: x = sin(a t + d), y = sin(b t), for a
  *        frequency ratio a:b from a list of pleasing ones. The phase d drifts a little every step, so

@@ -1,6 +1,6 @@
 /**
- * @file pendulum_core.c
- * @ingroup pendulum_core
+ * @file saver_pendulum_core.c
+ * @ingroup saver_pendulum_core
  * @brief Double pendulums for the screen saver, without LVGL (drawn by ui_saver_pendulum.c).
  *
  * Equal masses m and rods L (both 1), gravity G: with the angles a1, a2 from straight down and their
@@ -8,7 +8,7 @@
  *   a1'' = (-3G sin a1 - G sin(a1 - 2 a2) - 2 sin d (w2^2 + w1^2 cos d)) / D
  *   a2'' = 2 sin d (2 w1^2 + 2G cos a1 + w2^2 cos d) / D
  */
-#include "pendulum_core.h"
+#include "saver_pendulum_core.h"
 #include <math.h>
 #include <stdlib.h>
 
@@ -106,7 +106,7 @@ static void rk4(pend_t *s)
     s->w2 += h / 6 * (k1.w2 + 2 * k2.w2 + 2 * k3.w2 + k4.w2);
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 void pend_bobs(int k, float *x1, float *y1, float *x2, float *y2)
 {
     const pend_t *s = &s_p[k];
@@ -143,7 +143,7 @@ static void keep(void)
     }
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 void pend_set(float a1, float a2)
 {
     for (int k = 0; k < PEND_N; k++) {
@@ -165,7 +165,7 @@ static void pend_random(void)
     pend_set(a1, rnd_f(-3.14159f, 3.14159f));
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 bool pend_start(uint32_t seed)
 {
     if (!s_trail) {
@@ -179,7 +179,7 @@ bool pend_start(uint32_t seed)
     return true;
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 void pend_free(void)
 {
     free(s_trail);
@@ -187,7 +187,7 @@ void pend_free(void)
     s_len = 0;
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 bool pend_step(void)
 {
     if (!s_trail) {
@@ -208,13 +208,13 @@ bool pend_step(void)
     return false;
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 int pend_trail_len(void)
 {
     return s_len;
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 void pend_trail(int k, int age, float *x, float *y, float *fast)
 {
     const place_t *p = &s_trail[k][((s_head - age) % PEND_TRAIL + PEND_TRAIL) % PEND_TRAIL];
@@ -223,7 +223,7 @@ void pend_trail(int k, int age, float *x, float *y, float *fast)
     *fast = p->fast;
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 float pend_energy(int k)
 {
     const pend_t *s = &s_p[k];
@@ -233,7 +233,7 @@ float pend_energy(int k)
     return kin + pot;
 }
 
-/* (documented in pendulum_core.h) */
+/* (documented in saver_pendulum_core.h) */
 void pend_angles(int k, float *a1, float *a2)
 {
     *a1 = s_p[k].a1;

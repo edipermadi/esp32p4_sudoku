@@ -1441,10 +1441,19 @@ bool saver_pendulum_start(lv_obj_t *parent);
 /** @brief The double pendulum screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_pendulum_stop(void);
 /**
+ * @brief The starfield screen saver starts (ui_saver_stars.c): stars rushing past as streaks on the
+ *        savers' picture, 25 frames a second.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it
+ */
+bool saver_stars_start(lv_obj_t *parent);
+/** @brief The starfield screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_stars_stop(void);
+/**
  * @brief A cellular automaton screen saver starts (ui_saver_automata.c: Game of Life, Brian's Brain,
  *        Langton's ant and the rest): its rule on a grid of dots on the savers' picture.
  * @param[in] parent  the screen saver's cover
- * @param[in] rule  auto_rule_t (automata_core.h)
+ * @param[in] rule  auto_rule_t (saver_automata_core.h)
  * @return false if there was no memory for it (nothing shown)
  */
 bool saver_automata_start(lv_obj_t *parent, int rule);
@@ -1454,7 +1463,7 @@ void saver_automata_stop(void);
  * @brief A 3D cellular automaton screen saver starts (ui_saver_automata3d.c: Crystal growth, Diamond
  *        growth, Pyroclastic or Builder 1): its rule in a turning cube of blocks on the savers' picture.
  * @param[in] parent  the screen saver's cover
- * @param[in] rule  a3_rule_t (automata3d_core.h)
+ * @param[in] rule  a3_rule_t (saver_automata3d_core.h)
  * @return false if there was no memory for it
  */
 bool saver_automata3d_start(lv_obj_t *parent, int rule);

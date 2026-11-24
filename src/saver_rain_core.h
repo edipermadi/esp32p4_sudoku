@@ -1,6 +1,6 @@
 /**
- * @file rain_core.h
- * @ingroup rain_core
+ * @file saver_rain_core.h
+ * @ingroup saver_rain_core
  * @brief Digital rain for the screen saver, without LVGL (drawn by ui_saver_rain.c).
  */
 #pragma once
@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 /**
- * @defgroup rain_core Rain core
+ * @defgroup saver_rain_core Rain core
  * @ingroup ui_sudoku
  * @brief Digital rain: RAIN_COLS columns of RAIN_ROWS cells, each column a falling trail of the digits
  *        1 to 9. A trail's head is the brightest (RAIN_HEAD), the digits behind it dimmer the further

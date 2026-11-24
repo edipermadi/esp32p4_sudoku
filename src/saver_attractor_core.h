@@ -1,6 +1,6 @@
 /**
- * @file attractor_core.h
- * @ingroup attractor_core
+ * @file saver_attractor_core.h
+ * @ingroup saver_attractor_core
  * @brief Strange attractors for the screen saver, without LVGL (drawn by ui_saver_attractor.c).
  */
 #pragma once
@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 /**
- * @defgroup attractor_core Attractor core
+ * @defgroup saver_attractor_core Attractor core
  * @ingroup ui_sudoku
  * @brief Clifford and de Jong attractors: a point moved again and again by four-parameter sine and
  *        cosine formulas, each place it lands counted on an ATTR_W x ATTR_W grid (the screen), so the

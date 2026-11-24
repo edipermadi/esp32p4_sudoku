@@ -2,7 +2,7 @@
  * @file ui_saver_automata.c
  * @ingroup ui_sudoku
  * @brief The cellular automata screen savers (Game of Life, Brian's Brain, Langton's ant and the rest):
- *        one rule (automata_core.c) on a grid of round dots, in 3Blue1Brown's colours on black, the unlit
+ *        one rule (saver_automata_core.c) on a grid of round dots, in 3Blue1Brown's colours on black, the unlit
  *        dots faintly there. Life-like rules are blue with yellow newborns, dead cells fading through deep
  *        blue (Brian's Brain: firing yellow, dying blue); cyclic rules go round a wheel of colours; the
  *        excitable medium's waves are yellow with a refractory tail from gold to deep blue; the forest is
@@ -12,7 +12,7 @@
  * redraws only what changed.
  */
 #include "ui_internal.h"
-#include "automata_core.h"
+#include "saver_automata_core.h"
 
 #define AU_PX           (SCR_W / AUTO_N)        /**< a cell's size, px (6) */
 #define AU_PURPLE       0x9A72AC                /**< 3Blue1Brown's purple (only here) */

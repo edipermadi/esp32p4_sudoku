@@ -1,7 +1,7 @@
 /**
  * @file ui_saver_rain.c
  * @ingroup ui_sudoku
- * @brief The digital rain screen saver: falling trails of the digits 1 to 9 (rain_core.c) on black, each
+ * @brief The digital rain screen saver: falling trails of the digits 1 to 9 (saver_rain_core.c) on black, each
  *        column in one of 3Blue1Brown's colours, its head nearly white.
  *
  * The digits are drawn once, at the start, into tiles of each brightness (a canvas, then its pixels read
@@ -9,7 +9,7 @@
  * (ui_saver_pic.c) and redraws only each column's changed span (30 columns: within LVGL's 32 areas).
  */
 #include "ui_internal.h"
-#include "rain_core.h"
+#include "saver_rain_core.h"
 #include "esp_heap_caps.h"
 
 #define RAIN_PX         (SCR_W / RAIN_COLS)     /**< a cell's size, px (24) */

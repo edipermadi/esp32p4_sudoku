@@ -177,19 +177,22 @@ src/ui_saver_attractor.c the strange attractor screen saver: points plotted, the
 src/ui_saver_boids.c    the boids screen saver: trails erased and drawn, only the changed tiles redrawn
 src/ui_saver_lissajous.c the Lissajous screen saver: the figure and its beam erased and drawn with the pen
 src/ui_saver_pendulum.c the double pendulum screen saver: its trail, rods and bobs erased and drawn with the pen
+src/ui_saver_stars.c    the starfield screen saver: each star's streak erased and drawn with the pen
 src/ui_saver_automata.c the cellular automata screen savers (Game of Life, Brian's Brain, Langton's ant and the
                         rest): each rule's colours, the dots whose key changed drawn with the pen
-src/automata_core.c     cellular automata without LVGL: Generations (Life-like), cyclic, excitable, forest-fire
+src/saver_automata_core.c cellular automata without LVGL: Generations (Life-like), cyclic, excitable, forest-fire
                         and Langton's ant rules; restarts when one dies out, settles or grows quiet
 src/ui_saver_automata3d.c the 3D cellular automata screen savers: the turning cube's visible cells sorted far
                         to near by depth buckets and painted as bevelled blocks
-src/automata3d_core.c   3D cellular automata without LVGL: Generations rules (6 or 26 neighbours) in a walled
+src/saver_automata3d_core.c 3D cellular automata without LVGL: Generations rules (6 or 26 neighbours) in a walled
                         32^3 cube, each starting again when it ends
-src/pendulum_core.c     a double pendulum without LVGL: the equations of motion stepped with RK4, the trail
-src/lissajous_core.c    Lissajous figures without LVGL: the ratios, the drifting phase, shrinking between ratios, the beam
-src/boids_core.c        a flock of boids without LVGL: separation, alignment, cohesion, the edges, trails
-src/attractor_core.c    strange attractors without LVGL: the formulas, random sets that spread, the counts
-src/rain_core.c         digital rain without LVGL: the columns, their speeds and trails, the flicker
+src/saver_stars_core.c  a starfield without LVGL: stars nearer each step, projected, back far away once past;
+                        the speed's waves and the view's roll
+src/saver_pendulum_core.c a double pendulum without LVGL: the equations of motion stepped with RK4, the trail
+src/saver_lissajous_core.c Lissajous figures without LVGL: the ratios, the drifting phase, shrinking between ratios, the beam
+src/saver_boids_core.c  a flock of boids without LVGL: separation, alignment, cohesion, the edges, trails
+src/saver_attractor_core.c strange attractors without LVGL: the formulas, random sets that spread, the counts
+src/saver_rain_core.c   digital rain without LVGL: the columns, their speeds and trails, the flicker
 src/ui_lock.c           the lock screen (Swipe or PIN) and the keypad it shares
 src/ui_pin_setup.c      Settings' PIN setup: a new PIN typed twice
 src/lock_core.c         the lock's PIN without LVGL: right or wrong, tries, the wait, setting a new one

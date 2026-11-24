@@ -1,10 +1,10 @@
 /**
- * @file boids_core.c
- * @ingroup boids_core
+ * @file saver_boids_core.c
+ * @ingroup saver_boids_core
  * @brief A flock of boids, their colours and the hawks chasing them, for the screen saver, without LVGL
  *        (drawn by ui_saver_boids.c).
  */
-#include "boids_core.h"
+#include "saver_boids_core.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,7 +69,7 @@ static void recolour(boid_t *b, int c)
     }
 }
 
-/* (documented in boids_core.h) */
+/* (documented in saver_boids_core.h) */
 bool boids_start(uint32_t seed)
 {
     if (!s_b) {
@@ -95,7 +95,7 @@ bool boids_start(uint32_t seed)
     return true;
 }
 
-/* (documented in boids_core.h) */
+/* (documented in saver_boids_core.h) */
 void boids_free(void)
 {
     free(s_b);
@@ -241,7 +241,7 @@ static void hawk(int h, float *nvx, float *nvy)
     *nvy = vy;
 }
 
-/* (documented in boids_core.h) */
+/* (documented in saver_boids_core.h) */
 void boids_step(void)
 {
     if (!s_b) {
@@ -266,21 +266,21 @@ void boids_step(void)
     }
 }
 
-/* (documented in boids_core.h) */
+/* (documented in saver_boids_core.h) */
 void boids_at(int i, int age, float *x, float *y)
 {
     *x = s_b ? s_b[i].tx[age] : 0;
     *y = s_b ? s_b[i].ty[age] : 0;
 }
 
-/* (documented in boids_core.h) */
+/* (documented in saver_boids_core.h) */
 void boids_vel(int i, float *vx, float *vy)
 {
     *vx = s_b ? s_b[i].vx : 0;
     *vy = s_b ? s_b[i].vy : 0;
 }
 
-/* (documented in boids_core.h) */
+/* (documented in saver_boids_core.h) */
 int boids_colour(int i, int *before, int *since)
 {
     if (before) {

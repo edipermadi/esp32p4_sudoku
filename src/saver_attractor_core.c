@@ -1,9 +1,9 @@
 /**
- * @file attractor_core.c
- * @ingroup attractor_core
+ * @file saver_attractor_core.c
+ * @ingroup saver_attractor_core
  * @brief Strange attractors for the screen saver, without LVGL (drawn by ui_saver_attractor.c).
  */
-#include "attractor_core.h"
+#include "saver_attractor_core.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -126,7 +126,7 @@ static bool spreads(float *bx0, float *by0, float *bx1, float *by1)
     return cells >= TEST_SPREAD;
 }
 
-/* (documented in attractor_core.h) */
+/* (documented in saver_attractor_core.h) */
 void attr_next(void)
 {
     float bx0 = -1, by0 = -1, bx1 = 1, by1 = 1;
@@ -164,7 +164,7 @@ void attr_next(void)
     }
 }
 
-/* (documented in attractor_core.h) */
+/* (documented in saver_attractor_core.h) */
 bool attr_start(uint32_t seed)
 {
     if (!s_count) {
@@ -183,7 +183,7 @@ bool attr_start(uint32_t seed)
     return true;
 }
 
-/* (documented in attractor_core.h) */
+/* (documented in saver_attractor_core.h) */
 void attr_free(void)
 {
     free(s_count);
@@ -192,7 +192,7 @@ void attr_free(void)
     s_sin = NULL;
 }
 
-/* (documented in attractor_core.h) */
+/* (documented in saver_attractor_core.h) */
 int attr_plot(int n, uint32_t *dirty, int max_dirty)
 {
     if (!s_count) {
@@ -221,13 +221,13 @@ int attr_plot(int n, uint32_t *dirty, int max_dirty)
     return nd;
 }
 
-/* (documented in attractor_core.h) */
+/* (documented in saver_attractor_core.h) */
 const uint8_t *attr_counts(void)
 {
     return s_count;
 }
 
-/* (documented in attractor_core.h) */
+/* (documented in saver_attractor_core.h) */
 void attr_box(int *x0, int *y0, int *x1, int *y1)
 {
     *x0 = s_box[0];
@@ -236,7 +236,7 @@ void attr_box(int *x0, int *y0, int *x1, int *y1)
     *y1 = s_box[3];
 }
 
-/* (documented in attractor_core.h) */
+/* (documented in saver_attractor_core.h) */
 int attr_kind(void)
 {
     return s_kind;

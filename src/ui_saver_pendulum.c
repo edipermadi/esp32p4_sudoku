@@ -1,7 +1,7 @@
 /**
  * @file ui_saver_pendulum.c
  * @ingroup ui_sudoku
- * @brief The double pendulum screen saver: PEND_N chaotic double pendulums (pendulum_core.c) started a
+ * @brief The double pendulum screen saver: PEND_N chaotic double pendulums (saver_pendulum_core.c) started a
  *        hair apart, each in one of 3Blue1Brown's colours (blue, yellow, red); grey
  *        rods. They swing as one, then part. Each lower bob draws a trail coloured by how fast it
  *        went there (its colour's deep shade when slow, glowing to near white when fast) that fades out
@@ -11,7 +11,7 @@
  * savers' pen (ui_saver_pic.c), which redraws only what changed.
  */
 #include "ui_internal.h"
-#include "pendulum_core.h"
+#include "saver_pendulum_core.h"
 
 #define PD_FRAME_MS     40                      /**< a frame each, ms (25 a second) */
 #define PD_WIDTH        4                       /**< the rods' and the trails' width, px */

@@ -1,9 +1,9 @@
 /**
- * @file rain_core.c
- * @ingroup rain_core
+ * @file saver_rain_core.c
+ * @ingroup saver_rain_core
  * @brief Digital rain for the screen saver, without LVGL (drawn by ui_saver_rain.c).
  */
-#include "rain_core.h"
+#include "saver_rain_core.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -66,7 +66,7 @@ static void col_restart(rain_col_t *c)
     c->head = -(int32_t)rnd_in(1, RAIN_PAUSE_MAX) * c->speed;   /* (the pause, in steps) */
 }
 
-/* (documented in rain_core.h) */
+/* (documented in saver_rain_core.h) */
 void rain_free(void)
 {
     free(s_col);
@@ -76,7 +76,7 @@ void rain_free(void)
     s_digit = s_level = NULL;
 }
 
-/* (documented in rain_core.h) */
+/* (documented in saver_rain_core.h) */
 bool rain_start(uint32_t seed)
 {
     if (!s_col) {
@@ -100,7 +100,7 @@ bool rain_start(uint32_t seed)
     return true;
 }
 
-/* (documented in rain_core.h) */
+/* (documented in saver_rain_core.h) */
 void rain_step(void)
 {
     if (!s_col) {
@@ -144,7 +144,7 @@ void rain_step(void)
     }
 }
 
-/* (documented in rain_core.h) */
+/* (documented in saver_rain_core.h) */
 uint8_t rain_cell(int col, int row, uint8_t *digit)
 {
     if (!s_col) {
@@ -160,13 +160,13 @@ uint8_t rain_cell(int col, int row, uint8_t *digit)
     return s_level[i];
 }
 
-/* (documented in rain_core.h) */
+/* (documented in saver_rain_core.h) */
 uint8_t rain_colour(int col)
 {
     return s_col ? s_col[col].colour : 0;
 }
 
-/* (documented in rain_core.h) */
+/* (documented in saver_rain_core.h) */
 int32_t rain_head(int col)
 {
     return s_col ? s_col[col].head : 0;

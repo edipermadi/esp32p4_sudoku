@@ -1,6 +1,6 @@
 /**
- * @file boids_core.h
- * @ingroup boids_core
+ * @file saver_boids_core.h
+ * @ingroup saver_boids_core
  * @brief A flock of boids, their colours and the hawks chasing them, for the screen saver, without LVGL
  *        (drawn by ui_saver_boids.c).
  */
@@ -13,7 +13,7 @@ extern "C" {
 #endif
 
 /**
- * @defgroup boids_core Boids core
+ * @defgroup saver_boids_core Boids core
  * @ingroup ui_sudoku
  * @brief Reynolds' boids: BOIDS_N birds on a BOIDS_W x BOIDS_W field, each steering by three rules
  *        about its neighbours within BOIDS_SEE: keep apart from those nearer than BOIDS_APART

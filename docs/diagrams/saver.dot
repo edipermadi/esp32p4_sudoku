@@ -9,6 +9,7 @@ digraph saver {
     clk   [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="Screen saver?\n(the lock button:\nalways Dark)"];
     analog[label="Analog clock (dim greys),\nhands each second, moved each minute,\nCPU at full speed"];
     pend  [label="Three double pendulums\n(blue, yellow, red),\nchaotic, trails coloured by speed,\nnew start every 2 minutes"];
+    stars [label="Starfield: stars rushing past as streaks,\nspeed surging and calming in waves, 25 fps,\nCPU at full speed"];
     liss  [label="Lissajous (blue, yellow dot),\nturning figure and beam, 25 fps,\nnew ratio every 16 s"];
     boids [label="Boids (blue, green, yellow\nflocks; red hawks), fading trails, 25 fps,\nCPU at full speed"];
     attr  [label="Strange attractor,\ndrawn point by point for 2 minutes,\nthen cleared, the next,\nCPU at full speed"];
@@ -34,6 +35,7 @@ digraph saver {
     clk -> boids [label="Boids"];
     clk -> liss [label="Lissajous"];
     clk -> pend [label="Pendulum"];
+    clk -> stars [label="Starfield"];
     clk -> life [label="an automaton"];
     clk -> a3d [label="a 3D automaton"];
     clk -> dark [label="Dark"];
@@ -44,6 +46,7 @@ digraph saver {
     boids -> tap1;
     liss -> tap1;
     pend -> tap1;
+    stars -> tap1;
     life -> tap1;
     a3d -> tap1;
     tap1 -> wake [label="yes"];

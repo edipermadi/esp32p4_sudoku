@@ -5,15 +5,16 @@
  *        chosen shows at full speed: a dim clock (digital, or analog: ui_saver_analog.c) moving about,
  *        digital rain (ui_saver_rain.c), a strange attractor (ui_saver_attractor.c), a flock of boids
  *        (ui_saver_boids.c), a Lissajous figure (ui_saver_lissajous.c), double pendulums
- *        (ui_saver_pendulum.c), or a cellular automaton (ui_saver_automata.c: Game of Life, Brian's
- *        Brain, Langton's ant and eight more), or a 3D cellular automaton in a turning cube
- *        (ui_saver_automata3d.c: Crystal growth, Diamond growth, Pyroclastic, Builder 1). After "Screen saver for" minutes (or at once, for Dark) the
- *        screen goes black and the board saves power. The next tap only wakes it. The lock screen, if
- *        on, waits under it.
+ *        (ui_saver_pendulum.c), a starfield flown through (ui_saver_stars.c), a cellular automaton
+ *        (ui_saver_automata.c: Game of Life, Brian's Brain, Langton's ant and eight more), or a 3D
+ *        cellular automaton in a turning cube (ui_saver_automata3d.c: Crystal growth, Diamond growth,
+ *        Pyroclastic, Builder 1). After "Screen saver for" minutes (or at once, for Dark) the screen goes
+ *        black and the board saves power. The next tap only wakes it. The lock screen, if on, waits
+ *        under it.
  */
 #include "ui_internal.h"
-#include "automata_core.h"
-#include "automata3d_core.h"
+#include "saver_automata_core.h"
+#include "saver_automata3d_core.h"
 
 static void saver_sleep(bool lock_now);
 static void saver_show_stop(void);
@@ -96,6 +97,8 @@ static bool saver_show_start(uint8_t mode)
         return saver_lissajous_start(s_saver);
     case SAVER_MODE_PENDULUM:
         return saver_pendulum_start(s_saver);
+    case SAVER_MODE_STARS:
+        return saver_stars_start(s_saver);
     case SAVER_MODE_ANT:
         return saver_automata_start(s_saver, AUTO_R_ANT);
     case SAVER_MODE_BRAIN:
@@ -147,6 +150,7 @@ static void saver_show_stop(void)
     saver_boids_stop();
     saver_lissajous_stop();
     saver_pendulum_stop();
+    saver_stars_stop();
     saver_automata_stop();
     saver_automata3d_stop();
     if (s_saver) {

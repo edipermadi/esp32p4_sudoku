@@ -1,7 +1,7 @@
 /**
  * @file ui_saver_boids.c
  * @ingroup ui_sudoku
- * @brief The boids screen saver: a flock (boids_core.c) on black, each bird a bright dot in one of three
+ * @brief The boids screen saver: a flock (saver_boids_core.c) on black, each bird a bright dot in one of three
  *        of 3Blue1Brown's colours (blue, green, yellow) drawing a trail that fades out behind it; flocks come to one colour and fight it out when they meet, a colour
  *        change blending over BD_BLEND frames; red hawks chase the flock and scatter it.
  *
@@ -9,7 +9,7 @@
  * (ui_saver_pic.c), which redraws only what changed: a flock bunched in one place redraws little.
  */
 #include "ui_internal.h"
-#include "boids_core.h"
+#include "saver_boids_core.h"
 
 #define BD_FRAME_MS     40                      /**< a frame each, ms (25 a second) */
 #define BD_BLEND        16                      /**< frames a bird's colour change blends over */

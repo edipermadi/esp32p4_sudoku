@@ -1,7 +1,7 @@
 /**
  * @file ui_saver_automata3d.c
  * @ingroup ui_sudoku
- * @brief The 3D cellular automata screen savers: a rule of automata3d_core.c (Crystal growth, Diamond
+ * @brief The 3D cellular automata screen savers: a rule of saver_automata3d_core.c (Crystal growth, Diamond
  *        growth, Pyroclastic or Builder 1) in a cube of cells that turns slowly in space, each cell a small bevelled block in 3Blue1Brown's colours on
  *        black: live cells deep blue at the bottom through blue, teal and green to yellow at the top,
  *        dying ones from red through pink and purple to deep blue, the far ones dimmer.
@@ -12,7 +12,7 @@
  * Only the box the cube covered last frame and this one is cleared and redrawn.
  */
 #include "ui_internal.h"
-#include "automata3d_core.h"
+#include "saver_automata3d_core.h"
 #include <math.h>
 
 #define A3D_FRAME_MS    80                      /**< a frame each, ms */
