@@ -588,6 +588,77 @@ bool gen_antidiag_logic(logic_t *L)
     return false;
 }
 
+/**
+ * @brief Dutch Flatmates: may a cell still be d (it is, or d is among its candidates)?
+ * @param[in] L  the logic state
+ * @param[in] c  the cell
+ * @param[in] d  the digit
+ * @return true if it may
+ */
+static bool is_logic_open(const logic_t *L, int c, int d)
+{
+    return L->v[c] ? L->v[c] == d : (L->cand[c] >> d & 1) != 0;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_flatmates_logic(logic_t *L)
+{
+    for (int c = 0; c < 81; c++) {
+        const int r = c / 9;
+        const bool one = r > 0 && is_logic_open(L, c - 9, 1), nine = r < 8 && is_logic_open(L, c + 9, 9);
+        if (!L->v[c] && (L->cand[c] >> 5 & 1) && !one && !nine) {
+            eliminate(L, c, (uint16_t)(1u << 5));   /* no 1 above, no 9 below: no 5 */
+            trace(TECH_FLATMATES, c, -1, L->cand[c], 0, c, -1);
+            return true;
+        }
+        if (L->v[c] != 5) {
+            continue;
+        }
+        const int need = !one ? c + 9 : !nine ? c - 9 : -1;   /* its 1 can't come: the 9 below; and the other way */
+        if (need < 0 || need > 80) {
+            continue;
+        }
+        const uint16_t keep = (uint16_t)(1u << (need > c ? 9 : 1));
+        if (!L->v[need] && (L->cand[need] & ~keep)) {
+            eliminate(L, need, (uint16_t)(L->cand[need] & ~keep));
+            trace(TECH_FLATMATES, c, -1, keep, 0, need, -1);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_mathrax_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int q = 0; q < G->nmx; q++) {
+        const int at = G->mx_at[q];
+        const int cells[4] = {at, at + 1, at + 9, at + 10}, across[4] = {at + 10, at + 9, at + 1, at};
+        for (int k = 0; k < 4; k++) {
+            const int c = cells[k], p = across[k];
+            if (L->v[c]) {
+                continue;
+            }
+            const uint16_t them = L->v[p] ? (uint16_t)(1u << L->v[p]) : L->cand[p];
+            const bool seen = is_sudoku_geom_peer(G, c, p);   /* (same box: not the same digit) */
+            uint16_t keep = 0;
+            for (int d = 1; d <= 9; d++) {
+                const uint16_t w = (uint16_t)(G->mx_mask[q][d] & them & (seen ? ~(1u << d) : 0xFFFF));
+                if ((L->cand[c] >> d & 1) && w) {
+                    keep |= (uint16_t)(1u << d);
+                }
+            }
+            if (L->cand[c] & ~keep) {
+                eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+                trace(TECH_MATHRAX, q, -1, keep, 0, c, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /* (documented in gen_internal.h) */
 bool gen_xsum_logic(logic_t *L)
 {
@@ -1225,6 +1296,12 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->antidiag && gen_antidiag_logic(&L)) {
             continue;
         }
+        if (G->flatmates && gen_flatmates_logic(&L)) {
+            continue;
+        }
+        if (G->nmx && gen_mathrax_logic(&L)) {
+            continue;    /* Mathrax: the circles */
+        }
         if (G->magic && gen_magic_logic(&L)) {
             continue;
         }
@@ -1276,7 +1353,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->edge_kind == EDGE_GT) {
         return 16;
     }
-    if (G->nquads) {
+    if (G->nquads || G->nmx) {
         return 28;
     }
     if (G->nthermos && G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {

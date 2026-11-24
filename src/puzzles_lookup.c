@@ -238,6 +238,9 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_QUAD && buf && sudoku_geom_quad_text(cages, buf)) {
         return buf;    /* (its circles are in cages) */
     }
+    if (v == VAR_MATHRAX && buf && sudoku_geom_mathrax_text(cages, buf)) {
+        return buf;    /* (and Mathrax's) */
+    }
     if ((v == VAR_EVENODD || v == VAR_CONSEC || v == VAR_KROPKI || v == VAR_XV || v == VAR_GT || v == VAR_FORTRESS ||
             v == VAR_DIAGCONSEC) &&
             buf &&

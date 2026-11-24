@@ -736,6 +736,8 @@ typedef struct {
 #define R_ANTIDIAG (1u << 15)           /**< Anti-Diagonal */
 #define R_PSKY    (1u << 16)            /**< Odd/Even Skyscrapers */
 #define R_MAGIC   (1u << 17)            /**< Magic Square */
+#define R_FLATMATES (1u << 18)          /**< Dutch Flatmates */
+#define R_MATHRAX (1u << 19)            /**< Mathrax */
 /** @} */
 
 /**
@@ -1296,6 +1298,27 @@ static uint16_t idx159_allow(const uint8_t *v, int i)
 }
 
 /**
+ * @brief Dutch Flatmates: may a cell still hold a digit (it holds it, or is empty with the digit not yet in
+ *        its units)?
+ * @param[in] g  the search's board
+ * @param[in] c  the cell
+ * @param[in] d  the digit
+ * @return true if it may
+ */
+static inline bool is_cell_open(const grid_t *g, int c, int d)
+{
+    if (g->v[c]) {
+        return g->v[c] == d;
+    }
+    for (int k = 0; k < 5 && g->units[c][k] >= 0; k++) {
+        if (g->um[g->units[c][k]] >> d & 1) {
+            return false;
+        }
+    }
+    return (g->G->allow[c] >> d & 1) != 0;
+}
+
+/**
  * @brief The digits a cell may still take, by every rule of the board.
  * @param[in] g  the search's board
  * @param[in] i  the cell
@@ -1468,6 +1491,32 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_ANTIDIAG);
+    if ((rules & R_FLATMATES) && free) {            /* Dutch Flatmates: every 5 has a 1 above it or a 9 below */
+        const int r = i / 9;
+        if ((free >> 5 & 1) && !((r > 0 && is_cell_open(g, i - 9, 1)) || (r < 8 && is_cell_open(g, i + 9, 9)))) {
+            free &= (uint16_t)~(1u << 5);           /* a 5 here could have neither */
+        }
+        if (r < 8 && g->v[i + 9] == 5 && !(r < 7 && is_cell_open(g, i + 18, 9))) {
+            free &= (uint16_t)(1u << 1);            /* above a 5 whose 9 can't come: its 1 */
+        }
+        if (r > 0 && g->v[i - 9] == 5 && !(r > 1 && is_cell_open(g, i - 18, 1))) {
+            free &= (uint16_t)(1u << 9);            /* below a 5 whose 1 can't come: its 9 */
+        }
+    }
+    WHY(FIT_FLATMATES);
+    for (int s = 0; s < 4 && free && (rules & R_MATHRAX) && G->mx_of[i][s] != MX_NONE; s++) {
+        const int q = G->mx_of[i][s], at = G->mx_at[q];   /* Mathrax: what its diagonal partner leaves */
+        const int across = i == at ? at + 10 : i == at + 10 ? at : i == at + 1 ? at + 9 : at + 1;
+        const int w = g->v[across];
+        uint16_t m = 0;
+        for (int d = 1; d <= 9; d++) {
+            if ((free >> d & 1) && (w ? (G->mx_mask[q][d] >> w & 1) : G->mx_mask[q][d] != 0)) {
+                m |= (uint16_t)(1u << d);
+            }
+        }
+        free &= m;
+    }
+    WHY(FIT_MATHRAX);
     for (int line = 0; (rules & R_FIRST3) && free && line < 2; line++) {
         int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;   /* its row's, its column's clue */
         if (at < 3 && is_gen_first3_clued(G, lu)) {
@@ -1648,7 +1697,7 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->nlk ? R_LK : 0) | (G->sandwich ? R_SANDWICH : 0) | (G->nthermos ? R_LINE : 0) |
                (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0) |
                (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0) |
-               (G->magic ? R_MAGIC : 0);
+               (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

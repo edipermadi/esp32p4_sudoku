@@ -85,6 +85,8 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Chess Sudoku", OF_VARIANT(57)},
     {"Fastest Magic Square", OF_VARIANT(58)},
     {"Fastest Average Lines", OF_VARIANT(59)},
+    {"Fastest Dutch Flatmates", OF_VARIANT(60)},
+    {"Fastest Mathrax", OF_VARIANT(61)},
 };
 
 #define REC_OTHERS 5                    /**< the records after the fastest ones (a day, a run, a streak, solved, time) */

@@ -435,6 +435,16 @@ bool gen_geom_lines(int variant, const uint8_t cells[][9], const uint8_t *lens, 
  */
 bool gen_geom_quad(const uint8_t *at, const uint8_t *n, const uint8_t (*dig)[4], int nq, sudoku_geom_t *out);
 /**
+ * @brief Builds a board from its decorations: Mathrax, a classic board with these circles.
+ * @param[in] at         each circle's top-left cell
+ * @param[in] op         each one's operation, MX_*
+ * @param[in] val        each one's number (0 for MX_EVEN, MX_ODD)
+ * @param[in] nc         how many circles
+ * @param[out] out        gets the board
+ * @return false if a corner is used twice, a clue isn't one, or there are too many
+ */
+bool gen_geom_mathrax(const uint8_t *at, const uint8_t *op, const uint8_t *val, int nc, sudoku_geom_t *out);
+/**
  * @brief Builds a board from its decorations: Sandwich, a classic board with sums beside the rows and
  *        columns.
  * @param[in] sums       the rows' sums, then the columns' (0: none)
@@ -537,6 +547,20 @@ bool gen_magic_logic(logic_t *L);
  * @return true if a candidate went
  */
 bool gen_antidiag_logic(logic_t *L);
+/**
+ * @brief Dutch Flatmates: a 5 can't go where neither a 1 above nor a 9 below can; a 5 whose 1 above can't come
+ *        takes the 9 below (and the other way round)
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_flatmates_logic(logic_t *L);
+/**
+ * @brief Mathrax: a circle's cell keeps only the digits some candidate of its diagonal partner makes the
+ *        operation with
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_mathrax_logic(logic_t *L);
 /**
  * @brief Odd/Even Skyscrapers: each clue's possible orders of the line's last missing digits
  * @param[in,out] L  the logic state

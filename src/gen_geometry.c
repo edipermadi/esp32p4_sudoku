@@ -27,7 +27,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Diagonal Consecutive", "10 Lines", "Girandola",
                                                      "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal",
                                                      "Pill Arrows", "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square",
-                                                     "Average Lines"
+                                                     "Average Lines", "Dutch Flatmates", "Mathrax"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -173,6 +173,7 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
     g->windows = windows;
     memset(g->cage_of, CAGE_NONE, sizeof(g->cage_of));
     memset(g->thermo_of, THERMO_NONE, sizeof(g->thermo_of));
+    memset(g->mx_of, MX_NONE, sizeof(g->mx_of));
     g->all = (uint16_t)(((1u << (n + 1)) - 1) & ~1u);
     for (int r = 0; r < n; r++) {
         for (int c = 0; c < n; c++) {
@@ -330,6 +331,9 @@ void sudoku_geom_init(void)
             g[VAR_MAGIC].allow[r * 9 + q] = mid ? (uint16_t)(1u << 5) : corner ? (uint16_t)0x154 : (uint16_t)0x28A;
         }
     }
+    g[VAR_FLATMATES] = g[VAR_CLASSIC];              /* every 5 with a 1 right above it or a 9 right below */
+    g[VAR_FLATMATES].variant = VAR_FLATMATES;
+    g[VAR_FLATMATES].flatmates = true;
     g[VAR_ANTIDIAG] = g[VAR_CLASSIC];               /* at most three different digits on each long diagonal */
     g[VAR_ANTIDIAG].variant = VAR_ANTIDIAG;
     g[VAR_ANTIDIAG].antidiag = true;
@@ -356,7 +360,7 @@ void sudoku_geom_init(void)
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
                                   VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY,
-                                  VAR_AVG
+                                  VAR_AVG, VAR_MATHRAX
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -381,7 +385,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
             variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
             variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY ||
-            variant == VAR_AVG) {
+            variant == VAR_AVG || variant == VAR_MATHRAX) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -872,6 +876,91 @@ bool gen_geom_quad(const uint8_t *at, const uint8_t *n, const uint8_t (*dig)[4],
         }
     }
     out->nquads = (uint8_t)nq;
+    return true;
+}
+
+/* (documented in generator.h) */
+bool is_sudoku_mathrax_pair_ok(int op, int val, int a, int b)
+{
+    switch (op) {
+    case MX_SUM:
+        return a + b == val;
+    case MX_DIFF:
+        return a - b == val || b - a == val;
+    case MX_PROD:
+        return a * b == val;
+    case MX_QUOT:
+        return a == b * val || b == a * val;
+    case MX_EVEN:
+        return a % 2 == 0 && b % 2 == 0;
+    case MX_ODD:
+        return a % 2 == 1 && b % 2 == 1;
+    default:
+        return false;
+    }
+}
+
+/* (documented in generator.h) */
+uint16_t sudoku_mathrax_partners(int op, int val, int d)
+{
+    uint16_t m = 0;
+    for (int e = 1; e <= 9; e++) {
+        if (is_sudoku_mathrax_pair_ok(op, val, d, e)) {
+            m |= (uint16_t)(1u << e);
+        }
+    }
+    return m;
+}
+
+/* (documented in generator.h) */
+void sudoku_mathrax_label(int op, int val, char buf[8])
+{
+    static const char *const SIGN[] = {"", "+", "\xe2\x88\x92", "\xc3\x97", "\xc3\xb7"};   /* +, minus, times, divide */
+    if (op == MX_EVEN || op == MX_ODD) {
+        snprintf(buf, 8, "%s", op == MX_EVEN ? "E" : "O");
+    } else if (op >= MX_SUM && op <= MX_QUOT) {
+        snprintf(buf, 8, "%d%s", val, SIGN[op]);
+    } else {
+        buf[0] = 0;
+    }
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_mathrax(const uint8_t *at, const uint8_t *op, const uint8_t *val, int nc, sudoku_geom_t *out)
+{
+    if (nc > MX_MAX) {
+        return false;
+    }
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_MATHRAX;
+    for (int q = 0; q < nc; q++) {
+        bool numbered = op[q] >= MX_SUM && op[q] <= MX_QUOT;
+        if (at[q] > 79 || at[q] % 9 == 8 || op[q] < MX_SUM || op[q] > MX_ODD || (numbered && val[q] < 1) ||
+                (!numbered && val[q] != 0) || (op[q] == MX_QUOT && val[q] < 2) || (op[q] == MX_DIFF && val[q] > 8)) {
+            return false;
+        }
+        for (int p = 0; p < q; p++) {
+            if (at[p] == at[q]) {
+                return false;
+            }
+        }
+        out->mx_at[q] = at[q];
+        out->mx_op[q] = op[q];
+        out->mx_val[q] = val[q];
+        for (int d = 1; d <= 9; d++) {
+            out->mx_mask[q][d] = sudoku_mathrax_partners(op[q], val[q], d);
+        }
+        const int cells[4] = {at[q], at[q] + 1, at[q] + 9, at[q] + 10};
+        for (int k = 0; k < 4; k++) {
+            int s = 0;
+            while (s < 4 && out->mx_of[cells[k]][s] != MX_NONE) {
+                s++;
+            }
+            out->mx_of[cells[k]][s] = (uint8_t)q;
+        }
+    }
+    out->nmx = (uint8_t)nc;
     return true;
 }
 

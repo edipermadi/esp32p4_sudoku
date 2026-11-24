@@ -9,6 +9,7 @@
 static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
+static void board_mathrax_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 
 /**
@@ -268,6 +269,30 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
     lv_draw_label(layer, &l, &t);
 }
 
+/* (documented in ui_internal.h) */
+void draw_mathrax_circle(lv_layer_t *layer, int cx, int cy, const char *label)
+{
+    const int rad = 17;                             /* (a little wider than Quadruple's: "72\u00d7" fits) */
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.radius = LV_RADIUS_CIRCLE;
+    d.bg_color = C_CARD;
+    d.bg_opa = LV_OPA_COVER;
+    d.border_color = C_ORANGE;                      /* (as Quadruple's: not the accent, which marks the selection) */
+    d.border_width = 2;
+    lv_area_t r = {.x1 = cx - rad, .y1 = cy - rad, .x2 = cx + rad, .y2 = cy + rad};
+    lv_draw_rect(layer, &d, &r);
+    lv_draw_label_dsc_t l;
+    lv_draw_label_dsc_init(&l);
+    l.text = label;
+    l.text_local = 1;
+    l.font = &font_clue_12;
+    l.color = C_TEXT;
+    l.align = LV_TEXT_ALIGN_CENTER;
+    lv_area_t t = {.x1 = cx - rad, .y1 = cy - 7, .x2 = cx + rad, .y2 = cy + 8};
+    lv_draw_label(layer, &l, &t);
+}
+
 /**
  * @brief Kropki, XV, Greater-Than: each mark on the line between its two cells.
  * @param[in] grid  the board
@@ -304,6 +329,24 @@ static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
         lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->quad_at[q]), &a);
         lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->quad_at[q] + 10), &d);
         draw_quad_circle(layer, (a.x2 + d.x1) / 2, (a.y2 + d.y1) / 2, geo->quad_dig[q], geo->quad_n[q]);
+    }
+}
+
+/**
+ * @brief Mathrax: each circle with its clue, where its four cells meet.
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
+ */
+static void board_mathrax_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    for (int q = 0; q < geo->nmx; q++) {
+        lv_area_t a, d;
+        char label[8];
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->mx_at[q]), &a);
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + geo->mx_at[q] + 10), &d);
+        sudoku_mathrax_label(geo->mx_op[q], geo->mx_val[q], label);
+        draw_mathrax_circle(layer, (a.x2 + d.x1) / 2, (a.y2 + d.y1) / 2, label);
     }
 }
 
@@ -544,6 +587,9 @@ void board_regions_draw_cb(lv_event_t *e)
     }
     if (geo && geo->nquads) {
         board_quads_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (geo && geo->nmx) {
+        board_mathrax_draw(grid, geo, lv_event_get_layer(e));
     }
     if (!geo || geo->variant != VAR_JIGSAW) {
         return;

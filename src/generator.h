@@ -154,6 +154,11 @@
  *                rows, columns and diagonals add up to 15)
  *   VAR_AVG      Average Lines: Classic rules, and on each line its circled cell is the
  *                average of the others
+ *   VAR_FLATMATES Dutch Flatmates: Classic rules, and every 5 has a 1 directly above it or
+ *                a 9 directly below it (or both)
+ *   VAR_MATHRAX  Mathrax: Classic rules, and a circle where four cells meet gives a sum,
+ *                difference, product or quotient that both diagonal pairs of those cells
+ *                make, or E / O: all four even / odd
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -271,6 +276,8 @@ typedef enum {
     VAR_CHESS,                          /**< Chess Sudoku */
     VAR_MAGIC,                          /**< Magic Square */
     VAR_AVG,                            /**< Average Lines */
+    VAR_FLATMATES,                      /**< Dutch Flatmates */
+    VAR_MATHRAX,                        /**< Mathrax */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -286,7 +293,8 @@ typedef enum {
  *         "Parity Lines", "Slow Thermo", "Fortress", "Argyle", "Nabner", "Numbered Rooms", "Sum Skyscrapers",
  *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola",
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
- *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines"
+ *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
+ *         "Mathrax"
  */
 const char *variant_name(int variant);
 
@@ -340,6 +348,17 @@ enum {
 };
 #define QUADS_MAX      32               /**< Quadruple: circles per board */
 #define QUAD_NONE      0xFF             /**< no circle */
+#define MX_MAX         24               /**< Mathrax: circles per board */
+#define MX_NONE        0xFF             /**< no circle */
+/** @brief Mathrax: a circle's operation (sudoku_geom_t.mx_op), which both diagonal pairs of its four cells make. */
+enum {
+    MX_SUM = 1,                         /**< "9+": the pair adds up to the number */
+    MX_DIFF,                            /**< "2-": the pair is the number apart */
+    MX_PROD,                            /**< "12x": the pair multiplies to the number */
+    MX_QUOT,                            /**< "3/": one of the pair is the other times the number */
+    MX_EVEN,                            /**< "E": all four cells even (no number) */
+    MX_ODD                              /**< "O": all four cells odd (no number) */
+};
 
 /** @brief Kropki, XV, Greater-Than: the kind of edge marks (sudoku_geom_t.edge_kind). */
 enum {
@@ -432,6 +451,7 @@ typedef struct {
     bool idx159;                        /**< 159 Sudoku: columns 1, 5 and 9 give the place of the 1, 5 and 9 in their row */
     bool antidiag;                      /**< Anti-Diagonal: each long diagonal holds at most three different digits */
     bool magic;                         /**< Magic Square: the centre box's rows, columns and diagonals add up to 15 */
+    bool flatmates;                     /**< Dutch Flatmates: every 5 has a 1 right above it or a 9 right below it */
     bool psky;                          /**< Odd/Even Skyscrapers: the clues are rules */
     uint8_t psky_clue[18];              /**< per row and column (as sky[]): 0 no clue; 1..5 the odd buildings seen;
                                          *   PSKY_EVEN | 0..4 the even ones */
@@ -464,6 +484,14 @@ typedef struct {
     uint8_t quad_n[QUADS_MAX];          /**< its digits: how many, 1-4 */
     uint8_t quad_dig[QUADS_MAX][4];     /**< its digits, sorted */
     uint8_t quad_of[81][4];             /**< the circles at a cell's corners, QUAD_NONE padded */
+    /* Mathrax: circles, each at the corner where the 2x2 cells from mx_at meet, with an operation (and
+     * number) that both diagonal pairs of the four make: mx_at and mx_at + 10, mx_at + 1 and mx_at + 9 */
+    uint8_t nmx;                        /**< Mathrax: circles */
+    uint8_t mx_at[MX_MAX];              /**< each one's top-left cell (the circle at its bottom-right corner) */
+    uint8_t mx_op[MX_MAX];              /**< its operation, MX_* */
+    uint8_t mx_val[MX_MAX];             /**< its number (0 for MX_EVEN, MX_ODD) */
+    uint8_t mx_of[81][4];               /**< the circles at a cell's corners, MX_NONE padded */
+    uint16_t mx_mask[MX_MAX][10];       /**< [circle][d]: the digits that may stand opposite d (sudoku_mathrax_partners()) */
 } sudoku_geom_t;
 
 /** @brief Even-Odd's marks (sudoku_geom_t.parity). */
@@ -830,6 +858,47 @@ bool sudoku_geom_quad_text(const char *text, sudoku_geom_t *out);
  * @return false: buf too small
  */
 bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief A Mathrax board from its circles as text: "cell:clue;cell:clue;..." (cell 0..79 the top-left of the
+ * four, not in the last column; clue a number and its operation, "9+", "2-", "12x", "3/", or "E" / "O");
+ * sudoku_mathrax_text() writes it. Kept where Killer keeps its cages.
+ * @param[in] text  the circles
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_mathrax_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Mathrax board's circles as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_mathrax_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief Mathrax: does a diagonal pair (a, b) make a circle's operation? For MX_EVEN / MX_ODD, both digits even / odd.
+ * @param[in] op  MX_*
+ * @param[in] val  its number
+ * @param[in] a  one digit
+ * @param[in] b  the other
+ * @return true if they do
+ */
+bool is_sudoku_mathrax_pair_ok(int op, int val, int a, int b);
+/**
+ * @brief Mathrax: the digits that may stand opposite d on a diagonal of a circle (bit e = e).
+ * @param[in] op  MX_*
+ * @param[in] val  its number
+ * @param[in] d  the digit
+ * @return them (0: d can't be in that circle at all)
+ */
+uint16_t sudoku_mathrax_partners(int op, int val, int d);
+/**
+ * @brief Mathrax: a circle's clue as it is drawn: "9+", "2\u2212" (a minus), "12\u00d7", "3\u00f7", "E", "O".
+ * @param[in] op  MX_*
+ * @param[in] val  its number
+ * @param[out] buf  gets it (8 at least)
+ */
+void sudoku_mathrax_label(int op, int val, char buf[8]);
 
 /**
  * @brief Kropki, XV, Greater-Than: may a (the left / top cell) and b (its neighbour) stand
@@ -1141,7 +1210,9 @@ enum {
     FIT_ANTIDIAG,                       /**< Anti-Diagonal: its diagonal has three other digits already */
     FIT_PSKY_ROW,                       /**< Odd/Even Skyscrapers: the row's clue */
     FIT_PSKY_COL,                       /**< Odd/Even Skyscrapers: the column's clue */
-    FIT_MAGIC                           /**< Magic Square: a row, column or diagonal of the centre box */
+    FIT_MAGIC,                          /**< Magic Square: a row, column or diagonal of the centre box */
+    FIT_FLATMATES,                      /**< Dutch Flatmates: a 5 without a 1 above or a 9 below */
+    FIT_MATHRAX                         /**< Mathrax: a circle's operation */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1204,7 +1275,9 @@ typedef enum {
     TECH_159,                /**< 159 Sudoku: a row's column 1, 5 or 9 and the cell it points at */
     TECH_ANTIDIAG,           /**< Anti-Diagonal: a diagonal with its three digits */
     TECH_PSKY,               /**< Odd/Even Skyscrapers: a clue */
-    TECH_MAGIC               /**< Magic Square: a line of the centre box */
+    TECH_MAGIC,              /**< Magic Square: a line of the centre box */
+    TECH_FLATMATES,          /**< Dutch Flatmates: a 5 and the cells above and below it */
+    TECH_MATHRAX             /**< Mathrax: a circle */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {

@@ -484,6 +484,27 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int c = 0; geo->flatmates && c < 81; c++) {   /* Dutch Flatmates: a 5 that can have neither a 1 above nor a 9 below */
+        const int r = c / 9, up = r > 0 ? val[c - 9] : -1, down = r < 8 ? val[c + 9] : -1;
+        if (val[c] == 5 && up != 0 && up != 1 && down != 0 && down != 9) {
+            out[c] = true;
+            if (up > 0) {
+                out[c - 9] = true;
+            }
+            if (down > 0) {
+                out[c + 9] = true;
+            }
+        }
+    }
+    for (int q = 0; q < geo->nmx; q++) {          /* Mathrax: a diagonal pair that doesn't make the circle's operation */
+        const int at = geo->mx_at[q], cells[4] = {at, at + 1, at + 9, at + 10}, across[4] = {at + 10, at + 9, at + 1, at};
+        for (int k = 0; k < 4; k++) {
+            const int a = val[cells[k]], b = val[across[k]];
+            if (a && (b ? !(geo->mx_mask[q][a] >> b & 1) : !geo->mx_mask[q][a])) {
+                out[cells[k]] = true;               /* (a digit no partner suits, or a full pair that's wrong) */
+            }
+        }
+    }
     for (int q = 0; q < geo->nquads; q++) {       /* Quadruple: no room left for the circle's digits */
         int empty, at = geo->quad_at[q];
         if (sudoku_quad_missing(geo, q, val, &empty) > empty) {

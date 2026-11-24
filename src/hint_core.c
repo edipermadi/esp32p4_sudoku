@@ -316,6 +316,57 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
         }
         snprintf(tech, sizeof(tech), "A long diagonal holds at most three different digits, and %s has %s already, "
                  "so row %d, column %d is one of them. ", u1, digs, c / 9 + 1, c % 9 + 1);
+    } else if (t->kind == TECH_FLATMATES) {        /* Dutch Flatmates: the 5 (or the cell) and the cells above and below */
+        const int five = t->unit >= 0 && t->unit < 81 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : five;
+        mark[five] = mark[c] = 1;
+        if (five > 8) {
+            mark[five - 9] = 1;
+        }
+        if (five < 72) {
+            mark[five + 9] = 1;
+        }
+        if (c == five) {                            /* no 5 here: no 1 can be above, no 9 below */
+            snprintf(u1, sizeof(u1), "row %d, column %d", c / 9 + 1, c % 9 + 1);
+            snprintf(tech, sizeof(tech), "Every 5 needs a 1 right above it or a 9 right below it. Row %d, column %d "
+                     "can have neither, so it can't be a 5. ", c / 9 + 1, c % 9 + 1);
+        } else {                                    /* the 5's 1 can't come: the 9 below (or the other way) */
+            snprintf(u1, sizeof(u1), "the 5 in row %d, column %d", five / 9 + 1, five % 9 + 1);
+            const bool below = c > five;
+            snprintf(tech, sizeof(tech), "Every 5 needs a 1 right above it or a 9 right below it. For %s, a %d %s "
+                     "can't be, so the cell %s it must be %d. ", u1, below ? 1 : 9, below ? "above it" : "below it",
+                     below ? "below" : "above", below ? 9 : 1);
+        }
+    } else if (t->kind == TECH_MATHRAX && t->unit >= 0 && t->unit < geo->nmx) {   /* Mathrax: the circle's cells */
+        const int q = t->unit, at = geo->mx_at[q], c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : at;
+        mark[at] = mark[at + 1] = mark[at + 9] = mark[at + 10] = 1;
+        char lab[8], digs[24] = "", says[48];
+        sudoku_mathrax_label(geo->mx_op[q], geo->mx_val[q], lab);
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        switch (geo->mx_op[q]) {
+        case MX_SUM:
+            snprintf(says, sizeof(says), "add up to %d", geo->mx_val[q]);
+            break;
+        case MX_DIFF:
+            snprintf(says, sizeof(says), "are %d apart", geo->mx_val[q]);
+            break;
+        case MX_PROD:
+            snprintf(says, sizeof(says), "multiply to %d", geo->mx_val[q]);
+            break;
+        case MX_QUOT:
+            snprintf(says, sizeof(says), "are one %d times the other", geo->mx_val[q]);
+            break;
+        default:
+            snprintf(says, sizeof(says), "are all %s", geo->mx_op[q] == MX_EVEN ? "even" : "odd");
+            break;
+        }
+        snprintf(u1, sizeof(u1), "the %s circle", lab);
+        snprintf(tech, sizeof(tech), "The %s circle: both diagonal pairs of its four cells %s. What the cell "
+                 "across from row %d, column %d can be leaves it only %s. ", lab, says, c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_159) {              /* 159 Sudoku: the cell, and its row's columns 1, 5 and 9 */
         int c = t->unit;
         for (int k = 0; c >= 0 && c < 81 && k < 9; k += 4) {

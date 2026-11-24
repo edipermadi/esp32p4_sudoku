@@ -168,6 +168,8 @@ typedef enum {
     KIND_CHESS,                          /**< Chess Sudoku */
     KIND_MAGIC,                          /**< Magic Square */
     KIND_AVG,                            /**< Average Lines */
+    KIND_FLATMATES,                      /**< Dutch Flatmates */
+    KIND_MATHRAX,                        /**< Mathrax */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

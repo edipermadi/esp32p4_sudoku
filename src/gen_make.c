@@ -74,7 +74,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
                                   G->line_kind == LINE_NABNER || G->line_kind == LINE_LOCKOUT ||
                                   G->line_kind == LINE_DARROW || G->line_kind == LINE_TEN || G->line_kind == LINE_PILL ||
                                   G->line_kind == LINE_AVG);
-        if (G->edge_kind || G->nquads || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
+        if (G->edge_kind || G->nquads || G->nmx || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
             int tier = gen_technique_tier(G, out);
             ok = tier <= max_tier && (tier < 3 || gen_count_bounded(G, out, 2, node_limit) == 1);
         } else {
@@ -87,6 +87,63 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
             out[b] = vb;
         }
     }
+}
+
+/**
+ * @brief Mathrax: circles for a full grid, at random corners where some operation holds for both diagonal pairs
+ *        of the four cells (one picked at random among those that do).
+ * @param[in] full  the grid
+ * @param[in] want  how many circles
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
+ * @return false if too few corners make any operation
+ */
+static bool mathrax_circles(const uint8_t full[81], int want, uint32_t *rng, sudoku_geom_t *out)
+{
+    uint8_t corner[64], at[MX_MAX], op[MX_MAX], val[MX_MAX];
+    for (int k = 0; k < 64; k++) {
+        corner[k] = (uint8_t)(k / 8 * 9 + k % 8);
+    }
+    for (int i = 63; i > 0; i--) {                  /* the corners in a random order */
+        int j = (int)(rnd(rng) % (uint32_t)(i + 1));
+        uint8_t t = corner[i];
+        corner[i] = corner[j];
+        corner[j] = t;
+    }
+    int nc = 0;
+    for (int k = 0; k < 64 && nc < want && nc < MX_MAX; k++) {
+        const int a = corner[k], tl = full[a], tr = full[a + 1], bl = full[a + 9], br = full[a + 10];
+        uint8_t ops[6], vals[6];
+        int n = 0;
+        if (tl + br == tr + bl) {
+            ops[n] = MX_SUM, vals[n++] = (uint8_t)(tl + br);
+        }
+        if (abs(tl - br) == abs(tr - bl) && tl != br) {   /* (a pair the same digit: no 0 apart, no "1/") */
+            ops[n] = MX_DIFF, vals[n++] = (uint8_t)abs(tl - br);
+        }
+        if (tl * br == tr * bl) {
+            ops[n] = MX_PROD, vals[n++] = (uint8_t)(tl * br);
+        }
+        const int hi1 = tl > br ? tl : br, lo1 = tl + br - hi1, hi2 = tr > bl ? tr : bl, lo2 = tr + bl - hi2;
+        if (hi1 % lo1 == 0 && hi2 % lo2 == 0 && hi1 / lo1 == hi2 / lo2 && hi1 != lo1) {
+            ops[n] = MX_QUOT, vals[n++] = (uint8_t)(hi1 / lo1);
+        }
+        if (tl % 2 == 0 && tr % 2 == 0 && bl % 2 == 0 && br % 2 == 0) {
+            ops[n] = MX_EVEN, vals[n++] = 0;
+        }
+        if (tl % 2 && tr % 2 && bl % 2 && br % 2) {
+            ops[n] = MX_ODD, vals[n++] = 0;
+        }
+        if (!n) {
+            continue;
+        }
+        const int pick = (int)(rnd(rng) % (uint32_t)n);
+        at[nc] = (uint8_t)a;
+        op[nc] = ops[pick];
+        val[nc] = vals[pick];
+        nc++;
+    }
+    return nc >= want - 2 && gen_geom_mathrax(at, op, val, nc, out);
 }
 
 /* ---------------------------------------------------------------- generating (all variants) */
@@ -120,10 +177,11 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool grp = variant == VAR_ENTROPIC || variant == VAR_MODULAR;
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
-    const bool fort = variant == VAR_FORTRESS;
+    const bool fort = variant == VAR_FORTRESS, mrx = variant == VAR_MATHRAX;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
-                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky;
+                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky ||
+                     mrx;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -314,6 +372,11 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             if (!gen_geom_quad(at, n, (const uint8_t (*)[4])dig, nq, jig)) {
                 continue;
             }
+        } else if (mrx) {                           /* a grid, then circles at corners whose pairs make an operation */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            if (!mathrax_circles(full, level >= GEN_HARD ? 14 : 11, &rng, jig)) {
+                continue;
+            }
         } else if (sky) {                           /* a grid, then some of its 18 clues */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             uint8_t clues[18];
@@ -467,7 +530,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             }
             gen_geom_sandwich(sums, jig);
         } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC || variant == VAR_DIAGNC ||
-                   variant == VAR_ARGYLE || variant == VAR_CHESS || variant == VAR_MAGIC) {
+                   variant == VAR_ARGYLE || variant == VAR_CHESS || variant == VAR_MAGIC || variant == VAR_FLATMATES) {
             /* not every fill works out quickly: try again */
             if (!gen_random_full_grid(G, full, &rng, 20000)) {
                 continue;

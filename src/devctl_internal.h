@@ -146,7 +146,7 @@ void devctl_screenoff(void);
  */
 void devctl_perf(int n, const int *a);
 /**
- * @brief saver <n>: screen saver n now, Settings unchanged (devctl_screen.c).
+ * @brief saver N: screen saver N now, Settings unchanged (devctl_screen.c).
  * @param[in] mode  store_saver_t
  * @return false if there's no such saver
  */

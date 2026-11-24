@@ -12,7 +12,7 @@ python3 tools/gen_puzzles.py
 ```
 This rewrites `src/puzzles_data.c` and `src/puzzles_count.h`. It stops with an error if a puzzle is malformed or doesn't have exactly one solution. The download command for the source files is in the script's header. The list screen shows at most 100 puzzles per collection.
 
-**Fonts**: the grid digits (44 px, and 52 px for Digit size: Large) and the timer use Montserrat Medium, converted with lv_font_conv 1.5.2:
+**Fonts**: the grid digits (44 px, and 52 px for Digit size: Large), the timer and Mathrax's circle clues (12 px: the digits, E, O and + − × ÷, which LVGL's own Montserrat 12 lacks) use Montserrat Medium, converted with lv_font_conv 1.5.2:
 ```
 FONT=~/Arduino/libraries/lvgl/scripts/generators/built_in_font/Montserrat-Medium.ttf
 npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 44 --font $FONT \
@@ -21,6 +21,8 @@ npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 36 --font $FONT \
     -r 0x20,0x30-0x3A --format lvgl --lv-include lvgl.h -o src/fonts/font_timer_36.c
 npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 52 --font $FONT \
     -r 0x20,0x30-0x39 --format lvgl --lv-include lvgl.h -o src/fonts/font_digits_52.c
+npx lv_font_conv --no-compress --no-prefilter --bpp 4 --size 12 --font $FONT \
+    -r 0x20,0x2B,0x30-0x39,0x45,0x4F,0xD7,0xF7,0x2212 --format lvgl --lv-include lvgl.h -o src/fonts/font_clue_12.c
 ```
 
 ## Changing the colours
@@ -139,6 +141,10 @@ Lockout Lines, Sumless Killer and Double Arrow were added on 2026-11-23 too, mea
 | Chess Sudoku | 20 / 31 (33) | 211 / 409 (14.2) | 519 / 1391 (13) | 488 / 716 (10.5) |
 | Magic Square | 13 / 31 (31.8) | 39 / 60 (24) | 664 / 1823 (23.4) | 591 / 943 (22.6) |
 | Average Lines | 12 / 28 (30.1) | 72 / 82 (18.3) | 141 / 232 (16.5) | 773 / 994 (13.8) |
+| Dutch Flatmates | 157 / 438 (37.3) | 337 / 642 (22.6) | 808 / 2505 (22) | 644 / 1654 (20.6) |
+| Mathrax | 9 / 15 (29.7) | 92 / 119 (10) | 195 / 436 (6.7) | 1089 / 2256 (4.8) |
+
+Dutch Flatmates and Mathrax were added on 2026-11-24, measured the same way (`genbench 60`, `genbench 61`: "dutch" matches Dutch Whispers too); all 80 came out at the level asked for. Mathrax's circles do most of the work: Hard and Expert keep only a few givens.
 
 159 Sudoku, Product Killer and Extra Regions (2026-11-23), measured the same way; all on level. Product Killer Hard is slow because few cage layouts come out exactly Hard (about 19 tries a puzzle): products give a lot away. Its cage rule looks every "k different digits multiplying to p" up in a sorted list of the 512 sets of digits (`s_prod_sets`), one search for all nine digits: asked one digit at a time, by a small search, it took 1.7 s on the PC instead of 0.2 s.
 
@@ -358,7 +364,7 @@ src/import_parse.c      the other puzzle files imported (a puzzle per line, Open
 src/gen_*.c             the puzzle generator (gen_internal.h, split by what it does: gen_geometry.c boards, gen_texts.c the layouts as text, gen_solver.c the rules and search, gen_grade.c the techniques, gen_make.c generating, gen_regions.c Jigsaw regions and Killer cages, gen_lines.c the line variants' lines, gen_hints.c hints), for the variants (Classic, X-Sudoku, Hyper, Jigsaw, Killer, Mini 6x6, Kids 4x4, Anti-Knight, Anti-King, Even-Odd, Consecutive, Non-Consecutive, Disjoint Groups, Asterisk, Kropki, XV, Greater-Than, Quadruple, Arrow, Renban, German Whispers, Skyscraper, Little Killer, Thermo, Sandwich): generator, grader, solver (Fill) and hints
 src/puzzles.h           puzzle access (unpack, collection lookup)
 src/puzzles_data.c      generated puzzle data
-src/fonts/              Montserrat 44 and 52 px digits / 36 px timer, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code, camera, vertical-dots (menu), undo, redo and 3x3-grid (the Built-in tab) icons at 24/20 px (lv_font_conv)
+src/fonts/              Montserrat 44 and 52 px digits / 36 px timer / 12 px Mathrax clues, FontAwesome person, calendar, info, trophy, lock, star, chart, lightbulb, QR code, camera, vertical-dots (menu), undo, redo and 3x3-grid (the Built-in tab) icons at 24/20 px (lv_font_conv)
 src/avatars.c           the players' avatars: their groups (generated); the pixels are extras/avatars.bin (7 MB)
 src/avatar_store.c      the avatars from their own flash partition, and installing avatars.bin from the card
 src/bsp/                display (ST7703 / JD9365), GT911 touch, ES8311 speaker, microSD, LVGL port

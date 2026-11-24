@@ -57,7 +57,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "sumless-killer": "Sumless", "double-arrow": "Double", "diagonal-consecutive": "Diagonal C",
          "10-lines": "10", "girandola": "Girandola", "159-sudoku": "159", "product-killer": "Product",
          "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd",
-         "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average"}
+         "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average",
+         "dutch-flatmates": "Dutch F", "mathrax": "Mathrax"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -653,6 +654,35 @@ def rule_words(d, vals, c, v, r):
             return "it's %s of the magic square, which is always %s" % (
                 "a corner" if corner else "an edge", "even" if corner else "odd")
         return "with %s there, a line of the centre box couldn't make 15" % a_n(v)
+    if rule == "flatmates":                                 # Dutch Flatmates: every 5 has a 1 above or a 9 below
+        def why_not(o, want, side):
+            """why o (above or below) can't hold want: off the board, another digit, or ruled out"""
+            if o < 0 or o > 80:
+                return "nothing is %s it" % side
+            if vals[o]:
+                return "%s %s it is %d" % (rc(o), side, vals[o])
+            return "%s %s it can't be %d" % (rc(o), side, want)
+        if v == 5:
+            return "a 5 needs a 1 right above it or a 9 right below it, and %s, %s" % (
+                why_not(c - 9 if c > 8 else -1, 1, "above"), why_not(c + 9 if c < 72 else -1, 9, "below"))
+        if c < 72 and vals[c + 9] == 5:                     # right above a 5 whose 9 can't come
+            return "the 5 in %s needs a 1 right above it, as %s" % (
+                rc(c + 9), why_not(c + 18 if c < 63 else -1, 9, "below"))
+        if c > 8 and vals[c - 9] == 5:                      # right below a 5 whose 1 can't come
+            return "the 5 in %s needs a 9 right below it, as %s" % (
+                rc(c - 9), why_not(c - 18 if c > 17 else -1, 1, "above"))
+        return "a 5 nearby needs a 1 above it or a 9 below it"
+    if rule == "mathrax":                                   # Mathrax: the pair across the circle can't make its clue
+        q = d["mathrax"][r["circle"]]
+        lab, op, n, a = q["label"], q["op"], q["val"], r["across"]
+        if op in (5, 6):
+            return "the %s circle's four cells are all %s" % (lab, "even" if op == 5 else "odd")
+        if a < 0 or not vals[a]:
+            return "no digit across the %s circle could make its clue with %s" % (lab, a_n(v))
+        w = vals[a]
+        says = {1: "%d and %d don't add up to %d", 2: "%d and %d aren't %d apart", 3: "%d and %d don't multiply to %d",
+                4: "neither of %d and %d is %d times the other"}[op] % (v, w, n)
+        return "across the %s circle from the %d in %s: %s" % (lab, w, rc(a), says)
     if rule == "antidiag":                                  # Anti-Diagonal: three different digits on it already
         r_, c_ = c // 9, c % 9
         for dg in (0, 1):
@@ -1036,6 +1066,11 @@ def make_drawer(d, fonts):
             digs = "".join(map(str, q["digits"]))
             txt = digs if len(digs) <= 2 else digs[:2] + "\n" + digs[2:]
             g.multiline_text((cx, cy), txt, font=tiny, fill=GIVEN_FG, anchor="mm", align="center", spacing=0)
+        for q in d.get("mathrax", []):                      # Mathrax: a clue where four cells meet
+            x, y = xy(q["at"])
+            cx, cy, rr = x + CELL, y + CELL, 16
+            g.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=CELL_BG, outline=ORANGE, width=2)
+            g.text((cx, cy), q["label"], font=tiny, fill=GIVEN_FG, anchor="mm")
         for k in d.get("lk", []):                           # Little Killer: a sum before its diagonal, its arrow
             first, top, dr = k["cells"][0], k["top"], k["dir"]
             i = first % 9 if top else first // 9

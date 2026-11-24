@@ -46,6 +46,9 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     case VAR_QUAD:
         key = sudoku_quads_text(G, extra, sizeof(extra)) ? "circles" : NULL;
         break;
+    case VAR_MATHRAX:
+        key = sudoku_mathrax_text(G, extra, sizeof(extra)) ? "circles" : NULL;
+        break;
     case VAR_EVENODD:
     case VAR_CONSEC:
     case VAR_KROPKI:
@@ -141,6 +144,11 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
         break;
     case VAR_QUAD:
         if (sudoku_quads_text(G, extra, sizeof(extra))) {
+            cages = extra;
+        }
+        break;
+    case VAR_MATHRAX:
+        if (sudoku_mathrax_text(G, extra, sizeof(extra))) {
             cages = extra;
         }
         break;

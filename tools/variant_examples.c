@@ -227,6 +227,14 @@ static void context(const sudoku_geom_t *G, const uint8_t v[81], int c)
         printf("  cells: %c%c%c%c\n", v[at] ? '0' + v[at] : '.', v[at + 1] ? '0' + v[at + 1] : '.',
                v[at + 9] ? '0' + v[at + 9] : '.', v[at + 10] ? '0' + v[at + 10] : '.');
     }
+    for (int s = 0; s < 4 && G->nmx && G->mx_of[c][s] != MX_NONE; s++) {
+        int qd = G->mx_of[c][s], at = G->mx_at[qd];
+        char lab[8];
+        sudoku_mathrax_label(G->mx_op[qd], G->mx_val[qd], lab);
+        printf("         circle %s at r%dc%d-r%dc%d  cells: %c%c%c%c\n", lab, at / 9 + 1, at % 9 + 1, at / 9 + 2,
+               at % 9 + 2, v[at] ? '0' + v[at] : '.', v[at + 1] ? '0' + v[at + 1] : '.',
+               v[at + 9] ? '0' + v[at + 9] : '.', v[at + 10] ? '0' + v[at + 10] : '.');
+    }
     if (G->sandwich) {
         printf("         sandwich: row %d sum %d, column %d sum %d\n", r + 1, G->sandwich_sum[r], q + 1,
                G->sandwich_sum[9 + q]);
@@ -459,6 +467,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_QUAD:
         sudoku_quads_text(g, cages, len);
         break;
+    case VAR_MATHRAX:
+        sudoku_mathrax_text(g, cages, len);
+        break;
     case VAR_EVENODD:
     case VAR_CONSEC:
     case VAR_KROPKI:
@@ -665,6 +676,20 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_ANTIDIAG:
         printf(", \"rule\": \"antidiag\"");
         return;
+    case FIT_FLATMATES:
+        printf(", \"rule\": \"flatmates\"");
+        return;
+    case FIT_MATHRAX:
+        for (int s = 0; s < 4 && G->mx_of[c][s] != MX_NONE; s++) {   /* the circle whose partner rules d out */
+            const int qd = G->mx_of[c][s], at = G->mx_at[qd];
+            const int across = c == at ? at + 10 : c == at + 10 ? at : c == at + 1 ? at + 9 : at + 1;
+            if (v[across] ? !(G->mx_mask[qd][d] >> v[across] & 1) : !G->mx_mask[qd][d]) {
+                printf(", \"rule\": \"mathrax\", \"circle\": %d, \"across\": %d", qd, across);
+                return;
+            }
+        }
+        printf(", \"rule\": \"mathrax\", \"circle\": %d, \"across\": -1", G->mx_of[c][0]);
+        return;
     case FIT_MAGIC:
         printf(", \"rule\": \"magic\"");
         return;
@@ -756,6 +781,13 @@ static void layout_json(const sudoku_geom_t *G)
             printf("%s%d", j ? "," : "", G->quad_dig[qd][j]);
         }
         printf("]}");
+    }
+    printf("],\n \"flatmates\": %s, \"mathrax\": [", G->flatmates ? "true" : "false");
+    for (int qd = 0; qd < G->nmx; qd++) {
+        char lab[8];
+        sudoku_mathrax_label(G->mx_op[qd], G->mx_val[qd], lab);
+        printf("%s{\"at\": %d, \"op\": %d, \"val\": %d, \"label\": \"%s\"}", qd ? ", " : "", G->mx_at[qd],
+               G->mx_op[qd], G->mx_val[qd], lab);
     }
     printf("],\n \"sky\": ");
     if (G->skyscraper) {

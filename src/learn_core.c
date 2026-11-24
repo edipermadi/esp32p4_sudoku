@@ -50,12 +50,14 @@ static const learn_lesson_t LESSONS[] = {
     {"Non-Consecutive", "Side-by-side cells are never 1 apart: a digit's neighbours rule out the digits next to it.", VAR_NONCONSEC, TECH_CONSEC, false},
     {"Diagonal Non-Consecutive", "Cells touching at a corner are never 1 apart: the corners rule out the digits next to theirs.", VAR_DIAGNC, TECH_DIAGNC, false},
     {"Diagonal Consecutive", "Corner neighbours with a mark are 1 apart, without one they're not: a mark leaves two digits.", VAR_DIAGCONSEC, TECH_DIAGNC, false},
+    {"Dutch Flatmates", "Every 5 has a 1 right above it or a 9 right below: a 5 can't go where neither can.", VAR_FLATMATES, TECH_FLATMATES, true},
     {"Even-Odd cells", "A shaded cell is even, a ringed one odd: that alone can leave a digit one place.", VAR_EVENODD, TECH_NONE, false},
     {"Consecutive bars", "A bar: the two cells differ by 1. No bar: they don't. Both narrow down a cell's digits.", VAR_CONSEC, TECH_CONSEC, false},
     {"Kropki dots", "White dot: 1 apart; black dot: one is double the other; no dot: neither.", VAR_KROPKI, TECH_EDGE, false},
     {"XV marks", "V: the two add up to 5; X: to 10; no mark: to neither.", VAR_XV, TECH_EDGE, false},
     {"Greater-Than signs", "The signs inside a box chain up: a cell lies between the cells it's bigger and smaller than.", VAR_GT, TECH_EDGE, false},
     {"Quadruple circles", "A circle's digits must be among its four cells: where else they can go narrows them down.", VAR_QUAD, TECH_QUAD, false},
+    {"Mathrax circles", "Both diagonal pairs make the circle's sum, difference, product or quotient: few pairs can.", VAR_MATHRAX, TECH_MATHRAX, false},
     {"Fortress walls", "A grey cell is bigger than each white neighbour: grey cells go high, their neighbours low.", VAR_FORTRESS, TECH_EDGE, false},
     /* Lines */
     {"Thermometer", "Digits rise from the bulb: each cell lies between what the cells before and after it can be.", VAR_THERMO, TECH_THERMO, false},
@@ -154,6 +156,8 @@ int learn_group(int k)
     case VAR_GT:
     case VAR_QUAD:
     case VAR_FORTRESS:
+    case VAR_FLATMATES:
+    case VAR_MATHRAX:
         return LEARN_MARKS;
     case VAR_KILLER:
     case VAR_SUMLESS:

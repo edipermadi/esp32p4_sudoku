@@ -198,6 +198,9 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_QUAD:
         sudoku_quads_text(g, cages, cages_len);     /* (where cages go) */
         break;
+    case VAR_MATHRAX:
+        sudoku_mathrax_text(g, cages, cages_len);   /* (the same) */
+        break;
     case VAR_LK:
         sudoku_lk_text(g, cages, cages_len);        /* (the same) */
         break;
@@ -748,6 +751,70 @@ bool sudoku_quads_text(const sudoku_geom_t *g, char *buf, int len)
             d[k] = (char)('0' + g->quad_dig[q][k]);
         }
         int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d:%s", q ? ";" : "", g->quad_at[q], d);
+        if (w < 0 || w >= len - pos) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
+}
+
+/** Mathrax: each operation's letter in the text, MX_* in order ("x" for times, "/" for divided by) */
+static const char MX_CHARS[] = "?+-x/EO";
+
+/* (documented in generator.h) */
+bool sudoku_geom_mathrax_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t at[MX_MAX], op[MX_MAX], val[MX_MAX];
+    int nc = 0;
+    const char *p = text;
+    while (p && *p) {
+        if (nc >= MX_MAX) {
+            return false;
+        }
+        char *end;
+        long c = strtol(p, &end, 10);
+        if (end == p || *end != ':' || c < 0 || c > 79) {
+            return false;
+        }
+        p = end + 1;
+        long v = 0;
+        if (*p >= '0' && *p <= '9') {
+            v = strtol(p, &end, 10);
+            p = end;
+        }
+        const char *k = *p ? strchr(MX_CHARS + 1, *p) : NULL;
+        if (!k || v > 81) {
+            return false;
+        }
+        at[nc] = (uint8_t)c;
+        op[nc] = (uint8_t)(k - MX_CHARS);
+        val[nc] = (uint8_t)v;
+        nc++;
+        p++;
+        if (*p == ';') {
+            p++;
+        } else if (*p) {
+            return false;
+        }
+    }
+    return nc > 0 && gen_geom_mathrax(at, op, val, nc, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_mathrax_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    if (len < 1) {
+        return false;
+    }
+    buf[0] = 0;
+    for (int q = 0; q < g->nmx; q++) {
+        const int op = g->mx_op[q];
+        int w = op == MX_EVEN || op == MX_ODD
+                ? snprintf(buf + pos, (size_t)(len - pos), "%s%d:%c", q ? ";" : "", g->mx_at[q], MX_CHARS[op])
+                : snprintf(buf + pos, (size_t)(len - pos), "%s%d:%d%c", q ? ";" : "", g->mx_at[q], g->mx_val[q],
+                           MX_CHARS[op]);
         if (w < 0 || w >= len - pos) {
             return false;
         }

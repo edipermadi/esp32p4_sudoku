@@ -87,6 +87,8 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {20, 211, 519, 488},   /* Chess Sudoku (2026-11-23) */
     {13, 39, 664, 591},    /* Magic Square */
     {12, 72, 141, 773},    /* Average Lines */
+    {157, 337, 808, 644},  /* Dutch Flatmates (2026-11-24) */
+    {9, 92, 195, 1089},    /* Mathrax */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -164,7 +166,8 @@ static void gen_poll_cb(lv_timer_t *t)
     uint16_t id;
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
     const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_SUMLESS || gen_var_req == VAR_PRODUCT ||
-                        gen_var_req == VAR_REGIONS || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ? gen_cages : NULL;
+                        gen_var_req == VAR_REGIONS || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ||
+                        gen_var_req == VAR_MATHRAX ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = is_stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,

@@ -77,6 +77,7 @@ LV_FONT_DECLARE(font_digits_96)   /**< the same, for the Kids 4x4 board's big ce
 #define DIGIT_FONT (is_store_big_digits() ? &font_digits_52 : &font_digits_44)
 #define DIGIT_FONT_N(n) ((n) == 4 ? &font_digits_96 : DIGIT_FONT)   /**< for a board of side n */
 LV_FONT_DECLARE(font_timer_36)    /**< " 0-9:", game timer */
+LV_FONT_DECLARE(font_clue_12)     /**< " 0-9 E O + \u2212 \u00d7 \u00f7": Mathrax's circle clues */
 LV_FONT_DECLARE(font_icons_24)    /**< the two icons below + Montserrat 24 as fallback */
 LV_FONT_DECLARE(font_icons_20)    /**< the same at 20 px + Montserrat 20 */
 #define SYMBOL_USER     "\xEF\x80\x87"   /**< FontAwesome U+F007 */
@@ -226,6 +227,7 @@ typedef struct {
     int8_t lk_clue;                     /**< Little Killer: a sum above the top-left cell, the diagonal down-right; 0 none */
     const char *left_text;              /**< Outside Sudoku, Rossini: a clue left of the first row as text (left_clue -1), may be NULL */
     const uint8_t *dmarks;              /**< Diagonal Consecutive: per mark a cell and its DMARK_*, ends with 0xFF; may be NULL */
+    const char *mathrax;                /**< Mathrax: a circle's clue as drawn ("9+") at the picture's centre, may be NULL */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound (the format: share_core.h) */
@@ -833,6 +835,14 @@ void draw_edge_mark(lv_layer_t *layer, int kind, int m, bool down, int cx, int c
  * @param[in] n  how many
  */
 void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int n);
+/**
+ * @brief Draws a Mathrax circle with its clue (ui_board_draw.c).
+ * @param[in] layer  where
+ * @param[in] cx  its centre, x
+ * @param[in] cy  its centre, y
+ * @param[in] label  its clue as drawn (sudoku_mathrax_label())
+ */
+void draw_mathrax_circle(lv_layer_t *layer, int cx, int cy, const char *label);
 /**
  * @brief Diagonal Consecutive: a mark across the corner where two cells touch, an orange bar along their
  * diagonal (the board, the rules card)

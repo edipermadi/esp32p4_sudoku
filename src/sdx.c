@@ -139,6 +139,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_regions_text(p->cages, out);
     case VAR_QUAD:
         return sudoku_geom_quad_text(p->cages, out);   /* (its circles go where cages do) */
+    case VAR_MATHRAX:
+        return sudoku_geom_mathrax_text(p->cages, out);   /* (and Mathrax's) */
     case VAR_EVENODD:
     case VAR_CONSEC:
     case VAR_KROPKI:

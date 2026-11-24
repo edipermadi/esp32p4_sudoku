@@ -301,6 +301,24 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int c = 0; g->flatmates && c < 81; c++) {   /* Dutch Flatmates: every 5 with a 1 above or a 9 below */
+        if (sol[c] == 5 && !((c > 8 && sol[c - 9] == 1) || (c < 72 && sol[c + 9] == 9))) {
+            return false;
+        }
+    }
+    for (int q = 0; q < g->nmx; q++) {              /* Mathrax: both diagonal pairs make the clue (worked out here) */
+        const int at = g->mx_at[q], op = g->mx_op[q], n = g->mx_val[q];
+        const int pair[2][2] = {{sol[at], sol[at + 10]}, {sol[at + 1], sol[at + 9]}};
+        for (int k = 0; k < 2; k++) {
+            const int a = pair[k][0], b = pair[k][1], hi = a > b ? a : b, lo = a + b - hi;
+            const bool ok = op == MX_SUM ? a + b == n : op == MX_DIFF ? hi - lo == n : op == MX_PROD ? a * b == n
+                            : op == MX_QUOT ? hi == lo * n : op == MX_EVEN ? a % 2 == 0 && b % 2 == 0
+                            : op == MX_ODD ? a % 2 && b % 2 : false;
+            if (!ok) {
+                return false;
+            }
+        }
+    }
     for (int lu = 0; g->psky && lu < 18; lu++) {    /* Odd/Even Skyscrapers: the clues */
         const int c = g->psky_clue[lu];
         if (c && sudoku_psky_of(sol, lu, (c & PSKY_EVEN) != 0) != (c & ~PSKY_EVEN)) {
@@ -447,7 +465,10 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            a->edge_kind == b->edge_kind && !memcmp(a->edge, b->edge, 81) && a->nquads == b->nquads &&
            !memcmp(a->quad_at, b->quad_at, a->nquads) && !memcmp(a->quad_n, b->quad_n, a->nquads) &&
            !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads) && a->nrooms == b->nrooms &&
-           !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18);
+           !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18) &&
+           a->flatmates == b->flatmates && a->nmx == b->nmx && !memcmp(a->mx_at, b->mx_at, a->nmx) &&
+           !memcmp(a->mx_op, b->mx_op, a->nmx) && !memcmp(a->mx_val, b->mx_val, a->nmx) &&
+           !memcmp(a->mx_of, b->mx_of, sizeof(a->mx_of));
 }
 
 /* the layout texts of a board, as the game keeps them (sudoku_db's generated table) */
@@ -469,6 +490,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_QUAD:
         sudoku_quads_text(g, cages, len);
+        break;
+    case VAR_MATHRAX:
+        sudoku_mathrax_text(g, cages, len);
         break;
     case VAR_EVENODD:
     case VAR_CONSEC:
@@ -651,7 +675,7 @@ static void test_geometry(void)
         {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
         {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
         {VAR_159, 9, 81, 27, 20}, {VAR_ANTIDIAG, 9, 81, 27, 20},
-        {VAR_CHESS, 9, 81, 27, 20},     {VAR_MAGIC, 9, 81, 27, 20},
+        {VAR_CHESS, 9, 81, 27, 20},     {VAR_MAGIC, 9, 81, 27, 20}, {VAR_FLATMATES, 9, 81, 27, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -973,6 +997,59 @@ static void test_texts_and_sdx(void)
             CHECKF(sudoku_count_solutions(&back, p.givens, 2) == 1, "%s: still one solution", variant_name(v));
         }
     }
+}
+
+/* Mathrax: the pairs each operation allows, its text read and written back (and refused when it isn't one);
+ * Dutch Flatmates: the rule check marks a 5 with neither a 1 above nor a 9 below, and not one with either */
+static void test_flatmates_mathrax(void)
+{
+    CHECK(is_sudoku_mathrax_pair_ok(MX_SUM, 9, 2, 7) && !is_sudoku_mathrax_pair_ok(MX_SUM, 9, 3, 7));
+    CHECK(is_sudoku_mathrax_pair_ok(MX_DIFF, 2, 3, 5) && is_sudoku_mathrax_pair_ok(MX_DIFF, 2, 5, 3) &&
+          !is_sudoku_mathrax_pair_ok(MX_DIFF, 2, 3, 4));
+    CHECK(is_sudoku_mathrax_pair_ok(MX_PROD, 12, 3, 4) && is_sudoku_mathrax_pair_ok(MX_PROD, 12, 2, 6) &&
+          !is_sudoku_mathrax_pair_ok(MX_PROD, 12, 2, 5));
+    CHECK(is_sudoku_mathrax_pair_ok(MX_QUOT, 3, 2, 6) && is_sudoku_mathrax_pair_ok(MX_QUOT, 3, 9, 3) &&
+          !is_sudoku_mathrax_pair_ok(MX_QUOT, 3, 2, 5));
+    CHECK(is_sudoku_mathrax_pair_ok(MX_EVEN, 0, 2, 8) && !is_sudoku_mathrax_pair_ok(MX_EVEN, 0, 2, 7));
+    CHECK(is_sudoku_mathrax_pair_ok(MX_ODD, 0, 1, 9) && !is_sudoku_mathrax_pair_ok(MX_ODD, 0, 1, 8));
+    CHECK(sudoku_mathrax_partners(MX_SUM, 3, 1) == (1u << 2) && sudoku_mathrax_partners(MX_SUM, 3, 5) == 0);
+    char lab[8];
+    sudoku_mathrax_label(MX_PROD, 12, lab);
+    CHECK(!strcmp(lab, "12\xc3\x97"));
+    sudoku_mathrax_label(MX_ODD, 0, lab);
+    CHECK(!strcmp(lab, "O"));
+
+    static sudoku_geom_t b;
+    char buf[256];
+    CHECK(sudoku_geom_mathrax_text("10:9+;30:2-;40:12x;60:3/;12:E;70:O", &b) && b.variant == VAR_MATHRAX && b.nmx == 6);
+    CHECK(b.mx_op[3] == MX_QUOT && b.mx_val[3] == 3 && b.mx_op[4] == MX_EVEN && b.mx_val[4] == 0);
+    CHECK(b.mx_of[10][0] == 0 && b.mx_of[11][0] == 0 && b.mx_of[19][0] == 0 && b.mx_of[20][0] == 0 &&
+          b.mx_of[28][0] == MX_NONE && b.mx_of[21][0] == 4);   /* (21: the E circle's, at 12) */
+    CHECK(sudoku_mathrax_text(&b, buf, sizeof(buf)) && !strcmp(buf, "10:9+;30:2-;40:12x;60:3/;12:E;70:O"));
+    static const char *const BAD[] = {"", "8:9+", "80:9+", "10:9", "10:9?", "10:1/", "10:0-", "10:3E", "10:9+;10:5+"};
+    for (size_t k = 0; k < sizeof(BAD) / sizeof(BAD[0]); k++) {
+        CHECKF(!sudoku_geom_mathrax_text(BAD[k], &b), "Mathrax text \"%s\" refused", BAD[k]);
+    }
+    CHECK(sudoku_geom(VAR_CLASSIC)->mx_of[40][0] == MX_NONE && sudoku_geom(VAR_FLATMATES)->nmx == 0);
+
+    const sudoku_geom_t *F = sudoku_geom(VAR_FLATMATES);   /* the rule check */
+    bool out[81];
+    uint8_t v[81] = {0};
+    v[40] = 5;                                      /* a lone 5: fine while its neighbours are empty */
+    CHECK(game_conflicts(F, v, out) == 0);
+    v[31] = 2;                                      /* no 1 above, but a 9 can still come below */
+    CHECK(game_conflicts(F, v, out) == 0);
+    v[49] = 7;                                      /* neither: the 5 and both neighbours marked */
+    CHECK(game_conflicts(F, v, out) > 0 && out[40] && out[31] && out[49]);
+    v[49] = 9;
+    CHECK(game_conflicts(F, v, out) == 0);
+    memset(v, 0, 81);
+    v[4] = 5;                                       /* top row: only a 9 below will do */
+    v[13] = 8;
+    CHECK(game_conflicts(F, v, out) > 0 && out[4] && out[13]);
+    CHECK(is_sudoku_fits(F, v, 13, 9) == false);    /* (13 is filled) */
+    v[13] = 0;
+    CHECK(sudoku_fits_why(F, v, 13, 8) == FIT_FLATMATES && is_sudoku_fits(F, v, 13, 9));
 }
 
 static void test_sdx_edges(void)
@@ -2069,7 +2146,7 @@ int main(int argc, char **argv)
         {"generator", test_generate},        {"determinism (golden)", test_determinism},
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},
-        {"rules check", test_conflicts},     {"hint words", test_hint_words},
+        {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},
