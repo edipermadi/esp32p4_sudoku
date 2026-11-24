@@ -13,7 +13,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
 {
     lv_obj_set_user_data(grid, (void *)geo);
     const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums || geo->frame || geo->outside ||
-                       geo->rossini || geo->nrooms || geo->skysum || geo->psky || geo->b9;   /* clues outside the grid */
+                       geo->rossini || geo->nrooms || geo->skysum || geo->psky || geo->b9 || geo->n9;   /* clues outside */
     for (int i = 0; clues && i < BOARD_CLUES; i++) {
         lv_obj_set_hidden(clues[i], true);
     }
@@ -53,15 +53,15 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
     for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums || geo->frame || geo->outside || geo->rossini ||
-                     geo->nrooms || geo->skysum || geo->psky || geo->b9) && clues && i < 18; i++) {   /* left of the rows, above the columns */
+                     geo->nrooms || geo->skysum || geo->psky || geo->b9 || geo->n9) && clues && i < 18; i++) {   /* left of the rows, above the columns */
         int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->skyscraper ? geo->sky[i] : geo->xsums ? geo->xsum[i]
                            : geo->frame ? geo->frame_sum[i] : geo->outside ? geo->outside_set[i]
                            : geo->nrooms ? geo->nroom[i] : geo->skysum ? geo->sky_sum[i] : geo->psky ? geo->psky_clue[i]
-                           : geo->b9 ? geo->b9_sum[i]
+                           : geo->b9 ? geo->b9_sum[i] : geo->n9 ? geo->n9_set[i] << 1   /* (as Outside's: bit d = d) */
                            : geo->rossini_dir[i];
         int mid = LINE_THICK + (k / 3) * (box_w + LINE_THICK) + (k % 3) * (cs + LINE_THIN) + cs / 2;
         char t[12];
-        if (geo->outside) {                         /* its digits, side by side */
+        if (geo->outside || geo->n9) {              /* its digits, side by side */
             int n = 0;
             for (int d = 1; d <= 9; d++) {
                 if (v >> d & 1) {

@@ -150,6 +150,69 @@ static bool mathrax_circles(const uint8_t full[81], int want, uint32_t *rng, sud
     return nc >= want - 2 && gen_geom_mathrax(at, op, val, nc, out);
 }
 
+/**
+ * @brief Clone Sudoku: pairs of areas at random: each a connected shape of 4 to 6 cells grown from a random cell,
+ *        its clone moved so that no cell sees its own (another row, column and box), none overlapping.
+ * @param[in] want  how many pairs
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
+ * @return false if they didn't fit (try again)
+ */
+static bool clone_layout(int want, uint32_t *rng, sudoku_geom_t *out)
+{
+    uint8_t cells[CLONE_MAX][9], lens[CLONE_MAX];
+    int8_t dr[CLONE_MAX], dc[CLONE_MAX];
+    bool used[81] = {false};
+    int n = 0;
+    for (int tries = 0; tries < 200 && n < want; tries++) {
+        const int size = 4 + (int)(rnd(rng) % 3);
+        uint8_t a[9];
+        int na = 1;
+        a[0] = (uint8_t)(rnd(rng) % 81);
+        for (int g = 0; g < 40 && na < size; g++) {   /* grown one side-by-side cell at a time */
+            const int from = a[rnd(rng) % (uint32_t)na], way = (int)(rnd(rng) % 4);
+            const int to = way == 0 ? (from % 9 ? from - 1 : -1) : way == 1 ? (from % 9 < 8 ? from + 1 : -1)
+                           : way == 2 ? from - 9 : from + 9;
+            bool dup = to < 0 || to > 80;
+            for (int k = 0; !dup && k < na; k++) {
+                dup = a[k] == to;
+            }
+            if (!dup) {
+                a[na++] = (uint8_t)to;
+            }
+        }
+        if (na < size) {
+            continue;
+        }
+        const int r = (int)(rnd(rng) % 17) - 8, c = (int)(rnd(rng) % 17) - 8;
+        bool ok = r != 0 && c != 0;                 /* (another row and column for every cell) */
+        bool mine[81] = {false};
+        for (int k = 0; ok && k < na; k++) {
+            const int rr = a[k] / 9 + r, cc = a[k] % 9 + c, b = rr * 9 + cc;
+            ok = rr >= 0 && rr < 9 && cc >= 0 && cc < 9 && !used[a[k]] && !used[b] && !mine[b] &&
+                 (a[k] / 27 != b / 27 || a[k] % 9 / 3 != b % 9 / 3);   /* (and another box) */
+            for (int j = 0; ok && j < na; j++) {
+                ok = a[j] != b;                     /* (not onto its own area) */
+            }
+            if (ok) {
+                mine[b] = true;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        for (int k = 0; k < na; k++) {
+            used[a[k]] = used[(a[k] / 9 + r) * 9 + a[k] % 9 + c] = true;
+            cells[n][k] = a[k];
+        }
+        lens[n] = (uint8_t)na;
+        dr[n] = (int8_t)r;
+        dc[n] = (int8_t)c;
+        n++;
+    }
+    return n == want && gen_geom_clone(n, (const uint8_t (*)[9])cells, lens, dr, dc, out);
+}
+
 /* ---------------------------------------------------------------- generating (all variants) */
 
 /* (documented in generator.h) */
@@ -183,9 +246,10 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool fort = variant == VAR_FORTRESS, mrx = variant == VAR_MATHRAX;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM, b9 = variant == VAR_B9;
+    const bool n9 = variant == VAR_N9, clone = variant == VAR_CLONE;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
                      pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky ||
-                     mrx || b9;
+                     mrx || b9 || n9 || clone;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -399,6 +463,20 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_xsum_of(full, lu) : 0;
             }
             gen_geom_xsum(clues, jig);
+        } else if (n9) {                            /* a grid, then some of its 18 clues */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t sets[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                sets[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_n9_of(full, lu) : 0;
+            }
+            if (!gen_geom_n9(sets, jig)) {
+                continue;
+            }
+        } else if (clone) {                         /* the areas first, then a grid that clones them */
+            if (!clone_layout(level >= GEN_HARD ? 3 : 2, &rng, jig) || !gen_random_full_grid(jig, full, &rng, 20000)) {
+                continue;
+            }
         } else if (b9) {                            /* a grid, then some of its 18 clues (none where the 9 is first) */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             uint8_t clues[18];

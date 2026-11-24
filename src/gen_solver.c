@@ -742,6 +742,8 @@ typedef struct {
 #define R_B9      (1u << 21)            /**< Before Nine */
 #define R_QUADRO  (1u << 22)            /**< Quadro */
 #define R_AQ9     (1u << 23)            /**< Anti-Queen 9s */
+#define R_N9      (1u << 24)            /**< Next to Nine */
+#define R_CLONE   (1u << 25)            /**< Clone Sudoku */
 /** @} */
 
 /**
@@ -1120,6 +1122,46 @@ bool is_gen_skysum_line_ok(const uint8_t x[9], int c)
         more += d;
     }
     return sum + 9 <= c && c <= sum + more;         /* (the 9, still to come, is seen) */
+}
+
+/* (documented in gen_internal.h) */
+bool is_gen_n9_line_ok(const uint8_t x[9], int c)
+{
+    const uint16_t want = (uint16_t)(c << 1);      /* the clue's digits, bit d = d */
+    const int need = __builtin_popcount(want);
+    uint16_t have = 0;
+    for (int k = 0; k < 9; k++) {
+        have |= x[k] ? (uint16_t)(1u << x[k]) : 0;
+    }
+    for (int k = 0; k < 9; k++) {                   /* each place the 9 is, or could still be */
+        if (x[k] != 9 && (x[k] || (have >> 9 & 1))) {
+            continue;
+        }
+        const int nb = (k > 0) + (k < 8);
+        if (nb != need) {
+            continue;                               /* (one digit beside it: at an end; two: not) */
+        }
+        uint16_t got = 0;
+        int empty = 0;
+        bool ok = true;
+        for (int j = k - 1; j <= k + 1; j += 2) {
+            if (j < 0 || j > 8) {
+                continue;
+            }
+            if (!x[j]) {
+                empty++;
+            } else if (!(want >> x[j] & 1)) {
+                ok = false;                         /* a digit beside it the clue hasn't got */
+            } else {
+                got |= (uint16_t)(1u << x[j]);
+            }
+        }
+        const uint16_t rest = (uint16_t)(want & ~got);
+        if (ok && !(rest & have) && __builtin_popcount(rest) == empty) {
+            return true;                            /* (the clue's other digits not elsewhere, room beside it for them) */
+        }
+    }
+    return false;
 }
 
 /**
@@ -1622,6 +1664,42 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_AQ9);
+    for (int line = 0; (rules & R_N9) && free && line < 2; line++) {   /* Next to Nine: its row's, column's clue */
+        int lu = line ? 9 + i % 9 : i / 9, c = G->n9_set[lu], cells[9];
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        uint8_t x[9];
+        for (int k = 0; k < 9; k++) {
+            x[k] = g->v[cells[k]];
+        }
+        const int at = line ? i / 9 : i % 9;
+        for (int d = 1; d <= 9; d++) {
+            if (free >> d & 1) {
+                x[at] = (uint8_t)d;
+                if (!is_gen_n9_line_ok(x, c)) {
+                    free &= (uint16_t)~(1u << d);
+                }
+            }
+        }
+        WHY(line ? FIT_N9_COL : FIT_N9_ROW);
+    }
+    if ((rules & R_CLONE) && free && G->clone_of[i] != CLONE_NONE) {   /* Clone Sudoku: what its clone can be */
+        const int p = G->clone_of[i], w = g->v[p];
+        if (w) {
+            free &= (uint16_t)(1u << w);
+        } else {
+            uint16_t m = 0;
+            for (int d = 1; d <= 9; d++) {
+                if ((free >> d & 1) && is_cell_open(g, p, d)) {
+                    m |= (uint16_t)(1u << d);
+                }
+            }
+            free &= m;
+        }
+    }
+    WHY(FIT_CLONE);
     for (int line = 0; (rules & R_B9) && free && line < 2; line++) {   /* Before Nine: its row's, column's clue */
         int lu = line ? 9 + i % 9 : i / 9, c = G->b9_sum[lu], cells[9];
         if (!c) {
@@ -1824,7 +1902,8 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0) |
                (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0) |
                (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0) |
-               (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0) | (G->quadro ? R_QUADRO : 0) | (G->aq9 ? R_AQ9 : 0);
+               (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0) | (G->quadro ? R_QUADRO : 0) | (G->aq9 ? R_AQ9 : 0) |
+               (G->n9 ? R_N9 : 0) | (G->nclone ? R_CLONE : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

@@ -496,6 +496,37 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int lu = 0; geo->n9 && lu < 18; lu++) {   /* Next to Nine: beside the 9, a digit the clue hasn't, or too few */
+        const int want = geo->n9_set[lu] << 1;
+        int cells[9], k = 0;
+        if (!want) {
+            continue;
+        }
+        for (int j = 0; j < 9; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        }
+        while (k < 9 && val[cells[k]] != 9) {
+            k++;
+        }
+        if (k == 9) {
+            continue;
+        }
+        const int nb = (k > 0) + (k < 8);
+        if (nb != __builtin_popcount(want)) {
+            out[cells[k]] = true;                   /* (a 9 with the wrong number of cells beside it) */
+        }
+        for (int j = k - 1; j <= k + 1; j += 2) {
+            if (j >= 0 && j < 9 && val[cells[j]] && !(want >> val[cells[j]] & 1)) {
+                out[cells[k]] = out[cells[j]] = true;
+            }
+        }
+    }
+    for (int c = 0; geo->nclone && c < 81; c++) {   /* Clone Sudoku: a cell and its clone not the same */
+        const int p = geo->clone_of[c];
+        if (p != CLONE_NONE && val[c] && val[p] && val[c] != val[p]) {
+            out[c] = out[p] = true;
+        }
+    }
     for (int tl = 0; geo->quadro && tl < 72; tl++) {   /* Quadro: a full 2x2 block all odd or all even */
         const int four[4] = {tl, tl + 1, tl + 9, tl + 10};
         int odd = 0, even = 0;

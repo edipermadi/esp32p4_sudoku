@@ -80,6 +80,7 @@ static bool is_clue_variant(int variant)
     case VAR_SKYSUM:
     case VAR_PSKY:
     case VAR_B9:
+    case VAR_N9:
     case VAR_LK:
         return true;
     default:
@@ -90,12 +91,14 @@ static bool is_clue_variant(int variant)
 /* (documented in canon_core.h) */
 uint8_t canon_symmetries(int variant)
 {
-    if (is_clue_variant(variant) && variant != VAR_SANDWICH) {
+    if (is_clue_variant(variant) && variant != VAR_SANDWICH && variant != VAR_N9) {
         return 0x41;                    /* the clues stay left of the rows and above the columns, read the same way:
                                          * as it is, or mirrored about the main diagonal (rows' clues and columns' swap) */
     }
-    if (is_mark_variant(variant) || variant == VAR_SANDWICH || variant == VAR_QUAD || variant == VAR_MATHRAX) {
-        return 0xFF;                    /* (marks, circles turned too; a Sandwich sum is the same from either end) */
+    if (is_mark_variant(variant) || variant == VAR_SANDWICH || variant == VAR_N9 || variant == VAR_QUAD ||
+            variant == VAR_MATHRAX || variant == VAR_CLONE) {
+        return 0xFF;                    /* (marks, circles, clone areas turned too; a Sandwich sum, the digits beside a 9
+                                         * are the same from either end) */
     }
     if (variant == VAR_PILL) {
         return 0x41;                    /* its pill reads left to right or top to bottom: as it is, or about the main
@@ -187,7 +190,7 @@ bool is_canon_layout(int variant)
 {
     return variant == VAR_JIGSAW || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
            variant == VAR_PRODUCT || is_mark_variant(variant) || is_line_variant(variant) || is_clue_variant(variant) ||
-           variant == VAR_QUAD || variant == VAR_MATHRAX;
+           variant == VAR_QUAD || variant == VAR_MATHRAX || variant == VAR_CLONE;
 }
 
 /**
@@ -250,6 +253,8 @@ static unsigned clue_of(const sudoku_geom_t *G, int lu)
         return G->sky_sum[lu];
     case VAR_PSKY:
         return G->psky_clue[lu];
+    case VAR_N9:
+        return G->n9_set[lu];
     default:
         return G->b9_sum[lu];
     }
@@ -374,6 +379,35 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
             }
         }
         return hash_copy(variant, best, len);
+    }
+    if (variant == VAR_CLONE) {
+        /* a copy: the givens renumbered in reading order (a cell and its clone the same, whatever digit), then each
+         * cell's pair, numbered in reading order from 1 (0: in no area); the two areas' shapes say which cell clones
+         * which */
+        uint8_t best[162], cur[162];
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            uint8_t name[10] = {0}, lab[CLONE_MAX] = {0};
+            int next = 1, nlab = 0;
+            for (int k = 0; k < 81; k++) {
+                const int src = canon_cell(t, 9, k), d = givens[src], p = G->clone_pair[src];
+                if (d && !name[d]) {
+                    name[d] = (uint8_t)next++;
+                }
+                cur[k] = d ? name[d] : 0;
+                if (p != CLONE_NONE && !lab[p]) {
+                    lab[p] = (uint8_t)++nlab;
+                }
+                cur[81 + k] = p == CLONE_NONE ? 0 : lab[p];
+            }
+            if (!have || memcmp(cur, best, sizeof(cur)) < 0) {
+                memcpy(best, cur, sizeof(cur));
+                have = true;
+            }
+        }
+        return hash_copy(variant, best, sizeof(best));
     }
     if (variant == VAR_QUAD || variant == VAR_MATHRAX) {
         /* a copy: the givens as they are, then the circles, each as the top-left cell of its four on the turned board

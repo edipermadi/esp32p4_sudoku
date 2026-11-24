@@ -93,6 +93,8 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {29, 143, 584, 943},   /* Before Nine */
     {22, 232, 622, 419},   /* Quadro (2026-11-24) */
     {374, 267, 1828, 901}, /* Anti-Queen 9s */
+    {22, 123, 385, 1531},  /* Next to Nine (2026-11-24) */
+    {135, 211, 1062, 551}, /* Clone Sudoku */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -171,7 +173,7 @@ static void gen_poll_cb(lv_timer_t *t)
     const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
     const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_SUMLESS || gen_var_req == VAR_PRODUCT ||
                         gen_var_req == VAR_REGIONS || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ||
-                        gen_var_req == VAR_MATHRAX ? gen_cages : NULL;
+                        gen_var_req == VAR_MATHRAX || gen_var_req == VAR_CLONE ? gen_cages : NULL;
     const char *marks = gen_marks[0] ? gen_marks : NULL;
     const char *thermos = gen_thermos[0] ? gen_thermos : NULL;
     int gid = is_stats_db_ready() ? stats_db_gen_add(gen_var_req, gen_level_got, gen_givens, regions, cages, marks,

@@ -166,6 +166,10 @@
  *   VAR_QUADRO   Quadro: Classic rules, and every 2x2 block of cells holds an odd and an even
  *                digit (never four of one parity)
  *   VAR_AQ9      Anti-Queen 9s: Classic rules, and no two 9s share a diagonal (of any length)
+ *   VAR_N9       Next to Nine: Classic rules, and a clue left of a row or above a column lists
+ *                the digits right beside the row's or column's 9
+ *   VAR_CLONE    Clone Sudoku: Classic rules, and pairs of shaded areas of the same shape (one
+ *                the other moved) hold the same digits in the same places
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -289,6 +293,8 @@ typedef enum {
     VAR_B9,                             /**< Before Nine */
     VAR_QUADRO,                         /**< Quadro */
     VAR_AQ9,                            /**< Anti-Queen 9s */
+    VAR_N9,                             /**< Next to Nine */
+    VAR_CLONE,                          /**< Clone Sudoku */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -305,7 +311,7 @@ typedef enum {
  *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola",
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
- *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s"
+ *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku"
  */
 const char *variant_name(int variant);
 
@@ -359,6 +365,8 @@ enum {
 };
 #define QUADS_MAX      32               /**< Quadruple: circles per board */
 #define QUAD_NONE      0xFF             /**< no circle */
+#define CLONE_MAX      4                /**< Clone Sudoku: pairs of areas per board */
+#define CLONE_NONE     0xFF             /**< a cell in no area */
 #define MX_MAX         24               /**< Mathrax: circles per board */
 #define MX_NONE        0xFF             /**< no circle */
 /** @brief Mathrax: a circle's operation (sudoku_geom_t.mx_op), which both diagonal pairs of its four cells make. */
@@ -466,6 +474,18 @@ typedef struct {
     bool psym;                          /**< Point Symmetry: cells i and 80 - i add up to 10 (the centre: allow 5) */
     bool quadro;                        /**< Quadro: every 2x2 block of cells holds an odd and an even digit */
     bool aq9;                           /**< Anti-Queen 9s: no two 9s on one diagonal */
+    bool n9;                            /**< Next to Nine: the clues are rules */
+    uint8_t n9_set[18];                 /**< per row (0..8) and column (9..17), the digits beside its 9 (bit d - 1 = d, 1..8;
+                                         *   0: no clue) */
+    /* Clone Sudoku: pairs of areas, the second the first moved by clone_dr rows and clone_dc columns; each cell and
+     * its clone hold the same digit (they never share a row, column or box) */
+    uint8_t nclone;                     /**< Clone Sudoku: pairs */
+    uint8_t clone_n[CLONE_MAX];         /**< each pair's area: its cells */
+    uint8_t clone_cell[CLONE_MAX][9];   /**< the first area's cells */
+    int8_t clone_dr[CLONE_MAX];         /**< how far the second is moved: rows */
+    int8_t clone_dc[CLONE_MAX];         /**< columns (either way) */
+    uint8_t clone_of[81];               /**< each cell's clone, CLONE_NONE: in no area */
+    uint8_t clone_pair[81];             /**< each cell's pair, CLONE_NONE: in no area */
     bool b9;                            /**< Before Nine: the clues are rules */
     uint8_t b9_sum[18];                 /**< per row (0..8, from the left) and column (9..17, from the top), the sum of
                                          *   the digits before the 9, 0 = no clue */
@@ -840,6 +860,47 @@ bool sudoku_b9_text(const sudoku_geom_t *g, char *buf, int len);
  */
 int sudoku_b9_of(const uint8_t vals[81], int lu);
 /**
+ * @brief A Next to Nine board from its clues as text: 18 entries, comma-separated: 0 (no clue) or the 1-2
+ * digits (1-8) right beside the 9, e.g. "37" (as Outside Sudoku's), the rows from the left, then the columns
+ * from the top (kept in marks); sudoku_n9_text() writes it.
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_n9_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Next to Nine board's clues as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_n9_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief Next to Nine: the clue of a row or column with these digits in it.
+ * @param[in] vals  the cells
+ * @param[in] lu  the row (0..8) or column (9..17)
+ * @return its digits beside the 9 as n9_set keeps them (bit d - 1), 0 if the 9 or a cell beside it is empty
+ */
+int sudoku_n9_of(const uint8_t vals[81], int lu);
+/**
+ * @brief A Clone Sudoku board from its pairs of areas as text: "cell,cell,...>dr,dc;..." (the first area's cells,
+ * then how far its clone is moved: rows down, columns right, either may be negative; kept in cages);
+ * sudoku_clone_text() writes it.
+ * @param[in] text  the pairs
+ * @param[out] out  gets the board
+ * @return false if the text isn't one (areas overlapping or off the board, a cell and its clone in one unit)
+ */
+bool sudoku_geom_clone_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Clone Sudoku board's pairs as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_clone_text(const sudoku_geom_t *g, char *buf, int len);
+/**
  * @brief An Odd/Even Skyscrapers board from its clues as text: 18 fields, comma-separated, rows from the left
  * then columns from the top: 0 no clue, 1..5 the odd buildings seen, e0..e4 the even ones (kept in marks);
  * sudoku_psky_text() writes it.
@@ -1125,7 +1186,7 @@ static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
 /**
  * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot, the Girandola, 159
  * Sudoku's columns 1, 5 and 9, Extra Regions' regions, Anti-Diagonal's diagonals, Magic Square's box, Point
- * Symmetry's centre
+ * Symmetry's centre, Clone Sudoku's areas
  * @param[in] g  the board
  * @param[in] cell  the cell
  * @return true if so
@@ -1136,7 +1197,7 @@ static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
            is_sudoku_geom_on_centerdot(g, cell) || is_sudoku_geom_on_girandola(g, cell) ||
            (g->idx159 && cell % 9 % 4 == 0) || (g->variant == VAR_REGIONS && g->cage_of[cell] != CAGE_NONE) ||
            (g->antidiag && (cell / 9 == cell % 9 || cell / 9 + cell % 9 == 8)) ||
-           (g->magic && cell / 9 / 3 == 1 && cell % 9 / 3 == 1) || (g->psym && cell == 40);
+           (g->magic && cell / 9 / 3 == 1 && cell % 9 / 3 == 1) || (g->psym && cell == 40) || g->clone_pair[cell] != CLONE_NONE;
 }
 
 /* ---------------------------------------------------------------- generating */
@@ -1260,7 +1321,10 @@ enum {
     FIT_B9_ROW,                         /**< Before Nine: the row's clue */
     FIT_B9_COL,                         /**< Before Nine: the column's clue */
     FIT_QUADRO,                         /**< Quadro: a 2x2 block with three of one parity already */
-    FIT_AQ9                             /**< Anti-Queen 9s: a 9 on one of its diagonals */
+    FIT_AQ9,                            /**< Anti-Queen 9s: a 9 on one of its diagonals */
+    FIT_N9_ROW,                         /**< Next to Nine: the row's clue */
+    FIT_N9_COL,                         /**< Next to Nine: the column's clue */
+    FIT_CLONE                           /**< Clone Sudoku: its clone */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1329,7 +1393,9 @@ typedef enum {
     TECH_PSYM,               /**< Point Symmetry: a cell and its mirror through the centre */
     TECH_B9,                 /**< Before Nine: a clue */
     TECH_QUADRO,             /**< Quadro: a 2x2 block whose other three are one parity */
-    TECH_AQ9                 /**< Anti-Queen 9s: a 9 and its diagonals */
+    TECH_AQ9,                /**< Anti-Queen 9s: a 9 and its diagonals */
+    TECH_N9,                 /**< Next to Nine: a clue */
+    TECH_CLONE               /**< Clone Sudoku: a cell and its clone */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {

@@ -600,6 +600,31 @@ bool gen_aq9_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_n9_logic(logic_t *L)
+{
+    return sky_orders_logic(L, L->G->n9_set, is_gen_n9_line_ok, TECH_N9);
+}
+
+/* (documented in gen_internal.h) */
+bool gen_clone_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int c = 0; c < 81; c++) {
+        const int p = G->clone_of[c];
+        if (p == CLONE_NONE || L->v[c]) {
+            continue;
+        }
+        const uint16_t keep = (uint16_t)(L->cand[c] & (L->v[p] ? (uint16_t)(1u << L->v[p]) : L->cand[p]));
+        if (L->cand[c] & ~keep) {
+            eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+            trace(TECH_CLONE, p, -1, keep, 0, c, -1);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
 bool gen_psym_logic(logic_t *L)
 {
     for (int c = 0; c < 81; c++) {
@@ -1396,6 +1421,12 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->aq9 && gen_aq9_logic(&L)) {
             continue;    /* Anti-Queen 9s: the diagonals */
         }
+        if (G->n9 && gen_n9_logic(&L)) {
+            continue;    /* Next to Nine: the clues */
+        }
+        if (G->nclone && gen_clone_logic(&L)) {
+            continue;    /* Clone Sudoku: the clones */
+        }
         if (G->b9 && gen_b9_logic(&L)) {
             continue;    /* Before Nine: the clues */
         }
@@ -1459,10 +1490,10 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->antidiag || G->magic) {
         return 30;
     }
-    if (G->psym) {
+    if (G->psym || G->nclone) {
         return 30;
     }
-    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum || G->b9 ||
+    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum || G->b9 || G->n9 ||
             G->psky) {
         return 28;
     }

@@ -136,6 +136,8 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_AVG] = {4, 1, 0, 0, "5384", NULL, NULL, NULL, NULL, NULL, PIC_AVG, NULL, -1, 0, NULL, NULL, LINE_AVG},
     [VAR_FLATMATES] = {.w = 2, .h = 3, .digits = "1." "55" ".9", .left_clue = -1},
     [VAR_MATHRAX] = {.w = 2, .h = 2, .digits = "24" "57", .left_clue = -1, .mathrax = "9+"},
+    [VAR_N9] = {.w = 6, .h = 1, .digits = "512984", .left_clue = -1, .left_text = "28"},
+    [VAR_CLONE] = {.w = 4, .h = 2, .digits = "35.." "..35", .tint = "1100" "0011", .left_clue = -1},
     [VAR_QUADRO] = {.w = 3, .h = 2, .digits = "472" "915", .left_clue = -1},
     [VAR_AQ9] = {.w = 5, .h = 5, .digits = "....." "....." "..9.." "....." ".....", .cross = "x...x" ".x.x." "....." ".x.x." "x...x", .left_clue = -1},
     [VAR_PSYM] = {.w = 3, .h = 3, .digits = "2.7" ".5." "3.8", .tint = "000" "010" "000", .left_clue = -1},
@@ -278,6 +280,10 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_AVG] = "Classic rules, and on each teal line, the digit in the circle is the average of the line's other "
     "digits: they add up to it times how many they are, 3 + 8 + 4 = 3 x 5. Digits may repeat along a line where the "
     "rules allow.",
+    [VAR_N9] = "Classic rules, and a clue left of a row or above a column lists the digits right beside its 9, in any "
+    "order: here 2 and 8. A clue of one digit puts the 9 at an end of its row or column.",
+    [VAR_CLONE] = "Classic rules, and pairs of shaded areas of the same shape (one the other moved, marked with the same "
+    "letter) hold the same digits in the same places: here 3 5 and 3 5. A digit in one area is its clone's too.",
     [VAR_QUADRO] = "Classic rules, and every 2x2 block of cells holds at least one odd and one even digit: never four "
     "odd or four even together. Here 4 7 / 9 1 has the even 4, and 7 2 / 1 5 the even 2.",
     [VAR_AQ9] = "Classic rules, and no two 9s share a diagonal, of any length: a 9 rules out every crossed cell along "

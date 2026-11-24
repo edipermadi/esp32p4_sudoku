@@ -41,6 +41,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Magic Square", "The centre box's lines make 15: 5 in the middle, even corners, and each line's third digit follows.", VAR_MAGIC, TECH_MAGIC, false},
     {"Anti-Diagonal", "A long diagonal holds three different digits at most: once it has three, the rest are those.", VAR_ANTIDIAG, TECH_ANTIDIAG, false},
     {"Point Symmetry", "Cells mirrored through the centre add up to 10: a digit gives its mirror away.", VAR_PSYM, TECH_PSYM, true},
+    {"Clone areas", "Shaded areas of the same shape hold the same digits: what one cell can't be, its clone can't.", VAR_CLONE, TECH_CLONE, true},
     {"Extra region", "No digit repeats in a shaded region: its cells see each other across rows, columns and boxes.", VAR_REGIONS, TECH_NONE, false},
     {"159 Sudoku", "Columns 1, 5 and 9 say where the row's 1, 5 and 9 are: the two must agree.", VAR_159, TECH_159, false},
     {"Argyle lines", "No digit repeats on an argyle line: the cells along one see each other, like a row's.", VAR_ARGYLE, TECH_NONE, false},
@@ -97,6 +98,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Odd/Even Skyscraper clue", "Only the seen buildings of the clue's parity count: the 9 is always one of the odd.", VAR_PSKY, TECH_PSKY, false},
     {"Sum Skyscraper clue", "The buildings seen add up to the clue: the 9 is always seen, the rest make up the difference.", VAR_SKYSUM, TECH_SKYSUM, false},
     {"Before Nine clue", "The digits before the 9 add up to the clue: a small clue puts the 9 near the edge.", VAR_B9, TECH_B9, false},
+    {"Next to Nine clue", "The clue's digits sit right beside the 9: one digit puts the 9 at an end of its line.", VAR_N9, TECH_N9, true},
 };
 #define LESSONS_N ((int)(sizeof(LESSONS) / sizeof(LESSONS[0])))   /**< learn_count() */
 
@@ -142,6 +144,7 @@ int learn_group(int k)
     case VAR_CENTERDOT:
     case VAR_GIRANDOLA:
     case VAR_REGIONS:
+    case VAR_CLONE:
     case VAR_159:
     case VAR_ANTIDIAG:
     case VAR_PSYM:
@@ -180,6 +183,7 @@ int learn_group(int k)
     case VAR_SKYSUM:
     case VAR_PSKY:
     case VAR_B9:
+    case VAR_N9:
         return LEARN_CLUES;
     default:
         return LEARN_LINES;                         /* (Thermo, Arrow, ... Slow Thermo) */

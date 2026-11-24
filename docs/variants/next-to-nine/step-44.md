@@ -1,0 +1,10 @@
+<!-- Written by tools/walkthrough.py next-to-nine: edit the script, not this page. -->
+# Next to Nine, step 44: the 9 in box 8
+
+**Step 44 of 51** · [← Step 43](step-43.md) · [All steps](../next-to-nine.md#the-whole-puzzle-step-by-step) · [Step 45 →](step-45.md)
+
+Box 8 needs a 9, and r8c5 is its last empty cell: **r8c5 = 9**.
+
+![Step 44](../../screenshots/variants/next-to-nine-walkthrough/step-44.png)
+
+**Step 44 of 51** · [← Step 43](step-43.md) · [All steps](../next-to-nine.md#the-whole-puzzle-step-by-step) · [Step 45 →](step-45.md)

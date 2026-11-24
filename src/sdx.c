@@ -183,6 +183,10 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_skysum_text(p->marks, out);         /* (and Sum Skyscrapers') */
     case VAR_B9:
         return sudoku_geom_b9_text(p->marks, out);             /* (and Before Nine's) */
+    case VAR_N9:
+        return sudoku_geom_n9_text(p->marks, out);             /* (and Next to Nine's) */
+    case VAR_CLONE:
+        return sudoku_geom_clone_text(p->cages, out);          /* (its areas where cages go) */
     case VAR_FRAME:
         return sudoku_geom_frame_text(p->marks, out);          /* (and Frame's) */
     case VAR_OUTSIDE:

@@ -222,6 +222,12 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_B9:
         sudoku_b9_text(g, marks, 82);
         break;
+    case VAR_N9:
+        sudoku_n9_text(g, marks, 82);
+        break;
+    case VAR_CLONE:
+        sudoku_clone_text(g, cages, cages_len);     /* (where cages go) */
+        break;
     case VAR_PSKY:
         sudoku_psky_text(g, marks, 82);
         break;
@@ -522,6 +528,144 @@ bool sudoku_psky_text(const sudoku_geom_t *g, char *buf, int len)
         int w = snprintf(buf + pos, (size_t)(len - pos), "%s%s%d", i ? "," : "", (c & PSKY_EVEN) ? "e" : "",
                          c & ~PSKY_EVEN);
         if (w < 0 || pos + w >= len) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_n9_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t sets[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        if (!p) {
+            return false;
+        }
+        sets[i] = 0;
+        if (*p == '0') {
+            p++;
+        } else {
+            int n = 0;
+            while (*p >= '1' && *p <= '8') {
+                const uint8_t b = (uint8_t)(1u << (*p - '1'));
+                if ((sets[i] & b) || ++n > 2) {
+                    return false;
+                }
+                sets[i] |= b;
+                p++;
+            }
+            if (!n) {
+                return false;
+            }
+        }
+        if (i < 17) {
+            if (*p != ',') {
+                return false;
+            }
+            p++;
+        }
+    }
+    return *p == 0 && gen_geom_n9(sets, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_n9_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        char d[4];
+        int k = 0;
+        for (int x = 1; x <= 8; x++) {
+            if (g->n9_set[i] >> (x - 1) & 1) {
+                d[k++] = (char)('0' + x);
+            }
+        }
+        if (!k) {
+            d[k++] = '0';
+        }
+        d[k] = 0;
+        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%s", i ? "," : "", d);
+        if (w < 0 || w >= len - pos) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_clone_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t cells[CLONE_MAX][9], lens[CLONE_MAX];
+    int8_t dr[CLONE_MAX], dc[CLONE_MAX];
+    int n = 0;
+    const char *p = text;
+    while (p && *p) {
+        if (n >= CLONE_MAX) {
+            return false;
+        }
+        lens[n] = 0;
+        for (;;) {                                  /* the first area's cells */
+            char *end;
+            long c = strtol(p, &end, 10);
+            if (end == p || c < 0 || c > 80 || lens[n] >= 9) {
+                return false;
+            }
+            cells[n][lens[n]++] = (uint8_t)c;
+            p = end;
+            if (*p == ',') {
+                p++;
+            } else {
+                break;
+            }
+        }
+        if (*p != '>') {
+            return false;
+        }
+        char *end;
+        long r = strtol(p + 1, &end, 10);           /* how far its clone is moved */
+        if (end == p + 1 || *end != ',' || r < -8 || r > 8) {
+            return false;
+        }
+        p = end + 1;
+        long c = strtol(p, &end, 10);
+        if (end == p || c < -8 || c > 8) {
+            return false;
+        }
+        dr[n] = (int8_t)r;
+        dc[n] = (int8_t)c;
+        n++;
+        p = end;
+        if (*p == ';') {
+            p++;
+        } else if (*p) {
+            return false;
+        }
+    }
+    return n > 0 && gen_geom_clone(n, (const uint8_t (*)[9])cells, lens, dr, dc, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_clone_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    if (len < 1) {
+        return false;
+    }
+    buf[0] = 0;
+    for (int q = 0; q < g->nclone; q++) {
+        for (int k = 0; k < g->clone_n[q]; k++) {
+            int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d", k ? "," : q ? ";" : "", g->clone_cell[q][k]);
+            if (w < 0 || w >= len - pos) {
+                return false;
+            }
+            pos += w;
+        }
+        int w = snprintf(buf + pos, (size_t)(len - pos), ">%d,%d", g->clone_dr[q], g->clone_dc[q]);
+        if (w < 0 || w >= len - pos) {
             return false;
         }
         pos += w;

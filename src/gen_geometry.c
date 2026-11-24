@@ -28,7 +28,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal",
                                                      "Pill Arrows", "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square",
                                                      "Average Lines", "Dutch Flatmates", "Mathrax",
-                                                     "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s"
+                                                     "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
+                                                     "Next to Nine", "Clone Sudoku"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -163,6 +164,31 @@ int sudoku_b9_of(const uint8_t vals[81], int lu)
     return -1;                                      /* (no 9: not a Sudoku line) */
 }
 
+/* (documented in generator.h) */
+int sudoku_n9_of(const uint8_t vals[81], int lu)
+{
+    int cells[9];
+    line_cells(lu, cells);
+    for (int k = 0; k < 9; k++) {
+        if (vals[cells[k]] != 9) {
+            continue;
+        }
+        int set = 0;
+        for (int j = k - 1; j <= k + 1; j += 2) {   /* the cells beside it in the line */
+            if (j < 0 || j > 8) {
+                continue;
+            }
+            const int x = vals[cells[j]];
+            if (!x) {
+                return 0;
+            }
+            set |= 1 << (x - 1);
+        }
+        return set;
+    }
+    return 0;
+}
+
 /* ---------------------------------------------------------------- geometry */
 
 /** @brief ~25 KB: from malloc, which the sketch sends to PSRAM (internal RAM is
@@ -193,6 +219,8 @@ static void geom_build(sudoku_geom_t *g, int variant, int n, int box_h, int box_
     memset(g->cage_of, CAGE_NONE, sizeof(g->cage_of));
     memset(g->thermo_of, THERMO_NONE, sizeof(g->thermo_of));
     memset(g->mx_of, MX_NONE, sizeof(g->mx_of));
+    memset(g->clone_of, CLONE_NONE, sizeof(g->clone_of));
+    memset(g->clone_pair, CLONE_NONE, sizeof(g->clone_pair));
     g->all = (uint16_t)(((1u << (n + 1)) - 1) & ~1u);
     for (int r = 0; r < n; r++) {
         for (int c = 0; c < n; c++) {
@@ -389,7 +417,7 @@ void sudoku_geom_init(void)
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
                                   VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY,
-                                  VAR_AVG, VAR_MATHRAX, VAR_B9
+                                  VAR_AVG, VAR_MATHRAX, VAR_B9, VAR_N9, VAR_CLONE
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -414,7 +442,8 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
             variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
             variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY ||
-            variant == VAR_AVG || variant == VAR_MATHRAX || variant == VAR_B9) {
+            variant == VAR_AVG || variant == VAR_MATHRAX || variant == VAR_B9 || variant == VAR_N9 ||
+            variant == VAR_CLONE) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -740,6 +769,66 @@ bool gen_geom_nroom(const uint8_t clues[18], sudoku_geom_t *out)
          * and never the clue itself otherwise (the X-th cell holds it, not the first) */
         out->allow[cells[0]] &= c == 1 ? (uint16_t)0x3FE : (uint16_t)~((1u << 1) | (1u << c));
     }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_n9(const uint8_t sets[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_N9;
+    out->n9 = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int cells[9];
+        if (__builtin_popcount(sets[lu]) > 2) {
+            return false;                           /* (a 9 has two cells beside it at most) */
+        }
+        out->n9_set[lu] = sets[lu];
+        if (__builtin_popcount(sets[lu]) == 1) {    /* one digit beside it: the 9 is at an end of the line */
+            line_cells(lu, cells);
+            for (int k = 1; k < 8; k++) {
+                out->allow[cells[k]] &= (uint16_t)~(1u << 9);
+            }
+        }
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_clone(int n, const uint8_t cells[][9], const uint8_t *lens, const int8_t *dr, const int8_t *dc,
+                    sudoku_geom_t *out)
+{
+    if (n < 1 || n > CLONE_MAX) {
+        return false;
+    }
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_CLONE;
+    for (int p = 0; p < n; p++) {
+        if (lens[p] < 1 || lens[p] > 9 || (!dr[p] && !dc[p])) {
+            return false;
+        }
+        out->clone_n[p] = lens[p];
+        out->clone_dr[p] = dr[p];
+        out->clone_dc[p] = dc[p];
+        for (int k = 0; k < lens[p]; k++) {
+            const int a = cells[p][k], r = a / 9 + dr[p], c = a % 9 + dc[p];
+            if (a > 80 || r < 0 || r > 8 || c < 0 || c > 8) {
+                return false;
+            }
+            const int b = r * 9 + c;
+            if (out->clone_pair[a] != CLONE_NONE || out->clone_pair[b] != CLONE_NONE ||
+                    is_sudoku_geom_peer(out, a, b)) {
+                return false;                       /* (overlapping, or the two would see each other) */
+            }
+            out->clone_cell[p][k] = (uint8_t)a;
+            out->clone_of[a] = (uint8_t)b;
+            out->clone_of[b] = (uint8_t)a;
+            out->clone_pair[a] = out->clone_pair[b] = (uint8_t)p;
+        }
+    }
+    out->nclone = (uint8_t)n;
     return true;
 }
 

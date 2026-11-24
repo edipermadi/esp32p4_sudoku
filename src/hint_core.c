@@ -160,7 +160,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? geo->sandwich_sum[t->unit] : 0);
     } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM || t->kind == TECH_FRAME ||
                t->kind == TECH_OUTSIDE || t->kind == TECH_ROSSINI || t->kind == TECH_NROOM || t->kind == TECH_SKYSUM ||
-               t->kind == TECH_B9) {
+               t->kind == TECH_B9 || t->kind == TECH_N9) {
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         char digs[24] = "";
         size_t len = 0;
@@ -187,6 +187,19 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             snprintf(tech, sizeof(tech), "The clue of %s is %d: the first digit from there, X, says the X-th cell holds "
                      "it. Of the first digits that can do that, only those leave row %d, column %d %s. ", u1,
                      geo->nroom[k], c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_N9 && k >= 0 && k < 18) {
+            mark_unit(geo, mark, k, 1);
+            unit_name(geo, k, u1, sizeof(u1));
+            char beside[8] = "";
+            int nb = 0;
+            for (int d = 1; d <= 8; d++) {
+                if (geo->n9_set[k] >> (d - 1) & 1) {
+                    nb += snprintf(beside + nb, sizeof(beside) - (size_t)nb, "%s%d", nb ? " and " : "", d);
+                }
+            }
+            snprintf(tech, sizeof(tech), "In %s, %s %s right beside the 9. Of the ways its empty cells can be filled, "
+                     "only those leave row %d, column %d %s. ", u1, beside, nb > 1 ? "are" : "is", c / 9 + 1, c % 9 + 1,
+                     digs);
         } else if (t->kind == TECH_B9 && k >= 0 && k < 18) {
             mark_unit(geo, mark, k, 1);
             unit_name(geo, k, u1, sizeof(u1));
@@ -343,6 +356,19 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                      "can't be, so the cell %s it must be %d. ", u1, below ? 1 : 9, below ? "above it" : "below it",
                      below ? "below" : "above", below ? 9 : 1);
         }
+    } else if (t->kind == TECH_CLONE) {            /* Clone Sudoku: the cell and its clone */
+        const int c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : 0, p = t->unit >= 0 && t->unit < 81 ? t->unit : c;
+        mark[c] = mark[p] = 1;
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        snprintf(u1, sizeof(u1), "row %d, column %d", p / 9 + 1, p % 9 + 1);
+        snprintf(tech, sizeof(tech), "Row %d, column %d is the clone of %s: they hold the same digit, and what %s can "
+                 "be leaves it only %s. ", c / 9 + 1, c % 9 + 1, u1, u1, digs);
     } else if (t->kind == TECH_QUADRO) {           /* Quadro: the 2x2 block */
         const int tl = t->unit >= 0 && t->unit < 81 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : tl;
         mark[tl] = mark[tl + 1] = mark[tl + 9] = mark[tl + 10] = 1;

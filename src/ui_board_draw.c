@@ -10,6 +10,7 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
 static void board_edges_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_mathrax_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
+static void board_clone_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 
 /**
@@ -267,6 +268,80 @@ void draw_quad_circle(lv_layer_t *layer, int cx, int cy, const uint8_t *dig, int
     int h = n > 2 ? 26 : 14;
     lv_area_t t = {.x1 = cx - rad, .y1 = cy - h / 2, .x2 = cx + rad, .y2 = cy + h / 2 + 1};
     lv_draw_label(layer, &l, &t);
+}
+
+/**
+ * @brief Clone Sudoku: each area outlined with a dashed line just inside its cells (as a cage), and its pair's
+ * letter (A, B ...) small in its first cell, the same in both areas of a pair (they're tinted as well)
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
+ */
+static void board_clone_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    const int in = 4;
+    lv_draw_line_dsc_t ld;
+    lv_draw_line_dsc_init(&ld);
+    ld.color = C_MUTED;
+    ld.width = 1;
+    ld.dash_width = 4;
+    ld.dash_gap = 3;
+    for (int i = 0; i < 81; i++) {
+        const int k = geo->clone_pair[i];
+        if (k == CLONE_NONE) {
+            continue;
+        }
+        /* (an area: its pair and its side, so the two areas of a pair side by side are still two) */
+        const bool first = geo->clone_of[i] > i;    /* (a pair's shift has one sign for all its cells) */
+        const int r = i / 9, c = i % 9;
+        const bool up = r > 0 && geo->clone_pair[i - 9] == k && (geo->clone_of[i - 9] > i - 9) == first;
+        const bool down = r < 8 && geo->clone_pair[i + 9] == k && (geo->clone_of[i + 9] > i + 9) == first;
+        const bool left = c > 0 && geo->clone_pair[i - 1] == k && (geo->clone_of[i - 1] > i - 1) == first;
+        const bool right = c < 8 && geo->clone_pair[i + 1] == k && (geo->clone_of[i + 1] > i + 1) == first;
+        lv_area_t a;
+        lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
+        const int x1 = left ? a.x1 - 1 : a.x1 + in, x2 = right ? a.x2 + 1 : a.x2 - in;
+        const int y1 = up ? a.y1 - 1 : a.y1 + in, y2 = down ? a.y2 + 1 : a.y2 - in;
+        bool label = true;                          /* the letter in the area's first cell (reading order) */
+        for (int j = 0; j < i && label; j++) {
+            label = !(geo->clone_pair[j] == k && (geo->clone_of[j] > j) == first);
+        }
+        if (!up) {
+            ld.p1.x = label ? a.x1 + in + 12 : x1;
+            ld.p1.y = ld.p2.y = a.y1 + in;
+            ld.p2.x = x2;
+            lv_draw_line(layer, &ld);
+        }
+        if (!down) {
+            ld.p1.x = x1;
+            ld.p2.x = x2;
+            ld.p1.y = ld.p2.y = a.y2 - in;
+            lv_draw_line(layer, &ld);
+        }
+        if (!left) {
+            ld.p1.x = ld.p2.x = a.x1 + in;
+            ld.p1.y = label ? a.y1 + in + 13 : y1;
+            ld.p2.y = y2;
+            lv_draw_line(layer, &ld);
+        }
+        if (!right) {
+            ld.p1.x = ld.p2.x = a.x2 - in;
+            ld.p1.y = y1;
+            ld.p2.y = y2;
+            lv_draw_line(layer, &ld);
+        }
+        if (label) {
+            char t[2] = {(char)('A' + k), 0};
+            lv_draw_label_dsc_t d;
+            lv_draw_label_dsc_init(&d);
+            d.font = &lv_font_montserrat_12;
+            d.color = C_TEXT;
+            d.text = t;
+            d.text_local = 1;
+            lv_area_t la = {.x1 = a.x1 + 3, .y1 = a.y1 + 1, .x2 = a.x1 + 16, .y2 = a.y1 + 15};
+            lv_draw_label(layer, &d, &la);
+        }
+    }
 }
 
 /* (documented in ui_internal.h) */
@@ -590,6 +665,9 @@ void board_regions_draw_cb(lv_event_t *e)
     }
     if (geo && geo->nmx) {
         board_mathrax_draw(grid, geo, lv_event_get_layer(e));
+    }
+    if (geo && geo->nclone) {
+        board_clone_draw(grid, geo, lv_event_get_layer(e));
     }
     if (!geo || geo->variant != VAR_JIGSAW) {
         return;

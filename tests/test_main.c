@@ -307,6 +307,28 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int lu = 0; g->n9 && lu < 18; lu++) {      /* Next to Nine: the digits beside the 9 (worked out here) */
+        int k = 0, set = 0;
+        while (k < 9 && sol[lu < 9 ? lu * 9 + k : k * 9 + lu - 9] != 9) {
+            k++;
+        }
+        for (int j = k - 1; j <= k + 1; j += 2) {
+            if (j >= 0 && j < 9) {
+                set |= 1 << (sol[lu < 9 ? lu * 9 + j : j * 9 + lu - 9] - 1);
+            }
+        }
+        if (g->n9_set[lu] && set != g->n9_set[lu]) {
+            return false;
+        }
+    }
+    for (int q = 0; q < g->nclone; q++) {           /* Clone Sudoku: each cell the same as its clone, moved */
+        for (int k = 0; k < g->clone_n[q]; k++) {
+            const int a = g->clone_cell[q][k], b = (a / 9 + g->clone_dr[q]) * 9 + a % 9 + g->clone_dc[q];
+            if (sol[a] != sol[b]) {
+                return false;
+            }
+        }
+    }
     for (int tl = 0; g->quadro && tl < 72; tl++) {   /* Quadro: every 2x2 block mixed */
         if (tl % 9 == 8) {
             continue;                               /* (no block starts in the last column) */
@@ -501,7 +523,8 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->quad_at, b->quad_at, a->nquads) && !memcmp(a->quad_n, b->quad_n, a->nquads) &&
            !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads) && a->nrooms == b->nrooms &&
            !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18) &&
-           a->quadro == b->quadro && a->aq9 == b->aq9 && a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
+           a->n9 == b->n9 && !memcmp(a->n9_set, b->n9_set, 18) && a->nclone == b->nclone &&
+           !memcmp(a->clone_of, b->clone_of, 81) && a->quadro == b->quadro && a->aq9 == b->aq9 && a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
            a->flatmates == b->flatmates && a->nmx == b->nmx && !memcmp(a->mx_at, b->mx_at, a->nmx) &&
            !memcmp(a->mx_op, b->mx_op, a->nmx) && !memcmp(a->mx_val, b->mx_val, a->nmx) &&
            !memcmp(a->mx_of, b->mx_of, sizeof(a->mx_of));
@@ -556,6 +579,12 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_B9:
         sudoku_b9_text(g, marks, len);
+        break;
+    case VAR_N9:
+        sudoku_n9_text(g, marks, len);
+        break;
+    case VAR_CLONE:
+        sudoku_clone_text(g, cages, len);
         break;
     case VAR_PSKY:
         sudoku_psky_text(g, marks, len);
@@ -622,6 +651,8 @@ static unsigned clue_get(const sudoku_geom_t *g, int lu)
         return g->sky_sum[lu];
     case VAR_PSKY:
         return g->psky_clue[lu];
+    case VAR_N9:
+        return g->n9_set[lu];
     default:
         return g->b9_sum[lu];
     }
@@ -657,6 +688,9 @@ static void clue_set(sudoku_geom_t *g, int lu, unsigned c)
         break;
     case VAR_PSKY:
         g->psky_clue[lu] = (uint8_t)c;
+        break;
+    case VAR_N9:
+        g->n9_set[lu] = (uint8_t)c;
         break;
     default:
         g->b9_sum[lu] = (uint8_t)c;
@@ -727,7 +761,7 @@ static bool turn_layout(const sudoku_geom_t *b, int t, sudoku_geom_t *out)
         }
     }
     if (v == VAR_SANDWICH || v == VAR_SKY || v == VAR_XSUM || v == VAR_FRAME || v == VAR_OUTSIDE || v == VAR_ROSSINI ||
-            v == VAR_NROOMS || v == VAR_SKYSUM || v == VAR_PSKY || v == VAR_B9) {
+            v == VAR_NROOMS || v == VAR_SKYSUM || v == VAR_PSKY || v == VAR_B9 || v == VAR_N9) {
         for (int s = 0; s < 18; s++) {              /* each line's clue onto the line it's turned onto */
             const int c0 = s < 9 ? s * 9 : s - 9, c1 = s < 9 ? c0 + 1 : c0 + 9;
             const int d0 = canon_cell(t, 9, c0), d1 = canon_cell(t, 9, c1);
@@ -742,6 +776,15 @@ static bool turn_layout(const sudoku_geom_t *b, int t, sudoku_geom_t *out)
         for (int j = 0; j < b->lk_n[k]; j++) {
             tg.lk_cell[k][j] = (uint8_t)canon_cell(t, 9, b->lk_cell[k][j]);
         }
+    }
+    for (int q = 0; q < b->nclone; q++) {           /* Clone Sudoku: each area's cells turned, the shift with them */
+        const int a0 = b->clone_cell[q][0], b0 = (a0 / 9 + b->clone_dr[q]) * 9 + a0 % 9 + b->clone_dc[q];
+        const int ta = canon_cell(t, 9, a0), tb0 = canon_cell(t, 9, b0);
+        for (int k = 0; k < b->clone_n[q]; k++) {
+            tg.clone_cell[q][k] = (uint8_t)canon_cell(t, 9, b->clone_cell[q][k]);
+        }
+        tg.clone_dr[q] = (int8_t)(tb0 / 9 - ta / 9);
+        tg.clone_dc[q] = (int8_t)(tb0 % 9 - ta % 9);
     }
     sudoku_layout_texts(&tg, cages, (int)sizeof(cages), marks, thermos, (int)sizeof(thermos));
     sdx_puzzle_t p;
@@ -983,7 +1026,14 @@ static void test_canon(void)
         if (board.nlk || board.nquads || board.nmx || board.sandwich || board.edge_kind || board.consec_on ||
                 v == VAR_EVENODD || v == VAR_DIAGCONSEC || (board.nthermos == 0 && !board.ncages && v != VAR_JIGSAW)) {
             tb = board;                             /* marks, circles, clues: one of them changed: another hash */
-            if (board.nlk) {
+            if (board.nclone) {
+                for (int c = 0; c < 81; c++) {
+                    if (tb.clone_pair[c] != CLONE_NONE) {
+                        tb.clone_pair[c] = CLONE_NONE;   /* (a cell out of its area) */
+                        break;
+                    }
+                }
+            } else if (board.nlk) {
                 tb.lk_sum[0]++;
             } else if (board.nquads) {
                 tb.quad_dig[0][0] = (uint8_t)(tb.quad_dig[0][0] % 9 + 1);
@@ -1589,6 +1639,56 @@ static void test_quadro_aq9(void)
     CHECK(game_conflicts(A, v, out) == 0);
     v[8] = 9;                                       /* r1c9: on the other diagonal of the centre's 9 */
     CHECK(game_conflicts(A, v, out) > 0 && out[8] && out[40] && !out[0]);
+}
+
+/* Next to Nine: the line check exact on full lines and never wrong on partial ones, the clue worked out, the text
+ * read back; Clone Sudoku: its text read back (and refused when it isn't pairs), a cell and its clone the same */
+static void test_n9_clone(void)
+{
+    static const struct { uint8_t x[9]; int c; bool ok; } L[] = {   /* (clues: bit d - 1) */
+        {{3, 5, 2, 9, 1, 4, 6, 7, 8}, (1 << 1) | (1 << 0), true}, {{3, 5, 2, 9, 1, 4, 6, 7, 8}, 1 << 1, false},
+        {{9, 1, 2, 3, 4, 5, 6, 7, 8}, 1 << 0, true}, {{9, 1, 2, 3, 4, 5, 6, 7, 8}, (1 << 0) | (1 << 1), false},
+        {{0, 0, 0, 0, 0, 0, 0, 0, 0}, 1 << 4, true},          /* (an end: the 9 first or last, a 5 beside it) */
+        {{0, 0, 0, 0, 5, 0, 0, 0, 0}, 1 << 4, false},         /* (the 5 in the middle: never beside a 9 at an end) */
+        {{0, 0, 9, 0, 0, 0, 0, 0, 0}, 1 << 4, false},         /* (a 9 in the middle, one digit wanted) */
+        {{0, 7, 9, 0, 0, 0, 0, 0, 0}, (1 << 6) | (1 << 2), true}, {{0, 7, 9, 3, 0, 0, 0, 0, 0}, (1 << 6) | (1 << 2), true},
+        {{0, 7, 9, 4, 0, 0, 0, 0, 0}, (1 << 6) | (1 << 2), false},
+        {{3, 0, 9, 0, 0, 0, 0, 0, 0}, (1 << 6) | (1 << 2), false},   /* (its 3 elsewhere, not beside the 9) */
+    };
+    for (size_t k = 0; k < sizeof(L) / sizeof(L[0]); k++) {
+        CHECKF(is_gen_n9_line_ok(L[k].x, L[k].c) == L[k].ok, "Next to Nine line %zu", k);
+    }
+    static sudoku_geom_t b;
+    char buf[128];
+    CHECK(sudoku_geom_n9_text("37,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18", &b) && b.n9 && b.n9_set[0] == ((1 << 2) | (1 << 6)) &&
+          b.n9_set[1] == (1 << 4) && !(b.allow[9 + 4] >> 9 & 1) && (b.allow[9] >> 9 & 1));
+    CHECK(sudoku_n9_text(&b, buf, sizeof(buf)) && !strcmp(buf, "37,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18"));
+    CHECK(!sudoku_geom_n9_text("379,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b) &&
+          !sudoku_geom_n9_text("9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));
+    uint8_t full[81];
+    for (int c = 0; c < 81; c++) {
+        full[c] = (uint8_t)((c / 9 * 3 + c / 27 + c % 9) % 9 + 1);   /* (row 1: 1..9) */
+    }
+    CHECK(sudoku_n9_of(full, 0) == 1 << 7);         /* (row 1's 9 last, its 8 beside it) */
+
+    CHECK(sudoku_geom_clone_text("0,1,10>3,4", &b) && b.variant == VAR_CLONE && b.nclone == 1 && b.clone_of[0] == 31 &&
+          b.clone_of[31] == 0 && b.clone_of[10] == 41 && b.clone_pair[1] == 0 && b.clone_pair[2] == CLONE_NONE);
+    CHECK(sudoku_clone_text(&b, buf, sizeof(buf)) && !strcmp(buf, "0,1,10>3,4"));
+    static const char *const BAD[] = {"", "0,1>0,0", "0,1>0,3", "0,1>3,0", "0>1,1", "8>1,1", "0,1>1,1",
+                                      "0>3,3;0>4,4", "0>3,3;30>3,3", "0>9,0"
+                                     };
+    for (size_t k = 0; k < sizeof(BAD) / sizeof(BAD[0]); k++) {
+        CHECKF(!sudoku_geom_clone_text(BAD[k], &b), "Clone text \"%s\" refused", BAD[k]);
+    }
+    CHECK(sudoku_geom_clone_text("0,1,10>3,4", &b));
+    uint8_t v[81] = {0};
+    bool out[81];
+    v[0] = 5;
+    CHECK(sudoku_fits_why(&b, v, 31, 6) == FIT_CLONE && is_sudoku_fits(&b, v, 31, 5));
+    v[31] = 6;
+    CHECK(game_conflicts(&b, v, out) > 0 && out[0] && out[31]);
+    v[31] = 5;
+    CHECK(game_conflicts(&b, v, out) == 0);
 }
 
 static void test_sdx_edges(void)
@@ -2686,7 +2786,8 @@ int main(int argc, char **argv)
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},
         {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},
-        {"Point Symmetry and Before Nine", test_psym_b9}, {"Quadro and Anti-Queen 9s", test_quadro_aq9},     {"hint words", test_hint_words},
+        {"Point Symmetry and Before Nine", test_psym_b9}, {"Quadro and Anti-Queen 9s", test_quadro_aq9},
+        {"Next to Nine and Clone Sudoku", test_n9_clone},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},

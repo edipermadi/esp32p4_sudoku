@@ -59,7 +59,7 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd",
          "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average",
          "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before",
-         "quadro": "Quadro", "anti-queen-9s": "Anti-Q"}
+         "quadro": "Quadro", "anti-queen-9s": "Anti-Q", "next-to-nine": "Next", "clone-sudoku": "Clone"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -698,6 +698,28 @@ def rule_words(d, vals, c, v, r):
             if len(have) >= 3 and v not in have:
                 return "its long diagonal holds %s already, three different digits at most" % listing(map(str, have))
         return "a long diagonal can't take a fourth different digit"
+    if rule == "clone":                                     # Clone Sudoku: its clone holds the same digit
+        if w:
+            return "its clone, %s, is %d: they hold the same digit" % (at, w)
+        return "its clone, %s, can't be %d" % (at, v)
+    if rule == "n9":                                        # Next to Nine: the digits beside the 9
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        want = [x for x in range(1, 9) if d["n9"][lu] >> x & 1]
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        if v == 9:
+            k = line.index(c)
+            nb = [x[j] for j in (k - 1, k + 1) if 0 <= j < 9]
+            if len(nb) != len(want):
+                return "a 9 there would have %s beside it in %s, but its clue lists %s" % (
+                    "one cell" if len(nb) == 1 else "two cells", name, listing(map(str, want)))
+            return "a 9 there would have %s beside it in %s, not its clue's %s" % (
+                listing(str(n) if n else "an empty cell" for n in nb), name, listing(map(str, want)))
+        if 9 in x and abs(x.index(9) - line.index(c)) == 1:
+            return "it's beside the 9 in %s, whose clue lists %s" % (name, listing(map(str, want), "or"))
+        return "with %s there, %s couldn't have %s beside its 9" % (a_n(v), name, listing(map(str, want)))
     if rule == "quadro":                                    # Quadro: a 2x2 block with three of one parity
         r_, c_ = c // 9, c % 9
         for dr in (0, -1):
@@ -874,7 +896,7 @@ def step_text(d, vals, s):
 def make_drawer(d, fonts):
     n, band = d["n"], BAND if (d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame")
                               or d.get("outside") or d.get("rossini") or d.get("nroom") or d.get("skysum") or d.get("psky")
-                              or d.get("b9")) else 0
+                              or d.get("b9") or d.get("n9")) else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -1116,6 +1138,30 @@ def make_drawer(d, fonts):
             digs = "".join(map(str, q["digits"]))
             txt = digs if len(digs) <= 2 else digs[:2] + "\n" + digs[2:]
             g.multiline_text((cx, cy), txt, font=tiny, fill=GIVEN_FG, anchor="mm", align="center", spacing=0)
+        cl, co = d.get("clone", [-1] * 81), d.get("clone_of", [-1] * 81)
+        area = [cl[c] * 2 + (co[c] > c) if cl[c] >= 0 else -1 for c in range(81)]   # (a pair's two areas apart)
+        for c in range(81):                                 # Clone Sudoku: each area outlined, its pair's letter
+            if area[c] < 0:
+                continue
+            x, y = xy(c)
+            r_, c_ = c // 9, c % 9
+            ins = 4
+            up = r_ > 0 and area[c - 9] == area[c]
+            down = r_ < 8 and area[c + 9] == area[c]
+            left = c_ > 0 and area[c - 1] == area[c]
+            right = c_ < 8 and area[c + 1] == area[c]
+            x1, x2 = (x if left else x + ins), (x + CELL if right else x + CELL - ins)   # (on into a cell beside)
+            y1, y2 = (y if up else y + ins), (y + CELL if down else y + CELL - ins)
+            if not up:
+                g.line([(x1, y + ins), (x2, y + ins)], fill=MUTED, width=1)
+            if not down:
+                g.line([(x1, y + CELL - ins), (x2, y + CELL - ins)], fill=MUTED, width=1)
+            if not left:
+                g.line([(x + ins, y1), (x + ins, y2)], fill=MUTED, width=1)
+            if not right:
+                g.line([(x + CELL - ins, y1), (x + CELL - ins, y2)], fill=MUTED, width=1)
+            if area.index(area[c]) == c:
+                g.text((x + 7, y + 8), "ABCD"[cl[c]], font=tiny, fill=GIVEN_FG, anchor="mm")
         for q in d.get("mathrax", []):                      # Mathrax: a clue where four cells meet
             x, y = xy(q["at"])
             cx, cy, rr = x + CELL, y + CELL, 16
@@ -1150,9 +1196,10 @@ def make_drawer(d, fonts):
                     else:
                         g.ellipse(box, outline=MUTED, width=2)
                 g.text(pos, str(clues[i] & 15 if d.get("psky") else clues[i]), font=small, fill=SUM_FG, anchor="mm")
-        if d.get("outside"):                                # Outside Sudoku: the digits of each clue
+        sets = d.get("outside") or d.get("n9")
+        if sets:                                            # Outside Sudoku, Next to Nine: the digits of each clue
             for i in range(18):
-                txt = "".join(str(x) for x in range(1, 10) if d["outside"][i] >> x & 1)
+                txt = "".join(str(x) for x in range(1, 10) if sets[i] >> x & 1)
                 if not txt:
                     continue
                 if i < 9:

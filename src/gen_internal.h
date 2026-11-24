@@ -189,6 +189,15 @@ bool is_gen_skysum_line_ok(const uint8_t x[9], int c);
  */
 bool is_gen_b9_line_ok(const uint8_t x[9], int c);
 /**
+ * @brief Next to Nine: can a line's digits so far (0 = empty) still keep its clue (the digits beside its 9 are c's)?
+ *        Each place the 9 could be is tried: its neighbours must be able to be exactly the clue's digits. Exact for
+ *        a full line.
+ * @param[in] x  the line's digits
+ * @param[in] c  the clue, as n9_set keeps it (bit d - 1)
+ * @return true: still possible
+ */
+bool is_gen_n9_line_ok(const uint8_t x[9], int c);
+/**
  * @brief The digits the cell at a place of a row or column may hold, by its clue about the first three
  *        cells (Frame: their sum; Outside Sudoku: digits among them; Rossini: rising, falling or neither).
  * @param[in] G          the board
@@ -334,6 +343,18 @@ bool gen_quadro_logic(logic_t *L);
  * @return true if a candidate went
  */
 bool gen_aq9_logic(logic_t *L);
+/**
+ * @brief A technique: Next to Nine: what the clues leave, candidates taken out.
+ * @param[in,out] L          the state
+ * @return true if it changed anything
+ */
+bool gen_n9_logic(logic_t *L);
+/**
+ * @brief Clone Sudoku: a cell keeps only what its clone can still be
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_clone_logic(logic_t *L);
 /**
  * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
  *        candidates taken out.
@@ -553,6 +574,25 @@ bool gen_geom_skysum(const uint8_t clues[18], sudoku_geom_t *out);
  * @return false if a clue isn't one
  */
 bool gen_geom_b9(const uint8_t clues[18], sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Next to Nine, a classic board with clues beside the rows and columns.
+ * @param[in] sets       the rows' clues, then the columns' (bit d - 1: d is beside the 9; 0: none)
+ * @param[out] out        gets the board
+ * @return false if a clue isn't one (more than 2 digits)
+ */
+bool gen_geom_n9(const uint8_t sets[18], sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Clone Sudoku, a classic board with these pairs of areas.
+ * @param[in] n          the pairs
+ * @param[in] cells      each pair's first area
+ * @param[in] lens       its cells
+ * @param[in] dr         how far its clone is moved: rows
+ * @param[in] dc         columns
+ * @param[out] out        gets the board
+ * @return false if they aren't pairs (overlapping, off the board, a cell and its clone in one unit, too many)
+ */
+bool gen_geom_clone(int n, const uint8_t cells[][9], const uint8_t *lens, const int8_t *dr, const int8_t *dc,
+                    sudoku_geom_t *out);
 /**
  * @brief Builds an Odd/Even Skyscrapers board from its 18 clues (0 none; 1..5 odd; PSKY_EVEN | 0..4 even)
  * @param[in] clues  the clues
