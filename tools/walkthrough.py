@@ -60,7 +60,7 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average",
          "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before",
          "quadro": "Quadro", "anti-queen-9s": "Anti-Q", "next-to-nine": "Next", "clone-sudoku": "Clone",
-         "search-nine": "Search"}
+         "search-nine": "Search", "battlefield": "Battlefield"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -772,6 +772,28 @@ def rule_words(d, vals, c, v, r):
         if w:
             return "its mirror through the centre, %s, is %d: a %d there wouldn't make 10" % (at, w, v)
         return "its mirror through the centre, %s, can't be %d, which a %d would need" % (at, 10 - v, v)
+    if rule == "bf":                                        # Battlefield: the first X and last Y cells
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["bf"][lu]
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        fx, ly = x[0], x[8]
+        if fx and ly:
+            over = fx + ly > 9
+            part = x[9 - ly:fx] if over else x[fx:9 - ly]
+            if all(part):
+                what = ("its first %d and last %d cells would overlap on %s" % (fx, ly, listing(map(str, part)))
+                        if over else "its first %d and last %d cells would have %s between them" % (
+                            fx, ly, listing(map(str, part)) if part else "nothing"))
+                if len(part) > 1:
+                    what += ", adding up to %d" % sum(part)
+                return "with %s there, %s, not its clue %d" % (a_n(v), what, clue)
+            return ("with %s there, %s starts with %d and ends with %d, and its %s can't add up to its clue %d" % (
+                a_n(v), name, fx, ly, "overlap" if over else "gap", clue))
+        return ("with %s there, no first and last digits are left for %s whose overlap or gap could add up to its "
+                "clue %d" % (a_n(v), name, clue))
     if rule == "b9":                                        # Before Nine: the digits before the 9 add up to the clue
         lu = r["line"]
         name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
@@ -925,7 +947,7 @@ def step_text(d, vals, s):
 def make_drawer(d, fonts):
     n, band = d["n"], BAND if (d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame")
                               or d.get("outside") or d.get("rossini") or d.get("nroom") or d.get("skysum") or d.get("psky")
-                              or d.get("b9") or d.get("n9")) else 0
+                              or d.get("b9") or d.get("n9") or d.get("bf")) else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -1266,6 +1288,14 @@ def make_drawer(d, fonts):
                 tip = (cx + ux * h, cy + uy * h)
                 for sgn in (-1, 1):
                     g.line([tip, (tip[0] - ux * 5 + sgn * uy * 5, tip[1] - uy * 5 + sgn * ux * 5)], fill=SUM_FG, width=3)
+        for i, s in enumerate(d.get("bf") or []):           # Battlefield: a sum, left of a row or above a column
+            if s < 0:
+                continue
+            if i < 9:
+                pos = (PAD + band / 2, xy(i * 9)[1] + CELL / 2)
+            else:
+                pos = (xy(i - 9)[0] + CELL / 2, PAD + band / 2)
+            g.text(pos, str(s), font=small, fill=SUM_FG, anchor="mm")
         if d["sandwich"]:                                   # the sums: left of the rows, above the columns
             for i in range(9):
                 x, y = xy(i * 9)

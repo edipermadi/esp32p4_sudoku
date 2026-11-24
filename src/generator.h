@@ -172,6 +172,9 @@
  *                the other moved) hold the same digits in the same places
  *   VAR_S9       Search Nine: Classic rules, and an arrow in a cell points along its row or
  *                column to the 9: the cell's digit is how many cells away that 9 is
+ *   VAR_BF       Battlefield: Classic rules, and a clue left of a row or above a column: with X
+ *                its first digit and Y its last, the first X cells and the last Y cells; the
+ *                clue is the sum of the cells where they overlap, or else of those between them
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -298,6 +301,7 @@ typedef enum {
     VAR_N9,                             /**< Next to Nine */
     VAR_CLONE,                          /**< Clone Sudoku */
     VAR_S9,                             /**< Search Nine */
+    VAR_BF,                             /**< Battlefield */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -315,7 +319,7 @@ typedef enum {
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
  *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku",
- *         "Search Nine"
+ *         "Search Nine", "Battlefield"
  */
 const char *variant_name(int variant);
 
@@ -492,6 +496,8 @@ typedef struct {
     uint8_t clone_pair[81];             /**< each cell's pair, CLONE_NONE: in no area */
     bool s9;                            /**< Search Nine: the arrows are rules */
     uint8_t s9_dir[81];                 /**< Search Nine: each cell's arrow, S9_* (S9_NONE: none) */
+    bool bf;                            /**< Battlefield: the clues are rules */
+    uint8_t bf_clue[18];                /**< per row (0..8) and column (9..17): its sum + 1 (a sum can be 0), 0: no clue */
     bool b9;                            /**< Before Nine: the clues are rules */
     uint8_t b9_sum[18];                 /**< per row (0..8, from the left) and column (9..17, from the top), the sum of
                                          *   the digits before the 9, 0 = no clue */
@@ -946,6 +952,31 @@ bool sudoku_geom_s9_text(const char *text, sudoku_geom_t *out);
  */
 bool sudoku_s9_text(const sudoku_geom_t *g, char *buf, int len);
 /**
+ * @brief A Battlefield board from its clues as text: 18 entries, comma-separated, the rows' then the columns': '.'
+ * (no clue) or the sum 0..45 (kept in marks); sudoku_bf_text() writes it.
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_bf_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Battlefield board's clues as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_bf_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief Battlefield: the sum a row's or column's clue would be. With X its first digit and Y its last: the first X
+ * cells and the last Y cells overlap (X + Y > 9): the overlap's sum; else the sum of the cells between them (0 when
+ * they just meet).
+ * @param[in] vals  the cells
+ * @param[in] lu  the row (0..8) or column (9..17)
+ * @return the sum, -1 if a cell it needs is empty
+ */
+int sudoku_bf_of(const uint8_t vals[81], int lu);
+/**
  * @brief An Odd/Even Skyscrapers board from its clues as text: 18 fields, comma-separated, rows from the left
  * then columns from the top: 0 no clue, 1..5 the odd buildings seen, e0..e4 the even ones (kept in marks);
  * sudoku_psky_text() writes it.
@@ -1370,7 +1401,9 @@ enum {
     FIT_N9_ROW,                         /**< Next to Nine: the row's clue */
     FIT_N9_COL,                         /**< Next to Nine: the column's clue */
     FIT_CLONE,                          /**< Clone Sudoku: its clone */
-    FIT_S9                              /**< Search Nine: an arrow (its own, or one in its row or column) */
+    FIT_S9,                             /**< Search Nine: an arrow (its own, or one in its row or column) */
+    FIT_BF_ROW,                         /**< Battlefield: the row's clue */
+    FIT_BF_COL                          /**< Battlefield: the column's clue */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1442,7 +1475,8 @@ typedef enum {
     TECH_AQ9,                /**< Anti-Queen 9s: a 9 and its diagonals */
     TECH_N9,                 /**< Next to Nine: a clue */
     TECH_CLONE,              /**< Clone Sudoku: a cell and its clone */
-    TECH_S9                  /**< Search Nine: an arrow and the 9 it points to */
+    TECH_S9,                 /**< Search Nine: an arrow and the 9 it points to */
+    TECH_BF                  /**< Battlefield: a clue */
 } tech_kind_t;
 /** @brief Search Nine: how an arrow narrowed a cell (sudoku_tech_t.unit2 of TECH_S9). */
 enum {

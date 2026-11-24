@@ -606,6 +606,12 @@ bool gen_n9_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_bf_logic(logic_t *L)
+{
+    return sky_orders_logic(L, L->G->bf_clue, is_gen_bf_line_ok, TECH_BF);
+}
+
+/* (documented in gen_internal.h) */
 bool gen_clone_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
@@ -1490,6 +1496,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->s9 && gen_s9_logic(&L)) {
             continue;    /* Search Nine: the arrows */
         }
+        if (G->bf && gen_bf_logic(&L)) {
+            continue;    /* Battlefield: the clues */
+        }
         if (G->b9 && gen_b9_logic(&L)) {
             continue;    /* Before Nine: the clues */
         }
@@ -1557,7 +1566,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
         return 30;
     }
     if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum || G->b9 || G->n9 ||
-            G->psky) {
+            G->psky || G->bf) {
         return 28;
     }
     if (G->consec_on) {

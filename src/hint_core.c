@@ -160,7 +160,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? geo->sandwich_sum[t->unit] : 0);
     } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM || t->kind == TECH_FRAME ||
                t->kind == TECH_OUTSIDE || t->kind == TECH_ROSSINI || t->kind == TECH_NROOM || t->kind == TECH_SKYSUM ||
-               t->kind == TECH_B9 || t->kind == TECH_N9) {
+               t->kind == TECH_B9 || t->kind == TECH_N9 || t->kind == TECH_BF) {
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         char digs[24] = "";
         size_t len = 0;
@@ -199,6 +199,12 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             }
             snprintf(tech, sizeof(tech), "In %s, %s %s right beside the 9. Of the ways its empty cells can be filled, "
                      "only those leave row %d, column %d %s. ", u1, beside, nb > 1 ? "are" : "is", c / 9 + 1, c % 9 + 1,
+                     digs);
+        } else if (t->kind == TECH_BF && k >= 0 && k < 18) {
+            mark_unit(geo, mark, k, 1);
+            unit_name(geo, k, u1, sizeof(u1));
+            snprintf(tech, sizeof(tech), "The clue of %s is %d: its first X and last Y cells (X, Y its end digits) "
+                     "overlap on that sum, or have it between them. The ways left leave row %d, column %d %s. ", u1, geo->bf_clue[k] - 1, c / 9 + 1, c % 9 + 1,
                      digs);
         } else if (t->kind == TECH_B9 && k >= 0 && k < 18) {
             mark_unit(geo, mark, k, 1);

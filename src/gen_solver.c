@@ -745,6 +745,7 @@ typedef struct {
 #define R_N9      (1u << 24)            /**< Next to Nine */
 #define R_CLONE   (1u << 25)            /**< Clone Sudoku */
 #define R_S9      (1u << 26)            /**< Search Nine */
+#define R_BF      (1u << 27)            /**< Battlefield */
 /** @} */
 
 /**
@@ -1123,6 +1124,84 @@ bool is_gen_skysum_line_ok(const uint8_t x[9], int c)
         more += d;
     }
     return sum + 9 <= c && c <= sum + more;         /* (the 9, still to come, is seen) */
+}
+
+/** @brief Battlefield: [free digits][e]: the sum of the e smallest (lo) and largest (hi) of a set of digits 1-9
+ *  (bit d - 1), 0xFF if it has fewer than e (bf_tables()) */
+static uint8_t s_bf_lo[512][10], s_bf_hi[512][10];
+static volatile bool s_bf_ready;
+
+/** @brief fills s_bf_lo and s_bf_hi (once; two tasks doing it at once write the same) */
+static void bf_tables(void)
+{
+    for (int m = 0; m < 512; m++) {
+        int lo = 0, hi = 0, n = 0;
+        s_bf_lo[m][0] = s_bf_hi[m][0] = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (m >> (d - 1) & 1) {
+                lo += d;
+                s_bf_lo[m][++n] = (uint8_t)lo;
+            }
+        }
+        for (int k = n + 1; k <= 9; k++) {
+            s_bf_lo[m][k] = s_bf_hi[m][k] = 0xFF;
+        }
+        n = 0;
+        for (int d = 9; d >= 1; d--) {
+            if (m >> (d - 1) & 1) {
+                hi += d;
+                s_bf_hi[m][++n] = (uint8_t)hi;
+            }
+        }
+    }
+    s_bf_ready = true;
+}
+
+/* (documented in gen_internal.h) */
+bool is_gen_bf_line_ok(const uint8_t x[9], int c)
+{
+    if (!s_bf_ready) {
+        bf_tables();
+    }
+    const int want = c - 1;
+    unsigned have = 0;                              /* (bit d - 1) */
+    int pre[10], emp[10];                           /* the filled cells before k: their sum, the empty ones: how many */
+    pre[0] = emp[0] = 0;
+    for (int k = 0; k < 9; k++) {
+        have |= x[k] ? 1u << (x[k] - 1) : 0;
+        pre[k + 1] = pre[k] + x[k];
+        emp[k + 1] = emp[k] + !x[k];
+    }
+    for (int fx = 1; fx <= 9; fx++) {               /* its first digit X ... */
+        if (x[0] ? x[0] != fx : (have >> (fx - 1) & 1)) {
+            continue;
+        }
+        for (int ly = 1; ly <= 9; ly++) {           /* ... and its last, Y */
+            if (ly == fx || (x[8] ? x[8] != ly : (have >> (ly - 1) & 1))) {
+                continue;
+            }
+            const unsigned left = ~(have | 1u << (fx - 1) | 1u << (ly - 1)) & 0x1FFu;   /* the digits still free */
+            const int lo = fx + ly > 9 ? 9 - ly : fx, hi = fx + ly > 9 ? fx - 1 : 8 - ly;   /* overlap, or gap */
+            int sum = 0, e = 0;
+            if (lo <= hi) {
+                sum = pre[hi + 1] - pre[lo];
+                e = emp[hi + 1] - emp[lo];
+                if (lo == 0 && !x[0]) {             /* (an empty end cell in it: the X or Y tried) */
+                    sum += fx;
+                    e--;
+                }
+                if (hi == 8 && !x[8]) {
+                    sum += ly;
+                    e--;
+                }
+            }
+            const int small = s_bf_lo[left][e];     /* what its empty cells could add */
+            if (small != 0xFF && sum + small <= want && want <= sum + s_bf_hi[left][e]) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 /* (documented in gen_internal.h) */
@@ -1750,6 +1829,27 @@ static uint16_t grid_free(const grid_t *g, int i)
         free &= s9_allow(g, i, free);               /* Search Nine: its arrow, the arrows in its row and column */
     }
     WHY(FIT_S9);
+    for (int line = 0; (rules & R_BF) && free && line < 2; line++) {   /* Battlefield: its row's, column's clue */
+        int lu = line ? 9 + i % 9 : i / 9, c = G->bf_clue[lu], cells[9];
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        uint8_t x[9];
+        for (int k = 0; k < 9; k++) {
+            x[k] = g->v[cells[k]];
+        }
+        const int at = line ? i / 9 : i % 9;
+        for (int d = 1; d <= 9; d++) {
+            if (free >> d & 1) {
+                x[at] = (uint8_t)d;
+                if (!is_gen_bf_line_ok(x, c)) {
+                    free &= (uint16_t)~(1u << d);
+                }
+            }
+        }
+        WHY(line ? FIT_BF_COL : FIT_BF_ROW);
+    }
     for (int line = 0; (rules & R_B9) && free && line < 2; line++) {   /* Before Nine: its row's, column's clue */
         int lu = line ? 9 + i % 9 : i / 9, c = G->b9_sum[lu], cells[9];
         if (!c) {
@@ -1953,7 +2053,8 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0) |
                (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0) |
                (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0) | (G->quadro ? R_QUADRO : 0) | (G->aq9 ? R_AQ9 : 0) |
-               (G->n9 ? R_N9 : 0) | (G->nclone ? R_CLONE : 0) | (G->s9 ? R_S9 : 0);
+               (G->n9 ? R_N9 : 0) | (G->nclone ? R_CLONE : 0) | (G->s9 ? R_S9 : 0) |
+               (G->bf ? R_BF : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

@@ -29,7 +29,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Pill Arrows", "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square",
                                                      "Average Lines", "Dutch Flatmates", "Mathrax",
                                                      "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
-                                                     "Next to Nine", "Clone Sudoku", "Search Nine"
+                                                     "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -162,6 +162,26 @@ int sudoku_b9_of(const uint8_t vals[81], int lu)
         sum += x;
     }
     return -1;                                      /* (no 9: not a Sudoku line) */
+}
+
+/* (documented in generator.h) */
+int sudoku_bf_of(const uint8_t vals[81], int lu)
+{
+    int cells[9];
+    line_cells(lu, cells);
+    const int x = vals[cells[0]], y = vals[cells[8]];
+    if (!x || !y) {
+        return -1;
+    }
+    const int lo = x + y > 9 ? 9 - y : x, hi = x + y > 9 ? x - 1 : 8 - y;   /* the overlap, or the gap */
+    int sum = 0;
+    for (int k = lo; k <= hi; k++) {
+        if (!vals[cells[k]]) {
+            return -1;
+        }
+        sum += vals[cells[k]];
+    }
+    return sum;
 }
 
 /* (documented in generator.h) */
@@ -417,7 +437,7 @@ void sudoku_geom_init(void)
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
                                   VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY,
-                                  VAR_AVG, VAR_MATHRAX, VAR_B9, VAR_N9, VAR_CLONE, VAR_S9
+                                  VAR_AVG, VAR_MATHRAX, VAR_B9, VAR_N9, VAR_CLONE, VAR_S9, VAR_BF
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -443,7 +463,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
             variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY ||
             variant == VAR_AVG || variant == VAR_MATHRAX || variant == VAR_B9 || variant == VAR_N9 ||
-            variant == VAR_CLONE || variant == VAR_S9) {
+            variant == VAR_CLONE || variant == VAR_S9 || variant == VAR_BF) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -852,6 +872,22 @@ bool gen_geom_s9(const uint8_t dirs[81], sudoku_geom_t *out)
             m |= (uint16_t)(1u << k);
         }
         out->allow[c] &= m;
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_bf(const uint8_t clues[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_BF;
+    out->bf = true;
+    for (int lu = 0; lu < 18; lu++) {
+        if (clues[lu] > 46) {
+            return false;                           /* (a sum of 45 at most) */
+        }
+        out->bf_clue[lu] = clues[lu];
     }
     return true;
 }

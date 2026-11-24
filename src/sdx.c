@@ -185,6 +185,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_b9_text(p->marks, out);             /* (and Before Nine's) */
     case VAR_N9:
         return sudoku_geom_n9_text(p->marks, out);             /* (and Next to Nine's) */
+    case VAR_BF:
+        return sudoku_geom_bf_text(p->marks, out);             /* (Battlefield's clues go in marks) */
     case VAR_S9:
         return sudoku_geom_s9_text(p->marks, out);             /* (Search Nine's arrows go in marks) */
     case VAR_CLONE:

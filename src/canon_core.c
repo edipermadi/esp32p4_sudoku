@@ -81,6 +81,7 @@ static bool is_clue_variant(int variant)
     case VAR_PSKY:
     case VAR_B9:
     case VAR_N9:
+    case VAR_BF:
     case VAR_LK:
         return true;
     default:
@@ -91,14 +92,14 @@ static bool is_clue_variant(int variant)
 /* (documented in canon_core.h) */
 uint8_t canon_symmetries(int variant)
 {
-    if (is_clue_variant(variant) && variant != VAR_SANDWICH && variant != VAR_N9) {
+    if (is_clue_variant(variant) && variant != VAR_SANDWICH && variant != VAR_N9 && variant != VAR_BF) {
         return 0x41;                    /* the clues stay left of the rows and above the columns, read the same way:
                                          * as it is, or mirrored about the main diagonal (rows' clues and columns' swap) */
     }
-    if (is_mark_variant(variant) || variant == VAR_SANDWICH || variant == VAR_N9 || variant == VAR_QUAD ||
+    if (is_mark_variant(variant) || variant == VAR_SANDWICH || variant == VAR_N9 || variant == VAR_BF || variant == VAR_QUAD ||
             variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9) {
         return 0xFF;                    /* (marks, circles, clone areas, arrows turned too; a Sandwich sum, the digits
-                                         * beside a 9 are the same from either end) */
+                                         * beside a 9, a Battlefield sum are the same from either end) */
     }
     if (variant == VAR_PILL) {
         return 0x41;                    /* its pill reads left to right or top to bottom: as it is, or about the main
@@ -255,6 +256,8 @@ static unsigned clue_of(const sudoku_geom_t *G, int lu)
         return G->psky_clue[lu];
     case VAR_N9:
         return G->n9_set[lu];
+    case VAR_BF:
+        return G->bf_clue[lu];
     default:
         return G->b9_sum[lu];
     }

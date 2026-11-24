@@ -13,7 +13,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
 {
     lv_obj_set_user_data(grid, (void *)geo);
     const bool clued = geo->sandwich || geo->skyscraper || geo->nlk || geo->xsums || geo->frame || geo->outside ||
-                       geo->rossini || geo->nrooms || geo->skysum || geo->psky || geo->b9 || geo->n9;   /* clues outside */
+                       geo->rossini || geo->nrooms || geo->skysum || geo->psky || geo->b9 || geo->n9 || geo->bf;   /* clues outside */
     for (int i = 0; clues && i < BOARD_CLUES; i++) {
         lv_obj_set_hidden(clues[i], true);
     }
@@ -53,11 +53,11 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     lv_obj_set_pos(grid, gx, gy);
     lv_obj_set_size(grid, w, h);
     for (int i = 0; (geo->sandwich || geo->skyscraper || geo->xsums || geo->frame || geo->outside || geo->rossini ||
-                     geo->nrooms || geo->skysum || geo->psky || geo->b9 || geo->n9) && clues && i < 18; i++) {   /* left of the rows, above the columns */
+                     geo->nrooms || geo->skysum || geo->psky || geo->b9 || geo->n9 || geo->bf) && clues && i < 18; i++) {   /* left of the rows, above the columns */
         int k = i % 9, v = geo->sandwich ? geo->sandwich_sum[i] : geo->skyscraper ? geo->sky[i] : geo->xsums ? geo->xsum[i]
                            : geo->frame ? geo->frame_sum[i] : geo->outside ? geo->outside_set[i]
                            : geo->nrooms ? geo->nroom[i] : geo->skysum ? geo->sky_sum[i] : geo->psky ? geo->psky_clue[i]
-                           : geo->b9 ? geo->b9_sum[i] : geo->n9 ? geo->n9_set[i] << 1   /* (as Outside's: bit d = d) */
+                           : geo->b9 ? geo->b9_sum[i] : geo->bf ? geo->bf_clue[i] : geo->n9 ? geo->n9_set[i] << 1   /* (as Outside's: bit d = d) */
                            : geo->rossini_dir[i];
         int mid = LINE_THICK + (k / 3) * (box_w + LINE_THICK) + (k % 3) * (cs + LINE_THIN) + cs / 2;
         char t[12];
@@ -73,7 +73,7 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
             snprintf(t, sizeof(t), "%s", v == ROSSINI_NONE ? "" : i < 9 ? (v == ROSSINI_UP ? LV_SYMBOL_RIGHT : LV_SYMBOL_LEFT)
                      : (v == ROSSINI_UP ? LV_SYMBOL_DOWN : LV_SYMBOL_UP));
         } else {
-            snprintf(t, sizeof(t), "%d", geo->psky ? v & ~PSKY_EVEN : v);
+            snprintf(t, sizeof(t), "%d", geo->psky ? v & ~PSKY_EVEN : geo->bf ? v - 1 : v);   /* (Battlefield: sum + 1) */
         }
         /* Odd/Even Skyscrapers: a ring round a clue of odd buildings, a shaded square behind one of even ones (as
          * Even-Odd's cells); every other clue plain (the labels are shared by every board) */

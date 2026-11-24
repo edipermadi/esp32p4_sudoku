@@ -279,6 +279,9 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_N9 && buf && sudoku_geom_n9_text(marks, buf)) {
         return buf;    /* (and Next to Nine's) */
     }
+    if (v == VAR_BF && buf && sudoku_geom_bf_text(marks, buf)) {
+        return buf;    /* (Battlefield's clues are in marks) */
+    }
     if (v == VAR_S9 && buf && sudoku_geom_s9_text(marks, buf)) {
         return buf;    /* (Search Nine's arrows are in marks) */
     }

@@ -277,9 +277,10 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool fort = variant == VAR_FORTRESS, mrx = variant == VAR_MATHRAX;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM, b9 = variant == VAR_B9;
     const bool n9 = variant == VAR_N9, clone = variant == VAR_CLONE, s9 = variant == VAR_S9;
+    const bool bf = variant == VAR_BF;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
                      pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky ||
-                     mrx || b9 || n9 || clone || s9;
+                     mrx || b9 || n9 || clone || s9 || bf;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -501,6 +502,16 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 sets[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_n9_of(full, lu) : 0;
             }
             if (!gen_geom_n9(sets, jig)) {
+                continue;
+            }
+        } else if (bf) {                            /* a grid, then some of its 18 clues */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t clues[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)(sudoku_bf_of(full, lu) + 1) : 0;
+            }
+            if (!gen_geom_bf(clues, jig)) {
                 continue;
             }
         } else if (s9) {                            /* a grid, then arrows where a digit is its distance to a 9 */

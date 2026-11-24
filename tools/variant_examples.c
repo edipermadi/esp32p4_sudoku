@@ -513,6 +513,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_S9:
         sudoku_s9_text(g, marks, len);
         break;
+    case VAR_BF:
+        sudoku_bf_text(g, marks, len);
+        break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, len);
         break;
@@ -723,6 +726,10 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_B9_COL:
         printf(", \"rule\": \"b9\", \"line\": %d", why == FIT_B9_ROW ? r : 9 + q);
         return;
+    case FIT_BF_ROW:
+    case FIT_BF_COL:
+        printf(", \"rule\": \"bf\", \"line\": %d", why == FIT_BF_ROW ? r : 9 + q);
+        return;
     case FIT_N9_ROW:
     case FIT_N9_COL:
         printf(", \"rule\": \"n9\", \"line\": %d", why == FIT_N9_ROW ? r : 9 + q);
@@ -923,6 +930,16 @@ static void layout_json(const sudoku_geom_t *G)
         printf("%s%d", i ? "," : "", G->clone_of[i] == CLONE_NONE ? -1 : G->clone_of[i]);
     }
     printf("]");
+    printf(",\n \"bf\": ");                    /* (each line's sum, -1: no clue) */
+    if (G->bf) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->bf_clue[lu] - 1);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
     printf(",\n \"psym\": %s, \"b9\": ", G->psym ? "true" : "false");
     if (G->b9) {
         printf("[");

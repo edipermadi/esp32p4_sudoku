@@ -307,6 +307,20 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int lu = 0; g->bf && lu < 18; lu++) {      /* Battlefield: the overlap's or the gap's sum (worked out here) */
+        int x[9], sum = 0;
+        for (int k = 0; k < 9; k++) {
+            x[k] = sol[lu < 9 ? lu * 9 + k : k * 9 + lu - 9];
+        }
+        const int X = x[0], Y = x[8];
+        for (int k = 0; k < 9; k++) {
+            const bool in_x = k < X, in_y = k >= 9 - Y;
+            sum += X + Y > 9 ? (in_x && in_y ? x[k] : 0) : (!in_x && !in_y ? x[k] : 0);
+        }
+        if (g->bf_clue[lu] && sum != g->bf_clue[lu] - 1) {
+            return false;
+        }
+    }
     for (int lu = 0; g->n9 && lu < 18; lu++) {      /* Next to Nine: the digits beside the 9 (worked out here) */
         int k = 0, set = 0;
         while (k < 9 && sol[lu < 9 ? lu * 9 + k : k * 9 + lu - 9] != 9) {
@@ -540,7 +554,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads) && a->nrooms == b->nrooms &&
            !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18) &&
            a->n9 == b->n9 && !memcmp(a->n9_set, b->n9_set, 18) && a->nclone == b->nclone &&
-           a->s9 == b->s9 && !memcmp(a->s9_dir, b->s9_dir, 81) &&
+           a->s9 == b->s9 && !memcmp(a->s9_dir, b->s9_dir, 81) && a->bf == b->bf && !memcmp(a->bf_clue, b->bf_clue, 18) &&
            !memcmp(a->clone_of, b->clone_of, 81) && a->quadro == b->quadro && a->aq9 == b->aq9 && a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
            a->flatmates == b->flatmates && a->nmx == b->nmx && !memcmp(a->mx_at, b->mx_at, a->nmx) &&
            !memcmp(a->mx_op, b->mx_op, a->nmx) && !memcmp(a->mx_val, b->mx_val, a->nmx) &&
@@ -602,6 +616,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_S9:
         sudoku_s9_text(g, marks, len);
+        break;
+    case VAR_BF:
+        sudoku_bf_text(g, marks, len);
         break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, len);
@@ -673,6 +690,8 @@ static unsigned clue_get(const sudoku_geom_t *g, int lu)
         return g->psky_clue[lu];
     case VAR_N9:
         return g->n9_set[lu];
+    case VAR_BF:
+        return g->bf_clue[lu];
     default:
         return g->b9_sum[lu];
     }
@@ -708,6 +727,9 @@ static void clue_set(sudoku_geom_t *g, int lu, unsigned c)
         break;
     case VAR_PSKY:
         g->psky_clue[lu] = (uint8_t)c;
+        break;
+    case VAR_BF:
+        g->bf_clue[lu] = (uint8_t)c;
         break;
     case VAR_N9:
         g->n9_set[lu] = (uint8_t)c;
@@ -781,7 +803,7 @@ static bool turn_layout(const sudoku_geom_t *b, int t, sudoku_geom_t *out)
         }
     }
     if (v == VAR_SANDWICH || v == VAR_SKY || v == VAR_XSUM || v == VAR_FRAME || v == VAR_OUTSIDE || v == VAR_ROSSINI ||
-            v == VAR_NROOMS || v == VAR_SKYSUM || v == VAR_PSKY || v == VAR_B9 || v == VAR_N9) {
+            v == VAR_NROOMS || v == VAR_SKYSUM || v == VAR_PSKY || v == VAR_B9 || v == VAR_N9 || v == VAR_BF) {
         for (int s = 0; s < 18; s++) {              /* each line's clue onto the line it's turned onto */
             const int c0 = s < 9 ? s * 9 : s - 9, c1 = s < 9 ? c0 + 1 : c0 + 9;
             const int d0 = canon_cell(t, 9, c0), d1 = canon_cell(t, 9, c1);
@@ -1784,6 +1806,73 @@ static void test_s9(void)
         CHECKF(sudoku_generate(VAR_S9, (gen_level_t)lv, 99u + (uint32_t)lv, g, &b, &got), "Search Nine %s made",
                gen_level_name(lv));
         CHECK(b.s9 && sudoku_count_solutions(&b, g, 2) == 1 && sudoku_solve(&b, g, sol) && is_solved_ok(&b, g, sol));
+        CHECK(game_conflicts(&b, sol, out) == 0);
+    }
+}
+
+/* Battlefield: the clue worked out (a gap, an overlap, the two just meeting), the line check exact on full lines and
+ * never wrong on partial ones, the text read back (and refused when it isn't one), the conflicts, made at each level */
+static void test_bf(void)
+{
+    uint8_t full[81] = {0};
+    /* X 3, Y 2: the gap 9 5 1 8 = 23; X 7, Y 5: the overlap, cells 4..6, 9 + 4 + 6 = 19; X 4, Y 5: they meet, 0 */
+    static const uint8_t R[3][9] = {{3, 7, 4, 9, 5, 1, 8, 6, 2}, {7, 1, 2, 3, 9, 4, 6, 8, 5}, {4, 1, 2, 3, 6, 7, 8, 9, 5}};
+    static const int SUM[3] = {23, 19, 0};
+    for (int r = 0; r < 3; r++) {
+        memcpy(full + r * 9, R[r], 9);
+        CHECKF(sudoku_bf_of(full, r) == SUM[r], "Battlefield row %d: %d", r, sudoku_bf_of(full, r));
+        CHECKF(is_gen_bf_line_ok(R[r], SUM[r] + 1) && !is_gen_bf_line_ok(R[r], SUM[r] + 2), "Battlefield line %d", r);
+    }
+    CHECK(sudoku_bf_of(full, 9) == -1);             /* (column 1: not filled) */
+    uint32_t rng = 5;                               /* partial lines of full ones: never ruled out */
+    for (int t = 0; t < 2000; t++) {
+        uint8_t x[9], part[9];
+        for (int k = 0; k < 9; k++) {
+            x[k] = (uint8_t)(k + 1);
+        }
+        for (int k = 8; k > 0; k--) {
+            rng = rng * 1103515245u + 12345u;
+            const int j = (int)(rng >> 16) % (k + 1);
+            const uint8_t y = x[k];
+            x[k] = x[j];
+            x[j] = y;
+        }
+        uint8_t line[81] = {0};
+        memcpy(line, x, 9);
+        const int c = sudoku_bf_of(line, 0) + 1;
+        for (int k = 0; k < 9; k++) {
+            rng = rng * 1103515245u + 12345u;
+            part[k] = (rng >> 16) % 3 ? x[k] : 0;
+        }
+        CHECKF(is_gen_bf_line_ok(part, c), "Battlefield partial line %d", t);
+    }
+    static sudoku_geom_t b;
+    char buf[128];
+    CHECK(sudoku_geom_bf_text("23,.,0,.,.,.,.,.,.,.,.,.,.,.,.,.,.,45", &b) && b.variant == VAR_BF && b.bf &&
+          b.bf_clue[0] == 24 && b.bf_clue[1] == 0 && b.bf_clue[2] == 1 && b.bf_clue[17] == 46);
+    CHECK(sudoku_bf_text(&b, buf, sizeof(buf)) && !strcmp(buf, "23,.,0,.,.,.,.,.,.,.,.,.,.,.,.,.,.,45"));
+    CHECK(!sudoku_geom_bf_text("46,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.", &b) &&
+          !sudoku_geom_bf_text("-1,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.", &b) && !sudoku_geom_bf_text("1,2", &b) &&
+          !sudoku_geom_bf_text("", &b));
+    CHECK(sudoku_geom_bf_text("23,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.", &b));
+    uint8_t v[81] = {0};
+    bool out[81];
+    memcpy(v, R[0], 9);
+    CHECK(game_conflicts(&b, v, out) == 0);
+    v[3] = 0;                                       /* (a cell of the gap empty: not judged yet) */
+    CHECK(game_conflicts(&b, v, out) == 0);
+    memset(v, 0, 9);                                /* r1c1 = 9 and r1c9 = 8: the first 9 cells, overlapping the */
+    v[8] = 8;                                       /* last 8 (r1c2..r1c9): 45 - 9 at least 36, never 23 */
+    CHECK(sudoku_fits_why(&b, v, 0, 9) == FIT_BF_ROW);
+    memcpy(v, R[2], 9);                             /* (row 1 with a gap of 0: not 23) */
+    CHECK(game_conflicts(&b, v, out) > 0 && out[0] && out[8]);
+
+    for (int lv = GEN_EASY; lv <= GEN_EXPERT; lv++) {   /* made, one solution, the solution keeps every clue */
+        uint8_t g[81], sol[81];
+        gen_level_t got;
+        CHECKF(sudoku_generate(VAR_BF, (gen_level_t)lv, 31u + (uint32_t)lv, g, &b, &got), "Battlefield %s made",
+               gen_level_name(lv));
+        CHECK(b.bf && sudoku_count_solutions(&b, g, 2) == 1 && sudoku_solve(&b, g, sol) && is_solved_ok(&b, g, sol));
         CHECK(game_conflicts(&b, sol, out) == 0);
     }
 }
@@ -2885,7 +2974,7 @@ int main(int argc, char **argv)
         {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},
         {"Point Symmetry and Before Nine", test_psym_b9}, {"Quadro and Anti-Queen 9s", test_quadro_aq9},
         {"Next to Nine and Clone Sudoku", test_n9_clone},
-        {"Search Nine", test_s9},     {"hint words", test_hint_words},
+        {"Search Nine", test_s9},       {"Battlefield", test_bf},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},

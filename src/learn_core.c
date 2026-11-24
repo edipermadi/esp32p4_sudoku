@@ -100,6 +100,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Sum Skyscraper clue", "The buildings seen add up to the clue: the 9 is always seen, the rest make up the difference.", VAR_SKYSUM, TECH_SKYSUM, false},
     {"Before Nine clue", "The digits before the 9 add up to the clue: a small clue puts the 9 near the edge.", VAR_B9, TECH_B9, false},
     {"Next to Nine clue", "The clue's digits sit right beside the 9: one digit puts the 9 at an end of its line.", VAR_N9, TECH_N9, true},
+    {"Battlefield clue", "X, Y: a line's end digits. Its first X and last Y cells overlap on the clue's sum, or leave it between them.", VAR_BF, TECH_BF, true},
 };
 #define LESSONS_N ((int)(sizeof(LESSONS) / sizeof(LESSONS[0])))   /**< learn_count() */
 
@@ -186,6 +187,7 @@ int learn_group(int k)
     case VAR_PSKY:
     case VAR_B9:
     case VAR_N9:
+    case VAR_BF:
         return LEARN_CLUES;
     default:
         return LEARN_LINES;                         /* (Thermo, Arrow, ... Slow Thermo) */

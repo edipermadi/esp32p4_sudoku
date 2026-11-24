@@ -198,6 +198,15 @@ bool is_gen_b9_line_ok(const uint8_t x[9], int c);
  */
 bool is_gen_n9_line_ok(const uint8_t x[9], int c);
 /**
+ * @brief Battlefield: can a line's digits so far (0 = empty) still keep its clue? Each first digit X and last Y it
+ *        could have is tried: the filled cells of the overlap (or the gap) and what its empty ones could add must
+ *        reach the sum. Exact for a full line.
+ * @param[in] x  the line's digits
+ * @param[in] c  the clue, as bf_clue keeps it (the sum + 1)
+ * @return true: still possible
+ */
+bool is_gen_bf_line_ok(const uint8_t x[9], int c);
+/**
  * @brief The digits the cell at a place of a row or column may hold, by its clue about the first three
  *        cells (Frame: their sum; Outside Sudoku: digits among them; Rossini: rising, falling or neither).
  * @param[in] G          the board
@@ -363,6 +372,12 @@ bool gen_clone_logic(logic_t *L);
  * @return true if a candidate went
  */
 bool gen_s9_logic(logic_t *L);
+/**
+ * @brief A technique: Battlefield: what the clues leave, candidates taken out.
+ * @param[in,out] L  the state
+ * @return true if it changed anything
+ */
+bool gen_bf_logic(logic_t *L);
 /**
  * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
  *        candidates taken out.
@@ -608,6 +623,13 @@ bool gen_geom_clone(int n, const uint8_t cells[][9], const uint8_t *lens, const 
  * @return false if an arrow isn't one (pointing off the board, or not a way)
  */
 bool gen_geom_s9(const uint8_t dirs[81], sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Battlefield, a classic board with clues beside the rows and columns.
+ * @param[in] clues  the rows' clues, then the columns' (the sum + 1; 0: none)
+ * @param[out] out  gets the board
+ * @return false if a clue isn't one (over 45)
+ */
+bool gen_geom_bf(const uint8_t clues[18], sudoku_geom_t *out);
 /**
  * @brief Builds an Odd/Even Skyscrapers board from its 18 clues (0 none; 1..5 odd; PSKY_EVEN | 0..4 even)
  * @param[in] clues  the clues

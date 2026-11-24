@@ -228,6 +228,9 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_S9:
         sudoku_s9_text(g, marks, 82);
         break;
+    case VAR_BF:
+        sudoku_bf_text(g, marks, 82);
+        break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, cages_len);     /* (where cages go) */
         break;
@@ -701,6 +704,55 @@ bool sudoku_clone_text(const sudoku_geom_t *g, char *buf, int len)
             pos += w;
         }
         int w = snprintf(buf + pos, (size_t)(len - pos), ">%d,%d", g->clone_dr[q], g->clone_dc[q]);
+        if (w < 0 || w >= len - pos) {
+            return false;
+        }
+        pos += w;
+    }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_bf_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t c[18];
+    const char *p = text;
+    for (int i = 0; i < 18; i++) {
+        if (!p) {
+            return false;
+        }
+        if (*p == '.') {
+            c[i] = 0;
+            p++;
+        } else {
+            char *end;
+            const long v = strtol(p, &end, 10);
+            if (end == p || *p == '-' || *p == '+' || v < 0 || v > 45) {
+                return false;
+            }
+            c[i] = (uint8_t)(v + 1);
+            p = end;
+        }
+        if (i < 17) {
+            if (*p != ',') {
+                return false;
+            }
+            p++;
+        }
+    }
+    return *p == 0 && gen_geom_bf(c, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_bf_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    int pos = 0;
+    for (int i = 0; i < 18; i++) {
+        char v[4] = ".";
+        if (g->bf_clue[i]) {
+            snprintf(v, sizeof(v), "%d", g->bf_clue[i] - 1);
+        }
+        const int w = snprintf(buf + pos, (size_t)(len - pos), "%s%s", i ? "," : "", v);
         if (w < 0 || w >= len - pos) {
             return false;
         }

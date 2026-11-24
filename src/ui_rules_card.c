@@ -137,6 +137,7 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_FLATMATES] = {.w = 2, .h = 3, .digits = "1." "55" ".9", .left_clue = -1},
     [VAR_MATHRAX] = {.w = 2, .h = 2, .digits = "24" "57", .left_clue = -1, .mathrax = "9+"},
     [VAR_N9] = {.w = 6, .h = 1, .digits = "512984", .left_clue = -1, .left_text = "28"},
+    [VAR_BF] = {.w = 9, .h = 1, .digits = "374951862", .left_clue = 23},
     [VAR_S9] = {.w = 6, .h = 1, .digits = "3.5962", .left_clue = -1, .s9 = "r....l"},
     [VAR_CLONE] = {.w = 4, .h = 2, .digits = "35.." "..35", .tint = "1100" "0011", .left_clue = -1},
     [VAR_QUADRO] = {.w = 3, .h = 2, .digits = "472" "915", .left_clue = -1},
@@ -281,6 +282,10 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_AVG] = "Classic rules, and on each teal line, the digit in the circle is the average of the line's other "
     "digits: they add up to it times how many they are, 3 + 8 + 4 = 3 x 5. Digits may repeat along a line where the "
     "rules allow.",
+    [VAR_BF] = "Classic rules, and a clue left of a row or above a column. Take X, the line's first digit, and Y, "
+    "its last: the first X cells and the last Y cells. Where they overlap, the clue is the sum of the overlap; where "
+    "they don't, the sum of the cells between them. Here X = 3 and Y = 2: 3 7 4 and 6 2 leave 9 + 5 + 1 + 8 = 23 "
+    "between them. With X = 7 and Y = 5 instead, the two would overlap, and the clue would add up the overlap.",
     [VAR_S9] = "Classic rules, and an arrow in a cell points along its row or column to the 9: the cell's digit is how "
     "many cells away that 9 is. Here the 3 points right, three cells on to the 9, and the 2 points left, two cells "
     "back to it. An arrow's cell is never 9, and the 9 is never behind it.",

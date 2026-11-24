@@ -576,6 +576,15 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             out[40] = c == 40 || out[40];
         }
     }
+    for (int lu = 0; geo->bf && lu < 18; lu++) {   /* Battlefield: a full line whose overlap (or gap) misses the clue */
+        const int s = geo->bf_clue[lu] ? sudoku_bf_of(val, lu) : -1;   /* (-1: a cell it needs still empty) */
+        if (s >= 0 && s != geo->bf_clue[lu] - 1) {
+            for (int j = 0; j < 9; j++) {
+                const int c = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+                out[c] = out[c] || val[c];
+            }
+        }
+    }
     for (int lu = 0; geo->b9 && lu < 18; lu++) {   /* Before Nine: the digits before the 9 over the clue, or (to the 9) not it */
         const int c = geo->b9_sum[lu];
         int cells[9], sum = 0, k = 0;
