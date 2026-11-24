@@ -30,7 +30,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Average Lines", "Dutch Flatmates", "Mathrax",
                                                      "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
                                                      "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield",
-                                                     "Sequence Lines", "Battenburg", "Mini 8x8"
+                                                     "Sequence Lines", "Battenburg", "Mini 8x8",
+                                                     "Jigsaw 7x7"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -432,6 +433,8 @@ void sudoku_geom_init(void)
     g[VAR_SANDWICH].variant = VAR_SANDWICH;
     g[VAR_JIGSAW] = g[VAR_CLASSIC];                 /* placeholders: these boards come with their puzzle */
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
+    g[VAR_JIG7] = g[VAR_CLASSIC];
+    g[VAR_JIG7].variant = VAR_JIG7;
     g[VAR_KILLER] = g[VAR_CLASSIC];
     g[VAR_KILLER].variant = VAR_KILLER;
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
@@ -453,7 +456,7 @@ void sudoku_geom_init(void)
 const sudoku_geom_t *sudoku_geom(int variant)
 {
     sudoku_geom_init();
-    if (variant < 0 || variant >= VAR_COUNT || variant == VAR_JIGSAW || variant == VAR_KILLER ||
+    if (variant < 0 || variant >= VAR_COUNT || is_jigsaw_variant(variant) || variant == VAR_KILLER ||
             variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH ||
             variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD ||
             variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_SKY ||
@@ -1259,4 +1262,35 @@ bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out)
     }
     geom_build(out, VAR_JIGSAW, 9, 3, 3, false, false, regions);
     return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_jigsaw7(const uint8_t regions[81], sudoku_geom_t *out)
+{
+    int count[7] = {0};
+    uint8_t map[81] = {0};
+    for (int c = 0; c < 81; c++) {
+        if (c / 9 >= 7 || c % 9 >= 7) {
+            continue;                               /* (off the board) */
+        }
+        if (regions[c] > 6) {
+            return false;
+        }
+        map[c] = regions[c];
+        count[regions[c]]++;
+    }
+    for (int i = 0; i < 7; i++) {
+        if (count[i] != 7) {
+            return false;
+        }
+    }
+    geom_build(out, VAR_JIG7, 7, 1, 7, false, false, map);
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_jigsaw_of(int variant, const uint8_t regions[81], sudoku_geom_t *out)
+{
+    return variant == VAR_JIG7 ? sudoku_geom_jigsaw7(regions, out)
+           : variant == VAR_JIGSAW && sudoku_geom_jigsaw(regions, out);
 }

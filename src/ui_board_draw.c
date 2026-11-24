@@ -682,7 +682,7 @@ void board_regions_draw_cb(lv_event_t *e)
     if (geo && geo->batten) {
         board_batten_draw(grid, geo, lv_event_get_layer(e));
     }
-    if (!geo || geo->variant != VAR_JIGSAW) {
+    if (!geo || !is_jigsaw_variant(geo->variant)) {
         return;
     }
     lv_layer_t *layer = lv_event_get_layer(e);
@@ -693,12 +693,15 @@ void board_regions_draw_cb(lv_event_t *e)
     for (int i = 0; i < 81; i++) {
         lv_area_t a, b, r;
         lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
-        if (i % 9 < 8 && geo->region[i] != geo->region[i + 1]) {          /* border on the right */
+        if (!geo->used[i]) {
+            continue;                               /* (Jigsaw 7x7: off the board) */
+        }
+        if (i % 9 < geo->n - 1 && geo->region[i] != geo->region[i + 1]) {   /* border on the right */
             lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 1), &b);
             r = (lv_area_t) {.x1 = a.x2 - 1, .x2 = b.x1 + 1, .y1 = a.y1 - LINE_THIN, .y2 = a.y2 + LINE_THIN};
             lv_draw_rect(layer, &d, &r);
         }
-        if (i / 9 < 8 && geo->region[i] != geo->region[i + 9]) {          /* border below */
+        if (i / 9 < geo->n - 1 && geo->region[i] != geo->region[i + 9]) {   /* border below */
             lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 9), &b);
             r = (lv_area_t) {.x1 = a.x1 - LINE_THIN, .x2 = a.x2 + LINE_THIN, .y1 = a.y2 - 1, .y2 = b.y1 + 1};
             lv_draw_rect(layer, &d, &r);

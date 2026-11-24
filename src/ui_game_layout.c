@@ -17,11 +17,12 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
     for (int i = 0; clues && i < BOARD_CLUES; i++) {
         lv_obj_set_hidden(clues[i], true);
     }
-    if (geo->variant == VAR_JIGSAW) {
+    if (is_jigsaw_variant(geo->variant)) {
         /* evenly spaced cells on the thin-line colour in a thick frame; the
-         * region borders are drawn over them (board_regions_draw_cb) */
-        const int cs = (size_all - 2 * LINE_THICK - 8 * LINE_THIN) / 9;
-        const int w = 2 * LINE_THICK + 9 * cs + 8 * LINE_THIN;
+         * region borders are drawn over them (board_regions_draw_cb); Jigsaw 7x7: 7 of them a side */
+        const int n = geo->n;
+        const int cs = (size_all - 2 * LINE_THICK - (n - 1) * LINE_THIN) / n;
+        const int w = 2 * LINE_THICK + n * cs + (n - 1) * LINE_THIN;
         lv_obj_set_pos(grid, x0 + (size_all - w) / 2, y0 + (size_all - w) / 2);
         lv_obj_set_size(grid, w, w);
         lv_obj_set_style_bg_color(grid, C_GRID_THIN, 0);
@@ -31,7 +32,10 @@ void board_layout_at(const sudoku_geom_t *geo, lv_obj_t *grid, lv_obj_t *const *
             lv_obj_set_hidden(boxes[b], true);
         }
         for (int i = 0; i < 81; i++) {
-            lv_obj_set_hidden(cells[i], false);
+            lv_obj_set_hidden(cells[i], !geo->used[i]);
+            if (!geo->used[i]) {
+                continue;
+            }
             lv_obj_set_pos(cells[i], LINE_THICK + (i % 9) * (cs + LINE_THIN), LINE_THICK + (i / 9) * (cs + LINE_THIN));
             lv_obj_set_size(cells[i], cs, cs);
         }

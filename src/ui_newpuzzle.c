@@ -100,6 +100,7 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {17, 89, 192, 1463},   /* Sequence Lines (2026-11-24) */
     {15, 314, 776, 555},   /* Battenburg */
     {3, 12, 293, 115},     /* Mini 8x8 (2026-11-24) */
+    {40, 28, 115, 138},    /* Jigsaw 7x7 (2026-11-24) */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */
@@ -175,7 +176,7 @@ static void gen_poll_cb(lv_timer_t *t)
     gen_box = NULL;
     gen_bar = NULL;                                 /* (went with the box) */
     uint16_t id;
-    const uint8_t *regions = gen_var_req == VAR_JIGSAW ? gen_board->region : NULL;
+    const uint8_t *regions = is_jigsaw_variant(gen_var_req) ? gen_board->region : NULL;
     const char *cages = gen_var_req == VAR_KILLER || gen_var_req == VAR_SUMLESS || gen_var_req == VAR_PRODUCT ||
                         gen_var_req == VAR_REGIONS || gen_var_req == VAR_QUAD || gen_var_req == VAR_LK ||
                         gen_var_req == VAR_MATHRAX || gen_var_req == VAR_CLONE ? gen_cages : NULL;

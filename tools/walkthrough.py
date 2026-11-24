@@ -61,7 +61,7 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before",
          "quadro": "Quadro", "anti-queen-9s": "Anti-Q", "next-to-nine": "Next", "clone-sudoku": "Clone",
          "search-nine": "Search", "battlefield": "Battlefield", "sequence-lines": "Sequence",
-         "battenburg": "Battenburg", "mini-8x8": "Mini 8"}
+         "battenburg": "Battenburg", "mini-8x8": "Mini 8", "jigsaw-7x7": "Jigsaw 7"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)

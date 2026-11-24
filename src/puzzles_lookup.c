@@ -223,7 +223,7 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (variant) {
         *variant = v;
     }
-    if (v == VAR_JIGSAW && buf && sudoku_geom_jigsaw(reg, buf)) {
+    if (is_jigsaw_variant(v) && buf && sudoku_geom_jigsaw_of(v, reg, buf)) {
         return buf;
     }
     if ((v == VAR_KILLER || v == VAR_SUMLESS) && buf && sudoku_geom_killer_text(cages, buf)) {

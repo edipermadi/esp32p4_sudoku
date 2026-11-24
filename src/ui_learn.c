@@ -50,7 +50,7 @@ static void learn_open(void)
     if (var >= 0) {                                 /* made just now: kept in RAM only, as without a card */
         id = gen_ram_take();
         sudoku_layout_texts(learn_board, learn_cages, STATS_CAGES_LEN, learn_marks, learn_thermos, STATS_THERMOS_LEN);
-        gen_cache_put(id, var, GEN_MEDIUM, learn_found.givens, var == VAR_JIGSAW ? learn_board->region : NULL,
+        gen_cache_put(id, var, GEN_MEDIUM, learn_found.givens, is_jigsaw_variant(var) ? learn_board->region : NULL,
                       learn_cages[0] ? learn_cages : NULL, learn_marks[0] ? learn_marks : NULL,
                       learn_thermos[0] ? learn_thermos : NULL, NULL);
     }

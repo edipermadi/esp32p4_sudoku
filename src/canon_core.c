@@ -118,6 +118,7 @@ uint8_t canon_symmetries(int variant)
     case VAR_159:
         return 0x35;                    /* columns stay columns (columns 1, 5, 9 and the column numbers in them) */
     case VAR_JIGSAW:                    /* (its regions turned too: canon_hash_geom()) */
+    case VAR_JIG7:
     case VAR_KILLER:                    /* (its cages turned too; and these two's) */
     case VAR_SUMLESS:
     case VAR_REGIONS:
@@ -191,7 +192,7 @@ int canon_cell(int t, int n, int cell)
 /* (documented in canon_core.h) */
 bool is_canon_layout(int variant)
 {
-    return variant == VAR_JIGSAW || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
+    return is_jigsaw_variant(variant) || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
            variant == VAR_PRODUCT || is_mark_variant(variant) || is_line_variant(variant) || is_clue_variant(variant) ||
            variant == VAR_QUAD || variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9 ||
            variant == VAR_BATTEN;
@@ -572,7 +573,8 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
     }
     const bool prod = variant == VAR_PRODUCT;
     const bool killer = variant == VAR_KILLER || prod;   /* (sums, products: their digits as they are) */
-    const bool cages = variant != VAR_JIGSAW;       /* Killer, Sumless, Product, Extra Regions: cages (CAGE_NONE: none) */
+    const bool cages = !is_jigsaw_variant(variant);   /* Killer, Sumless, Product, Extra Regions: cages (CAGE_NONE: none) */
+    const int n = G->n;                             /* (Jigsaw 7x7: turned as a 7x7, its cells at the top left) */
     /* a copy: the givens (renumbered in reading order; Killer's and Product Killer's as they are), each cell's region
      * or cage (numbered in reading order from 1; 0: in no cage), then the sums (a byte each) or products (two) in that
      * order */
@@ -586,7 +588,11 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
         int next = 1, nlab = 0;
         memset(lab, 0, sizeof(lab));
         for (int k = 0; k < 81; k++) {      /* reading order of the turned board */
-            const int src = canon_cell(t, 9, k), d = givens[src];
+            if (k / 9 >= n || k % 9 >= n) {
+                cur[k] = cur[81 + k] = 0;   /* (off a smaller board) */
+                continue;
+            }
+            const int src = canon_cell(t, n, k), d = givens[src];
             if (d && !killer && !name[d]) {
                 name[d] = (uint8_t)next++;
             }

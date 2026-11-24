@@ -60,7 +60,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
     }
     /* Jigsaw and Killer: a uniqueness check that takes too long keeps the
      * clue (near the minimum, the plain search can take thousands of times longer) */
-    const uint32_t node_limit = G->variant == VAR_CLASSIC ? 0 : G->variant == VAR_JIGSAW ? 4000
+    const uint32_t node_limit = G->variant == VAR_CLASSIC ? 0 : is_jigsaw_variant(G->variant) ? 4000
                                 : G->variant == VAR_BETWEEN ? 1500 : 6000;   /* (Between: its counts are slow, cut them short) */
     for (int k = 0; k < no && clues > stop; k++) {
         sudoku_gen_yield();
@@ -259,7 +259,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         level = sudoku_top_level(variant);        /* (Product Killer: no Expert; Kids 4x4 stays as it was) */
     }
     static sudoku_geom_t *jig;                      /* a board made with its puzzle, being tried (PSRAM) */
-    const bool jigsaw = variant == VAR_JIGSAW, killer = variant == VAR_KILLER;
+    const bool jigsaw = is_jigsaw_variant(variant), killer = variant == VAR_KILLER;
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
     const bool thermo = variant == VAR_THERMO || variant == VAR_SLOW, sandwich = variant == VAR_SANDWICH;
     const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_DUTCH ||
@@ -303,8 +303,12 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         sudoku_gen_yield();
         if (jigsaw) {                               /* a new shape every few tries */
             if (t % 4 == 0) {
-                gen_jigsaw_map(map, &rng);
-                sudoku_geom_jigsaw(map, jig);
+                if (variant == VAR_JIG7) {
+                    gen_jigsaw7_map(map, &rng);
+                } else {
+                    gen_jigsaw_map(map, &rng);
+                }
+                sudoku_geom_jigsaw_of(variant, map, jig);
             }
             if (!gen_random_full_grid(G, full, &rng, 20000)) {   /* no quick fill: another shape */
                 t += 3 - t % 4;

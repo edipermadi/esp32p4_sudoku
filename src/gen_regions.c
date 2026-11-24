@@ -51,18 +51,25 @@ static bool is_region_connected(const uint8_t map[81], int reg)
 
 /* ---------------------------------------------------------------- Killer cages */
 
-/* (documented in gen_internal.h) */
-void gen_jigsaw_map(uint8_t map[81], uint32_t *rng)
+/**
+ * @brief Reshapes a region map of an n x n board by trading cells across region borders (a cell of A goes to B, a
+ *        cell of B next to A goes to A) while both regions stay in one piece; the cells off the board hold 0xFF.
+ * @param[in,out] map  the region of each cell
+ * @param[in] n  the board's side
+ * @param[in] want  the trades to make
+ * @param[in,out] rng  the random state
+ */
+static void jigsaw_reshape(uint8_t map[81], int n, int want, uint32_t *rng)
 {
-    for (int c = 0; c < 81; c++) {
-        map[c] = (uint8_t)((c / 27) * 3 + (c % 9) / 3);
-    }
     int done = 0;
-    for (int tries = 0; tries < 20000 && done < 90; tries++) {
+    for (int tries = 0; tries < 20000 && done < want; tries++) {
         int a = (int)(rnd(rng) % 81), r = a / 9, k = a % 9;
         int dir = (int)(rnd(rng) % 4);
-        int b = dir == 0 ? (k > 0 ? a - 1 : -1) : dir == 1 ? (k < 8 ? a + 1 : -1)
-                : dir == 2 ? (r > 0 ? a - 9 : -1) : (r < 8 ? a + 9 : -1);
+        if (r >= n || k >= n) {
+            continue;
+        }
+        int b = dir == 0 ? (k > 0 ? a - 1 : -1) : dir == 1 ? (k < n - 1 ? a + 1 : -1)
+                : dir == 2 ? (r > 0 ? a - 9 : -1) : (r < n - 1 ? a + 9 : -1);
         if (b < 0 || map[a] == map[b]) {
             continue;
         }
@@ -94,6 +101,56 @@ void gen_jigsaw_map(uint8_t map[81], uint32_t *rng)
         } else {
             map[a] = (uint8_t)A;
             map[c] = (uint8_t)B;
+        }
+    }
+}
+
+/* (documented in gen_internal.h) */
+void gen_jigsaw_map(uint8_t map[81], uint32_t *rng)
+{
+    for (int c = 0; c < 81; c++) {
+        map[c] = (uint8_t)((c / 27) * 3 + (c % 9) / 3);
+    }
+    jigsaw_reshape(map, 9, 90, rng);
+}
+
+/**
+ * @brief Jigsaw 7x7: the most cells any region of a map has in one row or column (7: a whole line).
+ * @param[in] map  the region of each cell
+ * @return it
+ */
+static int jigsaw7_straightest(const uint8_t map[81])
+{
+    int most = 0;
+    for (int reg = 0; reg < 7; reg++) {
+        for (int i = 0; i < 7; i++) {
+            int row = 0, col = 0;
+            for (int j = 0; j < 7; j++) {
+                row += map[i * 9 + j] == reg;
+                col += map[j * 9 + i] == reg;
+            }
+            most = row > most ? row : most;
+            most = col > most ? col : most;
+        }
+    }
+    return most;
+}
+
+/* (documented in gen_internal.h) */
+void gen_jigsaw7_map(uint8_t map[81], uint32_t *rng)
+{
+    for (int tries = 0; tries < 50; tries++) {      /* (the rows reshaped; again while a region stays row-like) */
+        for (int c = 0; c < 81; c++) {
+            map[c] = c / 9 < 7 && c % 9 < 7 ? (uint8_t)(c / 9) : 0xFF;   /* (the rows; off the board: no region) */
+        }
+        jigsaw_reshape(map, 7, 150, rng);
+        if (jigsaw7_straightest(map) <= 5) {
+            break;                                  /* (no region with 6 or 7 cells in one line) */
+        }
+    }
+    for (int c = 0; c < 81; c++) {
+        if (map[c] == 0xFF) {
+            map[c] = 0;
         }
     }
 }

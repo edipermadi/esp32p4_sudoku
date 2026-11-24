@@ -181,6 +181,7 @@ typedef enum {
     KIND_SEQ,                            /**< Sequence Lines */
     KIND_BATTEN,                         /**< Battenburg */
     KIND_MINI8,                          /**< Mini 8x8 */
+    KIND_JIG7,                           /**< Jigsaw 7x7 */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

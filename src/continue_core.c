@@ -90,5 +90,5 @@ int continue_cells(uint16_t id)
     if (!puzzle_is_generated(id) || !gen_lookup(id, NULL, &var, NULL)) {
         return 81;
     }
-    return var == VAR_MINI ? 36 : var == VAR_MINI8 ? 64 : var == VAR_KIDS ? 16 : 81;
+    return var == VAR_MINI ? 36 : var == VAR_MINI8 ? 64 : var == VAR_JIG7 ? 49 : var == VAR_KIDS ? 16 : 81;
 }

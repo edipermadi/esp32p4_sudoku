@@ -36,7 +36,7 @@ extern "C" {
  * - Anti-Queen 9s: 9 kept, the rest any way.
  *
  * With their layout turned with the givens (canon_hash_geom(); digits as they are but where said):
- * - Jigsaw: its regions, relabelled in reading order (digits any way);
+ * - Jigsaw, Jigsaw 7x7: its regions, relabelled in reading order (digits any way);
  * - Killer, Product Killer: their cages relabelled in reading order, with their sums or products; Sumless
  *   Killer, Extra Regions: their cages or shaded regions (digits any way);
  * - the marks: Kropki, XV, Consecutive (between side-by-side cells), Greater-Than (its signs turned round with

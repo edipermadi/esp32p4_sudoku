@@ -178,6 +178,8 @@
  *   VAR_SEQ      Sequence Lines: Classic rules, and along each line the digits go up or down by
  *                the same step (1 or more) from cell to cell
  *   VAR_MINI8    8x8 with 2x4 boxes (2 rows, 4 columns), digits 1-8
+ *   VAR_JIG7     Jigsaw 7x7: 7x7, digits 1-7, seven irregular regions of 7 connected cells
+ *                instead of boxes
  *   VAR_BATTEN   Battenburg: Classic rules, and a mark where four cells meet: their odd and even
  *                digits make a checkerboard; every mark is shown, so no mark: they don't
  *
@@ -203,7 +205,7 @@
  * pairs (180-degree rotation) as long as exactly one solution remains.
  * Graded by a solver that works like a person:
  *
- *   GEN_EASY    singles only (naked + hidden), 36 or more clues (6x6: 16; 8x8: 28)
+ *   GEN_EASY    singles only (naked + hidden), 36 or more clues (6x6: 16; 7x7: 22; 8x8: 28)
  *   GEN_MEDIUM  singles only, fewer clues
  *   GEN_HARD    also needs locked candidates (pointing / claiming) or
  *               naked / hidden pairs
@@ -310,6 +312,7 @@ typedef enum {
     VAR_SEQ,                            /**< Sequence Lines */
     VAR_BATTEN,                         /**< Battenburg */
     VAR_MINI8,                          /**< Mini 8x8 */
+    VAR_JIG7,                           /**< Jigsaw 7x7 */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -327,7 +330,7 @@ typedef enum {
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
  *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku",
- *         "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8"
+ *         "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8", "Jigsaw 7x7"
  */
 const char *variant_name(int variant);
 
@@ -608,6 +611,31 @@ const sudoku_geom_t *sudoku_geom(int variant);
  * @return false if the map isn't one
  */
 bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
+/**
+ * @brief A Jigsaw 7x7 board from its region map (81 cells row by row, 9 to a row; the 7x7 at the top left: region
+ * 0..6 each, 7 connected cells per region; the cells off the board are ignored) into out.
+ * @param[in] regions  the region of each cell
+ * @param[out] out  gets the board
+ * @return false if the map isn't one
+ */
+bool sudoku_geom_jigsaw7(const uint8_t regions[81], sudoku_geom_t *out);
+/**
+ * @brief A Jigsaw board of either size from its region map (sudoku_geom_jigsaw(), sudoku_geom_jigsaw7()).
+ * @param[in] variant  VAR_JIGSAW or VAR_JIG7
+ * @param[in] regions  the region of each cell
+ * @param[out] out  gets the board
+ * @return false if the map isn't one (or the variant isn't a Jigsaw)
+ */
+bool sudoku_geom_jigsaw_of(int variant, const uint8_t regions[81], sudoku_geom_t *out);
+/**
+ * @brief Is it a Jigsaw variant (irregular regions instead of boxes, kept in regions)?
+ * @param[in] variant  sudoku_variant_t
+ * @return true for VAR_JIGSAW and VAR_JIG7
+ */
+static inline bool is_jigsaw_variant(int variant)
+{
+    return variant == VAR_JIGSAW || variant == VAR_JIG7;
+}
 /**
  * @brief A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
  * (cells 0..80 row by row, each in one cage at most), into out; false if

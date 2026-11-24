@@ -15,7 +15,7 @@ Every puzzle that isn't built in, one row each: made with New puzzle, a daily pu
 | `givens` | TEXT | no | 81 digits row by row, 0 = empty (a 6×6 or 4×4 puzzle in the top-left corner) |
 | `created_at` | INTEGER | yes | Unix time, UTC; NULL when the clock wasn't set (no Wi-Fi yet) |
 | `day` | TEXT | yes | a daily puzzle: its date `YYYY-MM-DD`; else NULL |
-| `variant` | INTEGER | no | the rules: 0 Classic … 72 Mini 8x8 (`VAR_*` in `src/generator.h`, only ever added to at the end); 0 by default |
+| `variant` | INTEGER | no | the rules: 0 Classic … 73 Jigsaw 7x7 (`VAR_*` in `src/generator.h`, only ever added to at the end); 0 by default |
 | `regions` | TEXT | yes | Jigsaw: 81 digits 0–8, the region of each cell |
 | `cages` | TEXT | yes | Killer cages (`sum:cell,cell,...;...`), Quadruple circles, Little Killer diagonals |
 | `marks` | TEXT | yes | Even-Odd, Consecutive, Kropki, XV, Greater-Than, Fortress, Diagonal Consecutive (81 characters); Sandwich, Skyscraper, X-Sums, Frame, Numbered Rooms, Sum Skyscrapers clues (18 numbers); Outside clues (18 digit sets); Rossini arrows |

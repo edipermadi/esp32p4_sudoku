@@ -19,7 +19,7 @@ static lv_obj_t *gen_pick_desc;                     /**< its line about the vari
 static int gen_pick_var = VAR_CLASSIC;              /**< variant chosen there (kept until power-off) */
 
 #define GEN_CATS     4                  /**< the dialog's tabs */
-#define GEN_CAT_SLOTS 20                /**< variant buttons per tab: 5 rows of 4 (the unused ones hidden) */
+#define GEN_CAT_SLOTS 24                /**< variant buttons per tab: 6 rows of 4 (the unused ones hidden) */
 #define GEN_CAT_END  0xFF               /**< after a tab's last variant */
 
 /** @brief the New puzzle dialog's tabs: their names */
@@ -31,7 +31,7 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
         VAR_KIDS, VAR_MINI, VAR_MINI8, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_REGIONS,
-        VAR_DISJOINT, VAR_CLONE, VAR_JIGSAW, VAR_PSYM, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
+        VAR_DISJOINT, VAR_CLONE, VAR_JIGSAW, VAR_JIG7, VAR_PSYM, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
     },
     {
         VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_MATHRAX, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
@@ -48,7 +48,7 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
 };
 /** @brief each variant's button text (shorter than variant_name() where four across need it) */
 static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
-    [VAR_CLASSIC] = "Classic", [VAR_X] = "X-Sudoku", [VAR_MINI] = "Mini 6x6", [VAR_MINI8] = "Mini 8x8", [VAR_HYPER] = "Hyper",
+    [VAR_CLASSIC] = "Classic", [VAR_X] = "X-Sudoku", [VAR_MINI] = "Mini 6x6", [VAR_MINI8] = "Mini 8x8", [VAR_JIG7] = "Jigsaw 7x7", [VAR_HYPER] = "Hyper",
     [VAR_JIGSAW] = "Jigsaw", [VAR_KILLER] = "Killer", [VAR_KNIGHT] = "Anti-Knight", [VAR_EVENODD] = "Even-Odd",
     [VAR_CONSEC] = "Consecutive", [VAR_THERMO] = "Thermo", [VAR_SANDWICH] = "Sandwich", [VAR_KIDS] = "Kids 4x4",
     [VAR_KING] = "Anti-King", [VAR_NONCONSEC] = "Non-Consec.", [VAR_DISJOINT] = "Disjoint", [VAR_ASTERISK] = "Asterisk",
@@ -78,6 +78,7 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
     [VAR_MINI] = "6x6 with 2x3 boxes: rows, columns and boxes hold 1-6 once each.",
     [VAR_MINI8] = "8x8 with 2x4 boxes: rows, columns and boxes hold 1-8 once each.",
+    [VAR_JIG7] = "7x7 with seven irregular regions (thick borders); rows, columns and regions hold 1-7 once each.",
     [VAR_HYPER] = "9x9, and the four tinted 3x3 windows also hold 1-9 once each.",
     [VAR_JIGSAW] = "9x9 with nine irregular regions (thick borders) instead of boxes; each holds 1-9 once.",
     [VAR_KILLER] = "9x9 with cages (dashed): a cage's digits add up to its sum, none repeated. Few or no givens.",
@@ -291,7 +292,7 @@ void new_puzzle_cb(lv_event_t *e)
     lv_obj_t *vm = lv_buttonmatrix_create(lv_msgbox_get_content(m));
     gen_var_bm = vm;
     lv_buttonmatrix_set_one_checked(vm, true);
-    lv_obj_set_size(vm, LV_PCT(100), 252);          /* five rows (44 px each) */
+    lv_obj_set_size(vm, LV_PCT(100), 304);          /* six rows (44 px each) */
     lv_obj_set_style_pad_row(vm, 8, 0);
     lv_obj_set_style_pad_all(vm, 0, 0);
     lv_obj_set_style_pad_column(vm, 8, 0);

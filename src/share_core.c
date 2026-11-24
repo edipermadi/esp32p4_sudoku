@@ -31,6 +31,7 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     const char *key = NULL;
     switch (variant) {
     case VAR_JIGSAW:
+    case VAR_JIG7:
         for (int i = 0; i < 81; i++) {
             extra[i] = (char)('0' + G->region[i]);
         }
@@ -148,6 +149,7 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
     extra[0] = 0;
     switch (variant) {
     case VAR_JIGSAW:
+    case VAR_JIG7:
         for (int i = 0; i < 81; i++) {
             regions[i] = (char)('0' + G->region[i]);
         }

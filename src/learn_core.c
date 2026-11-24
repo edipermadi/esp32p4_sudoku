@@ -34,6 +34,7 @@ static const learn_lesson_t LESSONS[] = {
     {"X-Sudoku diagonals", "The two long diagonals hold 1-9 too: a digit can have one place left on one.", VAR_X, TECH_NONE, false},
     {"Hyper windows", "The four tinted windows hold 1-9 too: a digit can have one place left in one.", VAR_HYPER, TECH_NONE, false},
     {"Jigsaw regions", "Irregular regions instead of boxes: count a digit's places region by region.", VAR_JIGSAW, TECH_NONE, false},
+    {"Jigsaw 7x7 regions", "Seven irregular regions on a 7x7 board: count a digit's places region by region.", VAR_JIG7, TECH_NONE, false},
     {"Disjoint groups", "The cells in the same place in each box hold 1-9 too: a digit can have one place left in a group.", VAR_DISJOINT, TECH_NONE, false},
     {"Asterisk", "The nine asterisk cells hold 1-9 too: a digit can have one place left among them.", VAR_ASTERISK, TECH_NONE, false},
     {"Center Dot", "The nine box centres hold 1-9 too: a digit can have one place left among them.", VAR_CENTERDOT, TECH_NONE, false},
@@ -143,6 +144,7 @@ int learn_group(int k)
     case VAR_X:
     case VAR_HYPER:
     case VAR_JIGSAW:
+    case VAR_JIG7:
     case VAR_DISJOINT:
     case VAR_ASTERISK:
     case VAR_CENTERDOT:
@@ -322,7 +324,7 @@ static bool is_rule_single(const sudoku_geom_t *G, const uint8_t vals[81], const
     if (st->tech.kind || (st->kind != STEP_HIDDEN_SINGLE && st->kind != STEP_NAKED_SINGLE)) {
         return false;
     }
-    if (st->kind == STEP_HIDDEN_SINGLE && (st->unit >= UNIT_DIAG_MAIN || (G->variant == VAR_JIGSAW && st->unit >= 18))) {
+    if (st->kind == STEP_HIDDEN_SINGLE && (st->unit >= UNIT_DIAG_MAIN || (is_jigsaw_variant(G->variant) && st->unit >= 18))) {
         return true;                                /* (the variant's own region) */
     }
     const sudoku_geom_t *C = sudoku_geom(VAR_CLASSIC);

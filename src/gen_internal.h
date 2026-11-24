@@ -729,6 +729,13 @@ bool gen_geom_sky(const uint8_t clues[18], sudoku_geom_t *out);
  */
 void gen_jigsaw_map(uint8_t map[81], uint32_t *rng);
 /**
+ * @brief A random Jigsaw 7x7 map: the seven rows, reshaped the same way (more trades: rows are far from boxes),
+ * drawn again while a region keeps 6 or more cells in one row or column; the cells off the 7x7 get region 0.
+ * @param[out] map  gets the region of each cell
+ * @param[in,out] rng  the random state
+ */
+void gen_jigsaw7_map(uint8_t map[81], uint32_t *rng);
+/**
  * @brief Random cages over a solved grid: from each cell not in a cage yet (in a
  * random order), a cage grows to 2..max_size cells through neighbours whose
  * digit isn't in it yet. A lone cell left over joins a neighbouring cage

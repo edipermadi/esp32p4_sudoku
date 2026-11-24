@@ -15,7 +15,7 @@
  * @section mp_what What the firmware does
  *
  * - **Puzzles**: 1600 built-in puzzles (the OpenSudoku collections), a generator for new ones at four
- *   levels, a daily puzzle, 72 variants besides Classic, puzzles typed in, imported from the card
+ *   levels, a daily puzzle, 73 variants besides Classic, puzzles typed in, imported from the card
  *   (81-digit lines or OpenSudoku's XML) or saved into collections of one's own; a search by name
  *   and variant, and a puzzle played before is known again even turned, mirrored or renumbered.
  * - **Playing**: pencil marks, Auto notes, undo/redo, a mistake check, step-by-step hints (up to

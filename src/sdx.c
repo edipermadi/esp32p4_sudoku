@@ -117,7 +117,8 @@ bool sdx_parse(char *line, sdx_puzzle_t *p)
 bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
 {
     switch (p->variant) {
-    case VAR_JIGSAW: {
+    case VAR_JIGSAW:
+    case VAR_JIG7: {
         uint8_t reg[81];
         if (strlen(p->regions) != 81) {
             return false;
@@ -128,7 +129,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
             }
             reg[i] = (uint8_t)(p->regions[i] - '0');
         }
-        return sudoku_geom_jigsaw(reg, out);
+        return sudoku_geom_jigsaw_of(p->variant, reg, out);
     }
     case VAR_KILLER:
     case VAR_SUMLESS:

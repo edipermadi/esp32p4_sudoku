@@ -45,6 +45,10 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
         NULL, NULL, -1
     },
     [VAR_MINI] = {6, 4, 3, 2, "123456" "456123" "......" "......", NULL, NULL, NULL, NULL, NULL, NULL, NULL, -1},
+    [VAR_JIG7] = {
+        .w = 7, .h = 7, .digits = "123...." "45....." "6......" "7......" "......." "......." ".......",
+        .regions = "aaabbbb" "aaccbbb" "acccddd" "aeccddd" "eeeffdg" "eefffgg" "effgggg", .left_clue = -1
+    },
     [VAR_MINI8] = {.w = 8, .h = 4, .bw = 4, .bh = 2, .digits = "12345678" "56781234" "........" "........", .left_clue = -1},
     [VAR_HYPER] = {
         5, 5, 0, 0, "....." ".123." ".456." ".789." ".....", "0000001110011100111000000", NULL, NULL, NULL, NULL,
@@ -174,6 +178,9 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "once. The given digits can't be changed.",
     [VAR_X] = "Classic rules, and the two long diagonals (tinted) also hold 1 to 9, each once.",
     [VAR_MINI] = "A 6x6 grid: every row, column and 2x3 box holds 1 to 6, each once.",
+    [VAR_JIG7] = "A 7x7 grid with the digits 1 to 7: every row, every column and every irregular region (outlined "
+    "with thick lines) holds 1 to 7, each once. Here the top-left region has all seven. Every puzzle has its own "
+    "regions.",
     [VAR_MINI8] = "An 8x8 grid: every row, column and 2x4 box (two rows of four) holds 1 to 8, each once.",
     [VAR_HYPER] = "Classic rules, and the four tinted 3x3 windows also hold 1 to 9, each once.",
     [VAR_JIGSAW] = "Classic rules, but the boxes are irregular regions of nine cells, outlined with thick lines. "

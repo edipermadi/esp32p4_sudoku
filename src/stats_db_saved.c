@@ -189,7 +189,7 @@ void sdb_do_saved_export(void)
             }
             ok = fprintf(f, "%s|%s|%s|%s|%s|%s|%s\n", v >= 0 && v < VAR_COUNT ? variant_name(v) : "Classic",
                          lv >= 0 && lv < GEN_LEVELS ? gen_level_name(lv) : "Easy", t[0],
-                         v == VAR_JIGSAW ? t[1] : "", t[2], t[3], t[4]) > 0;
+                         is_jigsaw_variant(v) ? t[1] : "", t[2], t[3], t[4]) > 0;
             n++;
         }
         sqlite3_finalize(st);

@@ -62,7 +62,7 @@ static const char *unit_name(const sudoku_geom_t *G, int u, char *b)
     } else if (u < 18) {
         sprintf(b, "column %d", u - 8);
     } else if (u < 27) {
-        sprintf(b, "%s %d", G->variant == VAR_JIGSAW ? "region" : "box", u - 17);
+        sprintf(b, "%s %d", is_jigsaw_variant(G->variant) ? "region" : "box", u - 17);
     } else if (u == UNIT_DIAG_MAIN) {
         sprintf(b, "the main diagonal");
     } else if (u == UNIT_DIAG_ANTI) {
@@ -405,6 +405,7 @@ static void print_step(const sudoku_geom_t *G, const uint8_t v[81], const single
 }
 
 static bool is_plain(int v) { return v == VAR_CLASSIC || v == VAR_MINI || v == VAR_KIDS || v == VAR_MINI8; }
+/* (Jigsaw 7x7 is not "plain": a region's hidden single is its rule, as Jigsaw's) */
 
 /* the best opening single of position v for variant var: not a classic one (plain variants:
  * a hidden single in a box), with the fewest reasons that need the variant's rule spelled out
@@ -463,6 +464,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     regions[0] = cages[0] = marks[0] = thermos[0] = 0;
     switch (g->variant) {
     case VAR_JIGSAW:
+    case VAR_JIG7:
         for (int i = 0; i < 81; i++) {
             regions[i] = (char)('0' + g->region[i]);
         }

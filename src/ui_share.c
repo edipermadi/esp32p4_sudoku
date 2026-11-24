@@ -209,7 +209,7 @@ static void pz_check_poll(lv_timer_t *t)
     if (level < 0 || level >= GEN_LEVELS) {
         level = GEN_EXPERT;
     }
-    const uint8_t *regions = p->variant == VAR_JIGSAW ? p->geom.region : NULL;
+    const uint8_t *regions = is_jigsaw_variant(p->variant) ? p->geom.region : NULL;
     const char *cages = p->cages[0] ? p->cages : NULL, *marks = p->marks[0] ? p->marks : NULL;
     const char *thermos = p->thermos[0] ? p->thermos : NULL;
     int number = 0;                               /* "Received #3": numbered like My puzzles */

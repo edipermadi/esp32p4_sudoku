@@ -21,7 +21,7 @@ static void unit_name(const sudoku_geom_t *geo, int u, char *buf, size_t n)
     } else if (u < 18) {
         snprintf(buf, n, "column %d", u - 9 + 1);
     } else if (u < 27) {
-        snprintf(buf, n, "%s %d", geo->variant == VAR_JIGSAW ? "region" : "box", u - 18 + 1);
+        snprintf(buf, n, "%s %d", is_jigsaw_variant(geo->variant) ? "region" : "box", u - 18 + 1);
     } else if (u < UNIT_WINDOW) {
         snprintf(buf, n, "the %s diagonal", u == UNIT_DIAG_MAIN ? "top-left" : "top-right");
     } else if (u < UNIT_GROUP) {                    /* Hyper windows */
@@ -54,7 +54,7 @@ static const char *units_word(const sudoku_geom_t *geo)
     if (geo->windows) {
         return "row, column, box or window";
     }
-    if (geo->variant == VAR_JIGSAW) {
+    if (is_jigsaw_variant(geo->variant)) {
         return "row, column or region";
     }
     if (geo->variant == VAR_REGIONS) {
