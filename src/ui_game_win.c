@@ -188,6 +188,9 @@ static void solve_commit_cb(lv_timer_t *t)
     store_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes);
     stats_db_record_solve(s_solve_id, s_solve_secs, s_solve_mistakes, s_solve_hints,
                           s_solve_started, game_moves(), game_nmoves(), s_solve_flags);   /* finished: now */
+    if (store_saved_game()->id == s_solve_id) {
+        store_clear_game();                         /* no longer unfinished (its slot held the board before the last move) */
+    }
     /* head-to-head: where this leaves the player among everyone who solved it (after the solve above) */
     stats_h2h_t h;
     char line[96] = "";
