@@ -1275,7 +1275,7 @@ static void test_geometry(void)
 {
     static const struct { int variant, n, ncells, nunits, peers0; } G[] = {
         {VAR_CLASSIC, 9, 81, 27, 20}, {VAR_X, 9, 81, 29, 26}, {VAR_HYPER, 9, 81, 31, 20},
-        {VAR_MINI, 6, 36, 18, 12},     {VAR_KIDS, 4, 16, 12, 7},
+        {VAR_MINI, 6, 36, 18, 12},     {VAR_KIDS, 4, 16, 12, 7},       {VAR_MINI8, 8, 64, 24, 17},
         {VAR_KING, 9, 81, 27, 20},     {VAR_NONCONSEC, 9, 81, 27, 20}, {VAR_DISJOINT, 9, 81, 36, 24},
         {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
         {VAR_159, 9, 81, 27, 20}, {VAR_ANTIDIAG, 9, 81, 27, 20},
@@ -1507,7 +1507,8 @@ static void test_generate(void)
     static sudoku_geom_t board;
     uint8_t g[81], sol[81];
     for (int v = 0; v < VAR_COUNT; v++) {
-        int top = v == VAR_KIDS ? GEN_HARD : (v == VAR_CLASSIC || v == VAR_X || v == VAR_MINI) ? GEN_HARD : GEN_MEDIUM;
+        int top = v == VAR_KIDS ? GEN_HARD : (v == VAR_CLASSIC || v == VAR_X || v == VAR_MINI || v == VAR_MINI8) ? GEN_HARD
+                  : GEN_MEDIUM;
         for (int lv = GEN_EASY; lv <= top; lv++) {
             gen_level_t got;
             uint32_t seed = 1000u + (uint32_t)v * 17u + (uint32_t)lv;
@@ -2387,7 +2388,8 @@ static void test_learn(void)
         }
     }
     for (int v = 0; v < VAR_COUNT; v++) {
-        CHECKF(has[v] == (v != VAR_CLASSIC && v != VAR_MINI && v != VAR_KIDS), "%s: a lesson", variant_name(v));
+        CHECKF(has[v] == (v != VAR_CLASSIC && v != VAR_MINI && v != VAR_KIDS && v != VAR_MINI8), "%s: a lesson",
+               variant_name(v));
     }
 }
 

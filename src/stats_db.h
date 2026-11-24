@@ -180,6 +180,7 @@ typedef enum {
     KIND_BF,                             /**< Battlefield */
     KIND_SEQ,                            /**< Sequence Lines */
     KIND_BATTEN,                         /**< Battenburg */
+    KIND_MINI8,                          /**< Mini 8x8 */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

@@ -111,7 +111,8 @@ uint8_t canon_symmetries(int variant)
     }
     switch (variant) {                  /* (tests/test_main.c checks these against each board's peers) */
     case VAR_MINI:
-        return 0x35;                    /* 2x3 boxes: no quarter turns, no diagonal mirrors */
+    case VAR_MINI8:
+        return 0x35;                    /* 2x3 (2x4) boxes: no quarter turns, no diagonal mirrors */
     case VAR_FLATMATES:
         return 0x35;                    /* above and below stay in their column: no quarter turns, no diagonal mirrors */
     case VAR_159:
@@ -628,7 +629,7 @@ uint64_t canon_hash(int variant, const uint8_t givens[81])
     if (!sym || is_canon_layout(variant)) {
         return 0;                           /* (Jigsaw, Killer: canon_hash_geom(), with their layout) */
     }
-    const int n = variant == VAR_MINI ? 6 : variant == VAR_KIDS ? 4 : 9;
+    const int n = variant == VAR_MINI ? 6 : variant == VAR_MINI8 ? 8 : variant == VAR_KIDS ? 4 : 9;
     const int mode = canon_digits(variant);
     uint8_t best[81], cur[81];
     bool have = false;

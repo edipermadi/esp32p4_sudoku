@@ -23,7 +23,7 @@ extern "C" {
  * rules allow (canon_digits()), and the smallest copy is hashed (FNV-1a, 64 bits) with the variant.
  *
  * Without a layout of their own (canon_hash()):
- * - Classic, X-Sudoku, Mini 6x6, Kids 4x4, Hyper, Anti-Knight, Anti-King, Disjoint Groups, Asterisk, Center Dot,
+ * - Classic, X-Sudoku, Mini 6x6, Mini 8x8, Kids 4x4, Hyper, Anti-Knight, Anti-King, Disjoint Groups, Asterisk, Center Dot,
  *   Argyle, Girandola, Chess Sudoku and Anti-Diagonal: renumbered in reading order (the first digit met becomes
  *   1, the next new one 2 ...);
  * - Point Symmetry: the pairs that make 10 kept together, 5 kept;

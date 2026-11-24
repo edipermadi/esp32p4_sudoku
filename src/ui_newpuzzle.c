@@ -99,6 +99,7 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {27, 147, 639, 3333},  /* Battlefield (2026-11-24) */
     {17, 89, 192, 1463},   /* Sequence Lines (2026-11-24) */
     {15, 314, 776, 555},   /* Battenburg */
+    {3, 12, 293, 115},     /* Mini 8x8 (2026-11-24) */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */

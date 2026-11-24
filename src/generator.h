@@ -177,6 +177,7 @@
  *                clue is the sum of the cells where they overlap, or else of those between them
  *   VAR_SEQ      Sequence Lines: Classic rules, and along each line the digits go up or down by
  *                the same step (1 or more) from cell to cell
+ *   VAR_MINI8    8x8 with 2x4 boxes (2 rows, 4 columns), digits 1-8
  *   VAR_BATTEN   Battenburg: Classic rules, and a mark where four cells meet: their odd and even
  *                digits make a checkerboard; every mark is shown, so no mark: they don't
  *
@@ -202,7 +203,7 @@
  * pairs (180-degree rotation) as long as exactly one solution remains.
  * Graded by a solver that works like a person:
  *
- *   GEN_EASY    singles only (naked + hidden), 36 or more clues (6x6: 16)
+ *   GEN_EASY    singles only (naked + hidden), 36 or more clues (6x6: 16; 8x8: 28)
  *   GEN_MEDIUM  singles only, fewer clues
  *   GEN_HARD    also needs locked candidates (pointing / claiming) or
  *               naked / hidden pairs
@@ -308,6 +309,7 @@ typedef enum {
     VAR_BF,                             /**< Battlefield */
     VAR_SEQ,                            /**< Sequence Lines */
     VAR_BATTEN,                         /**< Battenburg */
+    VAR_MINI8,                          /**< Mini 8x8 */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -325,7 +327,7 @@ typedef enum {
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
  *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku",
- *         "Search Nine", "Battlefield", "Sequence Lines", "Battenburg"
+ *         "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8"
  */
 const char *variant_name(int variant);
 
@@ -426,8 +428,8 @@ enum {
 typedef struct {
     uint8_t variant;                    /**< sudoku_variant_t */
     uint8_t n;                          /**< digits and side: 9, 6 or 4 */
-    uint8_t box_h;                      /**< a box's height: 3, or 2 (6x6, 4x4) */
-    uint8_t box_w;                      /**< a box's width: 3 (9x9, 6x6), or 2 (4x4) */
+    uint8_t box_h;                      /**< a box's height: 3, or 2 (6x6, 8x8, 4x4) */
+    uint8_t box_w;                      /**< a box's width: 3 (9x9, 6x6), 4 (8x8), or 2 (4x4) */
     bool diag;                          /**< the two diagonals are units too */
     bool windows;                       /**< the four Hyper windows are units too */
     uint8_t region[81];                 /**< box (Jigsaw: region) of each cell, 0..n-1 */

@@ -404,7 +404,7 @@ static void print_step(const sudoku_geom_t *G, const uint8_t v[81], const single
     }
 }
 
-static bool is_plain(int v) { return v == VAR_CLASSIC || v == VAR_MINI || v == VAR_KIDS; }
+static bool is_plain(int v) { return v == VAR_CLASSIC || v == VAR_MINI || v == VAR_KIDS || v == VAR_MINI8; }
 
 /* the best opening single of position v for variant var: not a classic one (plain variants:
  * a hidden single in a box), with the fewest reasons that need the variant's rule spelled out

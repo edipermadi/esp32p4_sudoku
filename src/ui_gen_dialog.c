@@ -30,7 +30,7 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
  * a missing mark says something, and the less familiar kinds, later. */
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
-        VAR_KIDS, VAR_MINI, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_REGIONS,
+        VAR_KIDS, VAR_MINI, VAR_MINI8, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_REGIONS,
         VAR_DISJOINT, VAR_CLONE, VAR_JIGSAW, VAR_PSYM, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
     },
     {
@@ -48,7 +48,7 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
 };
 /** @brief each variant's button text (shorter than variant_name() where four across need it) */
 static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
-    [VAR_CLASSIC] = "Classic", [VAR_X] = "X-Sudoku", [VAR_MINI] = "Mini 6x6", [VAR_HYPER] = "Hyper",
+    [VAR_CLASSIC] = "Classic", [VAR_X] = "X-Sudoku", [VAR_MINI] = "Mini 6x6", [VAR_MINI8] = "Mini 8x8", [VAR_HYPER] = "Hyper",
     [VAR_JIGSAW] = "Jigsaw", [VAR_KILLER] = "Killer", [VAR_KNIGHT] = "Anti-Knight", [VAR_EVENODD] = "Even-Odd",
     [VAR_CONSEC] = "Consecutive", [VAR_THERMO] = "Thermo", [VAR_SANDWICH] = "Sandwich", [VAR_KIDS] = "Kids 4x4",
     [VAR_KING] = "Anti-King", [VAR_NONCONSEC] = "Non-Consec.", [VAR_DISJOINT] = "Disjoint", [VAR_ASTERISK] = "Asterisk",
@@ -77,6 +77,7 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLASSIC] = "9x9: rows, columns and 3x3 boxes hold 1-9 once each.",
     [VAR_X] = "9x9, and the two tinted diagonals also hold 1-9 once each.",
     [VAR_MINI] = "6x6 with 2x3 boxes: rows, columns and boxes hold 1-6 once each.",
+    [VAR_MINI8] = "8x8 with 2x4 boxes: rows, columns and boxes hold 1-8 once each.",
     [VAR_HYPER] = "9x9, and the four tinted 3x3 windows also hold 1-9 once each.",
     [VAR_JIGSAW] = "9x9 with nine irregular regions (thick borders) instead of boxes; each holds 1-9 once.",
     [VAR_KILLER] = "9x9 with cages (dashed): a cage's digits add up to its sum, none repeated. Few or no givens.",

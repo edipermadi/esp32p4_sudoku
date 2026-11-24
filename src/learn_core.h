@@ -22,7 +22,7 @@ extern "C" {
  * - **techniques** (LEARN_HIDDEN .. LEARN_XY_WING), on the built-in Classic puzzles: a puzzle is played forward
  *   with the hint engine (sudoku_next_step()) until the next step is that technique (the four rarest:
  *   until the singles run out and that technique opens one up, sudoku_step_with());
- * - **variant rules** (LEARN_RULES ..), one per variant but Classic, Mini 6x6 and Kids 4x4 (which only change
+ * - **variant rules** (LEARN_RULES ..), one per variant but Classic, Mini 6x6, Mini 8x8 and Kids 4x4 (which only change
  *   the grid): new puzzles of that variant are made (Medium) and played forward until the next step needs its
  *   rule. For a variant whose rule is a technique of the hint engine's (a cage, a line, a clue, the marks
  *   between cells), that technique; for one whose rule only adds regions or cells that see each other (X-Sudoku,

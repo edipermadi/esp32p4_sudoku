@@ -1638,7 +1638,8 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->sandwich) {
         return 24;
     }
-    return G->n == 9 ? 36 : G->n == 6 ? 16 : 8;   /* (4x4: half its 16 cells; Medium digs to the minimum, ~5) */
+    return G->n == 9 ? 36 : G->n == 8 ? 28 : G->n == 6 ? 16 : 8;   /* (8x8: as 9x9's share; 4x4: half its 16
+                                                                     * cells; Medium digs to the minimum, ~5) */
 }
 
 /* (documented in generator.h) */

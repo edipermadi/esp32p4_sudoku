@@ -30,7 +30,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Average Lines", "Dutch Flatmates", "Mathrax",
                                                      "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
                                                      "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield",
-                                                     "Sequence Lines", "Battenburg"
+                                                     "Sequence Lines", "Battenburg", "Mini 8x8"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -338,6 +338,7 @@ void sudoku_geom_init(void)
     geom_build(&g[VAR_X], VAR_X, 9, 3, 3, true, false, NULL);
     geom_build(&g[VAR_MINI], VAR_MINI, 6, 2, 3, false, false, NULL);
     geom_build(&g[VAR_KIDS], VAR_KIDS, 4, 2, 2, false, false, NULL);   /* 4x4 for kids: 2x2 boxes, digits 1-4 */
+    geom_build(&g[VAR_MINI8], VAR_MINI8, 8, 2, 4, false, false, NULL);   /* 8x8: 2x4 boxes, digits 1-8 */
     geom_build(&g[VAR_HYPER], VAR_HYPER, 9, 3, 3, false, true, NULL);
     geom_build(&g[VAR_KNIGHT], VAR_KNIGHT, 9, 3, 3, false, false, NULL);
     geom_build(&g[VAR_KING], VAR_KING, 9, 3, 3, false, false, NULL);

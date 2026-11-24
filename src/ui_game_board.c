@@ -188,7 +188,8 @@ void cell_draw_cb(lv_event_t *e)
     lv_obj_get_coords(cell, &co);
     int sv = game_lock() ? game_lock() : (game_sel() >= 0 ? game_b()->val[game_sel()] : 0);
 
-    /* three marks per row: 3 rows on a 9x9 board, 2 (centred) on a 6x6 one; 4x4: two by two */
+    /* three marks per row: 3 rows on a 9x9 or 8x8 board (8x8: the last row two), 2 (centred) on a 6x6 one; 4x4: two
+     * by two */
     const int cols = game_geo()->n == 4 ? 2 : 3;
     int size = lv_area_get_width(&co), pitch = size / cols, rows = (game_geo()->n + cols - 1) / cols;
     int x0 = 1, y0 = rows == 3 ? 2 : (size - rows * pitch) / 2;
