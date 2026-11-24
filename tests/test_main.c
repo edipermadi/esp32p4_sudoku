@@ -612,6 +612,9 @@ static void test_canon(void)
             real &= 0x35;                           /* (their rules: above and below, column numbers: columns stay) */
         }
         CHECKF(sym == real, "%s: canon_symmetries 0x%02x, the board's 0x%02x", variant_name(v), sym, real);
+        if (is_canon_layout(v)) {
+            continue;                               /* (Jigsaw, Killer: with their layout, below) */
+        }
         uint8_t giv[81] = {0}, sol[81];
         gen_level_t got;
         static sudoku_geom_t board;
@@ -699,6 +702,72 @@ static void test_canon(void)
         CHECKF(canon_hash(v, giv) != h, "%s: a given more, the same hash", variant_name(v));
     }
     CHECK(canon_hash(VAR_SANDWICH, (const uint8_t[81]) {0}) == 0);   /* (no hash: its clues aren't in the givens) */
+
+    /* Jigsaw, Killer, Sumless Killer, Extra Regions: the board turned with the givens (regions, cages and sums),
+     * renumbered at random (all but Killer): the same hash, and still one solution; another layout (relabelled
+     * regions: the same; a sum changed, a cell out of its cage: another hash); and none without the layout */
+    static const int LAYOUT[] = {VAR_JIGSAW, VAR_KILLER, VAR_SUMLESS, VAR_REGIONS, VAR_PRODUCT};
+    for (int pass = 0; pass < 5; pass++) {
+        const int v = LAYOUT[pass];
+        static sudoku_geom_t board, tb;
+        uint8_t giv[81] = {0};
+        gen_level_t got;
+        CHECK(sudoku_generate(v, GEN_EASY, 4242u + (uint32_t)v, giv, &board, &got));
+        const uint64_t h = canon_hash_geom(&board, giv);
+        CHECK(h != 0 && canon_hash(v, giv) == 0);
+        uint32_t rng = 7u + (uint32_t)v;
+        for (int t = 0; t < 8; t++) {
+            uint8_t perm[10], tr[81] = {0}, map[81], cage_of[81];
+            for (int d = 0; d <= 9; d++) {
+                perm[d] = (uint8_t)d;
+            }
+            for (int d = 9; v != VAR_KILLER && v != VAR_PRODUCT && d > 1; d--) {   /* (sums, products: digits kept) */
+                rng = rng * 1103515245u + 12345u;
+                const int j = 1 + (int)(rng >> 16) % d;
+                const uint8_t x = perm[d];
+                perm[d] = perm[j];
+                perm[j] = x;
+            }
+            for (int c = 0; c < 81; c++) {
+                const int to = canon_cell(t, 9, c);
+                tr[to] = perm[giv[c]];
+                map[to] = board.region[c];
+                cage_of[to] = board.cage_of[c];
+            }
+            const bool built = v == VAR_JIGSAW ? sudoku_geom_jigsaw(map, &tb)
+                               : v == VAR_PRODUCT ? gen_geom_product(cage_of, board.cage_prod, board.ncages, &tb)
+                               : gen_geom_killer(cage_of, board.cage_sum, board.ncages, &tb);
+            tb.variant = (uint8_t)v;                /* (Extra Regions: built as a Sumless Killer, as its text is) */
+            CHECKF(built, "%s: turn %d: the board turned", variant_name(v), t);
+            CHECKF(canon_hash_geom(&tb, tr) == h, "%s: turn %d: another hash", variant_name(v), t);
+            CHECKF(sudoku_count_solutions(&tb, tr, 2) == 1, "%s: turn %d: not one solution any more", variant_name(v), t);
+        }
+        if (v == VAR_JIGSAW) {                      /* the regions numbered another way: the same */
+            uint8_t map[81];
+            for (int c = 0; c < 81; c++) {
+                map[c] = (uint8_t)((board.region[c] + 4) % 9);
+            }
+            CHECK(sudoku_geom_jigsaw(map, &tb) && canon_hash_geom(&tb, giv) == h);
+        } else if (v == VAR_KILLER || v == VAR_PRODUCT) {   /* a cage's sum or product changed: another */
+            tb = board;
+            if (v == VAR_PRODUCT) {
+                tb.cage_prod[0] = (uint16_t)(tb.cage_prod[0] + 256);   /* (its high byte) */
+            } else {
+                tb.cage_sum[0]++;
+            }
+            CHECKF(canon_hash_geom(&tb, giv) != h, "%s: a clue changed, the same hash", variant_name(v));
+        } else {                                    /* a cell taken out of its cage (or region): another */
+            tb = board;
+            for (int c = 0; c < 81; c++) {
+                if (tb.cage_of[c] != CAGE_NONE) {
+                    tb.cage_of[c] = CAGE_NONE;
+                    break;
+                }
+            }
+            CHECKF(canon_hash_geom(&tb, giv) != h, "%s: a cell out of its cage, the same hash", variant_name(v));
+        }
+        CHECK(canon_hash_geom(sudoku_geom(VAR_CLASSIC), giv) != h);   /* (the givens alone, as Classic: another) */
+    }
     int dup = 0;                                     /* the built-in puzzles: how many are turned copies */
     static uint64_t seen[PUZZLE_COUNT];
     for (int i = 0; i < PUZZLE_COUNT; i++) {

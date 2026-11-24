@@ -20,8 +20,9 @@ uint64_t sdb_puzzle_canon(int puzzle)
     }
     sqlite3_stmt *st;
     uint64_t h = 0;
-    if (sqlite3_prepare_v2(sdb_db(), "SELECT givens, variant FROM generated WHERE id = ?1", -1, &st, NULL) ==
-            SQLITE_OK) {
+    static sudoku_geom_t *geo;                      /* a Jigsaw's or Killer's board, from its layout (PSRAM) */
+    if (sqlite3_prepare_v2(sdb_db(), "SELECT givens, variant, regions, cages FROM generated WHERE id = ?1", -1, &st,
+                           NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, puzzle - PUZZLE_GEN_BASE);
         if (sqlite3_step(st) == SQLITE_ROW) {
             const char *g = (const char *)sqlite3_column_text(st, 0);
@@ -30,7 +31,27 @@ uint64_t sdb_puzzle_canon(int puzzle)
                 for (int i = 0; i < 81; i++) {
                     givens[i] = g[i] >= '1' && g[i] <= '9' ? (uint8_t)(g[i] - '0') : 0;
                 }
-                h = canon_hash(variant, givens);
+                if (!is_canon_layout(variant)) {
+                    h = canon_hash(variant, givens);
+                } else if (geo || (geo = malloc(sizeof(*geo)))) {   /* Jigsaw, the cages: with their regions, cages */
+                    const char *reg = (const char *)sqlite3_column_text(st, 2);
+                    const char *cages = (const char *)sqlite3_column_text(st, 3);
+                    bool ok = false;
+                    if (variant == VAR_JIGSAW && reg && strlen(reg) == 81) {
+                        uint8_t map[81];
+                        for (int i = 0; i < 81; i++) {
+                            map[i] = (uint8_t)(reg[i] - '0');
+                        }
+                        ok = sudoku_geom_jigsaw(map, geo);
+                    } else if ((variant == VAR_KILLER || variant == VAR_SUMLESS) && cages) {
+                        ok = sudoku_geom_killer_text(cages, geo) && geo->variant == variant;
+                    } else if (variant == VAR_REGIONS && cages) {
+                        ok = sudoku_geom_regions_text(cages, geo);
+                    } else if (variant == VAR_PRODUCT && cages) {
+                        ok = sudoku_geom_product_text(cages, geo);
+                    }
+                    h = ok ? canon_hash_geom(geo, givens) : 0;
+                }
             }
         }
         sqlite3_finalize(st);

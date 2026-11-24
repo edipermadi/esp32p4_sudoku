@@ -6,6 +6,8 @@
  */
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
+#include "generator.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,7 +30,12 @@ extern "C" {
  * board is turned upside down; the rest any way), which only turns the ways that keep up up or down (its
  * rule is about the cells above and below); and 159 Sudoku, whose columns 1, 5 and 9 hold column numbers: no
  * quarter turns, and no renumbering but every digit d to 10 - d when the columns are mirrored (column c
- * becomes 10 - c, and the 1 and the 9 swap places with them). Plain C: the PC tests build it.
+ * becomes 10 - c, and the 1 and the 9 swap places with them). Two more come with their layout
+ * (canon_hash_geom()): Jigsaw (its regions turned with the givens, relabelled in reading order; digits any
+ * way), Killer (its cages and their sums turned with the givens, relabelled in reading order; digits as
+ * they are: the sums need them), Product Killer (the same with its products), and Sumless Killer and Extra
+ * Regions (their cages or shaded regions turned the same way; no sums, so digits any way). Plain C: the PC
+ * tests build it.
  * @{
  */
 
@@ -74,9 +81,26 @@ int canon_cell(int t, int n, int cell);
  * or renumbered (as far as the variant allows: canon_digits()), and (almost surely) different otherwise.
  * @param[in] variant  sudoku_variant_t
  * @param[in] givens  the givens, 0 = empty
- * @return the hash, never 0; 0 if the variant has none
+ * @return the hash, never 0; 0 if the variant has none, or needs its layout (is_canon_layout(): canon_hash_geom())
  */
 uint64_t canon_hash(int variant, const uint8_t givens[81]);
+/**
+ * @brief Does a variant's hash need the puzzle's layout (Jigsaw's regions; the cages of Killer, Sumless Killer,
+ * Product Killer and Extra Regions)?
+ * @param[in] variant  sudoku_variant_t
+ * @return true: hash it with canon_hash_geom()
+ */
+bool is_canon_layout(int variant);
+/**
+ * @brief A puzzle's canonical hash with its layout: canon_hash() for the variants without one; for Jigsaw,
+ * Killer, Sumless Killer, Product Killer and Extra Regions, the smallest of the 8 turned and mirrored copies of the
+ * givens and the layout together (regions or cages numbered in reading order, the sums or products in that order),
+ * so the same puzzle turned, mirrored or (but for Killer and Product Killer) renumbered hashes the same.
+ * @param[in] G  the puzzle's board (its variant, regions and cages)
+ * @param[in] givens  the givens, 0 = empty
+ * @return the hash, never 0; 0 if the variant has none
+ */
+uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81]);
 
 /** @} */
 
