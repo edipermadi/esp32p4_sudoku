@@ -273,6 +273,9 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_SKYSUM && buf && sudoku_geom_skysum_text(marks, buf)) {
         return buf;    /* (and Sum Skyscrapers') */
     }
+    if (v == VAR_B9 && buf && sudoku_geom_b9_text(marks, buf)) {
+        return buf;    /* (and Before Nine's) */
+    }
     if (v == VAR_FRAME && buf && sudoku_geom_frame_text(marks, buf)) {
         return buf;    /* (and Frame's) */
     }

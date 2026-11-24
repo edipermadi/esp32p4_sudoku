@@ -181,6 +181,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_nroom_text(p->marks, out);          /* (and Numbered Rooms') */
     case VAR_SKYSUM:
         return sudoku_geom_skysum_text(p->marks, out);         /* (and Sum Skyscrapers') */
+    case VAR_B9:
+        return sudoku_geom_b9_text(p->marks, out);             /* (and Before Nine's) */
     case VAR_FRAME:
         return sudoku_geom_frame_text(p->marks, out);          /* (and Frame's) */
     case VAR_OUTSIDE:

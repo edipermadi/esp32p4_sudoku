@@ -539,6 +539,36 @@ bool gen_skysum_logic(logic_t *L)
 }
 
 /* (documented in gen_internal.h) */
+bool gen_b9_logic(logic_t *L)
+{
+    return sky_orders_logic(L, L->G->b9_sum, is_gen_b9_line_ok, TECH_B9);
+}
+
+/* (documented in gen_internal.h) */
+bool gen_psym_logic(logic_t *L)
+{
+    for (int c = 0; c < 81; c++) {
+        if (L->v[c] || c == 40) {
+            continue;
+        }
+        const int p = 80 - c;
+        const uint16_t them = L->v[p] ? (uint16_t)(1u << L->v[p]) : L->cand[p];
+        uint16_t keep = 0;
+        for (int d = 1; d <= 9; d++) {
+            if ((L->cand[c] >> d & 1) && (them >> (10 - d) & 1)) {
+                keep |= (uint16_t)(1u << d);
+            }
+        }
+        if (L->cand[c] & ~keep) {
+            eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+            trace(TECH_PSYM, p, -1, keep, 0, c, -1);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* (documented in gen_internal.h) */
 bool gen_psky_logic(logic_t *L)
 {
     return sky_orders_logic(L, L->G->psky_clue, is_gen_psky_line_ok, TECH_PSKY);
@@ -1302,6 +1332,12 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->nmx && gen_mathrax_logic(&L)) {
             continue;    /* Mathrax: the circles */
         }
+        if (G->psym && gen_psym_logic(&L)) {
+            continue;    /* Point Symmetry: the mirrors */
+        }
+        if (G->b9 && gen_b9_logic(&L)) {
+            continue;    /* Before Nine: the clues */
+        }
         if (G->magic && gen_magic_logic(&L)) {
             continue;
         }
@@ -1362,7 +1398,10 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->antidiag || G->magic) {
         return 30;
     }
-    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum ||
+    if (G->psym) {
+        return 30;
+    }
+    if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum || G->b9 ||
             G->psky) {
         return 28;
     }

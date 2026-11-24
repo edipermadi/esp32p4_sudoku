@@ -58,7 +58,7 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "10-lines": "10", "girandola": "Girandola", "159-sudoku": "159", "product-killer": "Product",
          "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd",
          "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average",
-         "dutch-flatmates": "Dutch F", "mathrax": "Mathrax"}
+         "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -178,6 +178,10 @@ def rule_words(d, vals, c, v, r):
                 return ("the first three digits of %s %s from %s, so its %s cell is %d to %d" % (
                     name, "rise" if up else "fall", side, ("first", "second", "third")[at], k + 1, k + 7))
     if rule == "range":
+        if d.get("psym") and c == 40:                       # Point Symmetry: the centre is its own mirror
+            return "it's the centre, its own mirror: only 5 + 5 makes 10"
+        if d.get("b9") and v == 9:                          # Before Nine: a clue says something comes before the 9
+            return "it's the first cell after a clue: a 9 first would make the clue 0"
         if d.get("sky"):                                    # Skyscraper: the clue keeps it below a height
             if r["lo"] == r["hi"]:
                 return "a clue of its row or column makes it %s (see the rules above)" % a_n(r["lo"])
@@ -693,6 +697,31 @@ def rule_words(d, vals, c, v, r):
             if len(have) >= 3 and v not in have:
                 return "its long diagonal holds %s already, three different digits at most" % listing(map(str, have))
         return "a long diagonal can't take a fourth different digit"
+    if rule == "psym":                                      # Point Symmetry: its mirror through the centre
+        if w:
+            return "its mirror through the centre, %s, is %d: a %d there wouldn't make 10" % (at, w, v)
+        return "its mirror through the centre, %s, can't be %d, which a %d would need" % (at, 10 - v, v)
+    if rule == "b9":                                        # Before Nine: the digits before the 9 add up to the clue
+        lu = r["line"]
+        name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
+        clue = d["b9"][lu]
+        line = [lu * 9 + k for k in range(9)] if lu < 9 else [k * 9 + lu - 9 for k in range(9)]
+        x = [vals[o] for o in line]
+        x[line.index(c)] = v
+        side = "the left" if lu < 9 else "the top"
+        before = []
+        for k in range(9):
+            if x[k] == 9 or not x[k]:
+                break
+            before.append(x[k])
+        if 9 in x and len(before) == x.index(9):            # the 9 and every cell before it filled
+            return "from %s of %s, the digits before the 9 would be %s, adding up to %d, not its clue %d" % (
+                side, name, listing(map(str, before)) or "none", sum(before), clue)
+        if sum(before) > clue:
+            return "from %s of %s, %s would already add up to %d before the 9, more than its clue %d" % (
+                side, name, listing(map(str, before)), sum(before), clue)
+        return "from %s of %s, %s there leaves no way for the digits before the 9 to add up to its clue %d" % (
+            side, name, a_n(v), clue)
     if rule == "skysum":
         lu = r["line"]
         name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
@@ -824,7 +853,8 @@ def step_text(d, vals, s):
 
 def make_drawer(d, fonts):
     n, band = d["n"], BAND if (d["sandwich"] or d.get("sky") or d.get("lk") or d.get("xsum") or d.get("frame")
-                              or d.get("outside") or d.get("rossini") or d.get("nroom") or d.get("skysum") or d.get("psky")) else 0
+                              or d.get("outside") or d.get("rossini") or d.get("nroom") or d.get("skysum") or d.get("psky")
+                              or d.get("b9")) else 0
     big, small, tiny = fonts
     size = n * CELL + 2 * PAD + band
 
@@ -1085,7 +1115,8 @@ def make_drawer(d, fonts):
             g.line([(ax, ay), (ax + 6 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 2 * dx, ay + 6 * dy)], fill=SUM_FG, width=2)
             g.line([(ax + 6 * dx, ay + 6 * dy), (ax + 6 * dx, ay + 2 * dy)], fill=SUM_FG, width=2)
-        clues = d.get("sky") or d.get("xsum") or d.get("frame") or d.get("nroom") or d.get("skysum") or d.get("psky")
+        clues = (d.get("sky") or d.get("xsum") or d.get("frame") or d.get("nroom") or d.get("skysum") or d.get("psky")
+                 or d.get("b9"))
         if clues:                                           # Skyscraper, X-Sums, Frame, ...: the clues (0: none drawn)
             for i in range(18):
                 if not clues[i]:

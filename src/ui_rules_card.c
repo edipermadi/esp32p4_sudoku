@@ -136,6 +136,8 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_AVG] = {4, 1, 0, 0, "5384", NULL, NULL, NULL, NULL, NULL, PIC_AVG, NULL, -1, 0, NULL, NULL, LINE_AVG},
     [VAR_FLATMATES] = {.w = 2, .h = 3, .digits = "1." "55" ".9", .left_clue = -1},
     [VAR_MATHRAX] = {.w = 2, .h = 2, .digits = "24" "57", .left_clue = -1, .mathrax = "9+"},
+    [VAR_PSYM] = {.w = 3, .h = 3, .digits = "2.7" ".5." "3.8", .tint = "000" "010" "000", .left_clue = -1},
+    [VAR_B9] = {.w = 6, .h = 1, .digits = "352914", .left_clue = 10},
     [VAR_PILL] = {5, 1, 0, 0, "12345", NULL, NULL, NULL, NULL, NULL, PIC_PILL, NULL, -1, 0, NULL, NULL, LINE_PILL},
     [VAR_PSKY] = {5, 1, 0, 0, "25198", NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2, 0, NULL, NULL, 0, 0},
     [VAR_REGIONS] = {4, 2, 2, 2, "..8." "....", "0110" "0100", NULL, NULL, NULL, NULL, NULL, NULL, -1},
@@ -274,6 +276,10 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_AVG] = "Classic rules, and on each teal line, the digit in the circle is the average of the line's other "
     "digits: they add up to it times how many they are, 3 + 8 + 4 = 3 x 5. Digits may repeat along a line where the "
     "rules allow.",
+    [VAR_PSYM] = "Classic rules, and two cells mirrored through the centre (turned half a turn round it) add up to "
+    "10: here 2 and 8, 7 and 3. So the tinted centre is always 5, and every digit gives its mirror away.",
+    [VAR_B9] = "Classic rules, and a clue left of a row or above a column is the sum of the digits between it and "
+    "the 9: here 3 + 5 + 2 = 10. A line without a clue says nothing (its 9 may even be first).",
     [VAR_FLATMATES] = "Classic rules, and every 5 has a 1 right above it or a 9 right below it, or both: here the left "
     "5 has its 1, the right one its 9. So a 5 in the top row needs a 9 under it, and one in the bottom row a 1 over it.",
     [VAR_MATHRAX] = "Classic rules, and a circle where four cells meet holds a clue that both diagonal pairs of those "

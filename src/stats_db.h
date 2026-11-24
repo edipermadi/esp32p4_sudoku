@@ -170,6 +170,8 @@ typedef enum {
     KIND_AVG,                            /**< Average Lines */
     KIND_FLATMATES,                      /**< Dutch Flatmates */
     KIND_MATHRAX,                        /**< Mathrax */
+    KIND_PSYM,                           /**< Point Symmetry */
+    KIND_B9,                             /**< Before Nine */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**
@@ -1042,7 +1044,7 @@ typedef enum {
     REC_DAYS,                            /**< days */
     REC_MINUTES                          /**< minutes */
 } rec_unit_t;
-#define STATS_MAX_RECORDS 72             /**< records at most */
+#define STATS_MAX_RECORDS 96             /**< records at most (each holder is in PSRAM or static: room for more variants) */
 /** @brief A personal record. */
 typedef struct {
     const char *title;                   /**< static string */

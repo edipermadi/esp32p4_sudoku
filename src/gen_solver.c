@@ -738,6 +738,8 @@ typedef struct {
 #define R_MAGIC   (1u << 17)            /**< Magic Square */
 #define R_FLATMATES (1u << 18)          /**< Dutch Flatmates */
 #define R_MATHRAX (1u << 19)            /**< Mathrax */
+#define R_PSYM    (1u << 20)            /**< Point Symmetry */
+#define R_B9      (1u << 21)            /**< Before Nine */
 /** @} */
 
 /**
@@ -1116,6 +1118,61 @@ bool is_gen_skysum_line_ok(const uint8_t x[9], int c)
         more += d;
     }
     return sum + 9 <= c && c <= sum + more;         /* (the 9, still to come, is seen) */
+}
+
+/**
+ * @brief Before Nine: can e empty cells before the 9, with the filled ones adding up to sum so far, still make c?
+ *        They take digits 1-8 the line doesn't have yet: between the e smallest and the e largest of those.
+ * @param[in] sum  the filled cells before the 9, added up
+ * @param[in] e  the empty cells before it
+ * @param[in] c  the clue
+ * @param[in] have  the digits on the line (bit d)
+ * @return true: still possible
+ */
+static bool is_b9_reachable(int sum, int e, int c, uint16_t have)
+{
+    int lo = 0, hi = 0, n = 0;
+    for (int d = 1; d <= 8 && n < e; d++) {         /* the e smallest missing */
+        if (!(have >> d & 1)) {
+            lo += d;
+            n++;
+        }
+    }
+    if (n < e) {
+        return false;
+    }
+    n = 0;
+    for (int d = 8; d >= 1 && n < e; d--) {         /* the e largest */
+        if (!(have >> d & 1)) {
+            hi += d;
+            n++;
+        }
+    }
+    return sum + lo <= c && c <= sum + hi;
+}
+
+/* (documented in gen_internal.h) */
+bool is_gen_b9_line_ok(const uint8_t x[9], int c)
+{
+    uint16_t have = 0;
+    for (int k = 0; k < 9; k++) {
+        have |= x[k] ? (uint16_t)(1u << x[k]) : 0;
+    }
+    int sum = 0, e = 0;
+    for (int k = 0; k < 9; k++) {                   /* each place the 9 is, or could still be */
+        if (x[k] == 9) {
+            return is_b9_reachable(sum, e, c, have);
+        }
+        if (!x[k]) {
+            if (!(have >> 9 & 1) && is_b9_reachable(sum, e, c, have)) {
+                return true;                        /* (the 9 here would do) */
+            }
+            e++;
+        } else if ((sum += x[k]) > c) {
+            return false;                           /* already over: a later 9 only adds */
+        }
+    }
+    return false;
 }
 
 /**
@@ -1517,6 +1574,42 @@ static uint16_t grid_free(const grid_t *g, int i)
         free &= m;
     }
     WHY(FIT_MATHRAX);
+    if ((rules & R_PSYM) && free && i != 40) {      /* Point Symmetry: its mirror through the centre makes 10 with it */
+        const int w = g->v[80 - i];
+        if (w) {
+            free &= (uint16_t)(1u << (10 - w));
+        } else {
+            uint16_t m = 0;
+            for (int d = 1; d <= 9; d++) {
+                if ((free >> d & 1) && is_cell_open(g, 80 - i, 10 - d)) {
+                    m |= (uint16_t)(1u << d);
+                }
+            }
+            free &= m;
+        }
+    }
+    WHY(FIT_PSYM);
+    for (int line = 0; (rules & R_B9) && free && line < 2; line++) {   /* Before Nine: its row's, column's clue */
+        int lu = line ? 9 + i % 9 : i / 9, c = G->b9_sum[lu], cells[9];
+        if (!c) {
+            continue;
+        }
+        line_cells(lu, cells);
+        uint8_t x[9];
+        for (int k = 0; k < 9; k++) {
+            x[k] = g->v[cells[k]];
+        }
+        const int at = line ? i / 9 : i % 9;
+        for (int d = 1; d <= 9; d++) {
+            if (free >> d & 1) {
+                x[at] = (uint8_t)d;
+                if (!is_gen_b9_line_ok(x, c)) {
+                    free &= (uint16_t)~(1u << d);
+                }
+            }
+        }
+        WHY(line ? FIT_B9_COL : FIT_B9_ROW);
+    }
     for (int line = 0; (rules & R_FIRST3) && free && line < 2; line++) {
         int lu = line ? 9 + i % 9 : i / 9, at = line ? i / 9 : i % 9;   /* its row's, its column's clue */
         if (at < 3 && is_gen_first3_clued(G, lu)) {
@@ -1697,7 +1790,8 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->nlk ? R_LK : 0) | (G->sandwich ? R_SANDWICH : 0) | (G->nthermos ? R_LINE : 0) |
                (G->ncages ? R_CAGE : 0) | (G->nrooms ? R_NROOM : 0) | (G->skysum ? R_SKYSUM : 0) |
                (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0) |
-               (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0);
+               (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0) |
+               (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

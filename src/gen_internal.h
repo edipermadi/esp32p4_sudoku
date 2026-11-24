@@ -179,6 +179,16 @@ uint16_t gen_nroom_allow(const sudoku_geom_t *G, int lu, int at, const uint8_t *
  */
 bool is_gen_skysum_line_ok(const uint8_t x[9], int c);
 /**
+ * @brief Before Nine: can a line's digits so far (in order from the clue, 0 = empty) still keep its clue
+ *        (the digits before the 9 add up to c)? Exact for a full line (or one whose 9 and the cells before
+ *        it are filled); otherwise bounds: the empty cells before the 9 take the smallest or largest digits
+ *        missing from the line.
+ * @param[in] x  the line's digits
+ * @param[in] c  the clue
+ * @return true: still possible
+ */
+bool is_gen_b9_line_ok(const uint8_t x[9], int c);
+/**
  * @brief The digits the cell at a place of a row or column may hold, by its clue about the first three
  *        cells (Frame: their sum; Outside Sudoku: digits among them; Rossini: rising, falling or neither).
  * @param[in] G          the board
@@ -300,6 +310,18 @@ bool gen_nroom_logic(logic_t *L);
  * @return true if it changed anything
  */
 bool gen_skysum_logic(logic_t *L);
+/**
+ * @brief A technique: Before Nine: what the clues leave, candidates taken out.
+ * @param[in,out] L          the state
+ * @return true if it changed anything
+ */
+bool gen_b9_logic(logic_t *L);
+/**
+ * @brief Point Symmetry: a cell keeps only the digits that 10 minus some candidate of its mirror is
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_psym_logic(logic_t *L);
 /**
  * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
  *        candidates taken out.
@@ -511,6 +533,14 @@ bool gen_geom_nroom(const uint8_t clues[18], sudoku_geom_t *out);
  * @return false if a clue can't be met
  */
 bool gen_geom_skysum(const uint8_t clues[18], sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Before Nine, a classic board with clues beside the rows and
+ *        columns.
+ * @param[in] clues      the rows' clues, then the columns' (0: none; else 1..36)
+ * @param[out] out        gets the board
+ * @return false if a clue isn't one
+ */
+bool gen_geom_b9(const uint8_t clues[18], sudoku_geom_t *out);
 /**
  * @brief Builds an Odd/Even Skyscrapers board from its 18 clues (0 none; 1..5 odd; PSKY_EVEN | 0..4 even)
  * @param[in] clues  the clues

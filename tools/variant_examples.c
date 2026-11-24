@@ -494,6 +494,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_SKYSUM:
         sudoku_skysum_text(g, marks, len);
         break;
+    case VAR_B9:
+        sudoku_b9_text(g, marks, len);
+        break;
     case VAR_PSKY:
         sudoku_psky_text(g, marks, len);
         break;
@@ -697,6 +700,13 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_SKYSUM_COL:
         printf(", \"rule\": \"skysum\", \"line\": %d", why == FIT_SKYSUM_ROW ? r : 9 + q);
         return;
+    case FIT_B9_ROW:
+    case FIT_B9_COL:
+        printf(", \"rule\": \"b9\", \"line\": %d", why == FIT_B9_ROW ? r : 9 + q);
+        return;
+    case FIT_PSYM:
+        printf(", \"rule\": \"psym\", \"with\": %d", 80 - c);
+        return;
     case FIT_LK:
         for (int s = 0; s < 2; s++) {               /* the diagonal whose sum says no */
             int k = G->lk_of[c][s], sum = 0, empty = 0;
@@ -824,6 +834,16 @@ static void layout_json(const sudoku_geom_t *G)
         printf("[");
         for (int lu = 0; lu < 18; lu++) {
             printf("%s%d", lu ? "," : "", G->psky_clue[lu]);
+        }
+        printf("]");
+    } else {
+        printf("null");
+    }
+    printf(",\n \"psym\": %s, \"b9\": ", G->psym ? "true" : "false");
+    if (G->b9) {
+        printf("[");
+        for (int lu = 0; lu < 18; lu++) {
+            printf("%s%d", lu ? "," : "", G->b9_sum[lu]);
         }
         printf("]");
     } else {

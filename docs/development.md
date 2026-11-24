@@ -143,8 +143,10 @@ Lockout Lines, Sumless Killer and Double Arrow were added on 2026-11-23 too, mea
 | Average Lines | 12 / 28 (30.1) | 72 / 82 (18.3) | 141 / 232 (16.5) | 773 / 994 (13.8) |
 | Dutch Flatmates | 157 / 438 (37.3) | 337 / 642 (22.6) | 808 / 2505 (22) | 644 / 1654 (20.6) |
 | Mathrax | 9 / 15 (29.7) | 92 / 119 (10) | 195 / 436 (6.7) | 1089 / 2256 (4.8) |
+| Point Symmetry | 21 / 47 (32.8) | 128 / 162 (12.2) | 827 / 1301 (12.4) | 121 / 214 (12.5) |
+| Before Nine | 29 / 73 (29.3) | 143 / 198 (22.7) | 584 / 1198 (24.2) | 943 / 2103 (14.5) |
 
-Dutch Flatmates and Mathrax were added on 2026-11-24, measured the same way (`genbench 60`, `genbench 61`: "dutch" matches Dutch Whispers too); all 80 came out at the level asked for. Mathrax's circles do most of the work: Hard and Expert keep only a few givens.
+Dutch Flatmates and Mathrax were added on 2026-11-24, measured the same way (`genbench 60`, `genbench 61`: "dutch" matches Dutch Whispers too); all 80 came out at the level asked for. Mathrax's circles do most of the work: Hard and Expert keep only a few givens. Point Symmetry and Before Nine came the same day (`genbench 62`, `genbench 63`), all 80 on level. Point Symmetry is dug a cell at a time rather than in mirrored pairs (dug in pairs, its rule only ever linked two empty cells, and two thirds of its Medium and Hard puzzles were no harder without it); each given then hands over its mirror, so it keeps about 12 givens.
 
 159 Sudoku, Product Killer and Extra Regions (2026-11-23), measured the same way; all on level. Product Killer Hard is slow because few cage layouts come out exactly Hard (about 19 tries a puzzle): products give a lot away. Its cage rule looks every "k different digits multiplying to p" up in a sorted list of the 512 sets of digits (`s_prod_sets`), one search for all nine digits: asked one digit at a time, by a small search, it took 1.7 s on the PC instead of 0.2 s.
 

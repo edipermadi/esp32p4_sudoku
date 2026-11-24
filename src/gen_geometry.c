@@ -27,7 +27,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Diagonal Consecutive", "10 Lines", "Girandola",
                                                      "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal",
                                                      "Pill Arrows", "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square",
-                                                     "Average Lines", "Dutch Flatmates", "Mathrax"
+                                                     "Average Lines", "Dutch Flatmates", "Mathrax",
+                                                     "Point Symmetry", "Before Nine"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -142,6 +143,24 @@ int sudoku_skysum_of(const uint8_t vals[81], int lu)
         }
     }
     return sum;
+}
+
+/* (documented in generator.h) */
+int sudoku_b9_of(const uint8_t vals[81], int lu)
+{
+    int cells[9], sum = 0;
+    line_cells(lu, cells);
+    for (int k = 0; k < 9; k++) {
+        int x = vals[cells[k]];
+        if (!x) {
+            return -1;
+        }
+        if (x == 9) {
+            return sum;
+        }
+        sum += x;
+    }
+    return -1;                                      /* (no 9: not a Sudoku line) */
 }
 
 /* ---------------------------------------------------------------- geometry */
@@ -331,6 +350,10 @@ void sudoku_geom_init(void)
             g[VAR_MAGIC].allow[r * 9 + q] = mid ? (uint16_t)(1u << 5) : corner ? (uint16_t)0x154 : (uint16_t)0x28A;
         }
     }
+    g[VAR_PSYM] = g[VAR_CLASSIC];                   /* cells mirrored through the centre add up to 10 */
+    g[VAR_PSYM].variant = VAR_PSYM;
+    g[VAR_PSYM].psym = true;
+    g[VAR_PSYM].allow[40] = (uint16_t)(1u << 5);    /* (the centre is its own mirror: 5) */
     g[VAR_FLATMATES] = g[VAR_CLASSIC];              /* every 5 with a 1 right above it or a 9 right below */
     g[VAR_FLATMATES].variant = VAR_FLATMATES;
     g[VAR_FLATMATES].flatmates = true;
@@ -360,7 +383,7 @@ void sudoku_geom_init(void)
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
                                   VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY,
-                                  VAR_AVG, VAR_MATHRAX
+                                  VAR_AVG, VAR_MATHRAX, VAR_B9
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -385,7 +408,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_NROOMS || variant == VAR_SKYSUM || variant == VAR_LOCKOUT || variant == VAR_SUMLESS ||
             variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
             variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY ||
-            variant == VAR_AVG || variant == VAR_MATHRAX) {
+            variant == VAR_AVG || variant == VAR_MATHRAX || variant == VAR_B9) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -710,6 +733,27 @@ bool gen_geom_nroom(const uint8_t clues[18], sudoku_geom_t *out)
         /* the first digit X points at the clue's cell: X = 1 only for a clue of 1 (the first cell is it),
          * and never the clue itself otherwise (the X-th cell holds it, not the first) */
         out->allow[cells[0]] &= c == 1 ? (uint16_t)0x3FE : (uint16_t)~((1u << 1) | (1u << c));
+    }
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_b9(const uint8_t clues[18], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_B9;
+    out->b9 = true;
+    for (int lu = 0; lu < 18; lu++) {
+        int c = clues[lu], cells[9];
+        if (c > 36) {
+            return false;                           /* (at most the eight digits other than 9: 36) */
+        }
+        out->b9_sum[lu] = (uint8_t)c;
+        if (c) {                                    /* a clue: something comes before the 9 */
+            line_cells(lu, cells);
+            out->allow[cells[0]] &= (uint16_t)~(1u << 9);
+        }
     }
     return true;
 }

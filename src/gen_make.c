@@ -23,12 +23,16 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
 {
     memcpy(out, full, 81);
     const int n = G->n;
-    uint8_t order[41];                  /* one cell of each pair (the first half, plus the centre) */
+    uint8_t order[81];                  /* one cell of each pair (the first half, plus the centre) */
     int no = 0;
+    /* Point Symmetry: cells one at a time, not in mirrored pairs: a pair is then often one given and one empty
+     * cell, which its rule fills (taken in pairs, the rule only ever links two empty cells, and most of its
+     * puzzles below Expert needed it no more than Classic's) */
+    const bool single = G->psym;
     for (int k = 0; k < G->ncells; k++) {
         int c = G->cells[k], r = c / 9, col = c % 9;
         int m = (n - 1 - r) * 9 + (n - 1 - col);
-        if (c <= m) {
+        if (single || c <= m) {
             order[no++] = (uint8_t)c;
         }
     }
@@ -60,7 +64,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
                                 : G->variant == VAR_BETWEEN ? 1500 : 6000;   /* (Between: its counts are slow, cut them short) */
     for (int k = 0; k < no && clues > stop; k++) {
         sudoku_gen_yield();
-        int a = order[k], b = (n - 1 - a / 9) * 9 + (n - 1 - a % 9);
+        int a = order[k], b = single ? a : (n - 1 - a / 9) * 9 + (n - 1 - a % 9);
         uint8_t va = out[a], vb = out[b];
         out[a] = out[b] = 0;
         /* (marks and circles: when the logic alone solves it within max_tier, it has one
@@ -178,10 +182,10 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool fort = variant == VAR_FORTRESS, mrx = variant == VAR_MATHRAX;
-    const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM;
+    const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM, b9 = variant == VAR_B9;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
                      pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky ||
-                     mrx;
+                     mrx || b9;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -395,6 +399,17 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 clues[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_xsum_of(full, lu) : 0;
             }
             gen_geom_xsum(clues, jig);
+        } else if (b9) {                            /* a grid, then some of its 18 clues (none where the 9 is first) */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t clues[18];
+            int keep = level >= GEN_HARD ? 60 : 75;     /* % of the lines with a clue */
+            for (int lu = 0; lu < 18; lu++) {
+                const int c = sudoku_b9_of(full, lu);
+                clues[lu] = (int)(rnd(&rng) % 100) < keep && c > 0 ? (uint8_t)c : 0;
+            }
+            if (!gen_geom_b9(clues, jig)) {
+                continue;
+            }
         } else if (nroom || skysum) {               /* a grid, then some of its 18 clues */
             if (!gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0)) {
                 continue;
@@ -530,7 +545,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             }
             gen_geom_sandwich(sums, jig);
         } else if (variant == VAR_KNIGHT || variant == VAR_KING || variant == VAR_NONCONSEC || variant == VAR_DIAGNC ||
-                   variant == VAR_ARGYLE || variant == VAR_CHESS || variant == VAR_MAGIC || variant == VAR_FLATMATES) {
+                   variant == VAR_ARGYLE || variant == VAR_CHESS || variant == VAR_MAGIC || variant == VAR_FLATMATES ||
+                   variant == VAR_PSYM) {
             /* not every fill works out quickly: try again */
             if (!gen_random_full_grid(G, full, &rng, 20000)) {
                 continue;

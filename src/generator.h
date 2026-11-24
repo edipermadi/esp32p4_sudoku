@@ -159,6 +159,10 @@
  *   VAR_MATHRAX  Mathrax: Classic rules, and a circle where four cells meet gives a sum,
  *                difference, product or quotient that both diagonal pairs of those cells
  *                make, or E / O: all four even / odd
+ *   VAR_PSYM     Point Symmetry: Classic rules, and two cells mirrored through the centre
+ *                add up to 10 (so the centre is 5)
+ *   VAR_B9       Before Nine: Classic rules, and a clue left of a row or above a column
+ *                is the sum of the digits between it and the 9
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -278,6 +282,8 @@ typedef enum {
     VAR_AVG,                            /**< Average Lines */
     VAR_FLATMATES,                      /**< Dutch Flatmates */
     VAR_MATHRAX,                        /**< Mathrax */
+    VAR_PSYM,                           /**< Point Symmetry */
+    VAR_B9,                             /**< Before Nine */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -294,7 +300,7 @@ typedef enum {
  *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola",
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
- *         "Mathrax"
+ *         "Mathrax", "Point Symmetry", "Before Nine"
  */
 const char *variant_name(int variant);
 
@@ -452,6 +458,10 @@ typedef struct {
     bool antidiag;                      /**< Anti-Diagonal: each long diagonal holds at most three different digits */
     bool magic;                         /**< Magic Square: the centre box's rows, columns and diagonals add up to 15 */
     bool flatmates;                     /**< Dutch Flatmates: every 5 has a 1 right above it or a 9 right below it */
+    bool psym;                          /**< Point Symmetry: cells i and 80 - i add up to 10 (the centre: allow 5) */
+    bool b9;                            /**< Before Nine: the clues are rules */
+    uint8_t b9_sum[18];                 /**< per row (0..8, from the left) and column (9..17, from the top), the sum of
+                                         *   the digits before the 9, 0 = no clue */
     bool psky;                          /**< Odd/Even Skyscrapers: the clues are rules */
     uint8_t psky_clue[18];              /**< per row and column (as sky[]): 0 no clue; 1..5 the odd buildings seen;
                                          *   PSKY_EVEN | 0..4 the even ones */
@@ -798,6 +808,31 @@ bool sudoku_skysum_text(const sudoku_geom_t *g, char *buf, int len);
  */
 int sudoku_skysum_of(const uint8_t vals[81], int lu);
 /**
+ * @brief A Before Nine board from its clues as text: 18 numbers, 0 (no clue) or 1..36, the rows from the
+ * left top to bottom, then the columns from the top left to right, comma-separated (kept in marks, like
+ * Skyscraper's); sudoku_b9_text() writes it.
+ * @param[in] text  the clues
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_b9_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Before Nine board's clues as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_b9_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief Before Nine: the clue of a row or column with these digits in it (the sum of the digits from the
+ * clue's side up to the 9, without it).
+ * @param[in] vals  the cells
+ * @param[in] lu  the row (0..8, from the left) or column (9..17, from the top)
+ * @return the sum (0: the 9 is first), -1 if the 9 or a cell before it is empty
+ */
+int sudoku_b9_of(const uint8_t vals[81], int lu);
+/**
  * @brief An Odd/Even Skyscrapers board from its clues as text: 18 fields, comma-separated, rows from the left
  * then columns from the top: 0 no clue, 1..5 the odd buildings seen, e0..e4 the even ones (kept in marks);
  * sudoku_psky_text() writes it.
@@ -1082,7 +1117,8 @@ static inline int sudoku_thermo_step(const sudoku_geom_t *g, int t, int i)
 
 /**
  * @brief the cells drawn tinted: X diagonals, Hyper windows, the Asterisk, the Center Dot, the Girandola, 159
- * Sudoku's columns 1, 5 and 9, Extra Regions' regions, Anti-Diagonal's diagonals, Magic Square's box
+ * Sudoku's columns 1, 5 and 9, Extra Regions' regions, Anti-Diagonal's diagonals, Magic Square's box, Point
+ * Symmetry's centre
  * @param[in] g  the board
  * @param[in] cell  the cell
  * @return true if so
@@ -1093,7 +1129,7 @@ static inline bool is_sudoku_geom_tinted(const sudoku_geom_t *g, int cell)
            is_sudoku_geom_on_centerdot(g, cell) || is_sudoku_geom_on_girandola(g, cell) ||
            (g->idx159 && cell % 9 % 4 == 0) || (g->variant == VAR_REGIONS && g->cage_of[cell] != CAGE_NONE) ||
            (g->antidiag && (cell / 9 == cell % 9 || cell / 9 + cell % 9 == 8)) ||
-           (g->magic && cell / 9 / 3 == 1 && cell % 9 / 3 == 1);
+           (g->magic && cell / 9 / 3 == 1 && cell % 9 / 3 == 1) || (g->psym && cell == 40);
 }
 
 /* ---------------------------------------------------------------- generating */
@@ -1212,7 +1248,10 @@ enum {
     FIT_PSKY_COL,                       /**< Odd/Even Skyscrapers: the column's clue */
     FIT_MAGIC,                          /**< Magic Square: a row, column or diagonal of the centre box */
     FIT_FLATMATES,                      /**< Dutch Flatmates: a 5 without a 1 above or a 9 below */
-    FIT_MATHRAX                         /**< Mathrax: a circle's operation */
+    FIT_MATHRAX,                        /**< Mathrax: a circle's operation */
+    FIT_PSYM,                           /**< Point Symmetry: the cell mirrored through the centre */
+    FIT_B9_ROW,                         /**< Before Nine: the row's clue */
+    FIT_B9_COL                          /**< Before Nine: the column's clue */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1277,7 +1316,9 @@ typedef enum {
     TECH_PSKY,               /**< Odd/Even Skyscrapers: a clue */
     TECH_MAGIC,              /**< Magic Square: a line of the centre box */
     TECH_FLATMATES,          /**< Dutch Flatmates: a 5 and the cells above and below it */
-    TECH_MATHRAX             /**< Mathrax: a circle */
+    TECH_MATHRAX,            /**< Mathrax: a circle */
+    TECH_PSYM,               /**< Point Symmetry: a cell and its mirror through the centre */
+    TECH_B9                  /**< Before Nine: a clue */
 } tech_kind_t;
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {

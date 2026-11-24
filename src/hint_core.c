@@ -159,7 +159,8 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
         snprintf(tech, sizeof(tech), "In %s the digits between the 1 and the 9 add up to %d: that leaves the 1 and "
                  "the 9 fewer places there. ", u1, t->unit >= 0 && t->unit < 18 ? geo->sandwich_sum[t->unit] : 0);
     } else if (t->kind == TECH_SKY || t->kind == TECH_LK || t->kind == TECH_XSUM || t->kind == TECH_FRAME ||
-               t->kind == TECH_OUTSIDE || t->kind == TECH_ROSSINI || t->kind == TECH_NROOM || t->kind == TECH_SKYSUM) {
+               t->kind == TECH_OUTSIDE || t->kind == TECH_ROSSINI || t->kind == TECH_NROOM || t->kind == TECH_SKYSUM ||
+               t->kind == TECH_B9) {
         int k = t->unit, c = t->cell1 >= 0 ? t->cell1 : 0;
         char digs[24] = "";
         size_t len = 0;
@@ -186,6 +187,12 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             snprintf(tech, sizeof(tech), "The clue of %s is %d: the first digit from there, X, says the X-th cell holds "
                      "it. Of the first digits that can do that, only those leave row %d, column %d %s. ", u1,
                      geo->nroom[k], c / 9 + 1, c % 9 + 1, digs);
+        } else if (t->kind == TECH_B9 && k >= 0 && k < 18) {
+            mark_unit(geo, mark, k, 1);
+            unit_name(geo, k, u1, sizeof(u1));
+            snprintf(tech, sizeof(tech), "The clue of %s is %d: the digits from there up to the 9 add up to it. Of "
+                     "the ways its empty cells can be filled, only those leave row %d, column %d %s. ", u1,
+                     geo->b9_sum[k], c / 9 + 1, c % 9 + 1, digs);
         } else if (t->kind == TECH_SKYSUM && k >= 0 && k < 18) {
             mark_unit(geo, mark, k, 1);
             unit_name(geo, k, u1, sizeof(u1));
@@ -336,6 +343,19 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                      "can't be, so the cell %s it must be %d. ", u1, below ? 1 : 9, below ? "above it" : "below it",
                      below ? "below" : "above", below ? 9 : 1);
         }
+    } else if (t->kind == TECH_PSYM) {             /* Point Symmetry: the cell and its mirror */
+        const int c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : 0, p = 80 - c;
+        mark[c] = mark[p] = mark[40] = 1;
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        snprintf(u1, sizeof(u1), "row %d, column %d", p / 9 + 1, p % 9 + 1);
+        snprintf(tech, sizeof(tech), "Cells mirrored through the centre add up to 10. What %s, the mirror of row %d, "
+                 "column %d, can be leaves it only %s. ", u1, c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_MATHRAX && t->unit >= 0 && t->unit < geo->nmx) {   /* Mathrax: the circle's cells */
         const int q = t->unit, at = geo->mx_at[q], c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : at;
         mark[at] = mark[at + 1] = mark[at + 9] = mark[at + 10] = 1;

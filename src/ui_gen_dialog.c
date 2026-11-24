@@ -31,7 +31,7 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
         VAR_KIDS, VAR_MINI, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_REGIONS,
-        VAR_DISJOINT, VAR_JIGSAW, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
+        VAR_DISJOINT, VAR_JIGSAW, VAR_PSYM, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
     },
     {
         VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_MATHRAX, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
@@ -43,7 +43,7 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     },
     {
         VAR_KILLER, VAR_FRAME, VAR_OUTSIDE, VAR_SKY, VAR_LK, VAR_PRODUCT, VAR_SANDWICH, VAR_ROSSINI, VAR_XSUM,
-        VAR_PSKY, VAR_SKYSUM, VAR_NROOMS, VAR_SUMLESS, GEN_CAT_END
+        VAR_B9, VAR_PSKY, VAR_SKYSUM, VAR_NROOMS, VAR_SUMLESS, GEN_CAT_END
     },
 };
 /** @brief each variant's button text (shorter than variant_name() where four across need it) */
@@ -64,7 +64,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_159] = "159 Sudoku", [VAR_PRODUCT] = "Product", [VAR_REGIONS] = "Extra Regions",
     [VAR_ANTIDIAG] = "Anti-Diagonal", [VAR_PILL] = "Pill Arrow", [VAR_PSKY] = "Odd/Even Sky",
     [VAR_CHESS] = "Chess", [VAR_MAGIC] = "Magic Square", [VAR_AVG] = "Average", [VAR_FLATMATES] = "Flatmates",
-    [VAR_MATHRAX] = "Mathrax",
+    [VAR_MATHRAX] = "Mathrax", [VAR_PSYM] = "Point Sym.", [VAR_B9] = "Before Nine",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -124,6 +124,8 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_MAGIC] = "9x9, and the tinted centre box is a magic square: its lines add up to 15.",
     [VAR_AVG] = "9x9 with teal lines: the circled digit is the average of the line's other digits.",
     [VAR_ANTIDIAG] = "9x9, and each tinted long diagonal holds at most three different digits.",
+    [VAR_PSYM] = "9x9: two cells mirrored through the centre add up to 10 (the tinted centre is 5).",
+    [VAR_B9] = "9x9 with clues outside: the sum of the digits from there up to the 9.",
     [VAR_FLATMATES] = "9x9: every 5 has a 1 right above it or a 9 right below it (or both).",
     [VAR_MATHRAX] = "9x9 with circles: both diagonal pairs of the four cells make the clue (9+, 2-, 12x, 3/, E, O).",
     [VAR_PILL] = "9x9 with arrows: the two cells in a pill, read as a number, are the sum of the shaft.",

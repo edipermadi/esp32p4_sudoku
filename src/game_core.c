@@ -496,6 +496,32 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int c = 0; geo->psym && c <= 40; c++) {   /* Point Symmetry: a mirrored pair not making 10 (the centre: not 5) */
+        const int a = val[c], b = val[80 - c];
+        if (c == 40 ? a && a != 5 : a && b && a + b != 10) {
+            out[c] = out[80 - c] = true;
+            out[40] = c == 40 || out[40];
+        }
+    }
+    for (int lu = 0; geo->b9 && lu < 18; lu++) {   /* Before Nine: the digits before the 9 over the clue, or (to the 9) not it */
+        const int c = geo->b9_sum[lu];
+        int cells[9], sum = 0, k = 0;
+        if (!c) {
+            continue;
+        }
+        for (int j = 0; j < 9; j++) {
+            cells[j] = lu < 9 ? lu * 9 + j : j * 9 + lu - 9;
+        }
+        for (; k < 9 && val[cells[k]] && val[cells[k]] != 9; k++) {
+            sum += val[cells[k]];
+        }
+        const bool nine = k < 9 && val[cells[k]] == 9;
+        if (sum > c || (nine && sum != c)) {
+            for (int j = 0; j <= k && j < 9; j++) {
+                out[cells[j]] = out[cells[j]] || val[cells[j]];
+            }
+        }
+    }
     for (int q = 0; q < geo->nmx; q++) {          /* Mathrax: a diagonal pair that doesn't make the circle's operation */
         const int at = geo->mx_at[q], cells[4] = {at, at + 1, at + 9, at + 10}, across[4] = {at + 10, at + 9, at + 1, at};
         for (int k = 0; k < 4; k++) {

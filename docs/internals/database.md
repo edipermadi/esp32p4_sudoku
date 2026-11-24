@@ -6,7 +6,7 @@ How `sudoku.db` is laid out: its tables, what each one is for, and how they conn
 
 ## Overview
 
-`sudoku.db` is a SQLite 3 file in the root of the microSD card. It holds everything the game remembers: players, solves, games in progress, puzzles made on the board, collections, achievements and settings. The schema version is in `PRAGMA user_version` (now 11).
+`sudoku.db` is a SQLite 3 file in the root of the microSD card. It holds everything the game remembers: players, solves, games in progress, puzzles made on the board, collections, achievements and settings. The schema version is in `PRAGMA user_version` (now 15).
 
 The tables fall into four groups:
 
@@ -205,7 +205,7 @@ In short here; each name links to the table's own page.
 - **Daily puzzle**: `day` = its date `YYYY-MM-DD`. There is one per day, made the first time it's opened that day; later opens find it by `day`.
 - **Imported**: `source` = the collection's name, `number` = its place in it.
 
-`variant` says which rules apply (0 Classic ... 61 Mathrax, the `VAR_*` order in `src/generator.h`, append-only). The four text columns `regions`, `cages`, `marks` and `thermos` hold whatever the variant needs beyond the givens; columns a variant doesn't use are NULL:
+`variant` says which rules apply (0 Classic ... 63 Before Nine, the `VAR_*` order in `src/generator.h`, append-only). The four text columns `regions`, `cages`, `marks` and `thermos` hold whatever the variant needs beyond the givens; columns a variant doesn't use are NULL:
 
 | Column | Used by |
 |---|---|
@@ -282,7 +282,7 @@ Since SQLite doesn't enforce the links, the firmware deletes in a fixed order, e
 
 The tables are created with `CREATE TABLE IF NOT EXISTS`, so an older database keeps its old tables. `upgrade_schema()` then brings it up to date:
 
-- **New columns** are added with `ALTER TABLE ... ADD COLUMN` when `has_column()` doesn't find them. Defaults mean old rows stay valid: `hints` 0, `flags` 0, `moves` NULL ("not recorded"). `solves.canon` (user_version 12) is filled in for the older solves right after it's added (`sdb_canon_backfill()`), from their puzzles' givens.
+- **New columns** are added with `ALTER TABLE ... ADD COLUMN` when `has_column()` doesn't find them. Defaults mean old rows stay valid: `hints` 0, `flags` 0, `moves` NULL ("not recorded"). `solves.canon` (user_version 12) is filled in for the older solves right after it's added (`sdb_canon_backfill()`), from their puzzles' givens. User_versions 13 to 15 change no table: Point Symmetry, Non-Consecutive, Diagonal Non-Consecutive and Magic Square (13), Dutch Flatmates (14) and 159 Sudoku (15) got canonical hashes, so a version 12 to 14 database runs the backfill once more when it's opened (it only fills rows whose `canon` is still NULL; the variants without a hash stay NULL).
 - **Key changes** (adding `player_id`; one saved game per player becoming five) rename the old table to `*_v3` / `*_v8`, create the new one, copy the rows across and drop the old one, all in one transaction.
 - **Numbers that are already stored never change meaning:** variants, `TECH_*` bits, achievement keys and Learn techniques are only ever added at the end.
 

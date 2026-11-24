@@ -89,6 +89,8 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {12, 72, 141, 773},    /* Average Lines */
     {157, 337, 808, 644},  /* Dutch Flatmates (2026-11-24) */
     {9, 92, 195, 1089},    /* Mathrax */
+    {21, 128, 827, 121},   /* Point Symmetry (2026-11-24) */
+    {29, 143, 584, 943},   /* Before Nine */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */

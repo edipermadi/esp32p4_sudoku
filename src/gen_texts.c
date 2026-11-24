@@ -219,6 +219,9 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_SKYSUM:
         sudoku_skysum_text(g, marks, 82);
         break;
+    case VAR_B9:
+        sudoku_b9_text(g, marks, 82);
+        break;
     case VAR_PSKY:
         sudoku_psky_text(g, marks, 82);
         break;
@@ -524,6 +527,19 @@ bool sudoku_psky_text(const sudoku_geom_t *g, char *buf, int len)
         pos += w;
     }
     return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_b9_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t c[18];
+    return read_clues18(text, 36, c) && gen_geom_b9(c, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_b9_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    return write_clues18(g->b9_sum, buf, len);
 }
 
 /* (documented in generator.h) */

@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include "generator.h"
 #include "gen_bits.h"
+#include "gen_internal.h"               /* (is_gen_b9_line_ok(): Before Nine's line check) */
 #include "canon_core.h"
 #include "search_core.h"
 #include "learn_core.h"
@@ -306,6 +307,24 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int c = 0; g->psym && c < 81; c++) {       /* Point Symmetry: mirrored cells make 10 */
+        if (sol[c] + sol[80 - c] != 10) {
+            return false;
+        }
+    }
+    for (int lu = 0; g->b9 && lu < 18; lu++) {      /* Before Nine: the digits before the 9 (worked out here) */
+        int sum = 0;
+        for (int k = 0; k < 9; k++) {
+            const int x = sol[lu < 9 ? lu * 9 + k : k * 9 + lu - 9];
+            if (x == 9) {
+                break;
+            }
+            sum += x;
+        }
+        if (g->b9_sum[lu] && sum != g->b9_sum[lu]) {
+            return false;
+        }
+    }
     for (int q = 0; q < g->nmx; q++) {              /* Mathrax: both diagonal pairs make the clue (worked out here) */
         const int at = g->mx_at[q], op = g->mx_op[q], n = g->mx_val[q];
         const int pair[2][2] = {{sol[at], sol[at + 10]}, {sol[at + 1], sol[at + 9]}};
@@ -466,6 +485,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->quad_at, b->quad_at, a->nquads) && !memcmp(a->quad_n, b->quad_n, a->nquads) &&
            !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads) && a->nrooms == b->nrooms &&
            !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18) &&
+           a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
            a->flatmates == b->flatmates && a->nmx == b->nmx && !memcmp(a->mx_at, b->mx_at, a->nmx) &&
            !memcmp(a->mx_op, b->mx_op, a->nmx) && !memcmp(a->mx_val, b->mx_val, a->nmx) &&
            !memcmp(a->mx_of, b->mx_of, sizeof(a->mx_of));
@@ -517,6 +537,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_SKYSUM:
         sudoku_skysum_text(g, marks, len);
+        break;
+    case VAR_B9:
+        sudoku_b9_text(g, marks, len);
         break;
     case VAR_PSKY:
         sudoku_psky_text(g, marks, len);
@@ -585,6 +608,9 @@ static void test_canon(void)
             }
             real |= ok ? (uint8_t)(1u << t) : 0;
         }
+        if (v == VAR_FLATMATES || v == VAR_159) {
+            real &= 0x35;                           /* (their rules: above and below, column numbers: columns stay) */
+        }
         CHECKF(sym == real, "%s: canon_symmetries 0x%02x, the board's 0x%02x", variant_name(v), sym, real);
         uint8_t giv[81] = {0}, sol[81];
         gen_level_t got;
@@ -594,7 +620,8 @@ static void test_canon(void)
         }
         const uint64_t h = canon_hash(v, giv);
         uint32_t rng = 99u + (uint32_t)v;
-        for (int t = 0; t < 8; t++) {               /* every allowed turn, renumbered at random: the same */
+        const int mode = canon_digits(v);
+        for (int t = 0; t < 8; t++) {               /* every allowed turn, renumbered at random (as allowed): the same */
             if (!(sym >> t & 1)) {
                 continue;
             }
@@ -602,12 +629,41 @@ static void test_canon(void)
             for (int d = 1; d <= g->n; d++) {
                 perm[d] = (uint8_t)d;
             }
-            for (int d = g->n; d > 1; d--) {
+            /* any: every digit shuffled; Pairs: the four pairs (Flip and Flatmates: below) */
+            for (int d = mode == CANON_ANY ? g->n : 4; mode != CANON_FLATMATES && d > 1; d--) {
                 rng = rng * 1103515245u + 12345u;
                 const int j = 1 + (int)(rng >> 16) % d;
                 const uint8_t x = perm[d];
                 perm[d] = perm[j];
                 perm[j] = x;
+            }
+            for (int d = 1; mode == CANON_159 && d <= 9; d++) {      /* 159: 10 - d where the columns are mirrored */
+                perm[d] = (uint8_t)(t == 2 || t == 4 ? 10 - d : d);
+            }
+            if (mode == CANON_FLATMATES) {          /* 2 3 4 6 7 8 shuffled; 1 and 9 swapped upside down; 5 kept */
+                uint8_t fr[6] = {2, 3, 4, 6, 7, 8};
+                for (int i = 5; i > 0; i--) {
+                    rng = rng * 1103515245u + 12345u;
+                    const int j = (int)(rng >> 16) % (i + 1);
+                    const uint8_t x = fr[i];
+                    fr[i] = fr[j];
+                    fr[j] = x;
+                }
+                static const uint8_t FR[6] = {2, 3, 4, 6, 7, 8};
+                for (int i = 0; i < 6; i++) {
+                    perm[FR[i]] = fr[i];
+                }
+                perm[1] = t == 2 || t == 5 ? 9 : 1;
+                perm[9] = (uint8_t)(10 - perm[1]);
+            }
+            for (int d = 1; mode == CANON_PAIRS && d <= 4; d++) {   /* ... each turned round or not; partners follow */
+                rng = rng * 1103515245u + 12345u;
+                const int to = (rng >> 16) & 1 ? 10 - perm[d] : perm[d];
+                perm[d] = (uint8_t)to;
+                perm[10 - d] = (uint8_t)(10 - to);
+            }
+            for (int d = 1; mode == CANON_FLIP && d <= 9; d++) {     /* Flip: as it is, or every digit d to 10 - d */
+                perm[d] = (uint8_t)(t % 2 ? 10 - d : d);
             }
             for (int c = 0; c < 81; c++) {
                 if (c % 9 < g->n && c / 9 < g->n) {
@@ -615,6 +671,23 @@ static void test_canon(void)
                 }
             }
             CHECKF(canon_hash(v, tr) == h, "%s: turn %d renumbered: another hash", variant_name(v), t);
+            /* and still a puzzle of that variant: its rules kept (one solution, as the puzzle had) */
+            CHECKF(sudoku_count_solutions(g, tr, 2) == 1, "%s: turn %d renumbered: not one solution any more",
+                   variant_name(v), t);
+        }
+        if (v == VAR_FLATMATES || v == VAR_159) {   /* a quarter turn (not allowed: up isn't up any more): another */
+            uint8_t q[81];
+            for (int c = 0; c < 81; c++) {
+                q[canon_cell(1, 9, c)] = giv[c];
+            }
+            CHECK(canon_hash(v, q) != h);
+        }
+        if (mode != CANON_ANY) {                    /* a renumbering its rules don't allow (1 and 2 swapped): another */
+            uint8_t sw[81];
+            for (int c = 0; c < 81; c++) {
+                sw[c] = giv[c] == 1 ? 2 : giv[c] == 2 ? 1 : giv[c];
+            }
+            CHECKF(canon_hash(v, sw) != h, "%s: 1 and 2 swapped, the same hash", variant_name(v));
         }
         CHECK(sudoku_solve(&board, giv, sol));     /* one more given: another puzzle, another hash */
         for (int c = 0; c < 81; c++) {
@@ -676,6 +749,7 @@ static void test_geometry(void)
         {VAR_ASTERISK, 9, 81, 28, 20}, {VAR_CENTERDOT, 9, 81, 28, 20}, {VAR_GIRANDOLA, 9, 81, 28, 26},
         {VAR_159, 9, 81, 27, 20}, {VAR_ANTIDIAG, 9, 81, 27, 20},
         {VAR_CHESS, 9, 81, 27, 20},     {VAR_MAGIC, 9, 81, 27, 20}, {VAR_FLATMATES, 9, 81, 27, 20},
+        {VAR_PSYM, 9, 81, 27, 20},
     };
     for (size_t i = 0; i < sizeof(G) / sizeof(G[0]); i++) {
         const sudoku_geom_t *g = sudoku_geom(G[i].variant);
@@ -1050,6 +1124,60 @@ static void test_flatmates_mathrax(void)
     CHECK(is_sudoku_fits(F, v, 13, 9) == false);    /* (13 is filled) */
     v[13] = 0;
     CHECK(sudoku_fits_why(F, v, 13, 8) == FIT_FLATMATES && is_sudoku_fits(F, v, 13, 9));
+}
+
+/* Point Symmetry: the centre is 5, a digit sets its mirror, the rule check marks a pair not making 10;
+ * Before Nine: the line check exact on full lines and never wrong on partial ones, the clue worked out,
+ * the text read back, the rule check */
+static void test_psym_b9(void)
+{
+    const sudoku_geom_t *P = sudoku_geom(VAR_PSYM);
+    uint8_t v[81] = {0};
+    bool out[81];
+    CHECK(P->psym && P->allow[40] == (1u << 5) && is_sudoku_geom_tinted(P, 40) && !is_sudoku_geom_tinted(P, 41));
+    CHECK(sudoku_fits_why(P, v, 40, 4) == FIT_ALLOW && is_sudoku_fits(P, v, 40, 5));
+    v[0] = 3;                                       /* r1c1 = 3: r9c9 is 7 */
+    CHECK(is_sudoku_fits(P, v, 80, 7) && sudoku_fits_why(P, v, 80, 6) == FIT_PSYM);
+    v[80] = 6;
+    CHECK(game_conflicts(P, v, out) > 0 && out[0] && out[80]);
+    v[80] = 7;
+    CHECK(game_conflicts(P, v, out) == 0);
+
+    static const struct { uint8_t x[9]; int c; bool ok; } L[] = {
+        {{3, 5, 2, 9, 1, 4, 6, 7, 8}, 10, true},  {{3, 5, 2, 9, 1, 4, 6, 7, 8}, 11, false},
+        {{9, 1, 2, 3, 4, 5, 6, 7, 8}, 1, false},  {{1, 2, 3, 4, 5, 6, 7, 8, 9}, 36, true},
+        {{3, 0, 0, 0, 0, 0, 0, 0, 0}, 3, true},   /* (the 9 next) */
+        {{3, 0, 0, 0, 0, 0, 0, 0, 0}, 2, false},  /* (already over) */
+        {{3, 0, 9, 0, 0, 0, 0, 0, 0}, 4, true},   /* 3 + 1 */
+        {{3, 0, 9, 0, 0, 0, 0, 0, 0}, 12, false}, /* 3 + 8 at most */
+        {{3, 8, 0, 0, 0, 0, 0, 0, 0}, 4, false},  /* 3 + 8 is past it, the 9 can't be before the 8 */
+        {{0, 0, 0, 0, 0, 0, 0, 0, 9}, 36, true},  {{0, 0, 0, 0, 0, 0, 0, 0, 9}, 35, false},
+    };
+    for (size_t k = 0; k < sizeof(L) / sizeof(L[0]); k++) {
+        CHECKF(is_gen_b9_line_ok(L[k].x, L[k].c) == L[k].ok, "Before Nine line %zu: clue %d", k, L[k].c);
+    }
+    uint8_t full[81];
+    for (int c = 0; c < 81; c++) {
+        full[c] = (uint8_t)((c / 9 * 3 + c / 27 + c % 9) % 9 + 1);   /* (a valid grid, row 1: 1..9) */
+    }
+    CHECK(sudoku_b9_of(full, 0) == 36 && sudoku_b9_of(full, 9) == sudoku_b9_of(full, 9));
+    full[5] = 0;
+    CHECK(sudoku_b9_of(full, 0) == -1);
+
+    static sudoku_geom_t b;
+    char buf[96];
+    CHECK(sudoku_geom_b9_text("10,0,0,0,0,0,0,0,0,36,0,0,0,0,0,0,0,0", &b) && b.b9 && b.b9_sum[0] == 10 &&
+          b.b9_sum[9] == 36 && !(b.allow[0] >> 9 & 1));
+    CHECK(sudoku_b9_text(&b, buf, sizeof(buf)) && !strcmp(buf, "10,0,0,0,0,0,0,0,0,36,0,0,0,0,0,0,0,0"));
+    CHECK(!sudoku_geom_b9_text("37,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", &b));
+    memset(v, 0, 81);
+    v[0] = 3;
+    v[1] = 5;
+    v[2] = 9;                                       /* 3 + 5 = 8, not 10 */
+    CHECK(game_conflicts(&b, v, out) > 0 && out[0] && out[1] && out[2]);
+    v[2] = 2;
+    v[3] = 9;
+    CHECK(game_conflicts(&b, v, out) == 0);
 }
 
 static void test_sdx_edges(void)
@@ -2146,7 +2274,8 @@ int main(int argc, char **argv)
         {"generator", test_generate},        {"determinism (golden)", test_determinism},
         {"layout texts and .sdx", test_texts_and_sdx}, {".sdx edge cases", test_sdx_edges},
         {"hints", test_hints},               {"learn", test_learn},
-        {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},     {"hint words", test_hint_words},
+        {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},
+        {"Point Symmetry and Before Nine", test_psym_b9},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},
