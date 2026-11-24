@@ -4,7 +4,7 @@
  */
 #include "stats_db_internal.h"
 
-/* table layouts (user_version 20), shared by SCHEMA and the upgrade below */
+/* table layouts (user_version 21), shared by SCHEMA and the upgrade below */
 /** players' layout */
 #define T_PLAYERS \
     "players("                                                                  \
@@ -148,7 +148,7 @@ static const char SCHEMA_POST[] =
     "         SUM(s.fewest_mistakes = 0) AS without_mistakes"
     "  FROM puzzle_stats s JOIN players p ON p.id = s.player_id"
     "  GROUP BY s.player_id, s.level ORDER BY s.player_id, MIN(s.puzzle);"
-    "PRAGMA user_version = 20;";
+    "PRAGMA user_version = 21;";
 
 /**
  * @brief Whether a table has a column.
@@ -315,9 +315,10 @@ bool sdb_schema_create(void)
     bool ok = sdb_exec(SCHEMA) && upgrade_schema();
     /* (versions 13 to 18) more variants with a canonical hash: Point Symmetry, Non-Consecutive, Diagonal
      * Non-Consecutive, Magic Square (13), Dutch Flatmates (14), 159 Sudoku (15), Jigsaw and Killer with their layout
-     * (16), Sumless Killer and Extra Regions (17), Product Killer (18), Kropki and XV (19), the line variants (20);
-     * their earlier solves' hashes filled in (the rest stay NULL). Not filled in: only "solved before" misses them */
-    if (ok && was >= 12 && was <= 19 && !sdb_canon_backfill()) {
+     * (16), Sumless Killer and Extra Regions (17), Product Killer (18), Kropki and XV (19), the line variants (20), the
+     * rest (21: every variant has one now); their earlier solves' hashes filled in. Not filled in: only "solved
+     * before" misses them */
+    if (ok && was >= 12 && was <= 20 && !sdb_canon_backfill()) {
         printf("stats_db: the earlier solves' canonical hashes weren't filled in\n");
     }
     return ok && sdb_exec(SCHEMA_POST);

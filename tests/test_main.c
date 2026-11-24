@@ -584,6 +584,160 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
 
 /* ---------------------------------------------------------------- tests */
 
+/* a row's or column's clue (Sandwich's sum, an outside clue), by variant */
+static unsigned clue_get(const sudoku_geom_t *g, int lu)
+{
+    switch (g->variant) {
+    case VAR_SANDWICH:
+        return g->sandwich_sum[lu];
+    case VAR_SKY:
+        return g->sky[lu];
+    case VAR_XSUM:
+        return g->xsum[lu];
+    case VAR_FRAME:
+        return g->frame_sum[lu];
+    case VAR_OUTSIDE:
+        return g->outside_set[lu];
+    case VAR_ROSSINI:
+        return g->rossini_dir[lu];
+    case VAR_NROOMS:
+        return g->nroom[lu];
+    case VAR_SKYSUM:
+        return g->sky_sum[lu];
+    case VAR_PSKY:
+        return g->psky_clue[lu];
+    default:
+        return g->b9_sum[lu];
+    }
+}
+
+/* the same, set */
+static void clue_set(sudoku_geom_t *g, int lu, unsigned c)
+{
+    switch (g->variant) {
+    case VAR_SANDWICH:
+        g->sandwich_sum[lu] = (uint8_t)c;
+        break;
+    case VAR_SKY:
+        g->sky[lu] = (uint8_t)c;
+        break;
+    case VAR_XSUM:
+        g->xsum[lu] = (uint8_t)c;
+        break;
+    case VAR_FRAME:
+        g->frame_sum[lu] = (uint8_t)c;
+        break;
+    case VAR_OUTSIDE:
+        g->outside_set[lu] = (uint16_t)c;
+        break;
+    case VAR_ROSSINI:
+        g->rossini_dir[lu] = (uint8_t)c;
+        break;
+    case VAR_NROOMS:
+        g->nroom[lu] = (uint8_t)c;
+        break;
+    case VAR_SKYSUM:
+        g->sky_sum[lu] = (uint8_t)c;
+        break;
+    case VAR_PSKY:
+        g->psky_clue[lu] = (uint8_t)c;
+        break;
+    default:
+        g->b9_sum[lu] = (uint8_t)c;
+        break;
+    }
+}
+
+/* a board of marks, circles or outside clues turned by t (canon_cell(): a cell c to canon_cell(t, 9, c), as the
+ * givens are turned below), written as its layout texts and read back as an import would (sdx_geom()) */
+static bool turn_layout(const sudoku_geom_t *b, int t, sudoku_geom_t *out)
+{
+    static sudoku_geom_t tg;
+    static char cages[STATS_CAGES_LEN_T], thermos[STATS_CAGES_LEN_T];
+    char marks[82];
+    tg = *b;
+    const int v = b->variant;
+    if (v == VAR_KROPKI || v == VAR_XV || v == VAR_GT || v == VAR_CONSEC || v == VAR_EVENODD || v == VAR_FORTRESS ||
+            v == VAR_DIAGCONSEC) {
+        memset(tg.parity, 0, 81);
+        memset(tg.consec, 0, 81);
+        memset(tg.edge, 0, 81);
+        memset(tg.dmark, 0, 81);
+        for (int c = 0; c < 81; c++) {
+            tg.parity[canon_cell(t, 9, c)] = b->parity[c];
+            for (int dn = 0; dn < 2; dn++) {        /* its marks to the right and below, onto their turned edges */
+                const int o = dn ? c + 9 : c + 1;
+                if (o > 80 || (!dn && c % 9 == 8)) {
+                    continue;
+                }
+                int m = v == VAR_CONSEC ? (b->consec[c] & (dn ? CONSEC_DOWN : CONSEC_RIGHT)) != 0
+                        : dn ? EDGE_DOWN(b->edge[c]) : EDGE_RIGHT(b->edge[c]);
+                if (!m || b->edge_kind == EDGE_FORT) {
+                    continue;
+                }
+                const int a = canon_cell(t, 9, c), z = canon_cell(t, 9, o), lo = a < z ? a : z, hi = a + z - lo;
+                if (b->edge_kind == EDGE_GT && a != lo) {
+                    m = 3 - m;                      /* (the sign turned round with its cells) */
+                }
+                if (v == VAR_CONSEC) {
+                    tg.consec[lo] |= hi - lo == 1 ? CONSEC_RIGHT : CONSEC_DOWN;
+                } else {
+                    tg.edge[lo] |= (uint8_t)(hi - lo == 1 ? m : m << 2);
+                }
+            }
+            for (int dg = 0; dg < 2; dg++) {        /* its corner marks, down-right and down-left */
+                const int o = dg ? c + 8 : c + 10;
+                if (!(b->dmark[c] & (dg ? DMARK_DL : DMARK_DR))) {
+                    continue;
+                }
+                const int a = canon_cell(t, 9, c), z = canon_cell(t, 9, o), lo = a < z ? a : z, hi = a + z - lo;
+                tg.dmark[lo] |= hi - lo == 10 ? DMARK_DR : DMARK_DL;
+            }
+        }
+    }
+    for (int q = 0; q < b->nquads || q < b->nmx; q++) {   /* circles: their four cells' turned top-left */
+        const int at = q < b->nquads ? b->quad_at[q] : b->mx_at[q];
+        int top = 80;
+        const int four[4] = {at, at + 1, at + 9, at + 10};
+        for (int j = 0; j < 4; j++) {
+            const int d = canon_cell(t, 9, four[j]);
+            top = d < top ? d : top;
+        }
+        if (q < b->nquads) {
+            tg.quad_at[q] = (uint8_t)top;
+        }
+        if (q < b->nmx) {
+            tg.mx_at[q] = (uint8_t)top;
+        }
+    }
+    if (v == VAR_SANDWICH || v == VAR_SKY || v == VAR_XSUM || v == VAR_FRAME || v == VAR_OUTSIDE || v == VAR_ROSSINI ||
+            v == VAR_NROOMS || v == VAR_SKYSUM || v == VAR_PSKY || v == VAR_B9) {
+        for (int s = 0; s < 18; s++) {              /* each line's clue onto the line it's turned onto */
+            const int c0 = s < 9 ? s * 9 : s - 9, c1 = s < 9 ? c0 + 1 : c0 + 9;
+            const int d0 = canon_cell(t, 9, c0), d1 = canon_cell(t, 9, c1);
+            clue_set(&tg, d0 / 9 == d1 / 9 ? d0 / 9 : 9 + d0 % 9, clue_get(b, s));
+        }
+    }
+    /* Little Killer, about the main diagonal: clue sides and ways swapped (as it is: nothing to do) */
+    for (int k = 0; v == VAR_LK && t == 6 && k < b->nlk; k++) {
+        tg.lk_from_top[k] = !b->lk_from_top[k];
+        tg.lk_dir[k] = b->lk_dir[k] == LK_DOWN_LEFT ? LK_UP_RIGHT : b->lk_dir[k] == LK_UP_RIGHT ? LK_DOWN_LEFT
+                       : LK_DOWN_RIGHT;
+        for (int j = 0; j < b->lk_n[k]; j++) {
+            tg.lk_cell[k][j] = (uint8_t)canon_cell(t, 9, b->lk_cell[k][j]);
+        }
+    }
+    sudoku_layout_texts(&tg, cages, (int)sizeof(cages), marks, thermos, (int)sizeof(thermos));
+    sdx_puzzle_t p;
+    memset(&p, 0, sizeof(p));
+    p.variant = v;
+    p.regions = "";
+    p.cages = cages;
+    p.marks = marks;
+    p.thermos = thermos;
+    return sdx_geom(&p, out);
+}
+
 /* canon_core: the symmetry table against every board's peers, the hash the same turned, mirrored and
  * renumbered, and different for a different puzzle */
 static void test_canon(void)
@@ -611,8 +765,10 @@ static void test_canon(void)
         if (v == VAR_FLATMATES || v == VAR_159) {
             real &= 0x35;                           /* (their rules: above and below, column numbers: columns stay) */
         }
-        if (v == VAR_PILL) {
-            real &= 0x41;                           /* (its pill reads left to right or top to bottom) */
+        if (v == VAR_PILL || (v != VAR_SANDWICH && (v == VAR_SKY || v == VAR_XSUM || v == VAR_FRAME ||
+                              v == VAR_OUTSIDE || v == VAR_ROSSINI || v == VAR_NROOMS || v == VAR_SKYSUM ||
+                              v == VAR_PSKY || v == VAR_B9 || v == VAR_LK))) {
+            real &= 0x41;                           /* (a pill read left to right, clues left and above: kept so) */
         }
         CHECKF(sym == real, "%s: canon_symmetries 0x%02x, the board's 0x%02x", variant_name(v), sym, real);
         if (is_canon_layout(v)) {
@@ -767,7 +923,9 @@ static void test_canon(void)
                                     canon_cell(t, 9, board.thermo_cell[l][j]));
                 }
             }
-            const bool built = lines ? sudoku_geom_lines_text(v, lt, &tb)
+            const bool turned = !lines && v != VAR_JIGSAW && v != VAR_KILLER && v != VAR_SUMLESS && v != VAR_REGIONS &&
+                                v != VAR_PRODUCT;   /* (marks, circles, outside clues: turn_layout()) */
+            const bool built = turned ? turn_layout(&board, t, &tb) : lines ? sudoku_geom_lines_text(v, lt, &tb)
                                : marks ? sudoku_geom_marks(v, mt, &tb) : v == VAR_JIGSAW ? sudoku_geom_jigsaw(map, &tb)
                                : v == VAR_PRODUCT ? gen_geom_product(cage_of, board.cage_prod, board.ncages, &tb)
                                : gen_geom_killer(cage_of, board.cage_sum, board.ncages, &tb);
@@ -775,6 +933,32 @@ static void test_canon(void)
             CHECKF(built, "%s: turn %d: the board turned", variant_name(v), t);
             CHECKF(canon_hash_geom(&tb, tr) == h, "%s: turn %d: another hash", variant_name(v), t);
             CHECKF(sudoku_count_solutions(&tb, tr, 2) == 1, "%s: turn %d: not one solution any more", variant_name(v), t);
+        }
+        if (board.nlk || board.nquads || board.nmx || board.sandwich || board.edge_kind || board.consec_on ||
+                v == VAR_EVENODD || v == VAR_DIAGCONSEC || (board.nthermos == 0 && !board.ncages && v != VAR_JIGSAW)) {
+            tb = board;                             /* marks, circles, clues: one of them changed: another hash */
+            if (board.nlk) {
+                tb.lk_sum[0]++;
+            } else if (board.nquads) {
+                tb.quad_dig[0][0] = (uint8_t)(tb.quad_dig[0][0] % 9 + 1);
+            } else if (board.nmx) {
+                tb.mx_val[0]++;
+            } else if (v == VAR_EVENODD || v == VAR_FORTRESS) {
+                tb.parity[0] = (uint8_t)(tb.parity[0] ? PARITY_NONE : v == VAR_FORTRESS ? PARITY_FORT : PARITY_EVEN);
+            } else if (v == VAR_CONSEC) {
+                tb.consec[0] ^= CONSEC_RIGHT;
+            } else if (v == VAR_DIAGCONSEC) {
+                tb.dmark[0] ^= DMARK_DR;
+            } else if (board.edge_kind) {
+                tb.edge[0] = (uint8_t)(tb.edge[0] ^ 3);   /* (its mark to the right: another, or none) */
+            } else {
+                int lu = 0;
+                while (lu < 17 && !clue_get(&board, lu)) {
+                    lu++;
+                }
+                clue_set(&tb, lu, clue_get(&board, lu) + 1);
+            }
+            CHECKF(canon_hash_geom(&tb, giv) != h, "%s: its layout changed, the same hash", variant_name(v));
         }
         if (v == VAR_PILL) {                        /* mirrored left to right (its pills' numbers reversed): another */
             uint8_t tr[81] = {0};
@@ -840,7 +1024,7 @@ static void test_canon(void)
                 tb.cage_sum[0]++;
             }
             CHECKF(canon_hash_geom(&tb, giv) != h, "%s: a clue changed, the same hash", variant_name(v));
-        } else {                                    /* a cell taken out of its cage (or region): another */
+        } else if (v == VAR_SUMLESS || v == VAR_REGIONS) {                                    /* a cell taken out of its cage (or region): another */
             tb = board;
             for (int c = 0; c < 81; c++) {
                 if (tb.cage_of[c] != CAGE_NONE) {

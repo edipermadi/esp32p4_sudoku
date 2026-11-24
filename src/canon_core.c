@@ -51,9 +51,52 @@ static bool is_line_one_way(int variant)
            variant == VAR_AVG;
 }
 
+/**
+ * @brief Is it a variant of marks on cells or between them (kept in marks)?
+ * @param[in] variant  sudoku_variant_t
+ * @return true if so
+ */
+static bool is_mark_variant(int variant)
+{
+    return variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_CONSEC ||
+           variant == VAR_EVENODD || variant == VAR_FORTRESS || variant == VAR_DIAGCONSEC;
+}
+
+/**
+ * @brief Is it a variant of clues outside the grid (Sandwich, the left and top clues, Little Killer's diagonals)?
+ * @param[in] variant  sudoku_variant_t
+ * @return true if so
+ */
+static bool is_clue_variant(int variant)
+{
+    switch (variant) {
+    case VAR_SANDWICH:
+    case VAR_SKY:
+    case VAR_XSUM:
+    case VAR_FRAME:
+    case VAR_OUTSIDE:
+    case VAR_ROSSINI:
+    case VAR_NROOMS:
+    case VAR_SKYSUM:
+    case VAR_PSKY:
+    case VAR_B9:
+    case VAR_LK:
+        return true;
+    default:
+        return false;
+    }
+}
+
 /* (documented in canon_core.h) */
 uint8_t canon_symmetries(int variant)
 {
+    if (is_clue_variant(variant) && variant != VAR_SANDWICH) {
+        return 0x41;                    /* the clues stay left of the rows and above the columns, read the same way:
+                                         * as it is, or mirrored about the main diagonal (rows' clues and columns' swap) */
+    }
+    if (is_mark_variant(variant) || variant == VAR_SANDWICH || variant == VAR_QUAD || variant == VAR_MATHRAX) {
+        return 0xFF;                    /* (marks, circles turned too; a Sandwich sum is the same from either end) */
+    }
     if (variant == VAR_PILL) {
         return 0x41;                    /* its pill reads left to right or top to bottom: as it is, or about the main
                                          * diagonal (a pill across becomes one down, its tens still first) */
@@ -137,7 +180,8 @@ int canon_cell(int t, int n, int cell)
 bool is_canon_layout(int variant)
 {
     return variant == VAR_JIGSAW || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
-           variant == VAR_PRODUCT || variant == VAR_KROPKI || variant == VAR_XV || is_line_variant(variant);
+           variant == VAR_PRODUCT || is_mark_variant(variant) || is_line_variant(variant) || is_clue_variant(variant) ||
+           variant == VAR_QUAD || variant == VAR_MATHRAX;
 }
 
 /**
@@ -150,7 +194,94 @@ bool is_canon_layout(int variant)
 static int edge_mark(const sudoku_geom_t *G, int a, int b)
 {
     const int lo = a < b ? a : b, hi = a < b ? b : a;
-    return hi - lo == 1 ? EDGE_RIGHT(G->edge[lo]) : EDGE_DOWN(G->edge[lo]);
+    if (G->variant == VAR_CONSEC) {                 /* a bar, or none */
+        return (G->consec[lo] & (hi - lo == 1 ? CONSEC_RIGHT : CONSEC_DOWN)) != 0;
+    }
+    if (G->edge_kind == EDGE_FORT) {
+        return 0;                                   /* (Fortress: its grey cells say it all) */
+    }
+    const int m = hi - lo == 1 ? EDGE_RIGHT(G->edge[lo]) : EDGE_DOWN(G->edge[lo]);
+    return G->edge_kind == EDGE_GT && m && a != lo ? 3 - m : m;   /* (a sign seen from the other cell: turned round) */
+}
+
+/**
+ * @brief Diagonal Consecutive: is there a mark between two cells touching at a corner?
+ * @param[in] G  the board
+ * @param[in] a  a cell
+ * @param[in] b  a cell touching it at a corner
+ * @return 1 if so, else 0
+ */
+static int diag_mark(const sudoku_geom_t *G, int a, int b)
+{
+    const int lo = a < b ? a : b, hi = a < b ? b : a;
+    return (G->dmark[lo] & (hi - lo == 10 ? DMARK_DR : DMARK_DL)) != 0;
+}
+
+/**
+ * @brief An outside clue (or Sandwich's sum) of a row or column, as a number.
+ * @param[in] G  the board
+ * @param[in] lu  0..8 a row, 9..17 a column
+ * @return it (0: no clue)
+ */
+static unsigned clue_of(const sudoku_geom_t *G, int lu)
+{
+    switch (G->variant) {
+    case VAR_SANDWICH:
+        return G->sandwich_sum[lu];
+    case VAR_SKY:
+        return G->sky[lu];
+    case VAR_XSUM:
+        return G->xsum[lu];
+    case VAR_FRAME:
+        return G->frame_sum[lu];
+    case VAR_OUTSIDE:
+        return G->outside_set[lu];
+    case VAR_ROSSINI:
+        return G->rossini_dir[lu];
+    case VAR_NROOMS:
+        return G->nroom[lu];
+    case VAR_SKYSUM:
+        return G->sky_sum[lu];
+    case VAR_PSKY:
+        return G->psky_clue[lu];
+    default:
+        return G->b9_sum[lu];
+    }
+}
+
+/**
+ * @brief Hashes a copy (FNV-1a: the variant, then its bytes).
+ * @param[in] variant  sudoku_variant_t
+ * @param[in] best  the copy
+ * @param[in] len  its bytes
+ * @return the hash, never 0
+ */
+static uint64_t hash_copy(int variant, const uint8_t *best, size_t len)
+{
+    uint64_t h = 1469598103934665603ULL;
+    h = (h ^ (uint8_t)variant) * 1099511628211ULL;
+    for (size_t k = 0; k < len; k++) {
+        h = (h ^ best[k]) * 1099511628211ULL;
+    }
+    return h ? h : 1;
+}
+
+/**
+ * @brief Sorts n entries of w bytes (insertion: a few dozen at most).
+ * @param[in,out] e  the entries
+ * @param[in] n  how many
+ * @param[in] w  each one's bytes (12 at most)
+ */
+static void sort_entries(uint8_t *e, int n, int w)
+{
+    for (int a = 1; a < n; a++) {
+        for (int b = a; b > 0 && memcmp(e + b * w, e + (b - 1) * w, (size_t)w) < 0; b--) {
+            uint8_t x[12];
+            memcpy(x, e + b * w, (size_t)w);
+            memcpy(e + b * w, e + (b - 1) * w, (size_t)w);
+            memcpy(e + (b - 1) * w, x, (size_t)w);
+        }
+    }
 }
 
 /* (documented in canon_core.h) */
@@ -211,10 +342,13 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
         }
         return h ? h : 1;
     }
-    if (variant == VAR_KROPKI || variant == VAR_XV) {
-        /* a copy: the givens as they are (a black dot's doubling, a V's 5 need them), then each cell's mark to its
-         * right and below, as the turned board has them (a mark joins two cells either way round) */
-        uint8_t best[81 * 3], cur[81 * 3];
+    if (is_mark_variant(variant)) {
+        /* a copy: the givens as they are (the marks' meanings need them), then each cell's mark to its right and
+         * below, as the turned board has them (Greater-Than's signs seen from the turned board's left or top cell);
+         * then, but for Kropki and XV (whose copies were only that much), each cell's own mark (Even-Odd, Fortress)
+         * and its corner marks down-right and down-left (Diagonal Consecutive) */
+        uint8_t best[81 * 6], cur[81 * 6];
+        const size_t len = variant == VAR_KROPKI || variant == VAR_XV ? 81 * 3 : 81 * 6;
         for (int t = 0; t < 8; t++) {
             if (!(sym >> t & 1)) {
                 continue;
@@ -224,18 +358,116 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
                 cur[k] = givens[src];
                 cur[81 + k] = (uint8_t)(k % 9 < 8 ? edge_mark(G, src, canon_cell(t, 9, k + 1)) : 0);
                 cur[162 + k] = (uint8_t)(k < 72 ? edge_mark(G, src, canon_cell(t, 9, k + 9)) : 0);
+                cur[243 + k] = G->parity[src];
+                cur[324 + k] = (uint8_t)(k % 9 < 8 && k < 72 ? diag_mark(G, src, canon_cell(t, 9, k + 10)) : 0);
+                cur[405 + k] = (uint8_t)(k % 9 > 0 && k < 72 ? diag_mark(G, src, canon_cell(t, 9, k + 8)) : 0);
+            }
+            if (!have || memcmp(cur, best, len) < 0) {
+                memcpy(best, cur, len);
+                have = true;
+            }
+        }
+        return hash_copy(variant, best, len);
+    }
+    if (variant == VAR_QUAD || variant == VAR_MATHRAX) {
+        /* a copy: the givens as they are, then the circles, each as the top-left cell of its four on the turned board
+         * and its clue (Quadruple: its digits; Mathrax: its operation and number), sorted */
+        const bool quad = variant == VAR_QUAD;
+        const int nc = quad ? G->nquads : G->nmx;
+        uint8_t best[81 + QUADS_MAX * 6], cur[81 + QUADS_MAX * 6], inv[81];
+        const size_t len = 81 + (size_t)nc * 6;
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            for (int k = 0; k < 81; k++) {
+                const int src = canon_cell(t, 9, k);
+                inv[src] = (uint8_t)k;
+                cur[k] = givens[src];
+            }
+            uint8_t *e = cur + 81;
+            for (int q = 0; q < nc; q++) {
+                const int at = quad ? G->quad_at[q] : G->mx_at[q];
+                const uint8_t four[4] = {inv[at], inv[at + 1], inv[at + 9], inv[at + 10]};
+                uint8_t top = four[0];
+                for (int j = 1; j < 4; j++) {
+                    top = four[j] < top ? four[j] : top;   /* (the turned block's top-left) */
+                }
+                memset(e + q * 6, 0, 6);
+                e[q * 6] = top;
+                if (quad) {
+                    e[q * 6 + 1] = G->quad_n[q];
+                    memcpy(e + q * 6 + 2, G->quad_dig[q], 4);
+                } else {
+                    e[q * 6 + 1] = G->mx_op[q];   /* (its diagonal pairs stay diagonal pairs) */
+                    e[q * 6 + 2] = G->mx_val[q];
+                }
+            }
+            sort_entries(e, nc, 6);
+            if (!have || memcmp(cur, best, len) < 0) {
+                memcpy(best, cur, len);
+                have = true;
+            }
+        }
+        return hash_copy(variant, best, len);
+    }
+    if (variant == VAR_LK) {
+        /* a copy: the givens as they are, then the diagonals, each as its sum and its cells on the turned board,
+         * sorted (the side its clue is on follows from its cells) */
+        uint8_t best[81 + LK_MAX * 11], cur[81 + LK_MAX * 11], inv[81];
+        const int nd = G->nlk < LK_MAX ? G->nlk : LK_MAX;
+        const size_t len = 81 + (size_t)nd * 11;
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            for (int k = 0; k < 81; k++) {
+                const int src = canon_cell(t, 9, k);
+                inv[src] = (uint8_t)k;
+                cur[k] = givens[src];
+            }
+            uint8_t *e = cur + 81;
+            for (int d = 0; d < nd; d++) {
+                memset(e + d * 11, 0xFF, 11);
+                e[d * 11] = G->lk_sum[d];
+                e[d * 11 + 1] = G->lk_n[d];
+                for (int j = 0; j < G->lk_n[d]; j++) {
+                    e[d * 11 + 2 + j] = inv[G->lk_cell[d][j]];
+                }
+                sort_entries(e + d * 11 + 2, G->lk_n[d], 1);   /* (its cells as a set) */
+            }
+            sort_entries(e, nd, 11);
+            if (!have || memcmp(cur, best, len) < 0) {
+                memcpy(best, cur, len);
+                have = true;
+            }
+        }
+        return hash_copy(variant, best, len);
+    }
+    if (is_clue_variant(variant)) {
+        /* a copy: the givens as they are, then each row's and column's clue (two bytes: Outside Sudoku's are digit
+         * sets) as the turned board has them: the line a turned row or column was, its clue with it */
+        uint8_t best[81 + 36], cur[81 + 36];
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            for (int k = 0; k < 81; k++) {
+                cur[k] = givens[canon_cell(t, 9, k)];
+            }
+            for (int lu = 0; lu < 18; lu++) {
+                const int c0 = lu < 9 ? lu * 9 : lu - 9, c1 = lu < 9 ? c0 + 1 : c0 + 9;
+                const int s0 = canon_cell(t, 9, c0), s1 = canon_cell(t, 9, c1);
+                const unsigned c = clue_of(G, s0 / 9 == s1 / 9 ? s0 / 9 : 9 + s0 % 9);
+                cur[81 + 2 * lu] = (uint8_t)(c >> 8);
+                cur[81 + 2 * lu + 1] = (uint8_t)c;
             }
             if (!have || memcmp(cur, best, sizeof(cur)) < 0) {
                 memcpy(best, cur, sizeof(cur));
                 have = true;
             }
         }
-        uint64_t h = 1469598103934665603ULL;
-        h = (h ^ (uint8_t)variant) * 1099511628211ULL;
-        for (size_t k = 0; k < sizeof(best); k++) {
-            h = (h ^ best[k]) * 1099511628211ULL;
-        }
-        return h ? h : 1;
+        return hash_copy(variant, best, sizeof(best));
     }
     const bool prod = variant == VAR_PRODUCT;
     const bool killer = variant == VAR_KILLER || prod;   /* (sums, products: their digits as they are) */

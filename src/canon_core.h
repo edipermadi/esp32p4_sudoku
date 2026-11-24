@@ -18,28 +18,37 @@ extern "C" {
  * @ingroup topic_puzzles
  * @brief The same hash for a puzzle turned, mirrored or renumbered.
  *
- * The givens are taken through each of the board's symmetries (of the 8 turns and mirrors, those that map
- * its groups onto themselves: canon_symmetries()), each copy renumbered in reading order (the first digit
- * met becomes 1, the next new one 2 ...), and the smallest copy is hashed (FNV-1a, 64 bits) with the
- * variant. Only variants with no layout of their own (cages, lines, marks, clues, regions) have one:
- * Classic, X-Sudoku, Mini 6x6, Kids 4x4, Hyper, Anti-Knight, Anti-King, Disjoint Groups, Asterisk, Center
- * Dot, Argyle, Girandola, Chess Sudoku and Anti-Diagonal, whose rules don't care which digit is which; and
- * five whose rules do, renumbered only as far as their rules allow (canon_digits()): Point Symmetry (the
- * pairs that make 10 kept together), Non-Consecutive, Diagonal Non-Consecutive and Magic Square (each digit
- * d kept, or every one turned into 10 - d), and Dutch Flatmates (5 kept; 1 and 9 kept, or swapped where the
- * board is turned upside down; the rest any way), which only turns the ways that keep up up or down (its
- * rule is about the cells above and below); and 159 Sudoku, whose columns 1, 5 and 9 hold column numbers: no
- * quarter turns, and no renumbering but every digit d to 10 - d when the columns are mirrored (column c
- * becomes 10 - c, and the 1 and the 9 swap places with them). Two more come with their layout
- * (canon_hash_geom()): Jigsaw (its regions turned with the givens, relabelled in reading order; digits any
- * way), Killer (its cages and their sums turned with the givens, relabelled in reading order; digits as
- * they are: the sums need them), Product Killer (the same with its products), and Sumless Killer and Extra
- * Regions (their cages or shaded regions turned the same way; no sums, so digits any way), and Kropki and
- * XV (their marks turned with the givens; digits as they are: a black dot's doubling, a V's 5 need them), and
- * the 19 line variants (Thermo, Arrow, Renban ... Average Lines: their lines turned with the givens and sorted,
- * each from its start where its way matters (a bulb, a circle, a pill), else whichever way round is smaller;
- * digits as they are; Pill Arrows only as it is or mirrored about the main diagonal, its pill being read left to
- * right or top to bottom). Plain C: the PC tests build it.
+ * Every variant has one. The givens are taken through each of the board's symmetries (of the 8 turns and
+ * mirrors, those that keep the puzzle the same puzzle: canon_symmetries()), each copy renumbered as far as the
+ * rules allow (canon_digits()), and the smallest copy is hashed (FNV-1a, 64 bits) with the variant.
+ *
+ * Without a layout of their own (canon_hash()):
+ * - Classic, X-Sudoku, Mini 6x6, Kids 4x4, Hyper, Anti-Knight, Anti-King, Disjoint Groups, Asterisk, Center Dot,
+ *   Argyle, Girandola, Chess Sudoku and Anti-Diagonal: renumbered in reading order (the first digit met becomes
+ *   1, the next new one 2 ...);
+ * - Point Symmetry: the pairs that make 10 kept together, 5 kept;
+ * - Non-Consecutive, Diagonal Non-Consecutive, Magic Square: each digit d kept, or every one turned into 10 - d;
+ * - Dutch Flatmates: only the turns that keep up up or down (its rule is about the cells above and below); 5
+ *   kept, 1 and 9 swapped where the board is turned upside down, the rest any way;
+ * - 159 Sudoku: no quarter turns, and every digit d to 10 - d exactly when the columns are mirrored (its
+ *   columns 1, 5 and 9 hold column numbers).
+ *
+ * With their layout turned with the givens (canon_hash_geom(); digits as they are but where said):
+ * - Jigsaw: its regions, relabelled in reading order (digits any way);
+ * - Killer, Product Killer: their cages relabelled in reading order, with their sums or products; Sumless
+ *   Killer, Extra Regions: their cages or shaded regions (digits any way);
+ * - the marks: Kropki, XV, Consecutive (between side-by-side cells), Greater-Than (its signs turned round with
+ *   their cells), Even-Odd, Fortress (on cells), Diagonal Consecutive (at corners);
+ * - Quadruple, Mathrax: their circles moved with their four cells, sorted;
+ * - the 19 line variants: their lines sorted, each from its start where its way matters (a bulb, a circle, a
+ *   pill), else whichever way round is smaller; Pill Arrows only as it is or mirrored about the main diagonal
+ *   (its pill reads left to right or top to bottom);
+ * - Sandwich: each sum with its row or column (the same from either end: all 8);
+ * - the clues left of the rows and above the columns (Skyscraper, X-Sums, Frame, Outside Sudoku, Rossini,
+ *   Numbered Rooms, Sum Skyscrapers, Odd/Even Skyscrapers, Before Nine; Little Killer's diagonals, as their
+ *   cells and sums): only as it is or mirrored about the main diagonal, which keeps them left and above.
+ *
+ * Plain C: the PC tests build it.
  * @{
  */
 

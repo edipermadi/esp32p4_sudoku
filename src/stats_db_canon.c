@@ -33,29 +33,20 @@ uint64_t sdb_puzzle_canon(int puzzle)
                 }
                 if (!is_canon_layout(variant)) {
                     h = canon_hash(variant, givens);
-                } else if (geo || (geo = malloc(sizeof(*geo)))) {   /* Jigsaw, the cages, the marks: with their layout */
-                    const char *reg = (const char *)sqlite3_column_text(st, 2);
-                    const char *cages = (const char *)sqlite3_column_text(st, 3);
-                    bool ok = false;
-                    if (variant == VAR_JIGSAW && reg && strlen(reg) == 81) {
-                        uint8_t map[81];
-                        for (int i = 0; i < 81; i++) {
-                            map[i] = (uint8_t)(reg[i] - '0');
-                        }
-                        ok = sudoku_geom_jigsaw(map, geo);
-                    } else if ((variant == VAR_KILLER || variant == VAR_SUMLESS) && cages) {
-                        ok = sudoku_geom_killer_text(cages, geo) && geo->variant == variant;
-                    } else if (variant == VAR_REGIONS && cages) {
-                        ok = sudoku_geom_regions_text(cages, geo);
-                    } else if (variant == VAR_PRODUCT && cages) {
-                        ok = sudoku_geom_product_text(cages, geo);
-                    } else if (variant == VAR_KROPKI || variant == VAR_XV) {   /* (their marks) */
-                        const char *marks = (const char *)sqlite3_column_text(st, 4);
-                        ok = marks && strlen(marks) == 81 && sudoku_geom_marks(variant, marks, geo);
-                    } else {                                /* the line variants: their lines */
-                        const char *lines = (const char *)sqlite3_column_text(st, 5);
-                        ok = lines && sudoku_geom_lines_text(variant, lines, geo) && geo->variant == variant;
+                } else if (geo || (geo = malloc(sizeof(*geo)))) {   /* with its layout: built as an import is */
+                    sdx_puzzle_t p;
+                    memset(&p, 0, sizeof(p));
+                    p.variant = variant;
+                    const char *txt[4];
+                    for (int c = 0; c < 4; c++) {   /* regions, cages, marks, thermos ("" where there's none) */
+                        txt[c] = (const char *)sqlite3_column_text(st, 2 + c);
+                        txt[c] = txt[c] ? txt[c] : "";
                     }
+                    p.regions = txt[0];
+                    p.cages = txt[1];
+                    p.marks = txt[2];
+                    p.thermos = txt[3];
+                    const bool ok = sdx_geom(&p, geo) && geo->variant == variant;
                     h = ok ? canon_hash_geom(geo, givens) : 0;
                 }
             }
