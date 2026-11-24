@@ -13,6 +13,9 @@ Commands (on the command line, or one per line in a script; # starts a comment):
     press X Y | move X Y | release [X Y]
     wait MS                 let the UI run
     screenoff               turn the screen off as its timeout does (the next tap wakes it)
+    saver N                 show screen saver N now (sudoku.db's saver_clock numbers: 0 Dark,
+                            2 Life ...) without changing the one Settings chose; one showing
+                            is swapped for it; the next tap wakes the screen
     state                   the game on screen as text: a STATE line (name, variant,
                             solved, time, mistakes ...) and a BOARD line, 81 characters
                             row by row: 1-9 given, a-i entered (a = 1), . empty, # off the board
@@ -81,14 +84,30 @@ from a freshly booted Home screen: the tool waits for "DEVCTL ready" first
 --baud for the transfers, which go compressed (zlib) both ways: screenshots, files and SQL.
 Needs pyserial (pip install pyserial).
 
+To test without a reset each run, keep a session open: it holds the port (the board resets once,
+when it starts), and every later run for that port goes through it, in its own folder, printing
+as usual; the board stays as the last run left it. If the board is reset meanwhile (RESET, a
+crash), the next run finds it again. --sqlite needs the port itself; `make upload` ends the
+session first (the flasher needs the port), and so does --stop (closing the port resets the board).
+
+    python3 tools/devctl.py --port /dev/ttyACM1 --serve &
+    python3 tools/devctl.py --port /dev/ttyACM1 "saver 23; wait 5000; shot stars.png"
+    python3 tools/devctl.py --port /dev/ttyACM1 --stop
+
 Coordinates are screen pixels, 0..719, from the top left.
 """
 import argparse
 import base64
+import contextlib
 import csv
 import io
+import json
 import os
 import shlex
+import signal
+import socket
+import tempfile
+import traceback
 import sqlite3
 import unicodedata
 import struct
@@ -107,6 +126,8 @@ BOOT_BAUD = 115200
 class Board:
     def __init__(self, port, baud, wait_boot, verbose):
         self.verbose = verbose
+        self.baud = baud
+        self.rbuf = b""                            # read from the port, not yet taken as lines
         self.ser = serial.Serial()
         self.ser.port = port
         self.ser.baudrate = BOOT_BAUD
@@ -123,21 +144,59 @@ class Board:
             self.command("baud %d" % baud, expect="OK baud")
             self.ser.baudrate = baud
             time.sleep(0.1)
-            self.ser.reset_input_buffer()
+            self.drain()
             self.command("ping", expect="OK pong")
 
-    def readline(self, timeout):
+    def try_ping(self, timeout):
+        """True if the board answers a ping within timeout seconds (at the port's speed now)"""
+        self.drain()
+        self.ser.write(b"\nping\n")
         end = time.time() + timeout
-        buf = b""
         while time.time() < end:
-            b = self.ser.readline()
-            if not b:
-                continue
-            buf += b
-            if buf.endswith(b"\n"):
-                line = buf.decode("utf-8", "replace").rstrip("\r\n")
-                return line
-        return None
+            line = self.readline(end - time.time())
+            if line is None:
+                return False
+            if "OK pong" in line:
+                return True
+        return False
+
+    def resync(self):
+        """Before a session's request: the link answering; if the board was reset meanwhile (RESET,
+        a crash), it's back at the boot speed: found there (waiting for it to boot) and sped up again"""
+        if self.try_ping(1.0):
+            return
+        self.ser.baudrate = BOOT_BAUD
+        end = time.time() + 30
+        while not self.try_ping(1.0):
+            if time.time() > end:
+                sys.exit("the board doesn't answer on %s" % self.ser.port)
+        if self.baud != BOOT_BAUD:
+            self.command("baud %d" % self.baud, expect="OK baud")
+            self.ser.baudrate = self.baud
+            time.sleep(0.1)
+            self.drain()
+            self.command("ping", expect="OK pong")
+
+    def drain(self):
+        """drops whatever came in and wasn't read (the port's buffer and ours)"""
+        self.ser.reset_input_buffer()
+        self.rbuf = b""
+
+    def readline(self, timeout):
+        # Reads all that's waiting at once into rbuf and splits lines there: pyserial's readline() reads
+        # a byte a call, too slow for a screenshot at 921600 baud; the port's buffer fills, the USB
+        # reads pause and the CH343 drops bytes (the UART has no flow control): lines lost
+        end = time.time() + timeout
+        while True:
+            i = self.rbuf.find(b"\n")
+            if i >= 0:
+                line, self.rbuf = self.rbuf[:i + 1], self.rbuf[i + 1:]
+                return line.decode("utf-8", "replace").rstrip("\r\n")
+            left = end - time.time()
+            if left <= 0:
+                return None
+            self.ser.timeout = min(left, 0.5)
+            self.rbuf += self.ser.read(max(1, self.ser.in_waiting))
 
     def wait_for(self, text, timeout, fail=None):
         end = time.time() + timeout
@@ -229,14 +288,14 @@ class Board:
         print("put %s -> %s, %d bytes, %d compressed (%.0f KB/s)" % (local, remote, len(data), len(packed),
                                                                   len(data) / 1024 / dt))
 
-    def command(self, cmd, expect=None, timeout=20):
+    def command(self, cmd, expect=None, timeout=20, fail=None):
         if self.verbose:
             print("  >", cmd)
         self.ser.write((cmd + "\n").encode())
         word = cmd.split()[0]
-        return self.wait_for(expect or ("OK " + word), timeout)
+        return self.wait_for(expect or ("OK " + word), timeout, fail=fail)
 
-    def shot(self, path, blur=(), tries=3):
+    def shot(self, path, blur=(), tries=6):
         for attempt in range(tries):
             self.ser.write(b"shot z\n")                # z: sent compressed
             begin = self.wait_for("SHOT BEGIN", 10)
@@ -260,9 +319,15 @@ class Board:
                     break
                 elif self.verbose:
                     print("  <", line)
+            why = "no SHOT END"
             if end_line:
                 _, _, size, crc = end_line.split()
+                missing = [i for i in range(max(chunks) + 1 if chunks else 0) if i not in chunks]
                 data = unpack(b"".join(chunks[i] for i in sorted(chunks)), begin.endswith(" z"))
+                why = ("%d line%s lost" % (len(missing), "" if len(missing) == 1 else "s") if missing
+                       else "doesn't unpack" if data is None
+                       else "%d bytes, not %s" % (len(data), size) if len(data) != int(size)
+                       else "bad CRC")
                 if data is not None and len(data) == int(size) and zlib.crc32(data) == int(crc, 16):
                     rgb = decode_rle(data, 720, 720)
                     for box in blur:
@@ -270,7 +335,7 @@ class Board:
                     write_png(path, rgb, 720, 720)
                     print("saved", path)
                     return
-            print("screenshot garbled, retrying (%d)" % (attempt + 1))
+            print("screenshot garbled (%s), retrying (%d)" % (why, attempt + 1))
         sys.exit("couldn't get a clean screenshot")
 
 
@@ -372,7 +437,8 @@ def show_value(v, width=None):
     return s[:width - 1] + "…" if width and len(s) > width else s
 
 
-def print_result(cols, rows, mode, out=sys.stdout):
+def print_result(cols, rows, mode, out=None):
+    out = out or sys.stdout                         # (looked up now: a session redirects it)
     if mode == "csv":
         w = csv.writer(out, lineterminator="\n")
         w.writerow(cols)
@@ -738,9 +804,9 @@ def run(board, words):
         print("filled %s cell%s" % (line.split()[2], "" if line.split()[2] == "1" else "s"))
     elif cmd == "ping":                             # (it answers "OK pong")
         board.command("ping", expect="OK pong")
-    elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "screenoff"):
+    elif cmd in ("tap", "long", "swipe", "press", "move", "release", "wait", "screenoff", "saver"):
         timeout = 20 + (int(words[1]) / 1000 if cmd == "wait" and len(words) > 1 else 0)
-        board.command(" ".join(words), timeout=timeout)
+        board.command(" ".join(words), timeout=timeout, fail="ERR")
     else:
         sys.exit("unknown command: %s" % " ".join(words))
 
@@ -790,7 +856,7 @@ def sync_time(board):
             sys.exit(line)
 
 
-def main():
+def make_parser():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--baud", type=int, default=921600, help="speed for the transfers (default 921600)")
@@ -799,11 +865,19 @@ def main():
     ap.add_argument("--sql", action="append", help="SQL to run on sudoku.db (several: repeat --sql)")
     ap.add_argument("--sqlite", action="store_true", help="a SQL console on sudoku.db")
     ap.add_argument("--mode", default="box", choices=("box", "list", "csv", "tabs"), help="how SQL results print")
+    ap.add_argument("--serve", action="store_true",
+                    help="keep the port open as a session (the board resets once): later runs for this port go "
+                         "through it, without a reset each")
+    ap.add_argument("--stop", action="store_true", help="end the port's session (closing the port resets the board)")
+    ap.add_argument("--direct", action="store_true", help="open the port even if a session runs (it won't work "
+                                                          "while the session holds the port: for no session)")
     ap.add_argument("-v", "--verbose", action="store_true")
     ap.add_argument("commands", nargs="*", help="commands; several are separated by ';'")
-    args = ap.parse_args()
+    return ap
 
-    board = Board(args.port, args.baud, not args.no_wait, args.verbose)
+
+def execute(board, args):
+    """Runs a run's commands, script and SQL on the board; its exit code"""
     lines = []
     if args.script:
         with open(args.script) as f:
@@ -818,8 +892,141 @@ def main():
         ok = run_sql(board, text, args.mode) and ok
     if args.sqlite:
         sqlite_console(board, args.mode)
-    if not ok:
-        sys.exit(1)
+    return 0 if ok else 1
+
+
+# ---- the session: one process keeps the port open (opening it resets the board), and the runs for that
+# port send it their arguments over a Unix socket; it runs them one at a time, in the run's folder, and
+# sends back what they print (JSON lines: {"o": text}, {"e": text}, then {"exit": code})
+
+def session_path(port):
+    """the session's socket for a port (by-id links and the ttyACM name give the same one)"""
+    where = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    return os.path.join(where, "devctl-%s.sock" % os.path.basename(os.path.realpath(port)))
+
+
+def session_call(port, request):
+    """Sends a request to the port's session and passes on what it prints; its exit code, or None when
+    no session runs"""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(session_path(port))
+    except (FileNotFoundError, ConnectionRefusedError):
+        s.close()
+        return None
+    with s:
+        s.sendall(json.dumps(request).encode() + b"\n")
+        for raw in s.makefile("rb"):
+            msg = json.loads(raw)
+            if "o" in msg:
+                sys.stdout.write(msg["o"])
+                sys.stdout.flush()
+            elif "e" in msg:
+                sys.stderr.write(msg["e"])
+                sys.stderr.flush()
+            elif "exit" in msg:
+                return msg["exit"]
+    sys.stderr.write("the session ended in the middle of the run\n")
+    return 1
+
+
+class SessionOut(io.TextIOBase):
+    """a run's stdout or stderr inside the session: to its client (dropped once the client is gone)"""
+    def __init__(self, conn, key):
+        self.conn, self.key = conn, key
+
+    def write(self, text):
+        if text and self.conn:
+            try:
+                self.conn.sendall(json.dumps({self.key: text}).encode() + b"\n")
+            except OSError:
+                self.conn = None                    # (Ctrl-C on the client: the run goes on, unheard)
+        return len(text)
+
+    def isatty(self):
+        return False
+
+
+def serve(args):
+    path = session_path(args.port)
+    if session_call(args.port, {"ping": True}) is not None:
+        sys.exit("a session already runs for %s (%s)" % (args.port, path))
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(path)                             # (a session that died left it)
+    board = Board(args.port, args.baud, not args.no_wait, args.verbose)
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    old_mask = os.umask(0o077)                      # (only this user's runs)
+    srv.bind(path)
+    os.umask(old_mask)
+    srv.listen(8)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    print("devctl session on %s, at %d baud: runs for this port go through it (end it: --stop)"
+          % (args.port, args.baud), flush=True)
+    parser = make_parser()
+    try:
+        while True:
+            conn, _ = srv.accept()
+            with conn:
+                try:
+                    request = json.loads(conn.makefile("rb").readline() or b"{}")
+                except ValueError:
+                    continue
+                if request.get("stop"):
+                    conn.sendall(b'{"o": "session ended\\n"}\n{"exit": 0}\n')
+                    break
+                if request.get("ping"):
+                    conn.sendall(b'{"exit": 0}\n')
+                    continue
+                out, err = SessionOut(conn, "o"), SessionOut(conn, "e")
+                code, here = 0, os.getcwd()
+                try:
+                    os.chdir(request.get("cwd") or here)
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        run_args = parser.parse_args(request.get("argv", []))
+                        if run_args.sqlite:
+                            sys.exit("--sqlite needs the port itself: end the session first (--stop)")
+                        board.resync()
+                        code = execute(board, run_args)
+                except SystemExit as e:
+                    if isinstance(e.code, int) or e.code is None:
+                        code = e.code or 0
+                    else:
+                        err.write("%s\n" % e.code)
+                        code = 1
+                except Exception:
+                    err.write(traceback.format_exc())
+                    code = 1
+                finally:
+                    os.chdir(here)
+                with contextlib.suppress(OSError):
+                    conn.sendall(json.dumps({"exit": code}).encode() + b"\n")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.close()
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(path)
+        board.ser.close()
+
+
+def main():
+    args = make_parser().parse_args()
+    if args.serve:
+        serve(args)
+        return
+    if hasattr(signal, "SIGPIPE"):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)   # (output into `| head`: end quietly; not the session's)
+    if args.stop:
+        code = session_call(args.port, {"stop": True})
+        if code is None:
+            print("no session runs for %s" % args.port)
+        return
+    if not args.direct:
+        code = session_call(args.port, {"argv": sys.argv[1:], "cwd": os.getcwd()})
+        if code is not None:
+            sys.exit(code)
+    board = Board(args.port, args.baud, not args.no_wait, args.verbose)
+    sys.exit(execute(board, args))
 
 
 if __name__ == "__main__":

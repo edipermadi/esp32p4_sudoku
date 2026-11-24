@@ -12,6 +12,7 @@
 #include <lvgl.h>
 #include "esp_heap_caps.h"
 #include "ui_sudoku.h"
+#include "store.h"
 
 /** The line being read (CMD_MAX bytes, PSRAM: internal RAM is tight) */
 static char *s_line;
@@ -81,7 +82,7 @@ static void run(char *line)
     }
     if (s_cap) {                                    /* over sound: touches, wait, heap, screenoff only */
         static const char *const ok[] = {"tap", "long", "swipe", "press", "move", "release", "wait", "heap", "screenoff",
-                                         "fill", "state", "pz"
+                                         "saver", "fill", "state", "pz"
                                         };
         bool allowed = false;
         for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) {
@@ -179,6 +180,11 @@ static void run(char *line)
         devctl_bench(n, a);
     } else if (!strcmp(cmd, "screenoff")) {
         devctl_screenoff();
+    } else if (!strcmp(cmd, "saver")) {            /* saver <n>: that screen saver now, Settings unchanged */
+        if (n < 1 || !devctl_saver(a[0])) {
+            devctl_reply("ERR saver: give a saver number, 0..%d\n", SAVER_MODE_COUNT - 1);
+            return;
+        }
     } else {
         devctl_reply("ERR unknown: %s\n", line);
         return;

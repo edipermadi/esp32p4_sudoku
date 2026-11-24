@@ -16,7 +16,7 @@
 #include "saver_automata_core.h"
 #include "saver_automata3d_core.h"
 
-static void saver_sleep(bool lock_now);
+static void saver_sleep(bool lock_now, int mode);
 static void saver_show_stop(void);
 
 static lv_obj_t *s_saver;                 /**< the black cover on the system layer while the screen is off */
@@ -194,11 +194,30 @@ static void saver_wake_cb(lv_event_t *e)
 }
 
 /**
- * @brief The screen off: the game paused, the lock screen (if on) under a black cover, then the chosen
- *        saver at full speed (for "Screen saver for" minutes); or dark at once, saving power.
- * @param[in] lock_now  the lock button on Home: locked even with the lock Off, and dark at once
+ * @brief A saver on the cover at full speed (for "Screen saver for" minutes); or, for Dark (or if it
+ *        couldn't start), dark at once, saving power.
+ * @param[in] mode  store_saver_t
  */
-static void saver_sleep(bool lock_now)
+static void saver_show(uint8_t mode)
+{
+    if (saver_show_start(mode)) {
+        lv_refr_now(NULL);
+        bsp_display_brightness_set(effective_brightness());   /* (low PWM levels show nothing on this panel) */
+        sv_since = lv_tick_get();
+        sv_dark_timer = lv_timer_create(saver_dark_tick, 1000, NULL);
+        return;
+    }
+    lv_refr_now(NULL);                  /* panel shows black before the light goes off */
+    bsp_power_save(true);               /* light off, panel asleep, CPU slower */
+}
+
+/**
+ * @brief The screen off: the game paused, the lock screen (if on) under a black cover, then a saver at
+ *        full speed (for "Screen saver for" minutes); or dark at once, saving power.
+ * @param[in] lock_now  the lock button on Home: locked even with the lock Off, and dark at once
+ * @param[in] mode  store_saver_t to show, or -1 for the one chosen in Settings
+ */
+static void saver_sleep(bool lock_now, int mode)
 {
     if (lv_screen_active() == screen_game() && game_id() != STORE_NO_GAME && !is_game_solved() && !is_game_paused()) {
         set_paused(true);   /* stops the clock, hides the board, saves the game */
@@ -213,23 +232,32 @@ static void saver_sleep(bool lock_now)
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_saver, saver_wake_cb, LV_EVENT_PRESS_LOST, NULL);
-    if (!lock_now && saver_show_start(store_saver_mode())) {
-        lv_refr_now(NULL);
-        bsp_display_brightness_set(effective_brightness());   /* (low PWM levels show nothing on this panel) */
-        sv_since = lv_tick_get();
-        sv_dark_timer = lv_timer_create(saver_dark_tick, 1000, NULL);
-        return;
-    }
-    lv_refr_now(NULL);                  /* panel shows black before the light goes off */
-    bsp_power_save(true);               /* light off, panel asleep, CPU slower */
+    saver_show(lock_now ? SAVER_MODE_DARK : mode >= 0 ? (uint8_t)mode : store_saver_mode());
 }
 
 /* (documented in ui_sudoku.h) */
 void sudoku_ui_screen_off(void)
 {
     if (!s_saver) {
-        saver_sleep(false);
+        saver_sleep(false, -1);
     }
+}
+
+/* (documented in ui_sudoku.h) */
+bool sudoku_ui_screen_saver(int mode)
+{
+    if (mode < 0 || mode >= SAVER_MODE_COUNT) {
+        return false;
+    }
+    if (!s_saver) {
+        saver_sleep(false, mode);
+        return true;
+    }
+    saver_show_stop();                  /* one showing (or dark already): this one instead */
+    bsp_power_save(false);
+    lv_obj_invalidate(s_saver);
+    saver_show((uint8_t)mode);
+    return true;
 }
 
 /**
@@ -239,7 +267,7 @@ void sudoku_ui_screen_off(void)
 void lock_now_cb(lv_event_t *e)
 {
     if (!s_saver) {
-        saver_sleep(true);
+        saver_sleep(true, -1);
     }
 }
 
@@ -248,7 +276,7 @@ void saver_cb(lv_timer_t *t)
 {
     if (!s_saver && ui_sleep_min() &&
             lv_display_get_inactive_time(NULL) >= (uint32_t)ui_sleep_min() * 60 * 1000) {
-        saver_sleep(false);
+        saver_sleep(false, -1);
     }
 }
 

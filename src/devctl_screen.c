@@ -79,3 +79,13 @@ void devctl_screenoff(void)
     sudoku_ui_screen_off();                     /* as the timeout: black, then the lock screen if on */
     devctl_pump(200);
 }
+
+/* (documented in devctl_internal.h) */
+bool devctl_saver(int mode)
+{
+    if (!sudoku_ui_screen_saver(mode)) {
+        return false;
+    }
+    devctl_pump(200);
+    return true;
+}

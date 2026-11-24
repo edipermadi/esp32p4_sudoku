@@ -139,6 +139,12 @@ void devctl_bench(int n, const int *a);
 /** @brief screenoff: the screen off as its timeout does (devctl_screen.c). */
 void devctl_screenoff(void);
 /**
+ * @brief saver <n>: screen saver n now, Settings unchanged (devctl_screen.c).
+ * @param[in] mode  store_saver_t
+ * @return false if there's no such saver
+ */
+bool devctl_saver(int mode);
+/**
  * @brief ls / get / put / mv / rm / mkdir / import (serial only).
  * @param[in] line  the command line
  * @return true if it was one of them (and has been answered)

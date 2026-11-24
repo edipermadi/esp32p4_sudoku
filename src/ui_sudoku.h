@@ -75,6 +75,15 @@ void sudoku_ui_flash_done(void);
 
 /** @brief Turns the screen off now, as its timeout does (with the lock screen under it, if that's on); the next tap wakes it. For serial control. */
 void sudoku_ui_screen_off(void);
+/**
+ * @brief Shows a screen saver now, whatever Settings chose (and without changing that), as the screen
+ *        timeout would: on the black cover, with the lock screen under it if that's on; one already
+ *        showing (or the dark screen) is swapped for it. The next tap wakes the screen. For serial
+ *        control (devctl's saver).
+ * @param[in] mode  store_saver_t (Dark: the screen dark at once)
+ * @return false if there's no such saver
+ */
+bool sudoku_ui_screen_saver(int mode);
 
 /**
  * @brief Enters digits in the game on screen, as if typed on the pad (moves, undo, the replay,

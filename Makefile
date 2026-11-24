@@ -57,6 +57,7 @@ build:
 	@tools/build_extras.sh $(BUILD)
 
 upload: build
+	@$(PYTHON) tools/devctl.py --port $(PORT) --stop >/dev/null 2>&1 || true   # (a devctl session holds the port)
 	$(ARDUINO_CLI) upload --fqbn "$(FQBN)" --input-dir $(BUILD) -p $(PORT) .
 
 avatars:

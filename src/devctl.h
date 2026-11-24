@@ -30,6 +30,10 @@ extern "C" {
  *   press <x> <y> / move <x> <y> / release    by hand
  *   wait <ms>                 let the UI run (animations, the database)
  *   screenoff                 turn the screen off as its timeout does (the next tap wakes it)
+ *   saver <n>                 show screen saver n now (store_saver_t: the numbers of sudoku.db's
+ *                             saver_clock, 0 Dark ...) without changing the one Settings chose; one
+ *                             showing is swapped for it (the next tap wakes the screen);
+ *                             "ERR saver: ..." for no such saver
  *   clock                     -> "OK clock wifi=<state> time=set YYYY-MM-DD HH:MM:SS" (local) or
  *                             "OK clock wifi=<state> time=unset"; state: off, starting, idle,
  *                             connecting, connected, failed, no-radio
@@ -102,7 +106,7 @@ void devctl_poll(void);
  * @brief Runs one command line from elsewhere (gibberlink.h: commands as sound), in the LVGL task.
  *
  * Only touches, wait (at most 10 s), fill, state (one line: "OK state s<0|1> <board>"), ping, heap
- * (short), screenoff and pz; not shot, files, sql, baud or bench.
+ * (short), screenoff, saver and pz; not shot, files, sql, baud or bench.
  * @param[in] line      the command
  * @param[out] out  the answer ("OK ..." / "ERR ...", one line), not sent to the port
  * @param[in] n         out's size
