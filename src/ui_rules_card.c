@@ -33,6 +33,7 @@ static const uint8_t PIC_PILL[] = {0, 1, 2, 3, 4, 0xFF};    /**< (1 2) 3 4 5: 12
 static const uint8_t PIC_AVG[] = {0, 1, 2, 3, 0xFF};       /**< (5) 3 8 4: 3 + 8 + 4 = 3 x 5 */
 static const uint8_t PIC_PROD[] = {12, 0, 1, 0xFE, 70, 2, 3, 6, 0xFE, 0xFF};   /**< 3 x 4 = 12, and an empty 70 */
 static const uint8_t PIC_DMARKS[] = {0, DMARK_DR, 0xFF};   /**< 3 and 4 corner to corner: a mark; 8 and 4: none */
+static const uint8_t PIC_SEQ[] = {0, 1, 2, 3, 0xFF};      /**< 2 4 6 8: a step of 2 */
 static const uint8_t PIC_TEN[] = {0, 1, 2, 5, 4, 0xFF};    /**< 3 7 | 1 5 4: two runs of 10 */
 
 /** @brief Each variant's rules card picture. */
@@ -137,6 +138,8 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_FLATMATES] = {.w = 2, .h = 3, .digits = "1." "55" ".9", .left_clue = -1},
     [VAR_MATHRAX] = {.w = 2, .h = 2, .digits = "24" "57", .left_clue = -1, .mathrax = "9+"},
     [VAR_N9] = {.w = 6, .h = 1, .digits = "512984", .left_clue = -1, .left_text = "28"},
+    [VAR_BATTEN] = {.w = 3, .h = 2, .digits = "274" "586", .left_clue = -1, .batten = "100" "000"},
+    [VAR_SEQ] = {.w = 4, .h = 1, .digits = "2468", .thermo = PIC_SEQ, .left_clue = -1, .line_kind = LINE_SEQ},
     [VAR_BF] = {.w = 9, .h = 1, .digits = "374951862", .left_clue = 23},
     [VAR_S9] = {.w = 6, .h = 1, .digits = "3.5962", .left_clue = -1, .s9 = "r....l"},
     [VAR_CLONE] = {.w = 4, .h = 2, .digits = "35.." "..35", .tint = "1100" "0011", .left_clue = -1},
@@ -282,6 +285,12 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_AVG] = "Classic rules, and on each teal line, the digit in the circle is the average of the line's other "
     "digits: they add up to it times how many they are, 3 + 8 + 4 = 3 x 5. Digits may repeat along a line where the "
     "rules allow.",
+    [VAR_BATTEN] = "Classic rules, and a mark where four cells meet says their odd and even digits make a "
+    "checkerboard: here 2 7 / 5 8, even and odd on top, odd and even below. Every mark is shown, so four cells without "
+    "one are no checkerboard: 7 4 / 8 6 has three even digits.",
+    [VAR_SEQ] = "Classic rules, and along each indigo line the digits go up or down by the same step from cell to "
+    "cell, 1 or more: here 2 4 6 8, a step of 2. So no digit repeats on a line, and two digits on it give away the "
+    "rest.",
     [VAR_BF] = "Classic rules, and a clue left of a row or above a column. Take X, the line's first digit, and Y, "
     "its last: the first X cells and the last Y cells. Where they overlap, the clue is the sum of the overlap; where "
     "they don't, the sum of the cells between them. Here X = 3 and Y = 2: 3 7 4 and 6 2 leave 9 + 5 + 1 + 8 = 23 "
@@ -396,6 +405,11 @@ static void rules_pic_draw_cb(lv_event_t *e)
                              .x2 = x0 + (line[n - 1] % 9 + 1) * cs, .y2 = y0 + (line[n - 1] / 9 + 1) * cs
                             };
         draw_argyle_line(layer, &a, &b, k < ARGYLE_LINES / 2, 2);
+    }
+    for (int i = 0; p->batten && i < p->w * p->h; i++) {   /* Battenburg's marks, at a cell's bottom-right corner */
+        if (p->batten[i] == '1') {
+            draw_batten_mark(layer, x0 + (i % p->w + 1) * cs, y0 + (i / p->w + 1) * cs, cs * 2 / 11);
+        }
     }
     for (int i = 0; p->s9 && i < p->w * p->h; i++) {   /* Search Nine's arrows */
         const char *at = p->s9[i] != '.' ? strchr(".urdl", p->s9[i]) : NULL;

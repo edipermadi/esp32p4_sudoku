@@ -180,6 +180,13 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
         if (g->line_kind == LINE_RENBAN && hi - lo != n - 1) {
             return false;
         }
+        for (int i = 2; g->line_kind == LINE_SEQ && i < n; i++) {   /* Sequence: one step all along, not 0 */
+            if (sol[g->thermo_cell[t][i]] - sol[g->thermo_cell[t][i - 1]] !=
+                    sol[g->thermo_cell[t][1]] - sol[g->thermo_cell[t][0]] ||
+                    sol[g->thermo_cell[t][1]] == sol[g->thermo_cell[t][0]]) {
+                return false;
+            }
+        }
         if (g->line_kind == LINE_ARROW && sum != sol[g->thermo_cell[t][0]]) {
             return false;
         }
@@ -304,6 +311,16 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
     }
     for (int c = 0; g->flatmates && c < 81; c++) {   /* Dutch Flatmates: every 5 with a 1 above or a 9 below */
         if (sol[c] == 5 && !((c > 8 && sol[c - 9] == 1) || (c < 72 && sol[c + 9] == 9))) {
+            return false;
+        }
+    }
+    for (int tl = 0; g->batten && tl < 72; tl++) {  /* Battenburg: a mark exactly where odd and even are checkered */
+        if (tl % 9 == 8) {
+            continue;
+        }
+        const int a = sol[tl], b = sol[tl + 1], c = sol[tl + 9], d = sol[tl + 10];
+        const bool checker = (a % 2 == d % 2) && (b % 2 == c % 2) && (a % 2 != b % 2);
+        if (checker != (g->bat[tl] != 0)) {
             return false;
         }
     }
@@ -555,6 +572,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18) &&
            a->n9 == b->n9 && !memcmp(a->n9_set, b->n9_set, 18) && a->nclone == b->nclone &&
            a->s9 == b->s9 && !memcmp(a->s9_dir, b->s9_dir, 81) && a->bf == b->bf && !memcmp(a->bf_clue, b->bf_clue, 18) &&
+           a->batten == b->batten && !memcmp(a->bat, b->bat, 81) &&
            !memcmp(a->clone_of, b->clone_of, 81) && a->quadro == b->quadro && a->aq9 == b->aq9 && a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
            a->flatmates == b->flatmates && a->nmx == b->nmx && !memcmp(a->mx_at, b->mx_at, a->nmx) &&
            !memcmp(a->mx_op, b->mx_op, a->nmx) && !memcmp(a->mx_val, b->mx_val, a->nmx) &&
@@ -620,6 +638,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_BF:
         sudoku_bf_text(g, marks, len);
         break;
+    case VAR_BATTEN:
+        sudoku_batten_text(g, marks, len);
+        break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, len);
         break;
@@ -657,6 +678,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_TEN:
     case VAR_PILL:
     case VAR_AVG:
+    case VAR_SEQ:
         sudoku_thermos_text(g, thermos, len);
         break;
     default:
@@ -827,6 +849,21 @@ static bool turn_layout(const sudoku_geom_t *b, int t, sudoku_geom_t *out)
         }
         tg.clone_dr[q] = (int8_t)(tb0 / 9 - ta / 9);
         tg.clone_dc[q] = (int8_t)(tb0 % 9 - ta % 9);
+    }
+    if (v == VAR_BATTEN) {                          /* Battenburg: each mark onto its turned block's top-left cell */
+        memset(tg.bat, 0, 81);
+        for (int c = 0; c < 72; c++) {
+            if (!b->bat[c]) {
+                continue;
+            }
+            int top = 80;
+            const int four[4] = {c, c + 1, c + 9, c + 10};
+            for (int j = 0; j < 4; j++) {
+                const int d = canon_cell(t, 9, four[j]);
+                top = d < top ? d : top;
+            }
+            tg.bat[top] = 1;
+        }
     }
     if (v == VAR_S9) {                              /* Search Nine: each arrow onto its turned cell, pointing where its */
         memset(tg.s9_dir, 0, 81);                   /* next cell was turned to */
@@ -1079,7 +1116,9 @@ static void test_canon(void)
         if (board.nlk || board.nquads || board.nmx || board.sandwich || board.edge_kind || board.consec_on ||
                 v == VAR_EVENODD || v == VAR_DIAGCONSEC || (board.nthermos == 0 && !board.ncages && v != VAR_JIGSAW)) {
             tb = board;                             /* marks, circles, clues: one of them changed: another hash */
-            if (board.s9) {
+            if (board.batten) {
+                tb.bat[0] ^= 1;                     /* (a mark added, or taken away) */
+            } else if (board.s9) {
                 int c = 0;
                 while (c < 80 && !tb.s9_dir[c]) {
                     c++;
@@ -1480,7 +1519,7 @@ static void test_generate(void)
             CHECKF(board.variant == v, "%s: board variant %d", variant_name(v), board.variant);
             if (v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR || v == VAR_DUTCH ||
                     v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT || v == VAR_DARROW ||
-                    v == VAR_TEN || v == VAR_PILL || v == VAR_AVG) {
+                    v == VAR_TEN || v == VAR_PILL || v == VAR_AVG || v == VAR_SEQ) {
                 CHECKF(!is_lines_crossing(&board), "%s %s: two lines cross", variant_name(v), gen_level_name(lv));
             }
             CHECKF(is_givens_ok(&board, g), "%s %s: givens on the board", variant_name(v), gen_level_name(lv));
@@ -1875,6 +1914,75 @@ static void test_bf(void)
         CHECK(b.bf && sudoku_count_solutions(&b, g, 2) == 1 && sudoku_solve(&b, g, sol) && is_solved_ok(&b, g, sol));
         CHECK(game_conflicts(&b, sol, out) == 0);
     }
+}
+
+/* Sequence Lines: what a cell may hold by its line (one step all along, never 0), the conflicts */
+static void test_seq(void)
+{
+    static sudoku_geom_t b;
+    CHECK(sudoku_geom_lines_text(VAR_SEQ, "0,1,2,3;20,30,40", &b) && b.line_kind == LINE_SEQ && b.nthermos == 2);
+    uint8_t v[81] = {0};
+    bool out[81];
+    CHECK(gen_line_allow(&b, 0, 1, v, NULL) == 0x1FC);   /* (empty: 2..8; a cell with one on each side is never 1 or 9) */
+    v[0] = 2;
+    v[3] = 8;                                       /* 2 _ _ 8: a step of 2 */
+    CHECK(gen_line_allow(&b, 0, 1, v, NULL) == 1u << 4 && gen_line_allow(&b, 0, 2, v, NULL) == 1u << 6);
+    v[3] = 3;                                       /* 2 _ _ 3: no whole step */
+    CHECK(gen_line_allow(&b, 0, 1, v, NULL) == 0);
+    v[3] = 0;
+    v[0] = 9;                                       /* 9 first: down by 1 or 2 (four cells stay in 1..9) */
+    CHECK(gen_line_allow(&b, 0, 1, v, NULL) == ((1u << 8) | (1u << 7)));
+    v[0] = 0;
+    v[30] = 5;                                      /* the middle of three: anything but 5, steps up to 4 either way */
+    CHECK(gen_line_allow(&b, 1, 0, v, NULL) == (0x3FE & ~(1u << 5)));
+    CHECK(sudoku_fits_why(&b, v, 20, 5) != FIT_OK);
+    v[20] = 3;
+    v[40] = 7;
+    CHECK(game_conflicts(&b, v, out) == 0);
+    v[40] = 6;
+    CHECK(game_conflicts(&b, v, out) > 0 && out[20] && out[30] && out[40]);
+    v[40] = 0;
+    v[20] = 5;                                      /* (a step of 0: also in a column, a repeat; the line says so too) */
+    CHECK(game_conflicts(&b, v, out) > 0 && out[20] && out[30]);
+}
+
+/* Battenburg: its text read back (and refused with a mark on the last row or column), what a marked and an unmarked
+ * block leave a cell, the conflicts */
+static void test_batten(void)
+{
+    static sudoku_geom_t b;
+    char t[82], buf[100];
+    memset(t, '.', 81);
+    t[81] = 0;
+    t[0] = 'b';                                     /* the block r1c1-r2c2 is checkered; the one right of it isn't */
+    CHECK(sudoku_geom_batten_text(t, &b) && b.batten && b.bat[0] == 1 && b.bat[1] == 0);
+    CHECK(sudoku_batten_text(&b, buf, sizeof(buf)) && !strcmp(buf, t));
+    t[8] = 'b';
+    CHECK(!sudoku_geom_batten_text(t, &b));
+    t[8] = '.';
+    t[75] = 'b';
+    CHECK(!sudoku_geom_batten_text(t, &b));
+    t[75] = 'x';
+    CHECK(!sudoku_geom_batten_text(t, &b));
+    t[75] = '.';
+    CHECK(sudoku_geom_batten_text(t, &b));
+    uint8_t v[81] = {0};
+    bool out[81];
+    v[0] = 2;                                       /* marked: r2c2 even like r1c1, r1c2 and r2c1 odd */
+    CHECK(sudoku_fits_why(&b, v, 10, 3) == FIT_BATTEN && is_sudoku_fits(&b, v, 10, 4));
+    CHECK(sudoku_fits_why(&b, v, 1, 4) == FIT_BATTEN && is_sudoku_fits(&b, v, 1, 7));
+    v[1] = 7;                                       /* unmarked block r1c2-r2c3: 7 / 5 . with 8 across: 3 odd not */
+    v[10] = 4;                                      /* (r2c2 = 4 even) */
+    v[2] = 6;                                       /* r1c3 even, r2c2 even, r1c2 odd: a checker needs r2c3 odd */
+    CHECK(sudoku_fits_why(&b, v, 11, 5) == FIT_BATTEN && is_sudoku_fits(&b, v, 11, 8));
+    v[9] = 5;                                       /* the marked block whole: 2 7 / 5 4 */
+    v[11] = 0;
+    CHECK(game_conflicts(&b, v, out) == 0);
+    v[9] = 6;                                       /* 2 7 / 6 4: no checkerboard under a mark */
+    CHECK(game_conflicts(&b, v, out) > 0 && out[0] && out[9]);
+    v[9] = 5;
+    v[11] = 1;                                      /* 7 6 / 4 1: a checkerboard without a mark */
+    CHECK(game_conflicts(&b, v, out) > 0 && out[1] && out[2] && out[10] && out[11]);
 }
 
 static void test_sdx_edges(void)
@@ -2974,7 +3082,8 @@ int main(int argc, char **argv)
         {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},
         {"Point Symmetry and Before Nine", test_psym_b9}, {"Quadro and Anti-Queen 9s", test_quadro_aq9},
         {"Next to Nine and Clone Sudoku", test_n9_clone},
-        {"Search Nine", test_s9},       {"Battlefield", test_bf},     {"hint words", test_hint_words},
+        {"Search Nine", test_s9},       {"Battlefield", test_bf},
+        {"Sequence Lines", test_seq},  {"Battenburg", test_batten},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},

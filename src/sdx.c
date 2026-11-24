@@ -168,6 +168,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_TEN:
     case VAR_PILL:
     case VAR_AVG:
+    case VAR_SEQ:
         return sudoku_geom_lines_text(p->variant, p->thermos, out);   /* (lines go in thermos) */
     case VAR_SANDWICH:
         return sudoku_geom_sandwich_text(p->marks, out);
@@ -185,6 +186,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_b9_text(p->marks, out);             /* (and Before Nine's) */
     case VAR_N9:
         return sudoku_geom_n9_text(p->marks, out);             /* (and Next to Nine's) */
+    case VAR_BATTEN:
+        return sudoku_geom_batten_text(p->marks, out);         /* (Battenburg's marks) */
     case VAR_BF:
         return sudoku_geom_bf_text(p->marks, out);             /* (Battlefield's clues go in marks) */
     case VAR_S9:

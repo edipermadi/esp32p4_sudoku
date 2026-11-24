@@ -77,7 +77,7 @@ static void dig(const sudoku_geom_t *G, const uint8_t full[81], uint8_t out[81],
                                   G->line_kind == LINE_ENTROPIC || G->line_kind == LINE_MODULAR ||
                                   G->line_kind == LINE_NABNER || G->line_kind == LINE_LOCKOUT ||
                                   G->line_kind == LINE_DARROW || G->line_kind == LINE_TEN || G->line_kind == LINE_PILL ||
-                                  G->line_kind == LINE_AVG);
+                                  G->line_kind == LINE_AVG || G->line_kind == LINE_SEQ);
         if (G->edge_kind || G->nquads || G->nmx || (newest_lines && max_tier < 3)) {   /* (count only what the logic can't solve) */
             int tier = gen_technique_tier(G, out);
             ok = tier <= max_tier && (tier < 3 || gen_count_bounded(G, out, 2, node_limit) == 1);
@@ -263,7 +263,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool marks = variant == VAR_EVENODD || variant == VAR_CONSEC;
     const bool thermo = variant == VAR_THERMO || variant == VAR_SLOW, sandwich = variant == VAR_SANDWICH;
     const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_DUTCH ||
-                       variant == VAR_PARITY || variant == VAR_NABNER;
+                       variant == VAR_PARITY || variant == VAR_NABNER || variant == VAR_SEQ;
     const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
     const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
@@ -277,10 +277,10 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool fort = variant == VAR_FORTRESS, mrx = variant == VAR_MATHRAX;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM, b9 = variant == VAR_B9;
     const bool n9 = variant == VAR_N9, clone = variant == VAR_CLONE, s9 = variant == VAR_S9;
-    const bool bf = variant == VAR_BF;
+    const bool bf = variant == VAR_BF, batten = variant == VAR_BATTEN;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
                      pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky ||
-                     mrx || b9 || n9 || clone || s9 || bf;
+                     mrx || b9 || n9 || clone || s9 || bf || batten;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -504,6 +504,13 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
             if (!gen_geom_n9(sets, jig)) {
                 continue;
             }
+        } else if (batten) {                        /* a grid, then a mark on every checkerboard 2x2 block */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            uint8_t bat[81] = {0};
+            for (int tl = 0; tl < 72; tl++) {
+                bat[tl] = tl % 9 < 8 && is_sudoku_checker(full[tl], full[tl + 1], full[tl + 9], full[tl + 10]);
+            }
+            gen_geom_batten(bat, jig);
         } else if (bf) {                            /* a grid, then some of its 18 clues */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             uint8_t clues[18];

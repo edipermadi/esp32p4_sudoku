@@ -175,6 +175,10 @@
  *   VAR_BF       Battlefield: Classic rules, and a clue left of a row or above a column: with X
  *                its first digit and Y its last, the first X cells and the last Y cells; the
  *                clue is the sum of the cells where they overlap, or else of those between them
+ *   VAR_SEQ      Sequence Lines: Classic rules, and along each line the digits go up or down by
+ *                the same step (1 or more) from cell to cell
+ *   VAR_BATTEN   Battenburg: Classic rules, and a mark where four cells meet: their odd and even
+ *                digits make a checkerboard; every mark is shown, so no mark: they don't
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -302,6 +306,8 @@ typedef enum {
     VAR_CLONE,                          /**< Clone Sudoku */
     VAR_S9,                             /**< Search Nine */
     VAR_BF,                             /**< Battlefield */
+    VAR_SEQ,                            /**< Sequence Lines */
+    VAR_BATTEN,                         /**< Battenburg */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -319,7 +325,7 @@ typedef enum {
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
  *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku",
- *         "Search Nine", "Battlefield"
+ *         "Search Nine", "Battlefield", "Sequence Lines", "Battenburg"
  */
 const char *variant_name(int variant);
 
@@ -359,7 +365,8 @@ enum {
     LINE_TEN,                           /**< 10 Lines: runs of cells along it that each add up to 10 */
     LINE_PILL,                          /**< Pill Arrows: the first two cells (the pill, a two-digit number) are the
                                          *   rest's sum */
-    LINE_AVG                            /**< Average Lines: the first cell (the circle) is the others' average */
+    LINE_AVG,                           /**< Average Lines: the first cell (the circle) is the others' average */
+    LINE_SEQ                            /**< Sequence Lines: the digits go up or down by the same step (1 or more) */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -498,6 +505,10 @@ typedef struct {
     uint8_t s9_dir[81];                 /**< Search Nine: each cell's arrow, S9_* (S9_NONE: none) */
     bool bf;                            /**< Battlefield: the clues are rules */
     uint8_t bf_clue[18];                /**< per row (0..8) and column (9..17): its sum + 1 (a sum can be 0), 0: no clue */
+    bool batten;                        /**< Battenburg: the marks are rules (every one shown) */
+    uint8_t bat[81];                    /**< Battenburg: 1 = a mark at the cell's bottom-right corner (its 2x2 block with the
+                                         *   cells right, below and down-right a checkerboard of odd and even); rows and
+                                         *   columns 1-8 only */
     bool b9;                            /**< Before Nine: the clues are rules */
     uint8_t b9_sum[18];                 /**< per row (0..8, from the left) and column (9..17, from the top), the sum of
                                          *   the digits before the 9, 0 = no clue */
@@ -977,6 +988,35 @@ bool sudoku_bf_text(const sudoku_geom_t *g, char *buf, int len);
  */
 int sudoku_bf_of(const uint8_t vals[81], int lu);
 /**
+ * @brief A Battenburg board from its marks as text: 81 characters row by row, 'b' a mark at the cell's bottom-right
+ * corner, '.' none (the last row and column: '.'; kept in marks); sudoku_batten_text() writes it.
+ * @param[in] text  the marks
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_batten_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Battenburg board's marks as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it (82 at least)
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_batten_text(const sudoku_geom_t *g, char *buf, int len);
+
+/**
+ * @brief Battenburg: are four digits (top-left, top-right, bottom-left, bottom-right) a checkerboard of odd and even?
+ * @param[in] tl  top-left
+ * @param[in] tr  top-right
+ * @param[in] bl  bottom-left
+ * @param[in] br  bottom-right
+ * @return true if so
+ */
+static inline bool is_sudoku_checker(int tl, int tr, int bl, int br)
+{
+    return (tl & 1) == (br & 1) && (tr & 1) == (bl & 1) && (tl & 1) != (tr & 1);
+}
+/**
  * @brief An Odd/Even Skyscrapers board from its clues as text: 18 fields, comma-separated, rows from the left
  * then columns from the top: 0 no clue, 1..5 the odd buildings seen, e0..e4 the even ones (kept in marks);
  * sudoku_psky_text() writes it.
@@ -1403,7 +1443,8 @@ enum {
     FIT_CLONE,                          /**< Clone Sudoku: its clone */
     FIT_S9,                             /**< Search Nine: an arrow (its own, or one in its row or column) */
     FIT_BF_ROW,                         /**< Battlefield: the row's clue */
-    FIT_BF_COL                          /**< Battlefield: the column's clue */
+    FIT_BF_COL,                         /**< Battlefield: the column's clue */
+    FIT_BATTEN                          /**< Battenburg: a 2x2 block's mark, or its missing one */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1476,7 +1517,8 @@ typedef enum {
     TECH_N9,                 /**< Next to Nine: a clue */
     TECH_CLONE,              /**< Clone Sudoku: a cell and its clone */
     TECH_S9,                 /**< Search Nine: an arrow and the 9 it points to */
-    TECH_BF                  /**< Battlefield: a clue */
+    TECH_BF,                 /**< Battlefield: a clue */
+    TECH_BATTEN              /**< Battenburg: a 2x2 block and its mark (or none) */
 } tech_kind_t;
 /** @brief Search Nine: how an arrow narrowed a cell (sudoku_tech_t.unit2 of TECH_S9). */
 enum {
@@ -1494,7 +1536,8 @@ typedef struct {
      *  the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
      *  sky, xsum, frame, outside, rossini: the row or column (0..17), cell1 the cell; lk: the
      *  diagonal, cell1; diagnc: the cell its corners narrowed; s9: the arrow's cell, cell1 the cell
-     *  narrowed, unit2 how (S9_STEP_*), digit2 the distance that would point there (0: none);
+     *  narrowed, unit2 how (S9_STEP_*), digit2 the distance that would point there (0: none); batten: the
+     *  block's top-left cell, cell1 the cell narrowed, unit2 1 marked, 0 not;
      *  X-Wing, Swordfish: the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
     int unit;
     int unit2;               /**< the second unit (see unit) */

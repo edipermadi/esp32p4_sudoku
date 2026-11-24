@@ -578,6 +578,23 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         free &= sudoku_ten_allow(m, n, p);
         break;
     }
+    case LINE_SEQ: {                                /* a step s (not 0) and a start a: cell k holds a + k s */
+        uint16_t ok = 0;
+        for (int s = -8; s <= 8; s++) {
+            const int a_lo = s > 0 ? 1 : 1 - (n - 1) * s, a_hi = s > 0 ? 9 - (n - 1) * s : 9;   /* (all in 1..9) */
+            for (int a = a_lo; s && a <= a_hi; a++) {
+                bool fits = true;
+                for (int k = 0; k < n && fits; k++) {
+                    fits = k == p || (LMASK(cell[k]) >> (a + k * s) & 1);
+                }
+                if (fits) {
+                    ok |= (uint16_t)(1u << (a + p * s));
+                }
+            }
+        }
+        free &= ok;
+        break;
+    }
     case LINE_AVG: {                                /* the circle (place 0) times the others' count is their sum */
         const int k = n - 1;
         int smin = 0, smax = 0;
@@ -746,6 +763,7 @@ typedef struct {
 #define R_CLONE   (1u << 25)            /**< Clone Sudoku */
 #define R_S9      (1u << 26)            /**< Search Nine */
 #define R_BF      (1u << 27)            /**< Battlefield */
+#define R_BATTEN  (1u << 28)            /**< Battenburg */
 /** @} */
 
 /**
@@ -1829,6 +1847,24 @@ static uint16_t grid_free(const grid_t *g, int i)
         free &= s9_allow(g, i, free);               /* Search Nine: its arrow, the arrows in its row and column */
     }
     WHY(FIT_S9);
+    for (int q = 0; (rules & R_BATTEN) && free && q < 4; q++) {   /* Battenburg: each 2x2 block it's in */
+        const int tl = i - (q & 1) - (q >> 1) * 9;
+        if (tl < 0 || tl % 9 > 7 || tl / 9 > 7 || (q & 1 && i % 9 == 0)) {
+            continue;
+        }
+        const int four[4] = {tl, tl + 1, tl + 9, tl + 10}, me = (i - tl) % 9 + 2 * ((i - tl) / 9);   /* (its place: 0 1 / 2 3) */
+        const int diag = g->v[four[3 - me]], adj1 = g->v[four[me ^ 1]], adj2 = g->v[four[me ^ 2]];
+        unsigned par = 3;                           /* the parities it may have: bit 0 even, bit 1 odd */
+        if (G->bat[tl]) {                           /* a checkerboard: as its diagonal partner, unlike its neighbours */
+            par &= diag ? 1u << (diag & 1) : 3u;
+            par &= adj1 ? 1u << !(adj1 & 1) : 3u;
+            par &= adj2 ? 1u << !(adj2 & 1) : 3u;
+        } else if (diag && adj1 && adj2 && (adj1 & 1) == (adj2 & 1) && (diag & 1) != (adj1 & 1)) {
+            par &= ~(1u << (diag & 1));             /* no mark: the one parity that would make it one, not */
+        }
+        free &= (uint16_t)((par & 1 ? 0x154 : 0) | (par & 2 ? 0x2AA : 0));
+    }
+    WHY(FIT_BATTEN);
     for (int line = 0; (rules & R_BF) && free && line < 2; line++) {   /* Battlefield: its row's, column's clue */
         int lu = line ? 9 + i % 9 : i / 9, c = G->bf_clue[lu], cells[9];
         if (!c) {
@@ -2054,7 +2090,7 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0) |
                (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0) | (G->quadro ? R_QUADRO : 0) | (G->aq9 ? R_AQ9 : 0) |
                (G->n9 ? R_N9 : 0) | (G->nclone ? R_CLONE : 0) | (G->s9 ? R_S9 : 0) |
-               (G->bf ? R_BF : 0);
+               (G->bf ? R_BF : 0) | (G->batten ? R_BATTEN : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

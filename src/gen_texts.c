@@ -231,6 +231,9 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_BF:
         sudoku_bf_text(g, marks, 82);
         break;
+    case VAR_BATTEN:
+        sudoku_batten_text(g, marks, 82);
+        break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, cages_len);     /* (where cages go) */
         break;
@@ -709,6 +712,35 @@ bool sudoku_clone_text(const sudoku_geom_t *g, char *buf, int len)
         }
         pos += w;
     }
+    return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_batten_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t bat[81];
+    if (!text || strlen(text) != 81) {
+        return false;
+    }
+    for (int c = 0; c < 81; c++) {
+        if (text[c] != '.' && text[c] != 'b') {
+            return false;
+        }
+        bat[c] = text[c] == 'b';
+    }
+    return gen_geom_batten(bat, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_batten_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    if (len < 82) {
+        return false;
+    }
+    for (int c = 0; c < 81; c++) {
+        buf[c] = g->bat[c] ? 'b' : '.';
+    }
+    buf[81] = 0;
     return true;
 }
 

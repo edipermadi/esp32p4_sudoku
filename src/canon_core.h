@@ -42,11 +42,12 @@ extern "C" {
  * - the marks: Kropki, XV, Consecutive (between side-by-side cells), Greater-Than (its signs turned round with
  *   their cells), Even-Odd, Fortress (on cells), Diagonal Consecutive (at corners);
  * - Quadruple, Mathrax: their circles moved with their four cells, sorted;
- * - the 19 line variants: their lines sorted, each from its start where its way matters (a bulb, a circle, a
+ * - the 20 line variants: their lines sorted, each from its start where its way matters (a bulb, a circle, a
  *   pill), else whichever way round is smaller; Pill Arrows only as it is or mirrored about the main diagonal
  *   (its pill reads left to right or top to bottom);
  * - Sandwich, Next to Nine, Battlefield: each clue with its row or column (the same from either end: all 8);
  * - Clone Sudoku: its areas, each pair numbered in reading order (digits any way);
+ * - Battenburg: its marks, each with the block of four turned onto it (digits as they are: odd and even matter);
  * - Search Nine: its arrows, turned with their cells (digits as they are: an arrow's digit is a distance);
  * - the clues left of the rows and above the columns (Skyscraper, X-Sums, Frame, Outside Sudoku, Rossini,
  *   Numbered Rooms, Sum Skyscrapers, Odd/Even Skyscrapers, Before Nine; Little Killer's diagonals, as their

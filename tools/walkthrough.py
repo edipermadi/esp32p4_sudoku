@@ -60,7 +60,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average",
          "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before",
          "quadro": "Quadro", "anti-queen-9s": "Anti-Q", "next-to-nine": "Next", "clone-sudoku": "Clone",
-         "search-nine": "Search", "battlefield": "Battlefield"}
+         "search-nine": "Search", "battlefield": "Battlefield", "sequence-lines": "Sequence",
+         "battenburg": "Battenburg"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -79,6 +80,8 @@ ENTROPIC, MODULAR = (239, 178, 108), (98, 192, 192)
 DUTCH, PARITY = (228, 190, 64), (230, 128, 128)
 NABNER = (196, 160, 118)                                    # Nabner's lines (the board's brown, on white)
 AVG = (46, 158, 143)                                        # Average Lines (the board's teal)
+SEQ = (140, 149, 212)                                       # Sequence Lines (the board's indigo, on white)
+BAT_PINK, BAT_YELLOW = (238, 127, 166), (242, 205, 74)      # Battenburg's marks
 DARROW = (74, 127, 217)                                     # Double Arrow's lines and circles (the board's blue)
 TEN = (159, 209, 166)                                       # 10 Lines' green band (the board's, on white)
 GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
@@ -372,6 +375,27 @@ def rule_words(d, vals, c, v, r):
                             (run, a_n(v)) if run else "with %s there, the rest of its green line couldn't split "
                             "into runs of 10" % a_n(v))
             return "with %s there, its green line couldn't split into runs that each add up to 10" % a_n(v)
+        if kind == 19:                                      # Sequence Lines: one step all along, not 0
+            i = cells.index(c)
+            filled = [(k, vals[x]) for k, x in enumerate(cells) if x != c and vals[x]]
+            if len(filled) >= 2:
+                (k1, a1), (k2, a2) = filled[0], filled[1]
+                if a1 != a2 and (a2 - a1) % (k2 - k1) == 0:
+                    step = (a2 - a1) // (k2 - k1)
+                    return "the %d in %s and the %d in %s on its indigo line make a step of %d, so it's %d" % (
+                        a1, rc(cells[k1]), a2, rc(cells[k2]), step, a1 + (i - k1) * step)
+                return "the %d in %s and the %d in %s on its indigo line leave no step that fits" % (
+                    a1, rc(cells[k1]), a2, rc(cells[k2]))
+            if filled:
+                k1, a1 = filled[0]
+                gap = abs(i - k1)
+                if v == a1 or (v - a1) % gap:
+                    return "the %d in %s is %s away on its indigo line, and %s isn't a whole step (1 or more) from it" % (
+                        a1, rc(cells[k1]), cells_n(gap), a_n(v))
+                return ("with the %d in %s on its indigo line, %s here makes a step of %d, which runs out of 1-9 along "
+                        "the line" % (a1, rc(cells[k1]), a_n(v), (v - a1) // (i - k1)))
+            return "it's on an indigo line of %d cells, and %s there leaves no step that keeps them all within 1-9" % (
+                len(cells), a_n(v))
         if kind == 18:                                      # Average Lines: the circle is the others' average
             i, k = cells.index(c), len(cells) - 1
             circle = vals[cells[0]]
@@ -749,6 +773,21 @@ def rule_words(d, vals, c, v, r):
         if 9 in x and abs(x.index(9) - line.index(c)) == 1:
             return "it's beside the 9 in %s, whose clue lists %s" % (name, listing(map(str, want), "or"))
         return "with %s there, %s couldn't have %s beside its 9" % (a_n(v), name, listing(map(str, want)))
+    if rule == "batten":                                    # Battenburg: a 2x2 block's mark, or none
+        tl = r.get("block", -1)
+        kind = "odd" if v % 2 else "even"
+        if tl < 0:
+            return "a 2x2 block's mark (or missing one) rules it out"
+        if r.get("marked"):
+            o = r["with"]
+            if abs(o - c) in (8, 10):
+                return "a mark checkers its 2x2 block with %s, across the corner from it, which is %d: it's %s too" % (
+                    rc(o), vals[o], "odd" if vals[o] % 2 else "even")
+            return "a mark checkers its 2x2 block with %s, beside it, which is %d: it's the other kind, not %s" % (
+                rc(o), vals[o], kind)
+        others = [x for x in (tl, tl + 1, tl + 9, tl + 10) if x != c]
+        return ("its 2x2 block with %s has no mark, and %s would make it a checkerboard of odd and even" % (
+            listing("%d in %s" % (vals[x], rc(x)) for x in others), a_n(v)))
     if rule == "quadro":                                    # Quadro: a 2x2 block with three of one parity
         r_, c_ = c // 9, c % 9
         for dr in (0, -1):
@@ -1058,6 +1097,8 @@ def make_drawer(d, fonts):
                 g.line(pts, fill=REGIONSUM, width=int(CELL * 0.12), joint="curve")
             elif kind in (10, 11):                          # Dutch Whispers, Parity Lines: a narrow amber / red line
                 g.line(pts, fill=DUTCH if kind == 10 else PARITY, width=int(CELL * 0.12), joint="curve")
+            elif kind == 19:                                # Sequence Lines: a medium indigo line
+                g.line(pts, fill=SEQ, width=int(CELL * 0.2), joint="curve")
             elif kind == 13:                                # Nabner: a narrow brown line
                 g.line(pts, fill=NABNER, width=int(CELL * 0.12), joint="curve")
             elif kind == 16:                                # 10 Lines: a wide soft green band
@@ -1213,6 +1254,15 @@ def make_drawer(d, fonts):
                 g.line([(x + CELL - ins, y1), (x + CELL - ins, y2)], fill=MUTED, width=1)
             if area.index(area[c]) == c:
                 g.text((x + 7, y + 8), "ABCD"[cl[c]], font=tiny, fill=GIVEN_FG, anchor="mm")
+        for c, m in enumerate(d.get("bat", [])):           # Battenburg: a pink and yellow square at a corner
+            if not m:
+                continue
+            x, y = xy(c)
+            cx, cy, h = x + CELL, y + CELL, 5
+            g.rectangle([cx - h - 1, cy - h - 1, cx + h, cy + h], fill=CELL_BG)
+            for q in range(4):
+                qx, qy = (cx if q & 1 else cx - h), (cy if q & 2 else cy - h)
+                g.rectangle([qx, qy, qx + h - 1, qy + h - 1], fill=BAT_PINK if q in (0, 3) else BAT_YELLOW)
         for c, way in enumerate(d.get("s9", [])):          # Search Nine: an arrow by the middle of the side it points to
             if not way or c not in cells:
                 continue

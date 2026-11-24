@@ -54,6 +54,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Diagonal Consecutive", "Corner neighbours with a mark are 1 apart, without one they're not: a mark leaves two digits.", VAR_DIAGCONSEC, TECH_DIAGNC, false},
     {"Dutch Flatmates", "Every 5 has a 1 right above it or a 9 right below: a 5 can't go where neither can.", VAR_FLATMATES, TECH_FLATMATES, true},
     {"Quadro", "Every 2x2 block holds an odd and an even digit: three of one parity leave the fourth the other.", VAR_QUADRO, TECH_QUADRO, true},
+    {"Battenburg marks", "A mark: the four cells are a checkerboard of odd and even. No mark: they aren't.", VAR_BATTEN, TECH_BATTEN, true},
     {"Anti-Queen 9s", "No two 9s share a diagonal: each 9 rules 9 out along both its diagonals.", VAR_AQ9, TECH_AQ9, true},
     {"Search Nine arrows", "An arrow's digit is how far its 9 is that way: the 9 is never behind an arrow.", VAR_S9, TECH_S9, true},
     {"Even-Odd cells", "A shaded cell is even, a ringed one odd: that alone can leave a digit one place.", VAR_EVENODD, TECH_NONE, false},
@@ -81,6 +82,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Nabner line", "No two digits on a brown line are the same or 1 apart: each digit rules out its neighbours.", VAR_NABNER, TECH_LINE, false},
     {"Lockout line", "The diamonds are 4+ apart, the digits between outside their range: never a 5 between.", VAR_LOCKOUT, TECH_LINE, false},
     {"Average line", "The circle is the average of the line's other digits: they add up to it times their count.", VAR_AVG, TECH_LINE, false},
+    {"Sequence line", "A line's digits go up or down by one step: two digits on it fix the step, and every other cell.", VAR_SEQ, TECH_LINE, false},
     {"Pill Arrow", "The pill's two cells read as a number are the shaft's sum: its first digit is small.", VAR_PILL, TECH_LINE, false},
     {"Double Arrow", "The two circles add up to the digits between them: each end bounds the other.", VAR_DARROW, TECH_LINE, false},
     {"10 Line", "The line splits into runs that each make 10: a big digit needs small ones beside it.", VAR_TEN, TECH_LINE, false},
@@ -171,6 +173,7 @@ int learn_group(int k)
     case VAR_QUADRO:
     case VAR_AQ9:
     case VAR_S9:
+    case VAR_BATTEN:
         return LEARN_MARKS;
     case VAR_KILLER:
     case VAR_SUMLESS:

@@ -250,7 +250,7 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER || v == VAR_PALINDROME ||
             v == VAR_REGIONSUM || v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR ||
             v == VAR_DUTCH || v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT ||
-            v == VAR_DARROW || v == VAR_TEN || v == VAR_PILL || v == VAR_AVG) &&
+            v == VAR_DARROW || v == VAR_TEN || v == VAR_PILL || v == VAR_AVG || v == VAR_SEQ) &&
             buf &&
             sudoku_geom_lines_text(v, thermos, buf)) {
         return buf;
@@ -278,6 +278,9 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     }
     if (v == VAR_N9 && buf && sudoku_geom_n9_text(marks, buf)) {
         return buf;    /* (and Next to Nine's) */
+    }
+    if (v == VAR_BATTEN && buf && sudoku_geom_batten_text(marks, buf)) {
+        return buf;    /* (Battenburg's marks are in marks) */
     }
     if (v == VAR_BF && buf && sudoku_geom_bf_text(marks, buf)) {
         return buf;    /* (Battlefield's clues are in marks) */

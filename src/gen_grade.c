@@ -605,6 +605,53 @@ bool gen_n9_logic(logic_t *L)
     return sky_orders_logic(L, L->G->n9_set, is_gen_n9_line_ok, TECH_N9);
 }
 
+/**
+ * @brief Battenburg: the parities a cell can have in the techniques' state (bit 0 even, bit 1 odd).
+ * @param[in] L  the state
+ * @param[in] c  the cell
+ * @return them
+ */
+static unsigned batten_par(const logic_t *L, int c)
+{
+    const uint16_t m = L->v[c] ? (uint16_t)(1u << L->v[c]) : L->cand[c];
+    return (m & 0x154 ? 1u : 0u) | (m & 0x2AA ? 2u : 0u);
+}
+
+/* (documented in gen_internal.h) */
+bool gen_batten_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int tl = 0; tl < 72; tl++) {               /* each 2x2 block, by its top-left cell */
+        if (tl % 9 == 8) {
+            continue;
+        }
+        const int four[4] = {tl, tl + 1, tl + 9, tl + 10};
+        for (int me = 0; me < 4; me++) {
+            const int c = four[me];
+            if (L->v[c]) {
+                continue;
+            }
+            const unsigned diag = batten_par(L, four[3 - me]), a1 = batten_par(L, four[me ^ 1]);
+            const unsigned a2 = batten_par(L, four[me ^ 2]);
+            unsigned par = 3;
+            if (G->bat[tl]) {                       /* as its diagonal partner can be; not what a neighbour must be */
+                par &= diag;
+                par &= a1 == 3 ? 3u : a1 ^ 3u;
+                par &= a2 == 3 ? 3u : a2 ^ 3u;
+            } else if ((diag == 1 || diag == 2) && a1 == a2 && a1 == (diag ^ 3u)) {
+                par &= diag ^ 3u;                   /* no mark: not the parity that would make the checkerboard */
+            }
+            const uint16_t keep = (uint16_t)((par & 1 ? 0x154 : 0) | (par & 2 ? 0x2AA : 0));
+            if (L->cand[c] & ~keep) {
+                eliminate(L, c, (uint16_t)(L->cand[c] & ~keep));
+                trace(TECH_BATTEN, tl, G->bat[tl], L->cand[c], 0, c, -1);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /* (documented in gen_internal.h) */
 bool gen_bf_logic(logic_t *L)
 {
@@ -1499,6 +1546,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->bf && gen_bf_logic(&L)) {
             continue;    /* Battlefield: the clues */
         }
+        if (G->batten && gen_batten_logic(&L)) {
+            continue;    /* Battenburg: the marks */
+        }
         if (G->b9 && gen_b9_logic(&L)) {
             continue;    /* Before Nine: the clues */
         }
@@ -1562,7 +1612,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->antidiag || G->magic) {
         return 30;
     }
-    if (G->psym || G->nclone || G->s9) {
+    if (G->psym || G->nclone || G->s9 || G->batten) {
         return 30;
     }
     if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum || G->b9 || G->n9 ||

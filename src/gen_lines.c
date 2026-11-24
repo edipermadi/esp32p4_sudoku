@@ -484,13 +484,13 @@ bool gen_rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int want
 {
     uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
     /* (Dutch Whispers, Parity: lines that never cross, as the newer line variants; the older ones' puzzles stay) */
-    const bool uncrossed = variant == VAR_DUTCH || variant == VAR_PARITY || variant == VAR_NABNER;
+    const bool uncrossed = variant == VAR_DUTCH || variant == VAR_PARITY || variant == VAR_NABNER || variant == VAR_SEQ;
     int n = 0;
     for (int tries = 0; tries < 2000 && n < want; tries++) {
         int c = (int)(rnd(rng) % 81);
         int target = variant == VAR_ARROW ? 2 + (int)(rnd(rng) % 3)          /* circle + 1-3 */
                      : variant == VAR_RENBAN ? 3 + (int)(rnd(rng) % 3) : variant == VAR_PARITY ? 3 + (int)(rnd(rng) % 6)
-                     : variant == VAR_NABNER ? 3 + (int)(rnd(rng) % 3) : 3 + (int)(rnd(rng) % 4);
+                     : variant == VAR_NABNER || variant == VAR_SEQ ? 3 + (int)(rnd(rng) % 3) : 3 + (int)(rnd(rng) % 4);
         if (used[c] || (variant == VAR_WHISPER && full[c] == 5) || (variant == VAR_ARROW && full[c] < 3)) {
             continue;
         }
@@ -522,6 +522,8 @@ bool gen_rule_paths(int variant, const uint8_t full[81], uint32_t *rng, int want
                         for (int k = 0; k < len && ok; k++) {
                             ok = abs(x - full[cells[n][k]]) >= 2;
                         }
+                    } else if (variant == VAR_SEQ) {   /* the first step sets it (not 0), the rest keep it */
+                        ok = len == 1 ? x != full[c] : x - full[cur] == full[cells[n][1]] - full[c];
                     } else if (variant == VAR_RENBAN) {
                         bool seen = false;
                         for (int k = 0; k < len; k++) {

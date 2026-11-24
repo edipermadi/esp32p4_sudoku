@@ -291,6 +291,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  lk == LINE_TEN ? "This line splits into runs of cells that each add up to 10" :
                  lk == LINE_PILL ? "The arrow's shaft adds up to its pill, the two cells read as a two-digit number" :
                  lk == LINE_AVG ? "The circled digit is the average of the other digits on its line" :
+                 lk == LINE_SEQ ? "Along this line the digits go up or down by the same step, cell to cell" :
                  "Along this line, neighbours are 5 or more apart",
                  c / 9 + 1, c % 9 + 1, digs);
     } else if (t->kind == TECH_THERMO) {            /* Thermo: the thermometer */
@@ -383,6 +384,20 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
         snprintf(tech, sizeof(tech), "Every 2x2 block holds an odd and an even digit. The other three cells of %s "
                  "can only be %s, so row %d, column %d is %s. ", u1, odd ? "even" : "odd", c / 9 + 1, c % 9 + 1,
                  odd ? "odd" : "even");
+    } else if (t->kind == TECH_BATTEN) {           /* Battenburg: the 2x2 block */
+        const int tl = t->unit >= 0 && t->unit < 72 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : tl;
+        mark[tl] = mark[tl + 1] = mark[tl + 9] = mark[tl + 10] = 1;
+        const bool odd = (t->digit & 0x2AA) != 0;
+        snprintf(u1, sizeof(u1), "the 2x2 block with row %d, column %d", c / 9 + 1, c % 9 + 1);
+        if (t->unit2) {
+            snprintf(tech, sizeof(tech), "A mark says %s is a checkerboard of odd and even: each cell is the same as "
+                     "the one across the corner from it, unlike its two neighbours. So row %d, column %d is %s. ", u1,
+                     c / 9 + 1, c % 9 + 1, odd ? "odd" : "even");
+        } else {
+            snprintf(tech, sizeof(tech), "Every mark is shown, and %s has none: it isn't a checkerboard of odd and even. "
+                     "Its other three cells are set for one, so row %d, column %d is %s. ", u1, c / 9 + 1, c % 9 + 1,
+                     odd ? "odd" : "even");
+        }
     } else if (t->kind == TECH_S9) {               /* Search Nine: the arrow and the cell */
         static const char *const WAY[5] = {"", "up", "right", "down", "left"};
         const int a = t->unit >= 0 && t->unit < 81 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : a;

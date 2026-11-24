@@ -394,6 +394,33 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
             break;
         }
+        case LINE_SEQ: {                            /* two filled digits no single step (not 0) along it can join */
+            int first = -1;
+            for (int i = 0; i < n; i++) {
+                const int x = val[cell[i]];
+                if (!x) {
+                    continue;
+                }
+                if (first < 0) {
+                    first = i;
+                    continue;
+                }
+                const int dx = x - val[cell[first]], dk = i - first;
+                const int s = dx / dk, a = val[cell[first]] - first * s;   /* (the step and start they'd make) */
+                const bool bad = !dx || dx % dk || a < 1 || a > 9 || a + (n - 1) * s < 1 || a + (n - 1) * s > 9;
+                bool off = bad;
+                for (int j = 0; j < n && !off; j++) {   /* every filled digit on that sequence */
+                    off = val[cell[j]] && val[cell[j]] != a + j * s;
+                }
+                if (off) {
+                    for (int j = 0; j < n; j++) {
+                        out[cell[j]] = out[cell[j]] || val[cell[j]];
+                    }
+                    break;
+                }
+            }
+            break;
+        }
         case LINE_AVG: {                            /* the others can't (or, all filled, don't) average the circle */
             int sum = 0, empty = 0, circle = val[cell[0]];
             for (int i = 1; i < n; i++) {
@@ -574,6 +601,26 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
         if (c == 40 ? a && a != 5 : a && b && a + b != 10) {
             out[c] = out[80 - c] = true;
             out[40] = c == 40 || out[40];
+        }
+    }
+    for (int tl = 0; geo->batten && tl < 72; tl++) {   /* Battenburg: a mark and no checkerboard, or one without a mark */
+        const int four[4] = {tl, tl + 1, tl + 9, tl + 10};
+        if (tl % 9 == 8) {
+            continue;
+        }
+        for (int a = 0; a < 4; a++) {               /* (marked: two filled cells that already break it) */
+            for (int b = a + 1; geo->bat[tl] && b < 4; b++) {
+                const int x = val[four[a]], y = val[four[b]];
+                if (x && y && ((x & 1) == (y & 1)) != (a + b == 3)) {   /* (diagonal pairs alike, side pairs not) */
+                    out[four[a]] = out[four[b]] = true;
+                }
+            }
+        }
+        if (!geo->bat[tl] && val[four[0]] && val[four[1]] && val[four[2]] && val[four[3]] &&
+                is_sudoku_checker(val[four[0]], val[four[1]], val[four[2]], val[four[3]])) {
+            for (int a = 0; a < 4; a++) {
+                out[four[a]] = true;
+            }
         }
     }
     for (int lu = 0; geo->bf && lu < 18; lu++) {   /* Battlefield: a full line whose overlap (or gap) misses the clue */

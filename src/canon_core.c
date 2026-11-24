@@ -34,6 +34,7 @@ static bool is_line_variant(int variant)
     case VAR_TEN:
     case VAR_PILL:
     case VAR_AVG:
+    case VAR_SEQ:
         return true;
     default:
         return false;
@@ -97,7 +98,7 @@ uint8_t canon_symmetries(int variant)
                                          * as it is, or mirrored about the main diagonal (rows' clues and columns' swap) */
     }
     if (is_mark_variant(variant) || variant == VAR_SANDWICH || variant == VAR_N9 || variant == VAR_BF || variant == VAR_QUAD ||
-            variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9) {
+            variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9 || variant == VAR_BATTEN) {
         return 0xFF;                    /* (marks, circles, clone areas, arrows turned too; a Sandwich sum, the digits
                                          * beside a 9, a Battlefield sum are the same from either end) */
     }
@@ -191,7 +192,8 @@ bool is_canon_layout(int variant)
 {
     return variant == VAR_JIGSAW || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
            variant == VAR_PRODUCT || is_mark_variant(variant) || is_line_variant(variant) || is_clue_variant(variant) ||
-           variant == VAR_QUAD || variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9;
+           variant == VAR_QUAD || variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9 ||
+           variant == VAR_BATTEN;
 }
 
 /**
@@ -404,6 +406,35 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
                     lab[p] = (uint8_t)++nlab;
                 }
                 cur[81 + k] = p == CLONE_NONE ? 0 : lab[p];
+            }
+            if (!have || memcmp(cur, best, sizeof(cur)) < 0) {
+                memcpy(best, cur, sizeof(cur));
+                have = true;
+            }
+        }
+        return hash_copy(variant, best, sizeof(best));
+    }
+    if (variant == VAR_BATTEN) {
+        /* a copy: the givens as they are (odd and even matter), then each corner's mark on the turned board (the
+         * block of four cells turned onto it: its top-left source cell's mark) */
+        uint8_t best[162], cur[162];
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            for (int k = 0; k < 81; k++) {
+                const int src = canon_cell(t, 9, k);
+                cur[k] = givens[src];
+                cur[81 + k] = 0;
+                if (k % 9 < 8 && k < 72) {
+                    int top = 80;
+                    const int four[4] = {k, k + 1, k + 9, k + 10};
+                    for (int j = 0; j < 4; j++) {
+                        const int d = canon_cell(t, 9, four[j]);
+                        top = d < top ? d : top;
+                    }
+                    cur[81 + k] = G->bat[top];
+                }
             }
             if (!have || memcmp(cur, best, sizeof(cur)) < 0) {
                 memcpy(best, cur, sizeof(cur));

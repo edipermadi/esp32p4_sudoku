@@ -379,6 +379,14 @@ bool gen_s9_logic(logic_t *L);
  */
 bool gen_bf_logic(logic_t *L);
 /**
+ * @brief A technique: Battenburg: a marked 2x2 block's cells take the parity their diagonal partner can have and the
+ *        other one from their side neighbours; in an unmarked block whose other three are fixed in a checkerboard's
+ *        way, the fourth takes the other parity.
+ * @param[in,out] L  the state
+ * @return true if a candidate went
+ */
+bool gen_batten_logic(logic_t *L);
+/**
  * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
  *        candidates taken out.
  * @param[in,out] L          the state
@@ -631,6 +639,13 @@ bool gen_geom_s9(const uint8_t dirs[81], sudoku_geom_t *out);
  */
 bool gen_geom_bf(const uint8_t clues[18], sudoku_geom_t *out);
 /**
+ * @brief Builds a board from its decorations: Battenburg, a classic board with these marks (every one shown).
+ * @param[in] bat  per cell, 1: a mark at its bottom-right corner
+ * @param[out] out  gets the board
+ * @return false if a mark is on the last row or column
+ */
+bool gen_geom_batten(const uint8_t bat[81], sudoku_geom_t *out);
+/**
  * @brief Builds an Odd/Even Skyscrapers board from its 18 clues (0 none; 1..5 odd; PSKY_EVEN | 0..4 even)
  * @param[in] clues  the clues
  * @param[out] out  gets the board
@@ -817,7 +832,8 @@ bool gen_regionsum_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku
  * (1-3 cells) adds up to its circle, a Renban (3-5 cells) is a run of consecutive digits, along a
  * German (Dutch) Whispers line (3-6 cells) neighbours are 5 (4) or more apart, along a Parity line (3-8
  * cells) one odd, one even, on a Nabner line (3-5 cells) every two digits 2 or more apart
- * @param[in] variant  VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_DUTCH, VAR_PARITY or VAR_NABNER
+ * @param[in] variant  VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_DUTCH, VAR_PARITY, VAR_NABNER or VAR_SEQ (3-5 cells whose
+ *                     digits go up or down by one step)
  * @param[in] full  the solution
  * @param[in,out] rng  the random state
  * @param[in] want  lines wanted

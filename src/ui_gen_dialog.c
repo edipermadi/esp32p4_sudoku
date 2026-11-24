@@ -35,11 +35,11 @@ static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     },
     {
         VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_MATHRAX, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
-        VAR_CHESS, VAR_AQ9, VAR_S9, VAR_FLATMATES, VAR_QUADRO, VAR_DIAGCONSEC, VAR_NONCONSEC, VAR_DIAGNC, GEN_CAT_END
+        VAR_CHESS, VAR_AQ9, VAR_S9, VAR_FLATMATES, VAR_QUADRO, VAR_BATTEN, VAR_DIAGCONSEC, VAR_NONCONSEC, VAR_DIAGNC, GEN_CAT_END
     },
     {
         VAR_THERMO, VAR_SLOW, VAR_ARROW, VAR_AVG, VAR_PILL, VAR_PALINDROME, VAR_RENBAN, VAR_PARITY, VAR_WHISPER, VAR_DUTCH, VAR_DARROW,
-        VAR_REGIONSUM, VAR_ZIPPER, VAR_NABNER, VAR_BETWEEN, VAR_LOCKOUT, VAR_TEN, VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
+        VAR_REGIONSUM, VAR_ZIPPER, VAR_SEQ, VAR_NABNER, VAR_BETWEEN, VAR_LOCKOUT, VAR_TEN, VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
     },
     {
         VAR_KILLER, VAR_FRAME, VAR_OUTSIDE, VAR_SKY, VAR_LK, VAR_PRODUCT, VAR_SANDWICH, VAR_ROSSINI, VAR_XSUM,
@@ -66,7 +66,7 @@ static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
     [VAR_CHESS] = "Chess", [VAR_MAGIC] = "Magic Square", [VAR_AVG] = "Average", [VAR_FLATMATES] = "Flatmates",
     [VAR_MATHRAX] = "Mathrax", [VAR_PSYM] = "Point Sym.", [VAR_B9] = "Before Nine",
     [VAR_QUADRO] = "Quadro", [VAR_AQ9] = "Anti-Queen 9", [VAR_N9] = "Next to Nine", [VAR_CLONE] = "Clone",
-    [VAR_S9] = "Search Nine", [VAR_BF] = "Battlefield",
+    [VAR_S9] = "Search Nine", [VAR_BF] = "Battlefield", [VAR_SEQ] = "Sequence", [VAR_BATTEN] = "Battenburg",
 };
 /** @brief each tab's variant picked last (the one a tab opens on; kept until power-off) */
 static uint8_t gen_cat_pick[GEN_CATS] = {VAR_CLASSIC, VAR_KNIGHT, VAR_THERMO, VAR_KILLER};
@@ -130,6 +130,8 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_CLONE] = "9x9 with shaded areas: two of one letter have the same shape and the same digits.",
     [VAR_QUADRO] = "9x9: every 2x2 block of cells holds an odd and an even digit.",
     [VAR_AQ9] = "9x9: no two 9s share a diagonal, of any length.",
+    [VAR_BATTEN] = "9x9: a mark where four cells meet: odd and even checkered; no mark: they aren't.",
+    [VAR_SEQ] = "9x9 with indigo lines: along each, the digits go up or down by the same step.",
     [VAR_BF] = "9x9 with clues outside: the sum where a line's first X and last Y cells overlap, or between them.",
     [VAR_S9] = "9x9 with arrows in cells: the cell's digit is how many cells away the 9 is that way.",
     [VAR_PSYM] = "9x9: two cells mirrored through the centre add up to 10 (the tinted centre is 5).",

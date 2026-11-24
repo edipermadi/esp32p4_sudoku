@@ -1,7 +1,7 @@
 /**
  * @file ui_board_draw.c
  * @ingroup ui_game
- * @brief The board's variant overlays: Killer cages, marks between cells, lines and thermometers, Jigsaw regions, Argyle lines, Little Killer clues, Search Nine arrows.
+ * @brief The board's variant overlays: Killer cages, marks between cells, lines and thermometers, Jigsaw regions, Argyle lines, Little Killer clues, Search Nine arrows, Battenburg marks.
  */
 #include "ui_internal.h"
 
@@ -13,6 +13,7 @@ static void board_mathrax_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_laye
 static void board_clone_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_s9_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
+static void board_batten_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 
 /**
  * @brief Killer: each cage outlined with a dashed line just inside its cells, and
@@ -470,6 +471,11 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         ld.opa = LV_OPA_70;
         ld.width = cs * 12 / 100;
         break;
+    case LINE_SEQ:                                  /* (a medium indigo line) */
+        ld.color = lv_color_hex(0x3F4FB8);
+        ld.opa = LV_OPA_60;
+        ld.width = cs * 20 / 100;
+        break;
     case LINE_AVG:                                  /* (a teal line from its circle) */
         ld.color = lv_color_hex(0x2E9E8F);
         ld.opa = LV_OPA_80;
@@ -673,6 +679,9 @@ void board_regions_draw_cb(lv_event_t *e)
     if (geo && geo->s9) {
         board_s9_draw(grid, geo, lv_event_get_layer(e));
     }
+    if (geo && geo->batten) {
+        board_batten_draw(grid, geo, lv_event_get_layer(e));
+    }
     if (!geo || geo->variant != VAR_JIGSAW) {
         return;
     }
@@ -736,6 +745,41 @@ void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len)
     l.p2.x = ex;
     l.p2.y = ey - dy * h;
     lv_draw_line(layer, &l);
+}
+
+/* (documented in ui_internal.h) */
+void draw_batten_mark(lv_layer_t *layer, int cx, int cy, int half)
+{
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_opa = LV_OPA_COVER;
+    d.bg_color = C_CARD;                            /* (a thin frame, so it stands off the grid lines) */
+    lv_area_t f = {.x1 = cx - half - 2, .y1 = cy - half - 2, .x2 = cx + half + 1, .y2 = cy + half + 1};
+    lv_draw_rect(layer, &d, &f);
+    for (int q = 0; q < 4; q++) {                   /* pink top-left and bottom-right, yellow the other two */
+        d.bg_color = lv_color_hex(q == 0 || q == 3 ? 0xEE7FA6 : 0xF2CD4A);
+        const int x = q & 1 ? cx : cx - half, y = q & 2 ? cy : cy - half;
+        lv_area_t a = {.x1 = x, .y1 = y, .x2 = x + half - 1, .y2 = y + half - 1};
+        lv_draw_rect(layer, &d, &a);
+    }
+}
+
+/**
+ * @brief Battenburg: each mark, at its cell's bottom-right corner
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
+ */
+static void board_batten_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    for (int i = 0; i < 72; i++) {
+        if (geo->bat[i]) {
+            lv_area_t a, b;
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i + 10), &b);
+            draw_batten_mark(layer, (a.x2 + b.x1) / 2 + 1, (a.y2 + b.y1) / 2 + 1, (a.x2 - a.x1) * 2 / 11);
+        }
+    }
 }
 
 /* (documented in ui_internal.h) */

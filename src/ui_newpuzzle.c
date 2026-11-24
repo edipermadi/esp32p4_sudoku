@@ -97,6 +97,8 @@ static const uint16_t GEN_EXPECT_MS[VAR_COUNT][GEN_LEVELS] = {
     {135, 211, 1062, 551}, /* Clone Sudoku */
     {18, 95, 1002, 504},   /* Search Nine (2026-11-24) */
     {27, 147, 639, 3333},  /* Battlefield (2026-11-24) */
+    {17, 89, 192, 1463},   /* Sequence Lines (2026-11-24) */
+    {15, 314, 776, 555},   /* Battenburg */
 };
 static lv_timer_t *gen_timer;           /**< the progress bar's poll while a puzzle is made (NULL: none) */
 static volatile bool gen_done;          /**< the generator is done */

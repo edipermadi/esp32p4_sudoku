@@ -553,7 +553,11 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_TEN:
     case VAR_PILL:
     case VAR_AVG:
+    case VAR_SEQ:
         sudoku_thermos_text(g, thermos, len);
+        break;
+    case VAR_BATTEN:
+        sudoku_batten_text(g, marks, len);
         break;
     default:
         break;
@@ -768,6 +772,31 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_QUADRO:
         printf(", \"rule\": \"quadro\"");
         return;
+    case FIT_BATTEN:
+        for (int k = 0; k < 4; k++) {               /* the block that says no: its top-left cell, and the cell that does */
+            const int tl = c - (k & 1) - (k >> 1) * 9;
+            if (tl < 0 || tl % 9 > 7 || tl / 9 > 7 || (k & 1 && c % 9 == 0)) {
+                continue;
+            }
+            const int four[4] = {tl, tl + 1, tl + 9, tl + 10}, me = (c - tl) % 9 + 2 * ((c - tl) / 9);
+            if (G->bat[tl]) {
+                for (int j = 0; j < 4; j++) {       /* across the corner: alike; beside it: not */
+                    const int o = four[j], w = v[o];
+                    if (j != me && w && ((w & 1) == (d & 1)) != (j + me == 3)) {
+                        printf(", \"rule\": \"batten\", \"block\": %d, \"marked\": true, \"with\": %d", tl, o);
+                        return;
+                    }
+                }
+            } else {
+                const int dg = v[four[3 - me]], a1 = v[four[me ^ 1]], a2 = v[four[me ^ 2]];
+                if (dg && a1 && a2 && (a1 & 1) == (a2 & 1) && (dg & 1) != (a1 & 1) && (d & 1) == (dg & 1)) {
+                    printf(", \"rule\": \"batten\", \"block\": %d, \"marked\": false", tl);
+                    return;
+                }
+            }
+        }
+        printf(", \"rule\": \"batten\", \"block\": -1");
+        return;
     case FIT_AQ9:
         printf(", \"rule\": \"aq9\"");
         return;
@@ -928,6 +957,11 @@ static void layout_json(const sudoku_geom_t *G)
     printf("],\n \"clone_of\": [");
     for (int i = 0; i < 81; i++) {
         printf("%s%d", i ? "," : "", G->clone_of[i] == CLONE_NONE ? -1 : G->clone_of[i]);
+    }
+    printf("]");
+    printf(",\n \"bat\": [");                   /* (Battenburg: 1, a mark at the cell's bottom-right corner) */
+    for (int i = 0; i < 81; i++) {
+        printf("%s%d", i ? "," : "", G->bat[i]);
     }
     printf("]");
     printf(",\n \"bf\": ");                    /* (each line's sum, -1: no clue) */
