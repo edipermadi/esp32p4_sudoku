@@ -224,6 +224,7 @@ static void a3d_tick(lv_timer_t *t)
         a3d_due = 0;
         a3_step();
     }
+    saver_perf_mark();                              /* (the projection and sort count as drawing) */
     a3d_paint();
 }
 
@@ -246,7 +247,7 @@ bool saver_automata3d_start(lv_obj_t *parent, int rule)
     a3d_due = 0;
     a3d_box[2] = -1;
     a3d_paint();
-    a3d_timer = lv_timer_create(a3d_tick, A3D_FRAME_MS, NULL);
+    a3d_timer = saver_timer_create(a3d_tick, A3D_FRAME_MS);
     return true;
 }
 

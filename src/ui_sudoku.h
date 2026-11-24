@@ -75,6 +75,28 @@ void sudoku_ui_flash_done(void);
 
 /** @brief Turns the screen off now, as its timeout does (with the lock screen under it, if that's on); the next tap wakes it. For serial control. */
 void sudoku_ui_screen_off(void);
+/** @brief Where a screen saver's time went during a measurement (sudoku_ui_perf()). */
+typedef struct {
+    uint32_t frames;                      /**< the saver's frame ticks */
+    uint64_t tick_us;                     /**< their time, us: calc + draw + flush */
+    uint64_t calc_us;                     /**< working out (before saver_perf_mark()), us */
+    uint64_t draw_us;                     /**< painting the picture, us */
+    uint64_t flush_us;                    /**< flushing it from the cache and marking it for redraw, us */
+    uint32_t tick_max_us;                 /**< the longest tick, us */
+    uint32_t refreshes;                   /**< LVGL's screen refreshes */
+    uint64_t refresh_us;                  /**< their time, us (rendering the changed areas onto the panel) */
+    uint32_t refresh_max_us;              /**< the longest, us */
+    uint32_t ms;                          /**< how long it measured, ms */
+    int saver;                            /**< the screen saver showing (store_saver_t), or -1: none or dark */
+} sudoku_ui_perf_t;
+/**
+ * @brief Runs the UI for a while, as loop() does, timing the screen saver showing: its frame ticks split
+ *        into working out, painting and flushing, and LVGL's screen refreshes (any screen's). For
+ *        serial control (devctl's perf); only run it from the LVGL task.
+ * @param[in] ms  how long, ms
+ * @param[out] out  gets the sums
+ */
+void sudoku_ui_perf(uint32_t ms, sudoku_ui_perf_t *out);
 /**
  * @brief Shows a screen saver now, whatever Settings chose (and without changing that), as the screen
  *        timeout would: on the black cover, with the lock screen under it if that's on; one already

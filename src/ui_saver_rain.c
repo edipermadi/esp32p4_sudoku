@@ -159,6 +159,7 @@ static void rain_paint(void)
 static void rain_tick(lv_timer_t *t)
 {
     rain_step();
+    saver_perf_mark();
     rain_paint();
 }
 
@@ -174,7 +175,7 @@ bool saver_rain_start(lv_obj_t *parent)
     }
     memset(rn_shown, 0, RAIN_CELLS * sizeof(*rn_shown));   /* all unlit, as the black picture is */
     rain_paint();
-    rn_timer = lv_timer_create(rain_tick, RAIN_STEP_MS, NULL);
+    rn_timer = saver_timer_create(rain_tick, RAIN_STEP_MS);
     return true;
 }
 

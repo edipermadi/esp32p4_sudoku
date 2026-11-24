@@ -1492,6 +1492,28 @@ void saver_automata3d_stop(void);
 #define SV_GREY         0x888888    /**< grey */
 
 /**
+ * @brief A saver's frame timer, timed during a perf measurement (else just its callback); delete it with
+ *        lv_timer_delete() as usual (ui_saver_perf.c).
+ * @param[in] cb  the saver's tick
+ * @param[in] ms  its period, ms
+ * @return the timer
+ */
+lv_timer_t *saver_timer_create(lv_timer_cb_t cb, uint32_t ms);
+/** @brief In a saver's tick: the working out is done, painting starts (for perf's calc / draw split). */
+void saver_perf_mark(void);
+/**
+ * @brief Time spent flushing the picture (ui_saver_pic.c), added to the tick being timed.
+ * @param[in] us  how long, us
+ */
+void saver_perf_flush_add(uint32_t us);
+/** @brief A perf measurement running? @return true while one runs */
+bool is_saver_perf_on(void);
+/**
+ * @brief The screen saver showing.
+ * @return store_saver_t, or -1 (none, or dark)
+ */
+int ui_saver_shown(void);
+/**
  * @brief The savers' picture (ui_saver_pic.c): a full-screen black RGB565 image on the cover, in PSRAM.
  * @param[in] parent  the screen saver's cover
  * @return its pixels (SCR_W per row) to paint into, or NULL if there was no memory for it

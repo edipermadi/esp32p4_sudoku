@@ -45,14 +45,15 @@ static void make_colors(void)
  */
 static void stars_tick(lv_timer_t *t)
 {
+    stars_step();
+    saver_perf_mark();
     saver_pen_begin();
-    for (int i = 0; i < STARS_N; i++) {
+    for (int i = 0; i < STARS_N; i++) {             /* last frame's streaks erased (st_was: as drawn) */
         const st_streak_t *s = &st_was[i];
         if (s->w) {
             saver_pen_line(s->x0, s->y0, s->x1, s->y1, s->w, 0);
         }
     }
-    stars_step();
     for (int i = 0; i < STARS_N; i++) {
         st_streak_t *s = &st_was[i];
         int x0, y0, x1, y1, bright, tone;
@@ -83,7 +84,7 @@ bool saver_stars_start(lv_obj_t *parent)
     memset(st_was, 0, STARS_N * sizeof(*st_was));
     make_colors();
     stars_tick(NULL);
-    st_timer = lv_timer_create(stars_tick, ST_FRAME_MS, NULL);
+    st_timer = saver_timer_create(stars_tick, ST_FRAME_MS);
     return true;
 }
 

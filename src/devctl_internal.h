@@ -139,6 +139,13 @@ void devctl_bench(int n, const int *a);
 /** @brief screenoff: the screen off as its timeout does (devctl_screen.c). */
 void devctl_screenoff(void);
 /**
+ * @brief perf [ms]: runs the UI for ms (default 5000, at most 60000) as loop() does, timing the screen
+ *        saver showing and the screen refreshes; prints a PERF line (devctl_screen.c).
+ * @param[in] n  how many numbers came with it
+ * @param[in] a  the numbers (a[0]: ms)
+ */
+void devctl_perf(int n, const int *a);
+/**
  * @brief saver <n>: screen saver n now, Settings unchanged (devctl_screen.c).
  * @param[in] mode  store_saver_t
  * @return false if there's no such saver

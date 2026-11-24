@@ -102,9 +102,10 @@ static void draw(bool erase)
  */
 static void pend_tick(lv_timer_t *t)
 {
-    saver_pen_begin();
-    draw(true);
     pend_step();
+    saver_perf_mark();
+    saver_pen_begin();
+    draw(true);                                     /* (as last drawn: pd_trail, pd_bob not updated yet) */
     pd_trail_n = pend_trail_len();
     for (int p = 0; p < PEND_N; p++) {
         for (int k = 0; k < pd_trail_n; k++) {
@@ -141,7 +142,7 @@ bool saver_pendulum_start(lv_obj_t *parent)
     make_colors();
     pd_trail_n = 0;
     pend_tick(NULL);
-    pd_timer = lv_timer_create(pend_tick, PD_FRAME_MS, NULL);
+    pd_timer = saver_timer_create(pend_tick, PD_FRAME_MS);
     return true;
 }
 

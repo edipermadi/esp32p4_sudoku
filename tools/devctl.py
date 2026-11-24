@@ -24,6 +24,10 @@ Commands (on the command line, or one per line in a script; # starts a comment):
                             all or nothing: a given, a cell off the board or no game -> ERR
     heap [1]                free memory (internal, DMA, PSRAM); 1: per heap region too
     bench [N]               redraw the whole screen N times (default 30), print the time per frame
+    perf [MS]               let the UI run MS (default 5000) as usual, timing the screen saver
+                            showing: frames per second, each frame's working out (calc), painting
+                            (draw) and cache flush (flush), LVGL's screen refreshes, and how busy
+                            that keeps the board ("saver 23; wait 2000; perf" measures the Starfield)
     genbench VARIANT|all [LEVEL|all] [N]
                             time the puzzle generator: N puzzles (default 5) of each variant and
                             level, the same seeds every run, the CPU at full speed even with the
@@ -744,6 +748,13 @@ def run(board, words):
                 break
             if line.startswith("BENCH"):
                 print(line)
+    elif cmd == "perf":
+        # perf [MS]: the UI runs MS (default 5000) as usual while the board times the screen saver
+        ms = int(words[1]) if len(words) > 1 and words[1].isdigit() else 5000
+        board.ser.write((" ".join(words) + "\n").encode())
+        line = board.wait_for("PERF", ms / 1000 + 20, fail="ERR")
+        print(line)
+        board.wait_for("OK perf", 10, fail="ERR")
     elif cmd == "genbench":
         board.ser.write((" ".join(words) + "\n").encode())
         while True:                                 # minutes for "all": no overall limit

@@ -180,6 +180,8 @@ static void run(char *line)
         devctl_bench(n, a);
     } else if (!strcmp(cmd, "screenoff")) {
         devctl_screenoff();
+    } else if (!strcmp(cmd, "perf")) {            /* perf [ms]: where the screen saver's time goes */
+        devctl_perf(n, a);
     } else if (!strcmp(cmd, "saver")) {            /* saver <n>: that screen saver now, Settings unchanged */
         if (n < 1 || !devctl_saver(a[0])) {
             devctl_reply("ERR saver: give a saver number, 0..%d\n", SAVER_MODE_COUNT - 1);

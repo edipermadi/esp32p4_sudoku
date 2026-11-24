@@ -114,6 +114,7 @@ static void automata_paint(void)
 static void automata_tick(lv_timer_t *t)
 {
     auto_step();
+    saver_perf_mark();
     automata_paint();
 }
 
@@ -130,7 +131,7 @@ bool saver_automata_start(lv_obj_t *parent, int rule)
     make_colors();
     memset(au_shown, 0xFF, AUTO_CELLS);             /* every dot to draw (the gaps stay black) */
     automata_paint();
-    au_timer = lv_timer_create(automata_tick, (uint32_t)auto_step_ms(), NULL);
+    au_timer = saver_timer_create(automata_tick, (uint32_t)auto_step_ms());
     return true;
 }
 

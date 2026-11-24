@@ -12,6 +12,7 @@
 #include "ui_internal.h"
 #include "esp_cache.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 
 #define PIC_ROW_BYTES   (SCR_W * 2)             /**< a row of the picture, bytes */
 #define PIC_BYTES       (SCR_W * SCR_W * 2)     /**< the picture, bytes */
@@ -60,18 +61,26 @@ void saver_pic_flush(int32_t y0, int32_t y1)
     if (!pc_buf || y1 < y0) {
         return;
     }
+    int64_t t0 = is_saver_perf_on() ? esp_timer_get_time() : 0;
     size_t from = (size_t)y0 * PIC_ROW_BYTES, to = (size_t)(y1 + 1) * PIC_ROW_BYTES;
     from &= ~(size_t)63;                            /* (the cache works in 64-byte lines) */
     to = LV_MIN((to + 63) & ~(size_t)63, (size_t)PIC_BYTES);
     esp_cache_msync((uint8_t *)pc_buf + from, to - from, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    if (t0) {
+        saver_perf_flush_add((uint32_t)(esp_timer_get_time() - t0));
+    }
 }
 
 /* (documented in ui_internal.h) */
 void saver_pic_redraw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
     if (pc_img) {
+        int64_t t0 = is_saver_perf_on() ? esp_timer_get_time() : 0;
         lv_area_t a = {x0, y0, x1, y1};
         lv_obj_invalidate_area(pc_img, &a);
+        if (t0) {
+            saver_perf_flush_add((uint32_t)(esp_timer_get_time() - t0));
+        }
     }
 }
 

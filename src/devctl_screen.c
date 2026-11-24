@@ -80,6 +80,37 @@ void devctl_screenoff(void)
     devctl_pump(200);
 }
 
+/**
+ * @brief An average, us.
+ * @param[in] sum  the sum, us
+ * @param[in] n  how many
+ * @return sum / n (0 for none)
+ */
+static unsigned avg_us(uint64_t sum, uint32_t n)
+{
+    return n ? (unsigned)(sum / n) : 0;
+}
+
+/* (documented in devctl_internal.h) */
+void devctl_perf(int n, const int *a)
+{
+    uint32_t ms = n >= 1 && a[0] > 0 ? (uint32_t)(a[0] > 60000 ? 60000 : a[0]) : 5000;
+    sudoku_ui_perf_t p;
+    sudoku_ui_perf(ms, &p);
+    uint32_t t = p.ms ? p.ms : 1;
+    char who[16] = "none";
+    if (p.saver >= 0) {
+        snprintf(who, sizeof(who), "%d", p.saver);
+    }
+    unsigned busy = (unsigned)((p.tick_us + p.refresh_us) / 10 / t);     /* % of the time */
+    serial_printf("PERF saver=%s %u ms: %u frames, %u.%u fps; tick avg %u us (calc %u, draw %u, flush %u), "
+                  "max %u us; refresh %u x, avg %u us, max %u us; busy %u%%\n",
+                  who, (unsigned)p.ms, (unsigned)p.frames, (unsigned)(p.frames * 1000u / t),
+                  (unsigned)(p.frames * 10000u / t % 10), avg_us(p.tick_us, p.frames), avg_us(p.calc_us, p.frames),
+                  avg_us(p.draw_us, p.frames), avg_us(p.flush_us, p.frames), (unsigned)p.tick_max_us,
+                  (unsigned)p.refreshes, avg_us(p.refresh_us, p.refreshes), (unsigned)p.refresh_max_us, busy);
+}
+
 /* (documented in devctl_internal.h) */
 bool devctl_saver(int mode)
 {

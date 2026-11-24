@@ -46,11 +46,12 @@ static void draw(bool erase)
  */
 static void liss_tick(lv_timer_t *t)
 {
+    liss_step();
+    saver_perf_mark();
     saver_pen_begin();
     if (lj_was_n) {
-        draw(true);
+        draw(true);                                 /* (as last drawn: lj_was, lj_beam_was) */
     }
-    liss_step();
     lj_was_n = liss_segs();
     for (int i = 0; i <= lj_was_n; i++) {
         int x, y;
@@ -85,7 +86,7 @@ bool saver_lissajous_start(lv_obj_t *parent)
     liss_start(esp_random());
     lj_was_n = 0;
     liss_tick(NULL);
-    lj_timer = lv_timer_create(liss_tick, LJ_FRAME_MS, NULL);
+    lj_timer = saver_timer_create(liss_tick, LJ_FRAME_MS);
     return true;
 }
 

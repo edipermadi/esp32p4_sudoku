@@ -27,6 +27,7 @@ static lv_timer_t *sv_timer;              /**< the clock, each second */
 static uint32_t sv_moved;                 /**< when it last moved */
 static lv_timer_t *sv_dark_timer;         /**< each second while a saver shows: is it time for dark? */
 static uint32_t sv_since;                 /**< when the saver came up */
+static int sv_shown = -1;                 /**< the saver showing (store_saver_t), -1: none or dark */
 
 /**
  * @brief Each second: the clock's time and date, somewhere else each minute (no burn-in).
@@ -144,6 +145,7 @@ static void saver_show_stop(void)
     }
     sv_dark_timer = NULL;
     sv_clock = NULL;
+    sv_shown = -1;
     saver_analog_stop();
     saver_rain_stop();
     saver_attractor_stop();
@@ -201,6 +203,7 @@ static void saver_wake_cb(lv_event_t *e)
 static void saver_show(uint8_t mode)
 {
     if (saver_show_start(mode)) {
+        sv_shown = mode;
         lv_refr_now(NULL);
         bsp_display_brightness_set(effective_brightness());   /* (low PWM levels show nothing on this panel) */
         sv_since = lv_tick_get();
@@ -283,3 +286,5 @@ void saver_cb(lv_timer_t *t)
 /* ---- accessors: the other UI files reach this file's state through these */
 /** @brief The screen saver's cover. @return it (NULL: the screen is on) */
 lv_obj_t *ui_saver(void) { return s_saver; }
+/* (documented in ui_internal.h) */
+int ui_saver_shown(void) { return sv_shown; }

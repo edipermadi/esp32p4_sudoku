@@ -120,11 +120,12 @@ static void draw_flock(bool erase)
  */
 static void boids_tick(lv_timer_t *t)
 {
+    boids_step();
+    saver_perf_mark();
     saver_pen_begin();
     if (bd_drawn) {
-        draw_flock(true);
+        draw_flock(true);                           /* (the flock as last drawn: bd_was, not moved yet) */
     }
-    boids_step();
     for (int i = 0; i < BOIDS_ALL; i++) {
         for (int k = 0; k < BOIDS_TRAIL; k++) {
             float x, y;
@@ -163,7 +164,7 @@ bool saver_boids_start(lv_obj_t *parent)
     make_colors();
     bd_drawn = false;
     boids_tick(NULL);
-    bd_timer = lv_timer_create(boids_tick, BD_FRAME_MS, NULL);
+    bd_timer = saver_timer_create(boids_tick, BD_FRAME_MS);
     return true;
 }
 

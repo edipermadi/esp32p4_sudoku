@@ -30,6 +30,13 @@ extern "C" {
  *   press <x> <y> / move <x> <y> / release    by hand
  *   wait <ms>                 let the UI run (animations, the database)
  *   screenoff                 turn the screen off as its timeout does (the next tap wakes it)
+ *   perf [ms]                 run the UI for ms (default 5000, at most 60000) as usual, timing the
+ *                             screen saver showing -> "PERF saver=<n|none> <ms> ms: <frames> frames,
+ *                             <fps> fps; tick avg <us> us (calc <us>, draw <us>, flush <us>), max <us>
+ *                             us; refresh <k> x, avg <us> us, max <us> us; busy <pct>%" (calc: working
+ *                             out; draw: painting the picture; flush: cache flush and marking for
+ *                             redraw; refresh: LVGL putting it on the panel; busy: ticks and refreshes
+ *                             as a share of the time). Serial only
  *   saver <n>                 show screen saver n now (store_saver_t: the numbers of sudoku.db's
  *                             saver_clock, 0 Dark ...) without changing the one Settings chose; one
  *                             showing is swapped for it (the next tap wakes the screen);

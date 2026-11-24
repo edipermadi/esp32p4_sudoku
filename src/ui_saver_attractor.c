@@ -106,16 +106,18 @@ static void attr_tick(lv_timer_t *t)
     at_frame++;
     if (at_frame > ATTR_BUILD_FRAMES) {             /* drawn: clear, and the next one from nothing */
         attr_next();
+        saver_perf_mark();
         paint_box(x0, y0, x1, y1);                  /* (the old box: black) */
         at_frame = 0;
         at_points = ATTR_START_POINTS;
         at_n_old = 0;
         return;
     }
+    int n = attr_plot((int)at_points, at_new, ATTR_MAX_POINTS);
+    saver_perf_mark();
     int box[4] = {ATTR_W, ATTR_W, -1, -1};
     paint_cells(at_old, at_n_old, false, box);      /* last frame's sparks settle */
     at_n_old = 0;
-    int n = attr_plot((int)at_points, at_new, ATTR_MAX_POINTS);
     paint_cells(at_new, n, true, box);
     uint32_t *sw = at_old;                          /* (this frame's sparks settle next frame) */
     at_old = at_new;
@@ -145,7 +147,7 @@ bool saver_attractor_start(lv_obj_t *parent)
     at_frame = 0;
     at_points = ATTR_START_POINTS;
     at_n_old = 0;
-    at_timer = lv_timer_create(attr_tick, ATTR_FRAME_MS, NULL);
+    at_timer = saver_timer_create(attr_tick, ATTR_FRAME_MS);
     return true;
 }
 
