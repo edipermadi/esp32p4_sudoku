@@ -34,8 +34,12 @@ extern "C" {
  * (canon_hash_geom()): Jigsaw (its regions turned with the givens, relabelled in reading order; digits any
  * way), Killer (its cages and their sums turned with the givens, relabelled in reading order; digits as
  * they are: the sums need them), Product Killer (the same with its products), and Sumless Killer and Extra
- * Regions (their cages or shaded regions turned the same way; no sums, so digits any way). Plain C: the PC
- * tests build it.
+ * Regions (their cages or shaded regions turned the same way; no sums, so digits any way), and Kropki and
+ * XV (their marks turned with the givens; digits as they are: a black dot's doubling, a V's 5 need them), and
+ * the 19 line variants (Thermo, Arrow, Renban ... Average Lines: their lines turned with the givens and sorted,
+ * each from its start where its way matters (a bulb, a circle, a pill), else whichever way round is smaller;
+ * digits as they are; Pill Arrows only as it is or mirrored about the main diagonal, its pill being read left to
+ * right or top to bottom). Plain C: the PC tests build it.
  * @{
  */
 
@@ -86,16 +90,17 @@ int canon_cell(int t, int n, int cell);
 uint64_t canon_hash(int variant, const uint8_t givens[81]);
 /**
  * @brief Does a variant's hash need the puzzle's layout (Jigsaw's regions; the cages of Killer, Sumless Killer,
- * Product Killer and Extra Regions)?
+ * Product Killer and Extra Regions; Kropki's and XV's marks; the line variants' lines)?
  * @param[in] variant  sudoku_variant_t
  * @return true: hash it with canon_hash_geom()
  */
 bool is_canon_layout(int variant);
 /**
  * @brief A puzzle's canonical hash with its layout: canon_hash() for the variants without one; for Jigsaw,
- * Killer, Sumless Killer, Product Killer and Extra Regions, the smallest of the 8 turned and mirrored copies of the
- * givens and the layout together (regions or cages numbered in reading order, the sums or products in that order),
- * so the same puzzle turned, mirrored or (but for Killer and Product Killer) renumbered hashes the same.
+ * Killer, Sumless Killer, Product Killer, Extra Regions, Kropki, XV and the line variants, the smallest of the 8
+ * turned and mirrored copies of the givens and the layout together (regions or cages numbered in reading order, the
+ * sums or products in that order; the marks between cells as the turned board has them; the lines sorted), so the
+ * same puzzle turned, mirrored or (Jigsaw, Sumless Killer, Extra Regions) renumbered hashes the same.
  * @param[in] G  the puzzle's board (its variant, regions and cages)
  * @param[in] givens  the givens, 0 = empty
  * @return the hash, never 0; 0 if the variant has none

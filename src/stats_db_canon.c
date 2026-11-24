@@ -21,7 +21,7 @@ uint64_t sdb_puzzle_canon(int puzzle)
     sqlite3_stmt *st;
     uint64_t h = 0;
     static sudoku_geom_t *geo;                      /* a Jigsaw's or Killer's board, from its layout (PSRAM) */
-    if (sqlite3_prepare_v2(sdb_db(), "SELECT givens, variant, regions, cages FROM generated WHERE id = ?1", -1, &st,
+    if (sqlite3_prepare_v2(sdb_db(), "SELECT givens, variant, regions, cages, marks, thermos FROM generated WHERE id = ?1", -1, &st,
                            NULL) == SQLITE_OK) {
         sqlite3_bind_int(st, 1, puzzle - PUZZLE_GEN_BASE);
         if (sqlite3_step(st) == SQLITE_ROW) {
@@ -33,7 +33,7 @@ uint64_t sdb_puzzle_canon(int puzzle)
                 }
                 if (!is_canon_layout(variant)) {
                     h = canon_hash(variant, givens);
-                } else if (geo || (geo = malloc(sizeof(*geo)))) {   /* Jigsaw, the cages: with their regions, cages */
+                } else if (geo || (geo = malloc(sizeof(*geo)))) {   /* Jigsaw, the cages, the marks: with their layout */
                     const char *reg = (const char *)sqlite3_column_text(st, 2);
                     const char *cages = (const char *)sqlite3_column_text(st, 3);
                     bool ok = false;
@@ -49,6 +49,12 @@ uint64_t sdb_puzzle_canon(int puzzle)
                         ok = sudoku_geom_regions_text(cages, geo);
                     } else if (variant == VAR_PRODUCT && cages) {
                         ok = sudoku_geom_product_text(cages, geo);
+                    } else if (variant == VAR_KROPKI || variant == VAR_XV) {   /* (their marks) */
+                        const char *marks = (const char *)sqlite3_column_text(st, 4);
+                        ok = marks && strlen(marks) == 81 && sudoku_geom_marks(variant, marks, geo);
+                    } else {                                /* the line variants: their lines */
+                        const char *lines = (const char *)sqlite3_column_text(st, 5);
+                        ok = lines && sudoku_geom_lines_text(variant, lines, geo) && geo->variant == variant;
                     }
                     h = ok ? canon_hash_geom(geo, givens) : 0;
                 }

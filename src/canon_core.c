@@ -7,9 +7,60 @@
 #include "generator.h"
 #include <string.h>
 
+/**
+ * @brief Is it a line variant (its layout: lines of cells, kept in thermos)?
+ * @param[in] variant  sudoku_variant_t
+ * @return true if so
+ */
+static bool is_line_variant(int variant)
+{
+    switch (variant) {
+    case VAR_THERMO:
+    case VAR_ARROW:
+    case VAR_RENBAN:
+    case VAR_WHISPER:
+    case VAR_PALINDROME:
+    case VAR_REGIONSUM:
+    case VAR_ZIPPER:
+    case VAR_BETWEEN:
+    case VAR_ENTROPIC:
+    case VAR_MODULAR:
+    case VAR_DUTCH:
+    case VAR_PARITY:
+    case VAR_SLOW:
+    case VAR_NABNER:
+    case VAR_LOCKOUT:
+    case VAR_DARROW:
+    case VAR_TEN:
+    case VAR_PILL:
+    case VAR_AVG:
+        return true;
+    default:
+        return false;
+    }
+}
+
+/**
+ * @brief Does a line's way matter (a bulb, a circle or a pill at its start)? The others read the same backwards.
+ * @param[in] variant  sudoku_variant_t
+ * @return true if so
+ */
+static bool is_line_one_way(int variant)
+{
+    return variant == VAR_THERMO || variant == VAR_SLOW || variant == VAR_ARROW || variant == VAR_PILL ||
+           variant == VAR_AVG;
+}
+
 /* (documented in canon_core.h) */
 uint8_t canon_symmetries(int variant)
 {
+    if (variant == VAR_PILL) {
+        return 0x41;                    /* its pill reads left to right or top to bottom: as it is, or about the main
+                                         * diagonal (a pill across becomes one down, its tens still first) */
+    }
+    if (is_line_variant(variant)) {
+        return 0xFF;                    /* (its lines turned too: canon_hash_geom()) */
+    }
     switch (variant) {                  /* (tests/test_main.c checks these against each board's peers) */
     case VAR_MINI:
         return 0x35;                    /* 2x3 boxes: no quarter turns, no diagonal mirrors */
@@ -22,6 +73,8 @@ uint8_t canon_symmetries(int variant)
     case VAR_SUMLESS:
     case VAR_REGIONS:
     case VAR_PRODUCT:
+    case VAR_KROPKI:                    /* (its dots turned too) */
+    case VAR_XV:                        /* (its marks turned too) */
         return 0xFF;
     case VAR_CLASSIC:
     case VAR_X:
@@ -84,7 +137,20 @@ int canon_cell(int t, int n, int cell)
 bool is_canon_layout(int variant)
 {
     return variant == VAR_JIGSAW || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
-           variant == VAR_PRODUCT;
+           variant == VAR_PRODUCT || variant == VAR_KROPKI || variant == VAR_XV || is_line_variant(variant);
+}
+
+/**
+ * @brief Kropki, XV: the mark between two side-by-side cells (either order).
+ * @param[in] G  the board
+ * @param[in] a  a cell
+ * @param[in] b  the cell beside, above or below it
+ * @return MARK_* (0: none)
+ */
+static int edge_mark(const sudoku_geom_t *G, int a, int b)
+{
+    const int lo = a < b ? a : b, hi = a < b ? b : a;
+    return hi - lo == 1 ? EDGE_RIGHT(G->edge[lo]) : EDGE_DOWN(G->edge[lo]);
 }
 
 /* (documented in canon_core.h) */
@@ -94,6 +160,83 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
     if (!is_canon_layout(variant)) {
         return canon_hash(variant, givens);
     }
+    const uint8_t sym = canon_symmetries(variant);   /* (Pill Arrows: two of the eight) */
+    bool have = false;
+    if (is_line_variant(variant)) {
+        /* a copy: the givens as they are (thermometers, sums need them), then the lines, each as its length and its
+         * cells on the turned board (from its start where its way matters; else whichever way is smaller), the
+         * lines sorted (the order they're kept in doesn't matter) */
+        const bool one_way = is_line_one_way(variant);
+        const int nl = G->nthermos < THERMOS_MAX ? G->nthermos : THERMOS_MAX;
+        uint8_t best[81 + THERMOS_MAX * 10], cur[81 + THERMOS_MAX * 10], inv[81], ln[THERMOS_MAX][10];
+        const size_t len = 81 + (size_t)nl * 10;
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            for (int k = 0; k < 81; k++) {
+                const int src = canon_cell(t, 9, k);
+                inv[src] = (uint8_t)k;          /* where a cell goes */
+                cur[k] = givens[src];
+            }
+            for (int l = 0; l < nl; l++) {
+                const int n = G->thermo_n[l];
+                uint8_t fwd[9], rev[9];
+                for (int j = 0; j < n; j++) {
+                    fwd[j] = inv[G->thermo_cell[l][j]];
+                    rev[n - 1 - j] = fwd[j];
+                }
+                memset(ln[l], 0, 10);
+                ln[l][0] = (uint8_t)n;
+                memcpy(ln[l] + 1, !one_way && memcmp(rev, fwd, (size_t)n) < 0 ? rev : fwd, (size_t)n);
+            }
+            for (int a = 1; a < nl; a++) {          /* sorted (insertion: 16 lines at most) */
+                for (int b = a; b > 0 && memcmp(ln[b], ln[b - 1], 10) < 0; b--) {
+                    uint8_t x[10];
+                    memcpy(x, ln[b], 10);
+                    memcpy(ln[b], ln[b - 1], 10);
+                    memcpy(ln[b - 1], x, 10);
+                }
+            }
+            memcpy(cur + 81, ln, (size_t)nl * 10);
+            if (!have || memcmp(cur, best, len) < 0) {
+                memcpy(best, cur, len);
+                have = true;
+            }
+        }
+        uint64_t h = 1469598103934665603ULL;
+        h = (h ^ (uint8_t)variant) * 1099511628211ULL;
+        for (size_t k = 0; k < len; k++) {
+            h = (h ^ best[k]) * 1099511628211ULL;
+        }
+        return h ? h : 1;
+    }
+    if (variant == VAR_KROPKI || variant == VAR_XV) {
+        /* a copy: the givens as they are (a black dot's doubling, a V's 5 need them), then each cell's mark to its
+         * right and below, as the turned board has them (a mark joins two cells either way round) */
+        uint8_t best[81 * 3], cur[81 * 3];
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            for (int k = 0; k < 81; k++) {
+                const int src = canon_cell(t, 9, k);
+                cur[k] = givens[src];
+                cur[81 + k] = (uint8_t)(k % 9 < 8 ? edge_mark(G, src, canon_cell(t, 9, k + 1)) : 0);
+                cur[162 + k] = (uint8_t)(k < 72 ? edge_mark(G, src, canon_cell(t, 9, k + 9)) : 0);
+            }
+            if (!have || memcmp(cur, best, sizeof(cur)) < 0) {
+                memcpy(best, cur, sizeof(cur));
+                have = true;
+            }
+        }
+        uint64_t h = 1469598103934665603ULL;
+        h = (h ^ (uint8_t)variant) * 1099511628211ULL;
+        for (size_t k = 0; k < sizeof(best); k++) {
+            h = (h ^ best[k]) * 1099511628211ULL;
+        }
+        return h ? h : 1;
+    }
     const bool prod = variant == VAR_PRODUCT;
     const bool killer = variant == VAR_KILLER || prod;   /* (sums, products: their digits as they are) */
     const bool cages = variant != VAR_JIGSAW;       /* Killer, Sumless, Product, Extra Regions: cages (CAGE_NONE: none) */
@@ -102,8 +245,10 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
      * order */
     uint8_t best[81 * 2 + 2 * CAGES_MAX], cur[81 * 2 + 2 * CAGES_MAX];
     const int len = 81 * 2 + (prod ? 2 * G->ncages : killer ? G->ncages : 0);
-    bool have = false;
     for (int t = 0; t < 8; t++) {
+        if (!(sym >> t & 1)) {
+            continue;
+        }
         uint8_t name[10] = {0}, lab[CAGES_MAX];
         int next = 1, nlab = 0;
         memset(lab, 0, sizeof(lab));

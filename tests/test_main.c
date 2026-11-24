@@ -611,6 +611,9 @@ static void test_canon(void)
         if (v == VAR_FLATMATES || v == VAR_159) {
             real &= 0x35;                           /* (their rules: above and below, column numbers: columns stay) */
         }
+        if (v == VAR_PILL) {
+            real &= 0x41;                           /* (its pill reads left to right or top to bottom) */
+        }
         CHECKF(sym == real, "%s: canon_symmetries 0x%02x, the board's 0x%02x", variant_name(v), sym, real);
         if (is_canon_layout(v)) {
             continue;                               /* (Jigsaw, Killer: with their layout, below) */
@@ -706,9 +709,10 @@ static void test_canon(void)
     /* Jigsaw, Killer, Sumless Killer, Extra Regions: the board turned with the givens (regions, cages and sums),
      * renumbered at random (all but Killer): the same hash, and still one solution; another layout (relabelled
      * regions: the same; a sum changed, a cell out of its cage: another hash); and none without the layout */
-    static const int LAYOUT[] = {VAR_JIGSAW, VAR_KILLER, VAR_SUMLESS, VAR_REGIONS, VAR_PRODUCT};
-    for (int pass = 0; pass < 5; pass++) {
-        const int v = LAYOUT[pass];
+    for (int v = 0; v < VAR_COUNT; v++) {           /* (every variant hashed with its layout) */
+        if (!is_canon_layout(v)) {
+            continue;
+        }
         static sudoku_geom_t board, tb;
         uint8_t giv[81] = {0};
         gen_level_t got;
@@ -717,11 +721,16 @@ static void test_canon(void)
         CHECK(h != 0 && canon_hash(v, giv) == 0);
         uint32_t rng = 7u + (uint32_t)v;
         for (int t = 0; t < 8; t++) {
+            if (!(canon_symmetries(v) >> t & 1)) {
+                continue;                           /* (Pill Arrows: two of the eight) */
+            }
             uint8_t perm[10], tr[81] = {0}, map[81], cage_of[81];
             for (int d = 0; d <= 9; d++) {
                 perm[d] = (uint8_t)d;
             }
-            for (int d = 9; v != VAR_KILLER && v != VAR_PRODUCT && d > 1; d--) {   /* (sums, products: digits kept) */
+            const bool marks = v == VAR_KROPKI || v == VAR_XV;   /* (dots, X and V: the digits as they are too) */
+            const bool lines = board.nthermos > 0;   /* (and lines') */
+            for (int d = 9; (v == VAR_JIGSAW || v == VAR_SUMLESS || v == VAR_REGIONS) && d > 1; d--) {   /* (renumbered) */
                 rng = rng * 1103515245u + 12345u;
                 const int j = 1 + (int)(rng >> 16) % d;
                 const uint8_t x = perm[d];
@@ -734,7 +743,32 @@ static void test_canon(void)
                 map[to] = board.region[c];
                 cage_of[to] = board.cage_of[c];
             }
-            const bool built = v == VAR_JIGSAW ? sudoku_geom_jigsaw(map, &tb)
+            char mt[82];                            /* Kropki, XV: each mark onto the edge its two cells turned onto */
+            memset(mt, 0, sizeof(mt));
+            int mv[81] = {0};
+            for (int c = 0; marks && c < 81; c++) {
+                for (int dn = 0; dn < 2; dn++) {
+                    const int o = dn ? c + 9 : c + 1, m = dn ? EDGE_DOWN(board.edge[c]) : EDGE_RIGHT(board.edge[c]);
+                    if (!m || o > 80 || (!dn && c % 9 == 8)) {
+                        continue;
+                    }
+                    const int a = canon_cell(t, 9, c), b = canon_cell(t, 9, o), lo = a < b ? a : b, hi = a + b - lo;
+                    mv[lo] += hi - lo == 1 ? m : 3 * m;
+                }
+            }
+            for (int c = 0; c < 81; c++) {
+                mt[c] = (char)('0' + mv[c]);
+            }
+            static char lt[STATS_CAGES_LEN_T];      /* lines: each cell where it's turned to, in the line's order */
+            int pos = 0;
+            for (int l = 0; lines && l < board.nthermos; l++) {
+                for (int j = 0; j < board.thermo_n[l]; j++) {
+                    pos += snprintf(lt + pos, sizeof(lt) - (size_t)pos, "%s%d", j ? "," : l ? ";" : "",
+                                    canon_cell(t, 9, board.thermo_cell[l][j]));
+                }
+            }
+            const bool built = lines ? sudoku_geom_lines_text(v, lt, &tb)
+                               : marks ? sudoku_geom_marks(v, mt, &tb) : v == VAR_JIGSAW ? sudoku_geom_jigsaw(map, &tb)
                                : v == VAR_PRODUCT ? gen_geom_product(cage_of, board.cage_prod, board.ncages, &tb)
                                : gen_geom_killer(cage_of, board.cage_sum, board.ncages, &tb);
             tb.variant = (uint8_t)v;                /* (Extra Regions: built as a Sumless Killer, as its text is) */
@@ -742,12 +776,62 @@ static void test_canon(void)
             CHECKF(canon_hash_geom(&tb, tr) == h, "%s: turn %d: another hash", variant_name(v), t);
             CHECKF(sudoku_count_solutions(&tb, tr, 2) == 1, "%s: turn %d: not one solution any more", variant_name(v), t);
         }
-        if (v == VAR_JIGSAW) {                      /* the regions numbered another way: the same */
+        if (v == VAR_PILL) {                        /* mirrored left to right (its pills' numbers reversed): another */
+            uint8_t tr[81] = {0};
+            static char lt[STATS_CAGES_LEN_T];
+            int pos = 0;
+            for (int c = 0; c < 81; c++) {
+                tr[canon_cell(4, 9, c)] = giv[c];
+            }
+            for (int l = 0; l < board.nthermos; l++) {   /* (each pill's cells in reading order again) */
+                for (int j = 0; j < board.thermo_n[l]; j++) {
+                    const int at = j < 2 ? 1 - j : j;
+                    pos += snprintf(lt + pos, sizeof(lt) - (size_t)pos, "%s%d", j ? "," : l ? ";" : "",
+                                    canon_cell(4, 9, board.thermo_cell[l][at]));
+                }
+            }
+            const bool across = board.thermo_cell[0][1] == board.thermo_cell[0][0] + 1;
+            if (across && sudoku_geom_lines_text(v, lt, &tb)) {
+                CHECK(canon_hash_geom(&tb, tr) != h);
+            }
+        }
+        if (board.nthermos > 0) {                   /* its first line read backwards: the same where its way doesn't matter */
+            static char lt[STATS_CAGES_LEN_T];
+            int pos = 0;
+            for (int l = 0; l < board.nthermos; l++) {
+                for (int j = 0; j < board.thermo_n[l]; j++) {
+                    const int at = l ? j : board.thermo_n[l] - 1 - j;
+                    pos += snprintf(lt + pos, sizeof(lt) - (size_t)pos, "%s%d", j ? "," : l ? ";" : "",
+                                    board.thermo_cell[l][at]);
+                }
+            }
+            const bool one_way = v == VAR_THERMO || v == VAR_SLOW || v == VAR_ARROW || v == VAR_PILL || v == VAR_AVG;
+            if (sudoku_geom_lines_text(v, lt, &tb)) {   /* (a line its kind can't have backwards: refused) */
+                CHECKF((canon_hash_geom(&tb, giv) == h) == !one_way, "%s: a line backwards: %s hash", variant_name(v),
+                       one_way ? "the same" : "another");
+            } else {
+                CHECKF(one_way, "%s: a line backwards refused", variant_name(v));
+            }
+        } else if (v == VAR_JIGSAW) {               /* the regions numbered another way: the same */
             uint8_t map[81];
             for (int c = 0; c < 81; c++) {
                 map[c] = (uint8_t)((board.region[c] + 4) % 9);
             }
             CHECK(sudoku_geom_jigsaw(map, &tb) && canon_hash_geom(&tb, giv) == h);
+        } else if (v == VAR_KROPKI || v == VAR_XV) {   /* a mark changed, digits 1 and 2 swapped: another */
+            tb = board;
+            for (int c = 0; c < 81; c++) {
+                if (EDGE_RIGHT(tb.edge[c]) && c % 9 < 8) {
+                    tb.edge[c] = (uint8_t)((tb.edge[c] & ~3) | (EDGE_RIGHT(tb.edge[c]) == 1 ? 2 : 1));
+                    break;
+                }
+            }
+            CHECKF(canon_hash_geom(&tb, giv) != h, "%s: a mark changed, the same hash", variant_name(v));
+            uint8_t sw[81];
+            for (int c = 0; c < 81; c++) {
+                sw[c] = giv[c] == 1 ? 2 : giv[c] == 2 ? 1 : giv[c];
+            }
+            CHECKF(canon_hash_geom(&board, sw) != h, "%s: 1 and 2 swapped, the same hash", variant_name(v));
         } else if (v == VAR_KILLER || v == VAR_PRODUCT) {   /* a cage's sum or product changed: another */
             tb = board;
             if (v == VAR_PRODUCT) {

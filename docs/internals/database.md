@@ -6,7 +6,7 @@ How `sudoku.db` is laid out: its tables, what each one is for, and how they conn
 
 ## Overview
 
-`sudoku.db` is a SQLite 3 file in the root of the microSD card. It holds everything the game remembers: players, solves, games in progress, puzzles made on the board, collections, achievements and settings. The schema version is in `PRAGMA user_version` (now 18).
+`sudoku.db` is a SQLite 3 file in the root of the microSD card. It holds everything the game remembers: players, solves, games in progress, puzzles made on the board, collections, achievements and settings. The schema version is in `PRAGMA user_version` (now 20).
 
 The tables fall into four groups:
 
@@ -282,7 +282,7 @@ Since SQLite doesn't enforce the links, the firmware deletes in a fixed order, e
 
 The tables are created with `CREATE TABLE IF NOT EXISTS`, so an older database keeps its old tables. `upgrade_schema()` then brings it up to date:
 
-- **New columns** are added with `ALTER TABLE ... ADD COLUMN` when `has_column()` doesn't find them. Defaults mean old rows stay valid: `hints` 0, `flags` 0, `moves` NULL ("not recorded"). `solves.canon` (user_version 12) is filled in for the older solves right after it's added (`sdb_canon_backfill()`), from their puzzles' givens. User_versions 13 to 17 change no table: Point Symmetry, Non-Consecutive, Diagonal Non-Consecutive and Magic Square (13), Dutch Flatmates (14), 159 Sudoku (15), Jigsaw and Killer (16, hashed with their `regions` and `cages`), Sumless Killer and Extra Regions (17, with their `cages`) and Product Killer (18) got canonical hashes, so a version 12 to 17 database runs the backfill once more when it's opened (it only fills rows whose `canon` is still NULL; the variants without a hash stay NULL).
+- **New columns** are added with `ALTER TABLE ... ADD COLUMN` when `has_column()` doesn't find them. Defaults mean old rows stay valid: `hints` 0, `flags` 0, `moves` NULL ("not recorded"). `solves.canon` (user_version 12) is filled in for the older solves right after it's added (`sdb_canon_backfill()`), from their puzzles' givens. User_versions 13 to 17 change no table: Point Symmetry, Non-Consecutive, Diagonal Non-Consecutive and Magic Square (13), Dutch Flatmates (14), 159 Sudoku (15), Jigsaw and Killer (16, hashed with their `regions` and `cages`), Sumless Killer and Extra Regions (17, with their `cages`) Product Killer (18), Kropki and XV (19, with their `marks`) and the 19 line variants (20, with their `thermos`) got canonical hashes, so a version 12 to 19 database runs the backfill once more when it's opened (it only fills rows whose `canon` is still NULL; the variants without a hash stay NULL).
 - **Key changes** (adding `player_id`; one saved game per player becoming five) rename the old table to `*_v3` / `*_v8`, create the new one, copy the rows across and drop the old one, all in one transaction.
 - **Numbers that are already stored never change meaning:** variants, `TECH_*` bits, achievement keys and Learn techniques are only ever added at the end.
 

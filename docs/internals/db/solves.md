@@ -22,7 +22,7 @@ The log: one row per puzzle finished, never changed afterwards. Everything histo
 | `hints` | INTEGER | no | cells filled with Fill (the solution's digit); 0 by default |
 | `moves` | BLOB | yes | the move log: 6 bytes per move (below); NULL: not recorded (older solves) |
 | `flags` | INTEGER | no | `GAME_FLAG_*` (`src/store.h`): bit *k* (0–15) = a hint showed technique *k*; bit 20 = the no-notes challenge; 0 by default |
-| `canon` | INTEGER | yes | the puzzle's canonical hash (`src/canon_core.h`): the same for the puzzle turned, mirrored or with its digits renumbered; NULL for a variant without one (a layout of its own, or digits that matter in a way no renumbering keeps; Point Symmetry, Non-Consecutive, Diagonal Non-Consecutive, Magic Square, Dutch Flatmates and 159 Sudoku have one, and Jigsaw, Killer, Sumless Killer, Product Killer and Extra Regions with their regions or cages, renumbered only as their rules allow) |
+| `canon` | INTEGER | yes | the puzzle's canonical hash (`src/canon_core.h`): the same for the puzzle turned, mirrored or with its digits renumbered; NULL for a variant without one (a layout of its own, or digits that matter in a way no renumbering keeps; Point Symmetry, Non-Consecutive, Diagonal Non-Consecutive, Magic Square, Dutch Flatmates and 159 Sudoku have one, and Jigsaw, Killer, Sumless Killer, Product Killer and Extra Regions with their regions or cages, Kropki and XV with their marks, the line variants with their lines, renumbered only as their rules allow) |
 
 ## The move log
 
