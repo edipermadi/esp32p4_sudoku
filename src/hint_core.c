@@ -377,6 +377,34 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
         snprintf(tech, sizeof(tech), "Every 2x2 block holds an odd and an even digit. The other three cells of %s "
                  "can only be %s, so row %d, column %d is %s. ", u1, odd ? "even" : "odd", c / 9 + 1, c % 9 + 1,
                  odd ? "odd" : "even");
+    } else if (t->kind == TECH_S9) {               /* Search Nine: the arrow and the cell */
+        static const char *const WAY[5] = {"", "up", "right", "down", "left"};
+        const int a = t->unit >= 0 && t->unit < 81 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : a;
+        mark[a] = mark[c] = 1;
+        char digs[24] = "";
+        size_t len = 0;
+        for (int d = 1; d <= 9; d++) {
+            if (t->digit >> d & 1) {
+                len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
+            }
+        }
+        const int dir = geo->s9_dir[a] <= S9_LEFT ? geo->s9_dir[a] : 0;
+        snprintf(u1, sizeof(u1), "the arrow in row %d, column %d", a / 9 + 1, a % 9 + 1);
+        if (t->unit2 == S9_STEP_IS9) {
+            snprintf(tech, sizeof(tech), "An arrow's digit is how many cells away its 9 is. %s points %s and holds %d: "
+                     "row %d, column %d, %d cells %s, is the 9. ", u1, WAY[dir], t->digit2, c / 9 + 1, c % 9 + 1,
+                     t->digit2, WAY[dir]);
+        } else if (t->unit2 == S9_STEP_NOT9 && !t->digit2) {
+            snprintf(tech, sizeof(tech), "An arrow points to its line's 9. %s points %s, so the 9 isn't behind it: "
+                     "row %d, column %d isn't 9. ", u1, WAY[dir], c / 9 + 1, c % 9 + 1);
+        } else if (t->unit2 == S9_STEP_NOT9) {
+            snprintf(tech, sizeof(tech), "An arrow's digit is how many cells away its 9 is. A 9 in row %d, column %d "
+                     "would need %d in %s, and it can't be %d: row %d, column %d isn't 9. ", c / 9 + 1, c % 9 + 1,
+                     t->digit2, u1, t->digit2, c / 9 + 1, c % 9 + 1);
+        } else {
+            snprintf(tech, sizeof(tech), "An arrow's digit is how many cells away its 9 is. Of the cells %s from %s, "
+                     "only those that can be 9 leave it only %s. ", WAY[dir], u1, digs);
+        }
     } else if (t->kind == TECH_AQ9) {              /* Anti-Queen 9s: the 9 and its diagonals */
         const int n = t->unit >= 0 && t->unit < 81 ? t->unit : 0, c = t->cell1 >= 0 && t->cell1 < 81 ? t->cell1 : n;
         mark[n] = mark[c] = 1;

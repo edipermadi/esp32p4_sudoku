@@ -176,6 +176,7 @@ typedef enum {
     KIND_AQ9,                            /**< Anti-Queen 9s */
     KIND_N9,                             /**< Next to Nine */
     KIND_CLONE,                          /**< Clone Sudoku */
+    KIND_S9,                             /**< Search Nine */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

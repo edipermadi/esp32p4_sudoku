@@ -55,6 +55,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Dutch Flatmates", "Every 5 has a 1 right above it or a 9 right below: a 5 can't go where neither can.", VAR_FLATMATES, TECH_FLATMATES, true},
     {"Quadro", "Every 2x2 block holds an odd and an even digit: three of one parity leave the fourth the other.", VAR_QUADRO, TECH_QUADRO, true},
     {"Anti-Queen 9s", "No two 9s share a diagonal: each 9 rules 9 out along both its diagonals.", VAR_AQ9, TECH_AQ9, true},
+    {"Search Nine arrows", "An arrow's digit is how far its 9 is that way: the 9 is never behind an arrow.", VAR_S9, TECH_S9, true},
     {"Even-Odd cells", "A shaded cell is even, a ringed one odd: that alone can leave a digit one place.", VAR_EVENODD, TECH_NONE, false},
     {"Consecutive bars", "A bar: the two cells differ by 1. No bar: they don't. Both narrow down a cell's digits.", VAR_CONSEC, TECH_CONSEC, false},
     {"Kropki dots", "White dot: 1 apart; black dot: one is double the other; no dot: neither.", VAR_KROPKI, TECH_EDGE, false},
@@ -168,6 +169,7 @@ int learn_group(int k)
     case VAR_MATHRAX:
     case VAR_QUADRO:
     case VAR_AQ9:
+    case VAR_S9:
         return LEARN_MARKS;
     case VAR_KILLER:
     case VAR_SUMLESS:

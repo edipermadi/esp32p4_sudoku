@@ -225,6 +225,9 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_N9:
         sudoku_n9_text(g, marks, 82);
         break;
+    case VAR_S9:
+        sudoku_s9_text(g, marks, 82);
+        break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, cages_len);     /* (where cages go) */
         break;
@@ -593,6 +596,39 @@ bool sudoku_n9_text(const sudoku_geom_t *g, char *buf, int len)
         }
         pos += w;
     }
+    return true;
+}
+
+/** @brief Search Nine: each arrow's letter, by S9_* ('.' none) */
+static const char S9_LETTERS[] = ".urdl";
+
+/* (documented in generator.h) */
+bool sudoku_geom_s9_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t dirs[81];
+    if (!text || strlen(text) != 81) {
+        return false;
+    }
+    for (int c = 0; c < 81; c++) {
+        const char *at = text[c] ? strchr(S9_LETTERS, text[c]) : NULL;
+        if (!at) {
+            return false;
+        }
+        dirs[c] = (uint8_t)(at - S9_LETTERS);
+    }
+    return gen_geom_s9(dirs, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_s9_text(const sudoku_geom_t *g, char *buf, int len)
+{
+    if (len < 82) {
+        return false;
+    }
+    for (int c = 0; c < 81; c++) {
+        buf[c] = S9_LETTERS[g->s9_dir[c] <= S9_LEFT ? g->s9_dir[c] : 0];
+    }
+    buf[81] = 0;
     return true;
 }
 

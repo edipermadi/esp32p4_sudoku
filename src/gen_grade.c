@@ -624,6 +624,66 @@ bool gen_clone_logic(logic_t *L)
     return false;
 }
 
+/**
+ * @brief Search Nine: can a cell still be (or is it) d, in the techniques' state?
+ * @param[in] L  the state
+ * @param[in] c  the cell
+ * @param[in] d  the digit
+ * @return true if so
+ */
+static bool is_s9_maybe(const logic_t *L, int c, int d)
+{
+    return L->v[c] ? L->v[c] == d : (L->cand[c] >> d & 1) != 0;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_s9_logic(logic_t *L)
+{
+    const sudoku_geom_t *G = L->G;
+    for (int a = 0; a < 81; a++) {                  /* each arrow */
+        const int dir = G->s9_dir[a];
+        if (!dir) {
+            continue;
+        }
+        if (!L->v[a]) {                             /* its digit: a distance that reaches a cell that can be 9 */
+            uint16_t keep = 0;
+            for (int k = 1; k <= 8; k++) {
+                const int t = sudoku_s9_cell(a, dir, k);
+                if (t >= 0 && is_s9_maybe(L, t, 9)) {
+                    keep |= (uint16_t)(1u << k);
+                }
+            }
+            if (L->cand[a] & ~keep) {
+                eliminate(L, a, (uint16_t)(L->cand[a] & ~keep));
+                trace(TECH_S9, a, S9_STEP_REACH, L->cand[a], 0, a, -1);
+                return true;
+            }
+        } else {                                    /* a digit: the cell that far is the 9 */
+            const int t = sudoku_s9_cell(a, dir, L->v[a]);
+            if (t >= 0 && !L->v[t] && (L->cand[t] & ~(1u << 9))) {
+                eliminate(L, t, (uint16_t)(L->cand[t] & ~(1u << 9)));
+                trace(TECH_S9, a, S9_STEP_IS9, L->cand[t], L->v[a], t, -1);
+                return true;
+            }
+        }
+        for (int k = 1; k <= 8; k++) {              /* the cells it points away from, or past, or short of */
+            for (int back = 0; back < 2; back++) {
+                const int way = back ? (dir + 1) % 4 + 1 : dir;   /* (the opposite way: 1<->3, 2<->4) */
+                const int c = sudoku_s9_cell(a, way, k);
+                if (c < 0 || L->v[c] || !(L->cand[c] >> 9 & 1)) {
+                    continue;
+                }
+                if (back || !is_s9_maybe(L, a, k)) {
+                    eliminate(L, c, (uint16_t)(1u << 9));
+                    trace(TECH_S9, a, S9_STEP_NOT9, L->cand[c], back ? 0 : k, c, -1);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 /* (documented in gen_internal.h) */
 bool gen_psym_logic(logic_t *L)
 {
@@ -1427,6 +1487,9 @@ int gen_technique_tier(const sudoku_geom_t *G, const uint8_t givens[81])
         if (G->nclone && gen_clone_logic(&L)) {
             continue;    /* Clone Sudoku: the clones */
         }
+        if (G->s9 && gen_s9_logic(&L)) {
+            continue;    /* Search Nine: the arrows */
+        }
         if (G->b9 && gen_b9_logic(&L)) {
             continue;    /* Before Nine: the clues */
         }
@@ -1490,7 +1553,7 @@ int gen_easy_min_clues(const sudoku_geom_t *G)
     if (G->antidiag || G->magic) {
         return 30;
     }
-    if (G->psym || G->nclone) {
+    if (G->psym || G->nclone || G->s9) {
         return 30;
     }
     if (G->skyscraper || G->nlk || G->xsums || G->frame || G->outside || G->rossini || G->nrooms || G->skysum || G->b9 || G->n9 ||

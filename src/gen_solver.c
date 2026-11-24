@@ -744,6 +744,7 @@ typedef struct {
 #define R_AQ9     (1u << 23)            /**< Anti-Queen 9s */
 #define R_N9      (1u << 24)            /**< Next to Nine */
 #define R_CLONE   (1u << 25)            /**< Clone Sudoku */
+#define R_S9      (1u << 26)            /**< Search Nine */
 /** @} */
 
 /**
@@ -1420,6 +1421,51 @@ static inline bool is_cell_open(const grid_t *g, int c, int d)
 }
 
 /**
+ * @brief Search Nine: the digits the arrows leave a cell. Its own arrow: the digit k only when the cell k steps that
+ *        way can be 9. Each arrow along its row or column: a 9 here only when that arrow points this way and its
+ *        digit can be the distance; an arrow with a digit pointing elsewhere in the line: no 9 here; one pointing here
+ *        at that distance: only 9.
+ * @param[in] g  the search's board
+ * @param[in] i  the cell
+ * @param[in] free  what it may hold so far
+ * @return the digits the arrows allow
+ */
+static uint16_t s9_allow(const grid_t *g, int i, uint16_t free)
+{
+    const sudoku_geom_t *G = g->G;
+    const int own = G->s9_dir[i];
+    for (int k = 1; own && k <= 8; k++) {
+        const int t = sudoku_s9_cell(i, own, k);
+        if (t < 0 || !is_cell_open(g, t, 9)) {
+            free &= (uint16_t)~(1u << k);
+        }
+    }
+    if (own) {
+        free &= (uint16_t)~(1u << 9);
+    }
+    for (int dir = S9_UP; dir <= S9_LEFT && free; dir++) {   /* the cells of its row and column, each way from it */
+        for (int k = 1; k <= 8; k++) {
+            const int a = sudoku_s9_cell(i, dir, k);
+            if (a < 0) {
+                break;
+            }
+            const int ad = G->s9_dir[a];
+            if (ad == S9_NONE || (ad - 1) % 2 != (dir - 1) % 2) {
+                continue;                           /* (no arrow, or one across the line) */
+            }
+            const bool back = (ad - dir + 4) % 4 == 2;   /* it points back at i */
+            const int w = g->v[a];
+            if (!back || (w ? w != k : !is_cell_open(g, a, k))) {
+                free &= (uint16_t)~(1u << 9);       /* a 9 here: that arrow couldn't point at it */
+            } else if (w == k) {
+                free &= (uint16_t)(1u << 9);        /* it points here: the 9 */
+            }
+        }
+    }
+    return free;
+}
+
+/**
  * @brief The digits a cell may still take, by every rule of the board.
  * @param[in] g  the search's board
  * @param[in] i  the cell
@@ -1700,6 +1746,10 @@ static uint16_t grid_free(const grid_t *g, int i)
         }
     }
     WHY(FIT_CLONE);
+    if ((rules & R_S9) && free) {
+        free &= s9_allow(g, i, free);               /* Search Nine: its arrow, the arrows in its row and column */
+    }
+    WHY(FIT_S9);
     for (int line = 0; (rules & R_B9) && free && line < 2; line++) {   /* Before Nine: its row's, column's clue */
         int lu = line ? 9 + i % 9 : i / 9, c = G->b9_sum[lu], cells[9];
         if (!c) {
@@ -1903,7 +1953,7 @@ static bool grid_load(grid_t *g, const sudoku_geom_t *G, const uint8_t *cells)
                (G->idx159 ? R_159 : 0) | (G->antidiag ? R_ANTIDIAG : 0) | (G->psky ? R_PSKY : 0) |
                (G->magic ? R_MAGIC : 0) | (G->flatmates ? R_FLATMATES : 0) | (G->nmx ? R_MATHRAX : 0) |
                (G->psym ? R_PSYM : 0) | (G->b9 ? R_B9 : 0) | (G->quadro ? R_QUADRO : 0) | (G->aq9 ? R_AQ9 : 0) |
-               (G->n9 ? R_N9 : 0) | (G->nclone ? R_CLONE : 0);
+               (G->n9 ? R_N9 : 0) | (G->nclone ? R_CLONE : 0) | (G->s9 ? R_S9 : 0);
     for (int c = 0; c < G->ncages; c++) {
         g->cage_left[c] = (int8_t)G->cage_sum[c];
         g->cage_empty[c] = (int8_t)G->cage_n[c];

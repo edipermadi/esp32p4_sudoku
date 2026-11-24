@@ -1,7 +1,7 @@
 /**
  * @file ui_board_draw.c
  * @ingroup ui_game
- * @brief The board's variant overlays: Killer cages, marks between cells, lines and thermometers, Jigsaw regions, Argyle lines, Little Killer clues.
+ * @brief The board's variant overlays: Killer cages, marks between cells, lines and thermometers, Jigsaw regions, Argyle lines, Little Killer clues, Search Nine arrows.
  */
 #include "ui_internal.h"
 
@@ -12,6 +12,7 @@ static void board_quads_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
 static void board_mathrax_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_clone_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 static void board_thermos_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
+static void board_s9_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer);
 
 /**
  * @brief Killer: each cage outlined with a dashed line just inside its cells, and
@@ -669,6 +670,9 @@ void board_regions_draw_cb(lv_event_t *e)
     if (geo && geo->nclone) {
         board_clone_draw(grid, geo, lv_event_get_layer(e));
     }
+    if (geo && geo->s9) {
+        board_s9_draw(grid, geo, lv_event_get_layer(e));
+    }
     if (!geo || geo->variant != VAR_JIGSAW) {
         return;
     }
@@ -732,6 +736,52 @@ void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len)
     l.p2.x = ex;
     l.p2.y = ey - dy * h;
     lv_draw_line(layer, &l);
+}
+
+/* (documented in ui_internal.h) */
+void draw_s9_arrow(lv_layer_t *layer, const lv_area_t *cell, int dir)
+{
+    const int dx = dir == S9_RIGHT ? 1 : dir == S9_LEFT ? -1 : 0, dy = dir == S9_DOWN ? 1 : dir == S9_UP ? -1 : 0;
+    if (!dx && !dy) {
+        return;
+    }
+    const int cs = cell->x2 - cell->x1, len = cs / 6, head = cs / 12 + 1, in = cs / 22 + 2, off = cs / 5;
+    /* the tip by the side it points to, a little inside, off toward that side's right (up, down) or top (left,
+     * right) end: clear of the digit in the middle; the shaft back into the cell */
+    const int tx = dx > 0 ? cell->x2 - in : dx < 0 ? cell->x1 + in : cell->x2 - off;
+    const int ty = dy > 0 ? cell->y2 - in : dy < 0 ? cell->y1 + in : cell->y1 + off;
+    lv_draw_line_dsc_t l;
+    lv_draw_line_dsc_init(&l);
+    l.color = C_ACCENT;
+    l.width = cs >= 48 ? 3 : 2;
+    l.round_start = l.round_end = 1;
+    l.p1.x = tx - dx * len;
+    l.p1.y = ty - dy * len;
+    l.p2.x = tx;
+    l.p2.y = ty;
+    lv_draw_line(layer, &l);
+    for (int side = -1; side <= 1; side += 2) {     /* the head: two strokes back from the tip */
+        l.p1.x = tx - dx * head + dy * side * head;
+        l.p1.y = ty - dy * head + dx * side * head;
+        lv_draw_line(layer, &l);
+    }
+}
+
+/**
+ * @brief Search Nine: each arrow
+ * @param[in] grid  the board
+ * @param[in] geo  its board
+ * @param[in] layer  where
+ */
+static void board_s9_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_t *layer)
+{
+    for (int i = 0; i < 81; i++) {
+        if (geo->s9_dir[i]) {
+            lv_area_t a;
+            lv_obj_get_coords(lv_obj_get_child(grid, 9 + i), &a);
+            draw_s9_arrow(layer, &a, geo->s9_dir[i]);
+        }
+    }
 }
 
 /* (documented in ui_internal.h) */

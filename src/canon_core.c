@@ -96,9 +96,9 @@ uint8_t canon_symmetries(int variant)
                                          * as it is, or mirrored about the main diagonal (rows' clues and columns' swap) */
     }
     if (is_mark_variant(variant) || variant == VAR_SANDWICH || variant == VAR_N9 || variant == VAR_QUAD ||
-            variant == VAR_MATHRAX || variant == VAR_CLONE) {
-        return 0xFF;                    /* (marks, circles, clone areas turned too; a Sandwich sum, the digits beside a 9
-                                         * are the same from either end) */
+            variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9) {
+        return 0xFF;                    /* (marks, circles, clone areas, arrows turned too; a Sandwich sum, the digits
+                                         * beside a 9 are the same from either end) */
     }
     if (variant == VAR_PILL) {
         return 0x41;                    /* its pill reads left to right or top to bottom: as it is, or about the main
@@ -190,7 +190,7 @@ bool is_canon_layout(int variant)
 {
     return variant == VAR_JIGSAW || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
            variant == VAR_PRODUCT || is_mark_variant(variant) || is_line_variant(variant) || is_clue_variant(variant) ||
-           variant == VAR_QUAD || variant == VAR_MATHRAX || variant == VAR_CLONE;
+           variant == VAR_QUAD || variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9;
 }
 
 /**
@@ -401,6 +401,32 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
                     lab[p] = (uint8_t)++nlab;
                 }
                 cur[81 + k] = p == CLONE_NONE ? 0 : lab[p];
+            }
+            if (!have || memcmp(cur, best, sizeof(cur)) < 0) {
+                memcpy(best, cur, sizeof(cur));
+                have = true;
+            }
+        }
+        return hash_copy(variant, best, sizeof(best));
+    }
+    if (variant == VAR_S9) {
+        /* a copy: the givens as they are (an arrow's digit is a distance, the 9 is the 9), then each cell's arrow
+         * turned with the board (the way to the turned cell one step along it) */
+        uint8_t best[162], cur[162];
+        for (int t = 0; t < 8; t++) {
+            if (!(sym >> t & 1)) {
+                continue;
+            }
+            for (int k = 0; k < 81; k++) {
+                const int src = canon_cell(t, 9, k), dir = G->s9_dir[src], to = sudoku_s9_cell(src, dir, 1);
+                cur[k] = givens[src];
+                cur[81 + k] = S9_NONE;
+                for (int way = S9_UP; to >= 0 && way <= S9_LEFT; way++) {
+                    const int n = sudoku_s9_cell(k, way, 1);
+                    if (n >= 0 && canon_cell(t, 9, n) == to) {
+                        cur[81 + k] = (uint8_t)way;
+                    }
+                }
             }
             if (!have || memcmp(cur, best, sizeof(cur)) < 0) {
                 memcpy(best, cur, sizeof(cur));

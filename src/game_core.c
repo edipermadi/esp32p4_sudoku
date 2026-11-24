@@ -547,6 +547,28 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
+    for (int a = 0; geo->s9 && a < 81; a++) {      /* Search Nine: an arrow's digit that doesn't reach its 9 */
+        const int dir = geo->s9_dir[a], k = val[a];
+        if (!dir || !k) {
+            continue;
+        }
+        const int t = k < 9 ? sudoku_s9_cell(a, dir, k) : -1;
+        if (t < 0) {
+            out[a] = true;                          /* (a 9 in it, or a distance past the edge) */
+            continue;
+        }
+        if (val[t] && val[t] != 9) {
+            out[a] = out[t] = true;                 /* that far: no 9 */
+        }
+        for (int j = 1; j <= 8; j++) {              /* the line's 9 elsewhere, either way along the arrow's line */
+            for (int back = 0; back < 2; back++) {
+                const int c = sudoku_s9_cell(a, back ? (dir + 1) % 4 + 1 : dir, j);
+                if (c >= 0 && c != t && val[c] == 9) {
+                    out[a] = out[c] = true;
+                }
+            }
+        }
+    }
     for (int c = 0; geo->psym && c <= 40; c++) {   /* Point Symmetry: a mirrored pair not making 10 (the centre: not 5) */
         const int a = val[c], b = val[80 - c];
         if (c == 40 ? a && a != 5 : a && b && a + b != 10) {

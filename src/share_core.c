@@ -102,6 +102,9 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     case VAR_N9:
         key = sudoku_n9_text(G, extra, sizeof(extra)) ? "clues" : NULL;
         break;
+    case VAR_S9:
+        key = sudoku_s9_text(G, extra, sizeof(extra)) ? "arrows" : NULL;
+        break;
     case VAR_CLONE:
         key = sudoku_clone_text(G, extra, sizeof(extra)) ? "clones" : NULL;
         break;
@@ -204,6 +207,11 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
         break;
     case VAR_N9:
         if (sudoku_n9_text(G, extra, sizeof(extra))) {
+            marks = extra;
+        }
+        break;
+    case VAR_S9:
+        if (sudoku_s9_text(G, extra, sizeof(extra))) {
             marks = extra;
         }
         break;

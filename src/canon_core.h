@@ -47,6 +47,7 @@ extern "C" {
  *   (its pill reads left to right or top to bottom);
  * - Sandwich, Next to Nine: each clue with its row or column (the same from either end: all 8);
  * - Clone Sudoku: its areas, each pair numbered in reading order (digits any way);
+ * - Search Nine: its arrows, turned with their cells (digits as they are: an arrow's digit is a distance);
  * - the clues left of the rows and above the columns (Skyscraper, X-Sums, Frame, Outside Sudoku, Rossini,
  *   Numbered Rooms, Sum Skyscrapers, Odd/Even Skyscrapers, Before Nine; Little Killer's diagonals, as their
  *   cells and sums): only as it is or mirrored about the main diagonal, which keeps them left and above.

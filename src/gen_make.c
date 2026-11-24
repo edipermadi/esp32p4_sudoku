@@ -213,6 +213,36 @@ static bool clone_layout(int want, uint32_t *rng, sudoku_geom_t *out)
     return n == want && gen_geom_clone(n, (const uint8_t (*)[9])cells, lens, dr, dc, out);
 }
 
+/**
+ * @brief Search Nine: arrows over a full grid. A cell whose digit k has the 9 of its row or column k cells away can
+ *        hold an arrow that way (either way, at random, when both work); keep_pct of those get one.
+ * @param[in] full  the grid
+ * @param[in] keep_pct  % of the places that get an arrow
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
+ * @return false if too few arrows came out (try again)
+ */
+static bool s9_arrows(const uint8_t full[81], int keep_pct, uint32_t *rng, sudoku_geom_t *out)
+{
+    uint8_t dirs[81] = {0};
+    int n = 0;
+    for (int c = 0; c < 81; c++) {
+        const int k = full[c];
+        int ways[4], nw = 0;
+        for (int dir = S9_UP; k < 9 && dir <= S9_LEFT; dir++) {
+            const int t = sudoku_s9_cell(c, dir, k);
+            if (t >= 0 && full[t] == 9) {
+                ways[nw++] = dir;
+            }
+        }
+        if (nw && (int)(rnd(rng) % 100) < keep_pct) {
+            dirs[c] = (uint8_t)ways[nw > 1 ? rnd(rng) % (uint32_t)nw : 0];
+            n++;
+        }
+    }
+    return n >= 8 && gen_geom_s9(dirs, out);
+}
+
 /* ---------------------------------------------------------------- generating (all variants) */
 
 /* (documented in generator.h) */
@@ -246,10 +276,10 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool edges = variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT, quad = variant == VAR_QUAD;
     const bool fort = variant == VAR_FORTRESS, mrx = variant == VAR_MATHRAX;
     const bool nroom = variant == VAR_NROOMS, skysum = variant == VAR_SKYSUM, b9 = variant == VAR_B9;
-    const bool n9 = variant == VAR_N9, clone = variant == VAR_CLONE;
+    const bool n9 = variant == VAR_N9, clone = variant == VAR_CLONE, s9 = variant == VAR_S9;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
                      pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky ||
-                     mrx || b9 || n9 || clone;
+                     mrx || b9 || n9 || clone || s9;
     if (sandwich) {
         gen_bread_tables();
     }
@@ -471,6 +501,11 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
                 sets[lu] = (int)(rnd(&rng) % 100) < keep ? (uint8_t)sudoku_n9_of(full, lu) : 0;
             }
             if (!gen_geom_n9(sets, jig)) {
+                continue;
+            }
+        } else if (s9) {                            /* a grid, then arrows where a digit is its distance to a 9 */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            if (!s9_arrows(full, level >= GEN_HARD ? 60 : 80, &rng, jig)) {
                 continue;
             }
         } else if (clone) {                         /* the areas first, then a grid that clones them */

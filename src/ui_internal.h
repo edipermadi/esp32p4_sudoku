@@ -228,6 +228,7 @@ typedef struct {
     const char *left_text;              /**< Outside Sudoku, Rossini: a clue left of the first row as text (left_clue -1), may be NULL */
     const uint8_t *dmarks;              /**< Diagonal Consecutive: per mark a cell and its DMARK_*, ends with 0xFF; may be NULL */
     const char *mathrax;                /**< Mathrax: a circle's clue as drawn ("9+") at the picture's centre, may be NULL */
+    const char *s9;                     /**< Search Nine: w*h arrows, '.' none or 'u', 'r', 'd', 'l'; may be NULL */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound (the format: share_core.h) */
@@ -887,6 +888,14 @@ void draw_argyle_line(lv_layer_t *layer, const lv_area_t *first, const lv_area_t
  * @param[in] len  px
  */
 void draw_lk_arrow(lv_layer_t *layer, int x, int y, int dir, int len);
+/**
+ * @brief Search Nine: a cell's arrow, small, by its side that way, off the middle (clear of the digit; the board,
+ * the rules card)
+ * @param[in] layer  where
+ * @param[in] cell  the cell's area
+ * @param[in] dir  S9_*
+ */
+void draw_s9_arrow(lv_layer_t *layer, const lv_area_t *cell, int dir);
 /** @brief the labels for the clues outside the grid: Sandwich and Skyscraper use 18 (rows, then columns),
  * Little Killer one per place on a line between cells (10 above, 10 left) */
 #define BOARD_CLUES 20

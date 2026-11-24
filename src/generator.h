@@ -170,6 +170,8 @@
  *                the digits right beside the row's or column's 9
  *   VAR_CLONE    Clone Sudoku: Classic rules, and pairs of shaded areas of the same shape (one
  *                the other moved) hold the same digits in the same places
+ *   VAR_S9       Search Nine: Classic rules, and an arrow in a cell points along its row or
+ *                column to the 9: the cell's digit is how many cells away that 9 is
  *
  * The functions take the board's geometry (sudoku_geom_t): sudoku_geom()
  * for the fixed variants, sudoku_geom_jigsaw() for a Jigsaw region map,
@@ -295,6 +297,7 @@ typedef enum {
     VAR_AQ9,                            /**< Anti-Queen 9s */
     VAR_N9,                             /**< Next to Nine */
     VAR_CLONE,                          /**< Clone Sudoku */
+    VAR_S9,                             /**< Search Nine */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -311,7 +314,8 @@ typedef enum {
  *         "Lockout Lines", "Sumless Killer", "Double Arrow", "Diagonal Consecutive", "10 Lines", "Girandola",
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
- *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku"
+ *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku",
+ *         "Search Nine"
  */
 const char *variant_name(int variant);
 
@@ -486,6 +490,8 @@ typedef struct {
     int8_t clone_dc[CLONE_MAX];         /**< columns (either way) */
     uint8_t clone_of[81];               /**< each cell's clone, CLONE_NONE: in no area */
     uint8_t clone_pair[81];             /**< each cell's pair, CLONE_NONE: in no area */
+    bool s9;                            /**< Search Nine: the arrows are rules */
+    uint8_t s9_dir[81];                 /**< Search Nine: each cell's arrow, S9_* (S9_NONE: none) */
     bool b9;                            /**< Before Nine: the clues are rules */
     uint8_t b9_sum[18];                 /**< per row (0..8, from the left) and column (9..17, from the top), the sum of
                                          *   the digits before the 9, 0 = no clue */
@@ -543,6 +549,29 @@ enum {
 #define PSKY_EVEN    0x10               /**< Odd/Even Skyscrapers: a clue counting the even buildings (with the count) */
 #define DMARK_DR     1                  /**< Diagonal Consecutive: a mark with the cell down and right */
 #define DMARK_DL     2                  /**< Diagonal Consecutive: a mark with the cell down and left */
+
+/** @brief Search Nine: an arrow in a cell (sudoku_geom_t.s9_dir), the way to its row's or column's 9. */
+enum {
+    S9_NONE = 0,                        /**< no arrow */
+    S9_UP,                              /**< up its column */
+    S9_RIGHT,                           /**< right along its row */
+    S9_DOWN,                            /**< down its column */
+    S9_LEFT                             /**< left along its row */
+};
+
+/**
+ * @brief Search Nine: the cell k steps from a cell along an arrow's way.
+ * @param[in] cell  the cell
+ * @param[in] dir  S9_*
+ * @param[in] k  how many steps (1..8)
+ * @return the cell, -1 off the board (or no way)
+ */
+static inline int sudoku_s9_cell(int cell, int dir, int k)
+{
+    const int r = cell / 9 + (dir == S9_DOWN ? k : dir == S9_UP ? -k : 0);
+    const int c = cell % 9 + (dir == S9_RIGHT ? k : dir == S9_LEFT ? -k : 0);
+    return dir < S9_UP || dir > S9_LEFT || r < 0 || r > 8 || c < 0 || c > 8 ? -1 : r * 9 + c;
+}
 
 /** @brief Builds the tables (once); call early, before tasks use them. */
 void sudoku_geom_init(void);
@@ -900,6 +929,22 @@ bool sudoku_geom_clone_text(const char *text, sudoku_geom_t *out);
  * @return false: buf too small
  */
 bool sudoku_clone_text(const sudoku_geom_t *g, char *buf, int len);
+/**
+ * @brief A Search Nine board from its arrows as text: 81 characters row by row, '.' (no arrow) or 'u', 'r', 'd',
+ * 'l' (an arrow up, right, down, left; kept in marks); sudoku_s9_text() writes it.
+ * @param[in] text  the arrows
+ * @param[out] out  gets the board
+ * @return false if the text isn't one (an arrow pointing off the board)
+ */
+bool sudoku_geom_s9_text(const char *text, sudoku_geom_t *out);
+/**
+ * @brief A Search Nine board's arrows as text.
+ * @param[in] g  the board
+ * @param[out] buf  gets it (82 at least)
+ * @param[in] len  its size
+ * @return false: buf too small
+ */
+bool sudoku_s9_text(const sudoku_geom_t *g, char *buf, int len);
 /**
  * @brief An Odd/Even Skyscrapers board from its clues as text: 18 fields, comma-separated, rows from the left
  * then columns from the top: 0 no clue, 1..5 the odd buildings seen, e0..e4 the even ones (kept in marks);
@@ -1324,7 +1369,8 @@ enum {
     FIT_AQ9,                            /**< Anti-Queen 9s: a 9 on one of its diagonals */
     FIT_N9_ROW,                         /**< Next to Nine: the row's clue */
     FIT_N9_COL,                         /**< Next to Nine: the column's clue */
-    FIT_CLONE                           /**< Clone Sudoku: its clone */
+    FIT_CLONE,                          /**< Clone Sudoku: its clone */
+    FIT_S9                              /**< Search Nine: an arrow (its own, or one in its row or column) */
 };
 /**
  * @brief Which rule says no to digit d in the cell (is_sudoku_fits()'s answer, with why).
@@ -1395,8 +1441,15 @@ typedef enum {
     TECH_QUADRO,             /**< Quadro: a 2x2 block whose other three are one parity */
     TECH_AQ9,                /**< Anti-Queen 9s: a 9 and its diagonals */
     TECH_N9,                 /**< Next to Nine: a clue */
-    TECH_CLONE               /**< Clone Sudoku: a cell and its clone */
+    TECH_CLONE,              /**< Clone Sudoku: a cell and its clone */
+    TECH_S9                  /**< Search Nine: an arrow and the 9 it points to */
 } tech_kind_t;
+/** @brief Search Nine: how an arrow narrowed a cell (sudoku_tech_t.unit2 of TECH_S9). */
+enum {
+    S9_STEP_REACH = 0,                  /**< the arrow's cell: only distances that reach a cell that can be 9 */
+    S9_STEP_NOT9,                       /**< a cell in its row or column: the arrow can't point at a 9 there */
+    S9_STEP_IS9                         /**< the cell it points to, its digit known: the 9 */
+};
 /** @brief A technique a hint explains: which, where, with which digits and cells. */
 typedef struct {
     int kind;                /**< tech_kind_t */
@@ -1406,7 +1459,8 @@ typedef struct {
      *  Greater-Than): the cell its neighbours narrowed; quad: that cell, unit2
      *  the circle; line (Arrow, Renban, Whispers): the line, cell1 the cell;
      *  sky, xsum, frame, outside, rossini: the row or column (0..17), cell1 the cell; lk: the
-     *  diagonal, cell1; diagnc: the cell its corners narrowed;
+     *  diagonal, cell1; diagnc: the cell its corners narrowed; s9: the arrow's cell, cell1 the cell
+     *  narrowed, unit2 how (S9_STEP_*), digit2 the distance that would point there (0: none);
      *  X-Wing, Swordfish: the 2 or 3 base lines (rows 0..8 or columns 9..17; unit3 -1 for X-Wing) */
     int unit;
     int unit2;               /**< the second unit (see unit) */

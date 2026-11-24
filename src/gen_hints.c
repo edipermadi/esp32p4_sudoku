@@ -117,6 +117,7 @@ bool sudoku_next_step(const sudoku_geom_t *G, const uint8_t vals[81], const uint
                 !(G->nmx && gen_mathrax_logic(&L)) && !(G->psym && gen_psym_logic(&L)) && !(G->b9 && gen_b9_logic(&L)) &&
                 !(G->quadro && gen_quadro_logic(&L)) && !(G->aq9 && gen_aq9_logic(&L)) &&
                 !(G->n9 && gen_n9_logic(&L)) && !(G->nclone && gen_clone_logic(&L)) &&
+                !(G->s9 && gen_s9_logic(&L)) &&
                 !(G->magic && gen_magic_logic(&L)) && !(G->psky && gen_psky_logic(&L)) &&
                 !gen_locked_candidates(&L) &&
                 !gen_pairs(&L) && !gen_naked_triple(&L) && !gen_fish(&L, 2) && !gen_fish(&L, 3) && !gen_xy_wing(&L)) {

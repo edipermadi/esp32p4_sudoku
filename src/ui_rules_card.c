@@ -137,6 +137,7 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_FLATMATES] = {.w = 2, .h = 3, .digits = "1." "55" ".9", .left_clue = -1},
     [VAR_MATHRAX] = {.w = 2, .h = 2, .digits = "24" "57", .left_clue = -1, .mathrax = "9+"},
     [VAR_N9] = {.w = 6, .h = 1, .digits = "512984", .left_clue = -1, .left_text = "28"},
+    [VAR_S9] = {.w = 6, .h = 1, .digits = "3.5962", .left_clue = -1, .s9 = "r....l"},
     [VAR_CLONE] = {.w = 4, .h = 2, .digits = "35.." "..35", .tint = "1100" "0011", .left_clue = -1},
     [VAR_QUADRO] = {.w = 3, .h = 2, .digits = "472" "915", .left_clue = -1},
     [VAR_AQ9] = {.w = 5, .h = 5, .digits = "....." "....." "..9.." "....." ".....", .cross = "x...x" ".x.x." "....." ".x.x." "x...x", .left_clue = -1},
@@ -280,6 +281,9 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_AVG] = "Classic rules, and on each teal line, the digit in the circle is the average of the line's other "
     "digits: they add up to it times how many they are, 3 + 8 + 4 = 3 x 5. Digits may repeat along a line where the "
     "rules allow.",
+    [VAR_S9] = "Classic rules, and an arrow in a cell points along its row or column to the 9: the cell's digit is how "
+    "many cells away that 9 is. Here the 3 points right, three cells on to the 9, and the 2 points left, two cells "
+    "back to it. An arrow's cell is never 9, and the 9 is never behind it.",
     [VAR_N9] = "Classic rules, and a clue left of a row or above a column lists the digits right beside its 9, in any "
     "order: here 2 and 8. A clue of one digit puts the 9 at an end of its row or column.",
     [VAR_CLONE] = "Classic rules, and pairs of shaded areas of the same shape (one the other moved, marked with the same "
@@ -387,6 +391,14 @@ static void rules_pic_draw_cb(lv_event_t *e)
                              .x2 = x0 + (line[n - 1] % 9 + 1) * cs, .y2 = y0 + (line[n - 1] / 9 + 1) * cs
                             };
         draw_argyle_line(layer, &a, &b, k < ARGYLE_LINES / 2, 2);
+    }
+    for (int i = 0; p->s9 && i < p->w * p->h; i++) {   /* Search Nine's arrows */
+        const char *at = p->s9[i] != '.' ? strchr(".urdl", p->s9[i]) : NULL;
+        if (at) {
+            const int x = x0 + (i % p->w) * cs, y = y0 + (i / p->w) * cs;
+            const lv_area_t a = {.x1 = x, .y1 = y, .x2 = x + cs, .y2 = y + cs};
+            draw_s9_arrow(layer, &a, (int)(at - ".urdl"));
+        }
     }
     for (int k = 0; p->dmarks && p->dmarks[k] != 0xFF; k += 2) {   /* Diagonal Consecutive's corner marks */
         int c = p->dmarks[k], dl = p->dmarks[k + 1] == DMARK_DL;

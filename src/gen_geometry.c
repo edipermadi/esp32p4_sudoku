@@ -29,7 +29,7 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Pill Arrows", "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square",
                                                      "Average Lines", "Dutch Flatmates", "Mathrax",
                                                      "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
-                                                     "Next to Nine", "Clone Sudoku"
+                                                     "Next to Nine", "Clone Sudoku", "Search Nine"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -417,7 +417,7 @@ void sudoku_geom_init(void)
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
                                   VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY,
-                                  VAR_AVG, VAR_MATHRAX, VAR_B9, VAR_N9, VAR_CLONE
+                                  VAR_AVG, VAR_MATHRAX, VAR_B9, VAR_N9, VAR_CLONE, VAR_S9
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -443,7 +443,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_DARROW || variant == VAR_DIAGCONSEC || variant == VAR_TEN ||
             variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY ||
             variant == VAR_AVG || variant == VAR_MATHRAX || variant == VAR_B9 || variant == VAR_N9 ||
-            variant == VAR_CLONE) {
+            variant == VAR_CLONE || variant == VAR_S9) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -829,6 +829,30 @@ bool gen_geom_clone(int n, const uint8_t cells[][9], const uint8_t *lens, const 
         }
     }
     out->nclone = (uint8_t)n;
+    return true;
+}
+
+/* (documented in gen_internal.h) */
+bool gen_geom_s9(const uint8_t dirs[81], sudoku_geom_t *out)
+{
+    sudoku_geom_init();
+    *out = s_geom[VAR_CLASSIC];
+    out->variant = VAR_S9;
+    out->s9 = true;
+    for (int c = 0; c < 81; c++) {
+        if (dirs[c] == S9_NONE) {
+            continue;
+        }
+        if (dirs[c] > S9_LEFT || sudoku_s9_cell(c, dirs[c], 1) < 0) {
+            return false;                           /* (not a way, or nothing that way) */
+        }
+        out->s9_dir[c] = dirs[c];
+        uint16_t m = 0;                             /* its digit: how far the 9 is, so never 9, never past the edge */
+        for (int k = 1; k <= 8 && sudoku_s9_cell(c, dirs[c], k) >= 0; k++) {
+            m |= (uint16_t)(1u << k);
+        }
+        out->allow[c] &= m;
+    }
     return true;
 }
 

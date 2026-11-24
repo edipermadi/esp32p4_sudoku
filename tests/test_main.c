@@ -321,6 +321,22 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
             return false;
         }
     }
+    for (int c = 0; g->s9 && c < 81; c++) {         /* Search Nine: an arrow's digit is how far its 9 is (walked here) */
+        const int dr = g->s9_dir[c] == 3 ? 1 : g->s9_dir[c] == 1 ? -1 : 0;
+        const int dc = g->s9_dir[c] == 2 ? 1 : g->s9_dir[c] == 4 ? -1 : 0;
+        if (!dr && !dc) {
+            continue;
+        }
+        int r = c / 9, q = c % 9, k = 0;
+        do {
+            r += dr;
+            q += dc;
+            k++;
+        } while (r >= 0 && r < 9 && q >= 0 && q < 9 && sol[r * 9 + q] != 9);
+        if (r < 0 || r > 8 || q < 0 || q > 8 || sol[c] != k) {
+            return false;
+        }
+    }
     for (int q = 0; q < g->nclone; q++) {           /* Clone Sudoku: each cell the same as its clone, moved */
         for (int k = 0; k < g->clone_n[q]; k++) {
             const int a = g->clone_cell[q][k], b = (a / 9 + g->clone_dr[q]) * 9 + a % 9 + g->clone_dc[q];
@@ -524,6 +540,7 @@ static bool is_same_layout(const sudoku_geom_t *a, const sudoku_geom_t *b)
            !memcmp(a->quad_dig, b->quad_dig, sizeof(a->quad_dig[0]) * a->nquads) && a->nrooms == b->nrooms &&
            !memcmp(a->nroom, b->nroom, 18) && a->skysum == b->skysum && !memcmp(a->sky_sum, b->sky_sum, 18) &&
            a->n9 == b->n9 && !memcmp(a->n9_set, b->n9_set, 18) && a->nclone == b->nclone &&
+           a->s9 == b->s9 && !memcmp(a->s9_dir, b->s9_dir, 81) &&
            !memcmp(a->clone_of, b->clone_of, 81) && a->quadro == b->quadro && a->aq9 == b->aq9 && a->psym == b->psym && a->b9 == b->b9 && !memcmp(a->b9_sum, b->b9_sum, 18) &&
            a->flatmates == b->flatmates && a->nmx == b->nmx && !memcmp(a->mx_at, b->mx_at, a->nmx) &&
            !memcmp(a->mx_op, b->mx_op, a->nmx) && !memcmp(a->mx_val, b->mx_val, a->nmx) &&
@@ -582,6 +599,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
         break;
     case VAR_N9:
         sudoku_n9_text(g, marks, len);
+        break;
+    case VAR_S9:
+        sudoku_s9_text(g, marks, len);
         break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, len);
@@ -785,6 +805,17 @@ static bool turn_layout(const sudoku_geom_t *b, int t, sudoku_geom_t *out)
         }
         tg.clone_dr[q] = (int8_t)(tb0 / 9 - ta / 9);
         tg.clone_dc[q] = (int8_t)(tb0 % 9 - ta % 9);
+    }
+    if (v == VAR_S9) {                              /* Search Nine: each arrow onto its turned cell, pointing where its */
+        memset(tg.s9_dir, 0, 81);                   /* next cell was turned to */
+        for (int c = 0; c < 81; c++) {
+            const int to = sudoku_s9_cell(c, b->s9_dir[c], 1), a = canon_cell(t, 9, c);
+            for (int w = S9_UP; to >= 0 && w <= S9_LEFT; w++) {
+                if (sudoku_s9_cell(a, w, 1) == canon_cell(t, 9, to)) {
+                    tg.s9_dir[a] = (uint8_t)w;
+                }
+            }
+        }
     }
     sudoku_layout_texts(&tg, cages, (int)sizeof(cages), marks, thermos, (int)sizeof(thermos));
     sdx_puzzle_t p;
@@ -1026,7 +1057,13 @@ static void test_canon(void)
         if (board.nlk || board.nquads || board.nmx || board.sandwich || board.edge_kind || board.consec_on ||
                 v == VAR_EVENODD || v == VAR_DIAGCONSEC || (board.nthermos == 0 && !board.ncages && v != VAR_JIGSAW)) {
             tb = board;                             /* marks, circles, clues: one of them changed: another hash */
-            if (board.nclone) {
+            if (board.s9) {
+                int c = 0;
+                while (c < 80 && !tb.s9_dir[c]) {
+                    c++;
+                }
+                tb.s9_dir[c] = S9_NONE;             /* (an arrow gone) */
+            } else if (board.nclone) {
                 for (int c = 0; c < 81; c++) {
                     if (tb.clone_pair[c] != CLONE_NONE) {
                         tb.clone_pair[c] = CLONE_NONE;   /* (a cell out of its area) */
@@ -1689,6 +1726,66 @@ static void test_n9_clone(void)
     CHECK(game_conflicts(&b, v, out) > 0 && out[0] && out[31]);
     v[31] = 5;
     CHECK(game_conflicts(&b, v, out) == 0);
+}
+
+/* Search Nine: its text read back (and refused when an arrow points off the board), an arrow's cell narrowed to the
+ * distances on the board (never 9), the solver's rule and the conflicts, the grader's step */
+static void test_s9(void)
+{
+    static sudoku_geom_t b;
+    char t[82], buf[128];
+    memset(t, '.', 81);
+    t[81] = 0;
+    t[0] = 'r';                                     /* r1c1, right: the 9 1..8 cells on */
+    t[8 * 9 + 4] = 'u';                             /* r9c5, up */
+    t[40] = 'l';                                    /* r5c5, left: 1..4 */
+    CHECK(sudoku_geom_s9_text(t, &b) && b.variant == VAR_S9 && b.s9 && b.s9_dir[0] == S9_RIGHT &&
+          b.s9_dir[76] == S9_UP && b.allow[0] == 0x1FE && b.allow[40] == 0x1E);
+    CHECK(sudoku_s9_text(&b, buf, sizeof(buf)) && !strcmp(buf, t));
+    t[8] = 'r';                                     /* r1c9 pointing right: off the board */
+    CHECK(!sudoku_geom_s9_text(t, &b));
+    t[8] = 'x';
+    CHECK(!sudoku_geom_s9_text(t, &b) && !sudoku_geom_s9_text("u", &b));
+    t[8] = '.';
+    CHECK(sudoku_geom_s9_text(t, &b));
+    CHECK(sudoku_s9_cell(0, S9_RIGHT, 8) == 8 && sudoku_s9_cell(0, S9_UP, 1) == -1 && sudoku_s9_cell(40, S9_DOWN, 4) == 76 &&
+          sudoku_s9_cell(40, S9_NONE, 1) == -1);
+
+    uint8_t v[81] = {0};
+    bool out[81];
+    v[0] = 3;                                       /* r1c1 = 3, right: r1c4 is the 9 */
+    CHECK(sudoku_fits_why(&b, v, 1, 9) == FIT_S9 && is_sudoku_fits(&b, v, 3, 9) && sudoku_fits_why(&b, v, 3, 5) == FIT_S9);
+    v[0] = 0;
+    v[3] = 9;                                       /* the 9 at r1c4: r1c1 is 3 */
+    CHECK(sudoku_fits_why(&b, v, 0, 2) == FIT_S9 && is_sudoku_fits(&b, v, 0, 3));
+    v[3] = 0;
+    CHECK(!is_sudoku_fits(&b, v, 0, 9) && !is_sudoku_fits(&b, v, 40, 5));   /* (an arrow's cell: never 9, never past the edge) */
+    v[38] = 9;                                      /* r5c3: 2 left of r5c5 */
+    CHECK(is_sudoku_fits(&b, v, 40, 2) && !is_sudoku_fits(&b, v, 40, 3));
+    v[38] = 0;
+    v[44] = 9;                                      /* r5c9: right of r5c5's arrow, which points left: no */
+    CHECK(sudoku_fits_why(&b, v, 44, 9) == FIT_S9 || !is_sudoku_fits(&b, v, 44, 9));
+    v[44] = 0;
+    v[0] = 3;
+    v[3] = 9;
+    CHECK(game_conflicts(&b, v, out) == 0);
+    v[3] = 5;
+    CHECK(game_conflicts(&b, v, out) > 0 && out[0] && out[3]);
+    v[3] = 0;
+    v[5] = 9;                                       /* the row's 9 elsewhere */
+    CHECK(game_conflicts(&b, v, out) > 0 && out[0] && out[5]);
+    v[5] = 0;
+    v[0] = 9;                                       /* a 9 in an arrow's cell */
+    CHECK(game_conflicts(&b, v, out) > 0 && out[0]);
+
+    for (int lv = GEN_EASY; lv <= GEN_EXPERT; lv++) {   /* made, one solution, the solution keeps every arrow */
+        uint8_t g[81], sol[81];
+        gen_level_t got;
+        CHECKF(sudoku_generate(VAR_S9, (gen_level_t)lv, 99u + (uint32_t)lv, g, &b, &got), "Search Nine %s made",
+               gen_level_name(lv));
+        CHECK(b.s9 && sudoku_count_solutions(&b, g, 2) == 1 && sudoku_solve(&b, g, sol) && is_solved_ok(&b, g, sol));
+        CHECK(game_conflicts(&b, sol, out) == 0);
+    }
 }
 
 static void test_sdx_edges(void)
@@ -2787,7 +2884,8 @@ int main(int argc, char **argv)
         {"hints", test_hints},               {"learn", test_learn},
         {"rules check", test_conflicts},     {"Flatmates and Mathrax", test_flatmates_mathrax},
         {"Point Symmetry and Before Nine", test_psym_b9}, {"Quadro and Anti-Queen 9s", test_quadro_aq9},
-        {"Next to Nine and Clone Sudoku", test_n9_clone},     {"hint words", test_hint_words},
+        {"Next to Nine and Clone Sudoku", test_n9_clone},
+        {"Search Nine", test_s9},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},

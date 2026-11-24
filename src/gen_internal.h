@@ -356,6 +356,14 @@ bool gen_n9_logic(logic_t *L);
  */
 bool gen_clone_logic(logic_t *L);
 /**
+ * @brief A technique: Search Nine: what the arrows leave. An arrow's cell keeps the distances that reach a cell
+ *        that can be 9; a cell is no 9 when an arrow along its row or column can't point at it; the cell an arrow
+ *        with a digit points to is the 9.
+ * @param[in,out] L  the logic state
+ * @return true if a candidate went
+ */
+bool gen_s9_logic(logic_t *L);
+/**
  * @brief A technique: Frame, Outside Sudoku, Rossini: what the clues about the first three cells leave,
  *        candidates taken out.
  * @param[in,out] L          the state
@@ -593,6 +601,13 @@ bool gen_geom_n9(const uint8_t sets[18], sudoku_geom_t *out);
  */
 bool gen_geom_clone(int n, const uint8_t cells[][9], const uint8_t *lens, const int8_t *dr, const int8_t *dc,
                     sudoku_geom_t *out);
+/**
+ * @brief Builds a board from its decorations: Search Nine, a classic board with these arrows.
+ * @param[in] dirs  each cell's arrow, S9_* (S9_NONE: none)
+ * @param[out] out  gets the board
+ * @return false if an arrow isn't one (pointing off the board, or not a way)
+ */
+bool gen_geom_s9(const uint8_t dirs[81], sudoku_geom_t *out);
 /**
  * @brief Builds an Odd/Even Skyscrapers board from its 18 clues (0 none; 1..5 odd; PSKY_EVEN | 0..4 even)
  * @param[in] clues  the clues

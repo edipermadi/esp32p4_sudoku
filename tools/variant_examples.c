@@ -239,6 +239,16 @@ static void context(const sudoku_geom_t *G, const uint8_t v[81], int c)
         printf("         sandwich: row %d sum %d, column %d sum %d\n", r + 1, G->sandwich_sum[r], q + 1,
                G->sandwich_sum[9 + q]);
     }
+    for (int k = 0; G->s9 && k < 9; k++) {         /* Search Nine: the arrows in its row and column */
+        static const char WAY[] = ".urdl";
+        for (int line = 0; line < 2; line++) {
+            const int o = line ? k * 9 + q : r * 9 + k;
+            if (G->s9_dir[o] && (G->s9_dir[o] % 2 == 0) == !line && (o != c || !line)) {   /* (along the line) */
+                printf("         arrow %c at r%dc%d (%c)\n", WAY[G->s9_dir[o]], o / 9 + 1, o % 9 + 1,
+                       v[o] ? '0' + v[o] : '.');
+            }
+        }
+    }
 }
 
 typedef struct { int cell, digit, unit; bool naked, rule; } single_t;
@@ -500,6 +510,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_N9:
         sudoku_n9_text(g, marks, len);
         break;
+    case VAR_S9:
+        sudoku_s9_text(g, marks, len);
+        break;
     case VAR_CLONE:
         sudoku_clone_text(g, cages, len);
         break;
@@ -717,6 +730,34 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
     case FIT_CLONE:
         printf(", \"rule\": \"clone\", \"with\": %d", G->clone_of[c]);
         return;
+    case FIT_S9: {
+        /* the arrow that says no: its own (no 9 that far: the cell there, or -1 off the board / a 9 in it), or one in
+         * its row or column (pointing away from it, or its digit another distance, or pointing here: only 9) */
+        if (G->s9_dir[c]) {
+            const int t = d < 9 ? sudoku_s9_cell(c, G->s9_dir[c], d) : -1;
+            printf(", \"rule\": \"s9\", \"arrow\": %d, \"at\": %d", c, t);
+            return;
+        }
+        for (int way = S9_UP; way <= S9_LEFT; way++) {
+            for (int k = 1; k <= 8; k++) {
+                const int a = sudoku_s9_cell(c, way, k);
+                if (a < 0) {
+                    break;
+                }
+                const int ad = G->s9_dir[a];
+                if (!ad || (ad - 1) % 2 != (way - 1) % 2) {
+                    continue;
+                }
+                const bool back = (ad - way + 4) % 4 == 2;
+                if (d == 9 ? (!back || (v[a] && v[a] != k)) : (back && v[a] == k)) {
+                    printf(", \"rule\": \"s9\", \"arrow\": %d, \"at\": %d", a, back ? c : -1);
+                    return;
+                }
+            }
+        }
+        printf(", \"rule\": \"s9\", \"arrow\": -1, \"at\": -1");
+        return;
+    }
     case FIT_QUADRO:
         printf(", \"rule\": \"quadro\"");
         return;
@@ -868,6 +909,11 @@ static void layout_json(const sudoku_geom_t *G)
     } else {
         printf("null");
     }
+    printf(",\n \"s9\": [");                    /* (each cell's arrow: 0 none, 1 up, 2 right, 3 down, 4 left) */
+    for (int i = 0; i < 81; i++) {
+        printf("%s%d", i ? "," : "", G->s9_dir[i]);
+    }
+    printf("]");
     printf(",\n \"clone\": [");
     for (int i = 0; i < 81; i++) {
         printf("%s%d", i ? "," : "", G->clone_pair[i] == CLONE_NONE ? -1 : G->clone_pair[i]);

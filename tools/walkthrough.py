@@ -59,7 +59,8 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "extra-regions": "Extra", "anti-diagonal": "Anti-D", "pill-arrows": "Pill", "odd-even-skyscrapers": "Odd",
          "chess-sudoku": "Chess", "magic-square": "Magic", "average-lines": "Average",
          "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before",
-         "quadro": "Quadro", "anti-queen-9s": "Anti-Q", "next-to-nine": "Next", "clone-sudoku": "Clone"}
+         "quadro": "Quadro", "anti-queen-9s": "Anti-Q", "next-to-nine": "Next", "clone-sudoku": "Clone",
+         "search-nine": "Search"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -87,6 +88,7 @@ def line_group(kind, v):
     """Entropic (8): 1-3, 4-6, 7-9; Modular (9): the remainder mod 3"""
     return (v - 1) // 3 if kind == 8 else v % 3
 RIGHT, DOWN = 0, 1
+S9_WAYS = ["", "up", "right", "down", "left"]               # Search Nine: an arrow's way (0: none)
 WINDOWS = ["top-left", "top-right", "bottom-left", "bottom-right"]
 SPOTS = ["top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right"]
 
@@ -101,6 +103,11 @@ ORD = ("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eight
 def listing(items, word="and"):
     items = list(items)
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " " + word + " " + items[-1]
+
+
+def cells_n(k):
+    """1 cell, 3 cells"""
+    return "%d cell%s" % (k, "" if k == 1 else "s")
 
 
 def a_n(v):
@@ -181,6 +188,11 @@ def rule_words(d, vals, c, v, r):
     if rule == "range":
         if d.get("psym") and c == 40:                       # Point Symmetry: the centre is its own mirror
             return "it's the centre, its own mirror: only 5 + 5 makes 10"
+        if any(d.get("s9", [])) and d["s9"][c]:             # Search Nine: an arrow's cell, its digit a distance
+            way = S9_WAYS[d["s9"][c]]
+            if v == 9:
+                return "it has an arrow, pointing %s to its 9, so it isn't the 9 itself" % way
+            return "its arrow points %s, and the board ends %s that way, so it's at most %d" % (way, cells_n(r["hi"]), r["hi"])
         if d.get("b9") and v == 9:                          # Before Nine: a clue says something comes before the 9
             return "it's the first cell after a clue: a 9 first would make the clue 0"
         if d.get("sky"):                                    # Skyscraper: the clue keeps it below a height
@@ -702,6 +714,23 @@ def rule_words(d, vals, c, v, r):
         if w:
             return "its clone, %s, is %d: they hold the same digit" % (at, w)
         return "its clone, %s, can't be %d" % (at, v)
+    if rule == "s9":                                        # Search Nine: an arrow's digit is how far its 9 is
+        a, t = r["arrow"], r["at"]
+        way = S9_WAYS[d["s9"][a]] if a >= 0 else ""
+        if a == c:                                          # its own arrow: no 9 that far
+            if t < 0:
+                return "its arrow points %s, and %s that way is off the board" % (way, cells_n(v))
+            if vals[t]:
+                return "its arrow points %s, and %s that way, %s is %d, not the 9" % (way, cells_n(v), rc(t), vals[t])
+            return "its arrow points %s, and %s that way, %s can't be the 9" % (way, cells_n(v), rc(t))
+        if a < 0:
+            return "an arrow in its row or column says no"
+        dist = abs(a // 9 - c // 9) + abs(a % 9 - c % 9)
+        if v != 9:                                          # an arrow points at it from that far: it's the 9
+            return "the %d in %s points %s at it, %s away: it's the 9" % (vals[a], rc(a), way, cells_n(dist))
+        if t < 0 and not (vals[a] and vals[a] != dist):
+            return "the arrow in %s points %s, away from it: the 9 is that way" % (rc(a), way)
+        return "the %d in %s points %s %s, not %d: its 9 isn't here" % (vals[a], rc(a), way, cells_n(vals[a]), dist)
     if rule == "n9":                                        # Next to Nine: the digits beside the 9
         lu = r["line"]
         name = "row %d" % (lu + 1) if lu < 9 else "column %d" % (lu - 8)
@@ -1162,6 +1191,16 @@ def make_drawer(d, fonts):
                 g.line([(x + CELL - ins, y1), (x + CELL - ins, y2)], fill=MUTED, width=1)
             if area.index(area[c]) == c:
                 g.text((x + 7, y + 8), "ABCD"[cl[c]], font=tiny, fill=GIVEN_FG, anchor="mm")
+        for c, way in enumerate(d.get("s9", [])):          # Search Nine: an arrow by the middle of the side it points to
+            if not way or c not in cells:
+                continue
+            x, y = xy(c)
+            ux, uy = {1: (0, -1), 2: (1, 0), 3: (0, 1), 4: (-1, 0)}[way]
+            tip = (x + CELL / 2 + ux * (CELL / 2 - 4), y + CELL / 2 + uy * (CELL / 2 - 4))
+            ln, h = 9, 4
+            g.line([(tip[0] - ux * ln, tip[1] - uy * ln), tip], fill=SUM_FG, width=2)
+            for sgn in (-1, 1):
+                g.line([tip, (tip[0] - ux * h + sgn * uy * h, tip[1] - uy * h + sgn * ux * h)], fill=SUM_FG, width=2)
         for q in d.get("mathrax", []):                      # Mathrax: a clue where four cells meet
             x, y = xy(q["at"])
             cx, cy, rr = x + CELL, y + CELL, 16
