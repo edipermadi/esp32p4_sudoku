@@ -30,7 +30,7 @@ static const uint8_t SAVER_ORDER[SAVER_MODE_COUNT] = {
     SAVER_MODE_DARK, SAVER_MODE_CLOCK, SAVER_MODE_ANALOG, SAVER_MODE_RAIN, SAVER_MODE_ATTRACTOR, SAVER_MODE_BOIDS,
     SAVER_MODE_LISSAJOUS, SAVER_MODE_PENDULUM, SAVER_MODE_LIFE, SAVER_MODE_BRAIN, SAVER_MODE_ANT, SAVER_MODE_CYCLIC,
     SAVER_MODE_RPS, SAVER_MODE_EXCITABLE, SAVER_MODE_DAY_NIGHT, SAVER_MODE_SEEDS, SAVER_MODE_MAZE, SAVER_MODE_STAR_WARS,
-    SAVER_MODE_FOREST,
+    SAVER_MODE_FOREST, SAVER_MODE_3D_CRYSTAL, SAVER_MODE_3D_DIAMOND, SAVER_MODE_3D_PYRO, SAVER_MODE_3D_BUILDER,
 };
 /** The accent colours, as dropdown options */
 static const char *const ACCENT_NAMES = "Blue\nTeal\nGreen\nPurple\nPink";
@@ -277,7 +277,8 @@ void settings_tab_display(lv_obj_t *pane)
     }
     settings_dropdown(r, "Dark\nDigital clock\nAnalog clock\nRain\nAttractor\nBoids\nLissajous\nPendulum\n"
                       "Game of Life\nBrian's Brain\nLangton's ant\nCyclic spirals\nRock paper scissors\n"
-                      "Excitable medium\nDay & Night\nSeeds\nMaze\nStar Wars\nForest fire", saver_sel, 200, saver_dd_cb);
+                      "Excitable medium\nDay & Night\nSeeds\nMaze\nStar Wars\nForest fire\n"
+                      "3D Crystal growth\n3D Diamond growth\n3D Pyroclastic\n3D Builder", saver_sel, 200, saver_dd_cb);
 
     r = settings_row(col, "Screen saver for", "Then dark, saving power (not for Dark)");
     uint32_t min_sel = 0;

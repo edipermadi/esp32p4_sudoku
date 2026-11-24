@@ -1450,6 +1450,16 @@ void saver_pendulum_stop(void);
 bool saver_automata_start(lv_obj_t *parent, int rule);
 /** @brief The cellular automaton screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_automata_stop(void);
+/**
+ * @brief A 3D cellular automaton screen saver starts (ui_saver_automata3d.c: Crystal growth, Diamond
+ *        growth, Pyroclastic or Builder 1): its rule in a turning cube of blocks on the savers' picture.
+ * @param[in] parent  the screen saver's cover
+ * @param[in] rule  a3_rule_t (automata3d_core.h)
+ * @return false if there was no memory for it
+ */
+bool saver_automata3d_start(lv_obj_t *parent, int rule);
+/** @brief The 3D cellular automata screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_automata3d_stop(void);
 /*
  * The screen savers' colours: 3Blue1Brown's (Manim's) palette on black. A colour's _E shade is its
  * deepest, _A its palest; the plain name is the one the videos use most.

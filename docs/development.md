@@ -181,6 +181,10 @@ src/ui_saver_automata.c the cellular automata screen savers (Game of Life, Brian
                         rest): each rule's colours, the dots whose key changed drawn with the pen
 src/automata_core.c     cellular automata without LVGL: Generations (Life-like), cyclic, excitable, forest-fire
                         and Langton's ant rules; restarts when one dies out, settles or grows quiet
+src/ui_saver_automata3d.c the 3D cellular automata screen savers: the turning cube's visible cells sorted far
+                        to near by depth buckets and painted as bevelled blocks
+src/automata3d_core.c   3D cellular automata without LVGL: Generations rules (6 or 26 neighbours) in a walled
+                        32^3 cube, each starting again when it ends
 src/pendulum_core.c     a double pendulum without LVGL: the equations of motion stepped with RK4, the trail
 src/lissajous_core.c    Lissajous figures without LVGL: the ratios, the drifting phase, shrinking between ratios, the beam
 src/boids_core.c        a flock of boids without LVGL: separation, alignment, cohesion, the edges, trails

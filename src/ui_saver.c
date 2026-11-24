@@ -6,12 +6,14 @@
  *        digital rain (ui_saver_rain.c), a strange attractor (ui_saver_attractor.c), a flock of boids
  *        (ui_saver_boids.c), a Lissajous figure (ui_saver_lissajous.c), double pendulums
  *        (ui_saver_pendulum.c), or a cellular automaton (ui_saver_automata.c: Game of Life, Brian's
- *        Brain, Langton's ant and eight more). After "Screen saver for" minutes (or at once, for Dark) the
+ *        Brain, Langton's ant and eight more), or a 3D cellular automaton in a turning cube
+ *        (ui_saver_automata3d.c: Crystal growth, Diamond growth, Pyroclastic, Builder 1). After "Screen saver for" minutes (or at once, for Dark) the
  *        screen goes black and the board saves power. The next tap only wakes it. The lock screen, if
  *        on, waits under it.
  */
 #include "ui_internal.h"
 #include "automata_core.h"
+#include "automata3d_core.h"
 
 static void saver_sleep(bool lock_now);
 static void saver_show_stop(void);
@@ -114,6 +116,14 @@ static bool saver_show_start(uint8_t mode)
         return saver_automata_start(s_saver, AUTO_R_STAR_WARS);
     case SAVER_MODE_FOREST:
         return saver_automata_start(s_saver, AUTO_R_FOREST);
+    case SAVER_MODE_3D_CRYSTAL:
+        return saver_automata3d_start(s_saver, A3_R_CRYSTAL);
+    case SAVER_MODE_3D_DIAMOND:
+        return saver_automata3d_start(s_saver, A3_R_DIAMOND);
+    case SAVER_MODE_3D_PYRO:
+        return saver_automata3d_start(s_saver, A3_R_PYRO);
+    case SAVER_MODE_3D_BUILDER:
+        return saver_automata3d_start(s_saver, A3_R_BUILDER);
     default:
         return false;
     }
@@ -138,6 +148,7 @@ static void saver_show_stop(void)
     saver_lissajous_stop();
     saver_pendulum_stop();
     saver_automata_stop();
+    saver_automata3d_stop();
     if (s_saver) {
         lv_obj_clean(s_saver);                      /* (the clocks' objects: the cover stays, black) */
     }

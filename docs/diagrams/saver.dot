@@ -14,6 +14,7 @@ digraph saver {
     attr  [label="Strange attractor,\ndrawn point by point for 2 minutes,\nthen cleared, the next,\nCPU at full speed"];
     rain  [label="Digital rain (a colour a column),\n20 steps a second,\nCPU at full speed"];
     dim   [label="Dim grey clock,\nmoved each minute,\nCPU at full speed"];
+    a3d   [label="A 3D cellular automaton\nin a turning 32 x 32 x 32 cube of blocks\n(crystal, diamond, pyroclastic, builder),\neach its own choice"];
     life  [label="A cellular automaton on 120 x 120 dots\n(Game of Life, Brian's Brain, Langton's ant,\ncyclic spirals, rock paper scissors, excitable medium,\nDay & Night, Seeds, Maze, Star Wars, forest fire),\neach its own choice"];
     tap1  [shape=diamond, style=filled, fillcolor="#FFF4DC", color="#C48A1A", label="A tap within\n\"Screen saver for\"?"];
     dark  [label="Dark: backlight off, panel asleep,\nCPU at 180 MHz"];
@@ -34,6 +35,7 @@ digraph saver {
     clk -> liss [label="Lissajous"];
     clk -> pend [label="Pendulum"];
     clk -> life [label="an automaton"];
+    clk -> a3d [label="a 3D automaton"];
     clk -> dark [label="Dark"];
     dim -> tap1;
     analog -> tap1;
@@ -43,6 +45,7 @@ digraph saver {
     liss -> tap1;
     pend -> tap1;
     life -> tap1;
+    a3d -> tap1;
     tap1 -> wake [label="yes"];
     tap1 -> dark [label="no: time is up\n(Never: keeps waiting)"];
     dark -> tap2;

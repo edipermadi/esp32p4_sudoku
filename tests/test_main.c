@@ -35,6 +35,7 @@
 #include "lissajous_core.h"
 #include "pendulum_core.h"
 #include "automata_core.h"
+#include "automata3d_core.h"
 
 static int s_checks, s_failed;
 
@@ -1923,6 +1924,88 @@ static void test_automata(void)
     CHECK(!auto_step() && auto_state(0, 0) == 0);
 }
 
+/*
+ * The 3D automata (automata3d_core.c): births and survival by the 6 or the 26 neighbours, the walls dead,
+ * dying states, a crystal held before it starts again, each rule starting again (itself) within its run,
+ * every rule running in range,
+ * and the same seed giving the same runs.
+ */
+static void test_automata3d(void)
+{
+    const int c = (A3_N - 1) / 2;                   /* (the one cell of a patch of 1) */
+    CHECK(a3_start(1, A3_R_CRYSTAL));               /* Crystal growth (VN, B1,3/S0-6): a cell grows its 6 */
+    CHECK(a3_population() == 1 && a3_state(c, c, c) == 1);
+    CHECK(!a3_step() && a3_population() == 7);
+    CHECK(a3_state(c, c, c) == 1 && a3_state(c + 1, c, c) == 1 && a3_state(c, c, c - 1) == 1);
+    CHECK(a3_state(c + 1, c + 1, c) == 0);          /* (an edge away: 2 live neighbours, not born) */
+    for (int g = 1; g < 14; g++) {                  /* grown for its run, then held */
+        CHECK(!a3_step());
+    }
+    int pop = a3_population();
+    CHECK(a3_state(0, c, c) == 0 && pop > 100);     /* (not at the walls yet) */
+    bool held = true;
+    while (a3_generation() < 14 + 16) {
+        held &= !a3_step() && a3_population() == pop;
+    }
+    CHECK(held);
+    CHECK(a3_step() && a3_rule() == A3_R_CRYSTAL && a3_generation() == 0 && a3_population() == 1);   /* again */
+
+    a3_set_rule(A3_R_PYRO);                         /* Pyroclastic (Moore, B6-8/S4-7/C10) */
+    a3_clear();
+    a3_set(10, 10, 10, 1);                          /* a lone cell: dying through its 8 states */
+    const int nb[6][3] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
+    for (int k = 0; k < 6; k++) {                   /* 6 around an empty cell: it is born */
+        a3_set(20 + nb[k][0], 20 + nb[k][1], 20 + nb[k][2], 1);
+    }
+    a3_set(0, 5, 5, 1);                             /* across the walls: no neighbours (no wrap) */
+    a3_set(A3_N - 1, 5, 5, 1);
+    CHECK(!a3_step());
+    CHECK(a3_state(20, 20, 20) == 1 && a3_state(10, 10, 10) == 2);
+    CHECK(a3_state(0, 5, 5) == 2 && a3_state(A3_N - 1, 5, 5) == 2);
+    for (int s = 3; s < 10; s++) {
+        CHECK(!a3_step() && a3_state(10, 10, 10) == s);
+    }
+    a3_clear();
+    a3_set(10, 10, 10, 9);                          /* the last dying state: dead next, then all died out */
+    CHECK(!a3_step() && a3_state(10, 10, 10) == 0 && a3_population() == 0);
+    CHECK(a3_step() && a3_rule() == A3_R_PYRO && a3_population() > 0);   /* a new start */
+
+    bool in = true;                                 /* every rule runs, states in range */
+    for (int r = 0; r < A3_R_COUNT; r++) {
+        a3_set_rule(r);
+        CHECK(a3_rule() == r && a3_rule_name(r)[0] && a3_population() > 0 && a3_step_ms() > 0);
+        for (int g = 0; g < 60 && !a3_step(); g++) {
+            const uint8_t *cell = a3_cells();
+            int n = 0;
+            for (int i = 0; i < A3_CELLS; i++) {
+                in &= cell[i] < a3_states();
+                n += cell[i] != 0;
+            }
+            in &= n == a3_population();
+        }
+    }
+    CHECK(in);
+    for (int r = 0; r < A3_R_COUNT; r++) {          /* each starts again within its run, the same rule */
+        a3_set_rule(r);
+        int g = 0;
+        while (!a3_step() && g < 1000) {
+            g++;
+        }
+        CHECKF(g < 1000 && a3_rule() == r && a3_generation() == 0, "3D automata: rule %d after %d", r, g);
+    }
+    int st[2];                                      /* the same seed, the same runs */
+    for (int k = 0; k < 2; k++) {
+        CHECK(a3_start(77, A3_R_PYRO));
+        for (int g = 0; g < 30; g++) {
+            a3_step();
+        }
+        st[k] = a3_population() * 16 + a3_state(15, 16, 17);
+    }
+    CHECK(st[0] == st[1]);
+    a3_free();
+    CHECK(!a3_step() && a3_state(0, 0, 0) == 0 && !a3_cells());
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -1936,7 +2019,7 @@ int main(int argc, char **argv)
         {"rain (screen saver)", test_rain},
         {"attractor (screen saver)", test_attractor}, {"boids (screen saver)", test_boids},
         {"lissajous (screen saver)", test_lissajous}, {"pendulum (screen saver)", test_pendulum},
-        {"automata (screen saver)", test_automata},
+        {"automata (screen saver)", test_automata}, {"3D automata (screen saver)", test_automata3d},
     };
     sudoku_geom_init();
     int failed_tests = 0;
