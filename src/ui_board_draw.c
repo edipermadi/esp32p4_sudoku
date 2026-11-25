@@ -45,9 +45,19 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
          * the lines run on to the next cell so the outline stays joined */
         int x1 = left ? a.x1 - 1 : a.x1 + in, x2 = right ? a.x2 + 1 : a.x2 - in;
         int y1 = up ? a.y1 - 1 : a.y1 + in, y2 = down ? a.y2 + 1 : a.y2 - in;
-        bool label = geo->cage_cell[k][0] == i && (geo->cage_sum[k] || geo->cage_prod[k]);   /* (Sumless Killer: none) */
-        const int num = geo->cage_prod[k] ? geo->cage_prod[k] : geo->cage_sum[k];   /* (Product Killer: up to 5 digits) */
-        const int ndig = num >= 10000 ? 5 : num >= 1000 ? 4 : num >= 100 ? 3 : 2;
+        bool label = geo->cage_cell[k][0] == i && (geo->cage_sum[k] || geo->cage_prod[k] || geo->cage_dq[k]);   /* (Sumless Killer: none) */
+        const int num = geo->cage_prod[k] ? geo->cage_prod[k] : geo->cage_dq[k] ? geo->cage_dq[k] : geo->cage_sum[k];   /* (Product Killer: up to 5 digits) */
+        char sum[8];                                /* (Calcudoku Killer: the number and its operation, "12x") */
+        if (geo->cage_op[k]) {
+            sudoku_mathrax_label(geo->cage_op[k], num, sum);
+        } else {
+            snprintf(sum, sizeof(sum), "%d", num);
+        }
+        int nch = 0;                                /* its glyphs (a sign: 2 or 3 bytes in UTF-8) */
+        for (const char *q = sum; *q; q++) {
+            nch += (*q & 0xC0) != 0x80;
+        }
+        const int ndig = nch < 2 ? 2 : nch;
         if (!up) {
             ld.p1.x = label ? a.x1 + in + 4 + 7 * ndig : x1;   /* room for the sum (18 px for two digits) */
             ld.p1.y = ld.p2.y = a.y1 + in;
@@ -77,11 +87,9 @@ static void board_cages_draw(lv_obj_t *grid, const sudoku_geom_t *geo, lv_layer_
             lv_draw_line(layer, &ld);
         }
         if (label) {
-            char sum[8];
-            snprintf(sum, sizeof(sum), "%d", num);
             lv_draw_label_dsc_t d;
             lv_draw_label_dsc_init(&d);
-            d.font = &lv_font_montserrat_12;
+            d.font = geo->cage_op[k] ? &font_clue_12 : &lv_font_montserrat_12;   /* (Calcudoku Killer: its signs) */
             d.color = C_TEXT;
             d.text = sum;
             d.text_local = 1;
@@ -501,6 +509,11 @@ void draw_line_path(lv_layer_t *layer, int kind, const lv_point_t *pts, int n, i
         break;
     case LINE_PALINDROME:
         ld.color = lv_color_hex(0x8A8F98);
+        ld.opa = LV_OPA_60;
+        ld.width = cs * 20 / 100;
+        break;
+    case LINE_WPAL:                                 /* (a medium olive line) */
+        ld.color = lv_color_hex(0x8C9A3A);
         ld.opa = LV_OPA_60;
         ld.width = cs * 20 / 100;
         break;

@@ -61,7 +61,9 @@ PAGES = {"classic": "Classic", "x-sudoku": "X-Sudoku", "mini-6x6": "Mini", "hype
          "dutch-flatmates": "Dutch F", "mathrax": "Mathrax", "point-symmetry": "Point", "before-nine": "Before",
          "quadro": "Quadro", "anti-queen-9s": "Anti-Q", "next-to-nine": "Next", "clone-sudoku": "Clone",
          "search-nine": "Search", "battlefield": "Battlefield", "sequence-lines": "Sequence",
-         "battenburg": "Battenburg", "mini-8x8": "Mini 8", "jigsaw-7x7": "Jigsaw 7"}
+         "battenburg": "Battenburg", "mini-8x8": "Mini 8", "jigsaw-7x7": "Jigsaw 7",
+         "jigsaw-6x6": "Jigsaw 6", "jigsaw-8x8": "Jigsaw 8",
+         "weak-palindrome": "Weak", "calcudoku-killer": "Calcudoku"}
 
 CELL, THICK, THIN, PAD, BAND = 44, 3, 1, 6, 30
 BG, LINE, LINE_THIN = (247, 245, 249), (52, 56, 64), (200, 204, 212)
@@ -81,10 +83,24 @@ DUTCH, PARITY = (228, 190, 64), (230, 128, 128)
 NABNER = (196, 160, 118)                                    # Nabner's lines (the board's brown, on white)
 AVG = (46, 158, 143)                                        # Average Lines (the board's teal)
 SEQ = (140, 149, 212)                                       # Sequence Lines (the board's indigo, on white)
+WPAL = (186, 194, 137)                                      # Weak Palindrome (the board's olive, on white)
 BAT_PINK, BAT_YELLOW = (238, 127, 166), (242, 205, 74)      # Battenburg's marks
 DARROW = (74, 127, 217)                                     # Double Arrow's lines and circles (the board's blue)
 TEN = (159, 209, 166)                                       # 10 Lines' green band (the board's, on white)
 GROUP_NAMES = {8: ("low (1-3)", "middle (4-6)", "high (7-9)"), 9: ("one of 3 6 9", "one of 1 4 7", "one of 2 5 8")}
+FRACTION = {2: "half", 3: "a third", 4: "a quarter"}       # (Calcudoku Killer's / cages, in words)
+
+
+def cage_label(cage):
+    """a cage's number as the board shows it: the sum, or the product; Calcudoku Killer's with its sign ("12×")"""
+    op = cage.get("op", 0)
+    num = cage.get("dq") or cage.get("prod") or cage["sum"]
+    return "%d%s" % (num, ["", "+", "\u2212", "\u00d7", "\u00f7"][op] if op else "")
+
+
+def cage_name(cage):
+    """a cage in a sentence: "the cage of 12" (Killer, Product Killer), "the 12× cage" (Calcudoku Killer)"""
+    return "the %s cage" % cage_label(cage) if cage.get("op") else "the cage of %d" % (cage.get("prod") or cage["sum"])
 
 
 def line_group(kind, v):
@@ -261,6 +277,17 @@ def rule_words(d, vals, c, v, r):
                 w, at, "%d or more" % w if same else "above %d" % w)
         return "it comes before the %d in %s on its thermometer, so it's %s" % (
             w, at, "%d or less" % w if same else "below %d" % w)
+    if rule == "cage" and d["cages"][r["cage"]].get("dq"):     # Calcudoku Killer: a pair that far apart, or that many times
+        cage = d["cages"][r["cage"]]
+        q, diff = cage["dq"], cage["op"] == 2
+        o = [x for x in cage["cells"] if x != c][0]
+        lab = cage_label(cage)
+        if vals[o]:
+            w = vals[o]
+            return "in the %s cage the other digit is %d, and %d isn't %s" % (
+                lab, w, v, "%d apart from it" % q if diff else "%d times it or %s of it" % (q, FRACTION.get(q, "1/%d" % q)))
+        return "in the %s cage, no digit is %s %s" % (
+            lab, "%d apart from" % q if diff else "%d times or %s of" % (q, FRACTION.get(q, "1/%d" % q)), a_n(v))
     if rule == "cage" and d["cages"][r["cage"]].get("prod"):   # Product Killer: the digits multiply to it
         cage = d["cages"][r["cage"]]
         p = cage["prod"]
@@ -271,15 +298,15 @@ def rule_words(d, vals, c, v, r):
         for x in filled:
             left //= x
         if v in filled:
-            return "the cage of %d%s has a %d already" % (p, has, v)
+            return "%s%s has a %d already" % (cage_name(cage), has, v)
         if left % v:
-            return "the cage of %d%s leaves %d to make, and %d doesn't go into it" % (p, has, left, v) if filled \
+            return "%s%s leaves %d to make, and %d doesn't go into it" % (cage_name(cage), has, left, v) if filled \
                 else "the cage's digits multiply to %d, and %d doesn't go into it" % (p, v)
         if not empty:
-            return "the cage of %d%s needs %d there" % (p, has, left)
+            return "%s%s needs %d there" % (cage_name(cage), has, left)
         other = "cell" if len(empty) == 1 else "%d cells" % len(empty)
-        return "in the cage of %d%s, a %d would leave %d for its other %s, which different digits can't make" % (
-            p, has, v, left // v, other)
+        return "in %s%s, a %d would leave %d for its other %s, which different digits can't make" % (
+            cage_name(cage), has, v, left // v, other)
     if rule == "159":                                       # 159 Sudoku: a row's columns 1, 5, 9
         row, col = c // 9, c % 9
         line = [vals[row * 9 + j] for j in range(9)]
@@ -302,20 +329,20 @@ def rule_words(d, vals, c, v, r):
         left = cage["sum"] - sum(filled) - v
         has = " (with %s already in it)" % listing(map(str, filled)) if filled else ""
         if v in filled:
-            return "the cage of %d%s has a %d already" % (cage["sum"], has, v)
+            return "%s%s has a %d already" % (cage_name(cage), has, v)
         if not empty:
-            return "the cage of %d%s needs %d there" % (cage["sum"], has, cage["sum"] - sum(filled))
+            return "%s%s needs %d there" % (cage_name(cage), has, cage["sum"] - sum(filled))
         free = sorted(x for x in range(1, 10) if x not in filled and x != v)
         k = len(empty)
         lo, hi = sum(free[:k]), sum(free[-k:])
         other = "cell" if k == 1 else "%d cells" % k
         if left < lo:
-            return "in the cage of %d%s, a %d would leave %d for its other %s, too little" % (
-                cage["sum"], has, v, left, other)
+            return "in %s%s, a %d would leave %d for its other %s, too little" % (
+                cage_name(cage), has, v, left, other)
         if left > hi:
-            return "in the cage of %d%s, a %d would leave %d for its other %s, too much" % (
-                cage["sum"], has, v, left, other)
-        return "the cage of %d%s can't be made up with a %d there" % (cage["sum"], has, v)
+            return "in %s%s, a %d would leave %d for its other %s, too much" % (
+                cage_name(cage), has, v, left, other)
+        return "%s%s can't be made up with a %d there" % (cage_name(cage), has, v)
     if rule == "quad":
         q = d["quads"][r["quad"]]
         cells = [q["at"], q["at"] + 1, q["at"] + 9, q["at"] + 10]
@@ -457,6 +484,8 @@ def rule_words(d, vals, c, v, r):
             return "with %s there, the cells between the circles couldn't add up to the two circles" % a_n(v)
         if kind == 4:                                       # Palindrome: the cell mirroring it
             return "it mirrors the %d in %s on its grey line, which reads the same from both ends" % (w, at)
+        if kind == 20:                                      # Weak Palindrome: the cell mirroring it, its parity
+            return "it mirrors the %d in %s on its olive line, so it's %s too" % (w, at, "odd" if w % 2 else "even")
         if kind == 6:                                       # Zipper: mirrored cells add up to the line's total
             n = len(cells)
             i = cells.index(c)
@@ -1099,6 +1128,8 @@ def make_drawer(d, fonts):
                 g.line(pts, fill=DUTCH if kind == 10 else PARITY, width=int(CELL * 0.12), joint="curve")
             elif kind == 19:                                # Sequence Lines: a medium indigo line
                 g.line(pts, fill=SEQ, width=int(CELL * 0.2), joint="curve")
+            elif kind == 20:                                # Weak Palindrome: a medium olive line
+                g.line(pts, fill=WPAL, width=int(CELL * 0.2), joint="curve")
             elif kind == 13:                                # Nabner: a narrow brown line
                 g.line(pts, fill=NABNER, width=int(CELL * 0.12), joint="curve")
             elif kind == 16:                                # 10 Lines: a wide soft green band
@@ -1173,8 +1204,8 @@ def make_drawer(d, fonts):
                     if cage_of.get(o) != k:
                         dashed(g, a, b)
             x, y = xy(cage["cells"][0])
-            if cage["sum"] or cage.get("prod"):             # (Sumless Killer: none)
-                g.text((x + 3, y + 1), str(cage.get("prod") or cage["sum"]), font=tiny, fill=GIVEN_FG)
+            if cage["sum"] or cage.get("prod") or cage.get("dq"):   # (Sumless Killer: none)
+                g.text((x + 3, y + 1), cage_label(cage), font=tiny, fill=GIVEN_FG)
         for c in cells:                                     # odd rings, the digits, the step's marks
             x, y = xy(c)
             if d["parity"][c] == 2:

@@ -208,6 +208,30 @@ bool gen_cage_logic(logic_t *L)
 {
     const sudoku_geom_t *G = L->G;
     for (int k = 0; k < G->ncages; k++) {
+        if (G->cage_dq[k]) {                        /* Calcudoku Killer's - and /: each cell by the other's candidates */
+            const int a = G->cage_cell[k][0], b = G->cage_cell[k][1];
+            if (L->v[a] && L->v[b]) {
+                continue;
+            }
+            const uint16_t ma = L->v[a] ? (uint16_t)(1u << L->v[a]) : L->cand[a];
+            const uint16_t mb = L->v[b] ? (uint16_t)(1u << L->v[b]) : L->cand[b];
+            uint16_t fa = 0, fb = 0;
+            for (int x = 1; x <= 9; x++) {
+                for (int y = 1; (ma >> x & 1) && y <= 9; y++) {
+                    if ((mb >> y & 1) && x != y && is_calc_pair(G->cage_op[k], G->cage_dq[k], x, y)) {
+                        fa |= (uint16_t)(1u << x);
+                        fb |= (uint16_t)(1u << y);
+                    }
+                }
+            }
+            const bool ca = eliminate(L, a, (uint16_t)(L->cand[a] & ~fa));
+            const bool cb = eliminate(L, b, (uint16_t)(L->cand[b] & ~fb));
+            if (ca || cb) {
+                trace(TECH_CAGE, k, -1, (uint16_t)(fa | fb), 0, -1, -1);
+                return true;
+            }
+            continue;
+        }
         const bool prod = G->cage_prod[k] != 0;     /* (Product Killer: the digits multiply to it) */
         if (!G->cage_sum[k] && !prod) {
             continue;                               /* (Sumless Killer, Extra Regions: no sum, its cells are only peers) */

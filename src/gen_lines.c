@@ -366,9 +366,12 @@ bool gen_group_paths(int variant, const uint8_t full[81], uint32_t *rng, int wan
 }
 
 /* (documented in gen_internal.h) */
-bool gen_palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
+bool gen_palindrome_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out)
 {
-    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0};
+    /* Weak: mirrored cells the same parity, not the same digit; and its lines never cross themselves or each other
+     * corner to corner (an X), as Palindrome's (left as they were) may */
+    const bool weak = variant == VAR_WPAL;
+    uint8_t cells[THERMOS_MAX][9], lens[THERMOS_MAX], used[81] = {0}, blocks[81] = {0};
     int n = 0;
     for (int tries = 0; tries < 2000 && n < want; tries++) {
         int c = (int)(rnd(rng) % 81), target = 4 + (int)(rnd(rng) % 4);
@@ -381,7 +384,7 @@ bool gen_palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
         if (target % 2 == 0) {                      /* even: a middle pair, diagonal neighbours with one digit */
             int k = line_neighbours(c, used, line, len, nb), nm = 0, m[8];
             for (int j = 0; j < k; j++) {
-                if (full[nb[j]] == full[c]) {
+                if (weak ? !((full[nb[j]] ^ full[c]) & 1) && !is_block_crossed(blocks, c, nb[j]) : full[nb[j]] == full[c]) {
                     m[nm++] = nb[j];
                 }
             }
@@ -408,9 +411,25 @@ bool gen_palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
             }
             int na[8], nbb[8], ka = line_neighbours(a, used, on, non, na), kb = line_neighbours(b, used, on, non, nbb);
             int pa[64], pb[64], np = 0;
+            uint8_t path[9];                        /* (Weak: the line so far in order, end to end) */
+            int plen = 0;
+            for (int j = nl - 1; weak && j >= 0; j--) {
+                path[plen++] = left[j];
+            }
+            for (int j = 0; weak && j < len; j++) {
+                path[plen++] = line[j];
+            }
+            for (int j = 0; weak && j < nl; j++) {
+                path[plen++] = right[j];
+            }
             for (int i = 0; i < ka; i++) {
                 for (int j = 0; j < kb; j++) {
-                    if (na[i] != nbb[j] && full[na[i]] == full[nbb[j]]) {
+                    if (weak && (is_line_crossing(path, plen, a, na[i]) || is_line_crossing(path, plen, b, nbb[j]) ||
+                                 is_block_crossed(blocks, a, na[i]) || is_block_crossed(blocks, b, nbb[j]) ||
+                                 is_steps_crossing(a, na[i], b, nbb[j]))) {
+                        continue;                   /* (an X with itself or another line) */
+                    }
+                    if (na[i] != nbb[j] && (weak ? !((full[na[i]] ^ full[nbb[j]]) & 1) : full[na[i]] == full[nbb[j]])) {
                         pa[np] = na[i];
                         pb[np++] = nbb[j];
                     }
@@ -442,9 +461,12 @@ bool gen_palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudok
         for (int j = 0; j < total; j++) {
             used[cells[n][j]] = 1;
         }
+        if (weak) {
+            mark_line_blocks(blocks, cells[n], total);
+        }
         lens[n++] = (uint8_t)total;
     }
-    return n >= 3 && gen_geom_lines(VAR_PALINDROME, cells, lens, n, out);
+    return n >= 3 && gen_geom_lines(variant, cells, lens, n, out);
 }
 
 /* (documented in gen_internal.h) */

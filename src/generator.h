@@ -180,6 +180,13 @@
  *   VAR_MINI8    8x8 with 2x4 boxes (2 rows, 4 columns), digits 1-8
  *   VAR_JIG7     Jigsaw 7x7: 7x7, digits 1-7, seven irregular regions of 7 connected cells
  *                instead of boxes
+ *   VAR_JIG6     Jigsaw 6x6: 6x6, digits 1-6, six irregular regions of 6 connected cells
+ *   VAR_JIG8     Jigsaw 8x8: 8x8, digits 1-8, eight irregular regions of 8 connected cells
+ *   VAR_WPAL     Weak Palindrome: Classic rules, and on each line two cells mirrored about its
+ *                middle are both odd or both even
+ *   VAR_CALC     Calcudoku Killer: Classic rules, plus cages, each with a number and an operation:
+ *                its digits add up to it (+) or multiply to it (x); a two-cell cage may instead
+ *                have them that far apart (-) or one that many times the other (/); no repeats
  *   VAR_BATTEN   Battenburg: Classic rules, and a mark where four cells meet: their odd and even
  *                digits make a checkerboard; every mark is shown, so no mark: they don't
  *
@@ -313,6 +320,10 @@ typedef enum {
     VAR_BATTEN,                         /**< Battenburg */
     VAR_MINI8,                          /**< Mini 8x8 */
     VAR_JIG7,                           /**< Jigsaw 7x7 */
+    VAR_JIG6,                           /**< Jigsaw 6x6 */
+    VAR_JIG8,                           /**< Jigsaw 8x8 */
+    VAR_WPAL,                           /**< Weak Palindrome */
+    VAR_CALC,                           /**< Calcudoku Killer */
     VAR_COUNT                           /**< how many */
 } sudoku_variant_t;
 
@@ -330,7 +341,8 @@ typedef enum {
  *         "159 Sudoku", "Product Killer", "Extra Regions", "Anti-Diagonal", "Pill Arrows",
  *         "Odd/Even Skyscrapers", "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates",
  *         "Mathrax", "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s", "Next to Nine", "Clone Sudoku",
- *         "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8", "Jigsaw 7x7"
+ *         "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8", "Jigsaw 7x7",
+ *         "Jigsaw 6x6", "Jigsaw 8x8", "Weak Palindrome", "Calcudoku Killer"
  */
 const char *variant_name(int variant);
 
@@ -371,7 +383,8 @@ enum {
     LINE_PILL,                          /**< Pill Arrows: the first two cells (the pill, a two-digit number) are the
                                          *   rest's sum */
     LINE_AVG,                           /**< Average Lines: the first cell (the circle) is the others' average */
-    LINE_SEQ                            /**< Sequence Lines: the digits go up or down by the same step (1 or more) */
+    LINE_SEQ,                           /**< Sequence Lines: the digits go up or down by the same step (1 or more) */
+    LINE_WPAL                           /**< Weak Palindrome: cells mirrored about the middle are both odd or both even */
 };
 #define LK_MAX         16               /**< Little Killer: diagonals per board */
 #define LK_NONE        0xFF             /**< a cell on no diagonal */
@@ -453,7 +466,12 @@ typedef struct {
     uint8_t ncages;                     /**< Killer: cages */
     uint8_t cage_of[81];                /**< each cell's cage, CAGE_NONE = not in a cage */
     uint8_t cage_sum[CAGES_MAX];        /**< each cage's sum (Sumless Killer, Product Killer, Extra Regions: 0, none) */
-    uint16_t cage_prod[CAGES_MAX];      /**< Product Killer: each cage's product (0 on every other board) */
+    uint16_t cage_prod[CAGES_MAX];      /**< Product Killer: each cage's product (0 on every other board); Calcudoku
+                                         *   Killer: its x cages' */
+    uint8_t cage_op[CAGES_MAX];         /**< Calcudoku Killer: each cage's MX_SUM, MX_DIFF, MX_PROD or MX_QUOT (its
+                                         *   + cages' sums in cage_sum, its x cages' products in cage_prod); 0 on
+                                         *   every other board */
+    uint8_t cage_dq[CAGES_MAX];         /**< Calcudoku Killer: a two-cell - or / cage's difference or quotient (else 0) */
     uint8_t cage_n[CAGES_MAX];          /**< each cage's cells: how many */
     uint8_t cage_cell[CAGES_MAX][9];    /**< cells of each cage, the top-left one first */
     uint16_t allow[81];                 /**< digits each cell may hold (candidate bits; Even-Odd narrows its marked cells) */
@@ -620,8 +638,17 @@ bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out);
  */
 bool sudoku_geom_jigsaw7(const uint8_t regions[81], sudoku_geom_t *out);
 /**
- * @brief A Jigsaw board of either size from its region map (sudoku_geom_jigsaw(), sudoku_geom_jigsaw7()).
- * @param[in] variant  VAR_JIGSAW or VAR_JIG7
+ * @brief A small Jigsaw board (6x6, 7x7 or 8x8) from its region map (81 cells row by row, 9 to a row; the n x n at
+ * the top left: region 0..n-1 each, n cells per region; the cells off the board are ignored) into out.
+ * @param[in] n  the board's side: 6, 7 or 8
+ * @param[in] regions  the region of each cell
+ * @param[out] out  gets the board
+ * @return false if the map isn't one (or n isn't 6, 7 or 8)
+ */
+bool sudoku_geom_jigsaw_n(int n, const uint8_t regions[81], sudoku_geom_t *out);
+/**
+ * @brief A Jigsaw board of any size from its region map (sudoku_geom_jigsaw(), sudoku_geom_jigsaw_n()).
+ * @param[in] variant  VAR_JIGSAW, VAR_JIG6, VAR_JIG7 or VAR_JIG8
  * @param[in] regions  the region of each cell
  * @param[out] out  gets the board
  * @return false if the map isn't one (or the variant isn't a Jigsaw)
@@ -630,11 +657,32 @@ bool sudoku_geom_jigsaw_of(int variant, const uint8_t regions[81], sudoku_geom_t
 /**
  * @brief Is it a Jigsaw variant (irregular regions instead of boxes, kept in regions)?
  * @param[in] variant  sudoku_variant_t
- * @return true for VAR_JIGSAW and VAR_JIG7
+ * @return true for VAR_JIGSAW, VAR_JIG6, VAR_JIG7 and VAR_JIG8
  */
 static inline bool is_jigsaw_variant(int variant)
 {
-    return variant == VAR_JIGSAW || variant == VAR_JIG7;
+    return variant == VAR_JIGSAW || variant == VAR_JIG7 || variant == VAR_JIG6 || variant == VAR_JIG8;
+}
+/**
+ * @brief A Jigsaw variant's side.
+ * @param[in] variant  VAR_JIGSAW, VAR_JIG6, VAR_JIG7 or VAR_JIG8
+ * @return 6, 7, 8, or 9 (Jigsaw, and anything else)
+ */
+static inline int jigsaw_side(int variant)
+{
+    return variant == VAR_JIG6 ? 6 : variant == VAR_JIG7 ? 7 : variant == VAR_JIG8 ? 8 : 9;
+}
+/**
+ * @brief Calcudoku Killer: do two digits make a two-cell cage's - or / ?
+ * @param[in] op  MX_DIFF (that far apart) or MX_QUOT (one that many times the other)
+ * @param[in] val  the cage's number
+ * @param[in] a  one digit
+ * @param[in] b  the other
+ * @return true if they do
+ */
+static inline bool is_calc_pair(int op, int val, int a, int b)
+{
+    return op == MX_DIFF ? a - b == val || b - a == val : op == MX_QUOT && (a == b * val || b == a * val);
 }
 /**
  * @brief A Killer board from its cages as text: "sum:cell,cell,...;sum:cell,..."
@@ -656,6 +704,15 @@ bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out);
  */
 bool sudoku_geom_product_text(const char *text, sudoku_geom_t *out);
 /**
+ * @brief A Calcudoku Killer board from its cages as text: "number op:cell,cell,...;..." (as
+ * sudoku_geom_killer_text(), each number followed by its operation: '+' a sum, 'x' a product, '-' a difference
+ * or '/' a quotient, the last two for two-cell cages only: "12x:0,1,10;3-:2,3"). sudoku_cages_text() writes it.
+ * @param[in] text  the cages
+ * @param[out] out  gets the board
+ * @return false if the text isn't one
+ */
+bool sudoku_geom_calc_text(const char *text, sudoku_geom_t *out);
+/**
  * @brief An Extra Regions board from its regions as text: "0:cell,cell,...;0:..." (as a Sumless Killer's
  * cages). sudoku_cages_text() writes it.
  * @param[in] text  the regions
@@ -664,7 +721,8 @@ bool sudoku_geom_product_text(const char *text, sudoku_geom_t *out);
  */
 bool sudoku_geom_regions_text(const char *text, sudoku_geom_t *out);
 /**
- * @brief A Killer board's cages as text (sudoku_geom_killer_text()'s form).
+ * @brief A Killer board's cages as text (sudoku_geom_killer_text()'s form; Calcudoku Killer's with their
+ * operations, sudoku_geom_calc_text()'s).
  * @param[in] g  the board
  * @param[out] buf  gets it
  * @param[in] len  its size
@@ -708,7 +766,7 @@ bool sudoku_geom_thermo_text(const char *text, sudoku_geom_t *out);
  * Whispers, Parity, Slow Thermo: from its bulb);
  * sudoku_thermos_text() writes them all. A Palindrome line's cells that mirror each other mustn't see
  * each other (they hold the same digit); a Between, Entropic or Modular line has 3 cells at least.
- * @param[in] variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_REGIONSUM,
+ * @param[in] variant  VAR_THERMO, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_PALINDROME, VAR_WPAL, VAR_REGIONSUM,
  *                 VAR_ZIPPER, VAR_BETWEEN, VAR_ENTROPIC, VAR_MODULAR, VAR_DUTCH, VAR_PARITY or VAR_SLOW
  * @param[in] text  the lines
  * @param[out] out  gets the board

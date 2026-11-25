@@ -31,7 +31,8 @@ static const char *const VARIANT_NAMES[VAR_COUNT] = {"Classic", "X-Sudoku", "Min
                                                      "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
                                                      "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield",
                                                      "Sequence Lines", "Battenburg", "Mini 8x8",
-                                                     "Jigsaw 7x7"
+                                                     "Jigsaw 7x7", "Jigsaw 6x6", "Jigsaw 8x8",
+                                                     "Weak Palindrome", "Calcudoku Killer"
                                                     };
 
 const char *gen_level_name(int level) { return GEN_LEVEL_NAMES[level]; }
@@ -433,16 +434,20 @@ void sudoku_geom_init(void)
     g[VAR_SANDWICH].variant = VAR_SANDWICH;
     g[VAR_JIGSAW] = g[VAR_CLASSIC];                 /* placeholders: these boards come with their puzzle */
     g[VAR_JIGSAW].variant = VAR_JIGSAW;
-    g[VAR_JIG7] = g[VAR_CLASSIC];
-    g[VAR_JIG7].variant = VAR_JIG7;
+    static const uint8_t JIGS[] = {VAR_JIG6, VAR_JIG7, VAR_JIG8};
+    for (size_t i = 0; i < sizeof(JIGS); i++) {
+        g[JIGS[i]] = g[VAR_CLASSIC];
+        g[JIGS[i]].variant = JIGS[i];
+    }
     g[VAR_KILLER] = g[VAR_CLASSIC];
     g[VAR_KILLER].variant = VAR_KILLER;
     static const uint8_t OWN[] = {VAR_KROPKI, VAR_XV, VAR_GT, VAR_QUAD, VAR_ARROW, VAR_RENBAN, VAR_WHISPER, VAR_SKY,
-                                  VAR_LK, VAR_PALINDROME, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
+                                  VAR_LK, VAR_PALINDROME, VAR_WPAL, VAR_REGIONSUM, VAR_XSUM, VAR_ZIPPER, VAR_FRAME, VAR_BETWEEN,
                                   VAR_ENTROPIC, VAR_MODULAR, VAR_OUTSIDE, VAR_ROSSINI, VAR_DUTCH, VAR_PARITY, VAR_SLOW,
                                   VAR_FORTRESS, VAR_NABNER, VAR_NROOMS, VAR_SKYSUM, VAR_LOCKOUT, VAR_SUMLESS, VAR_DARROW,
                                   VAR_DIAGCONSEC, VAR_TEN, VAR_PRODUCT, VAR_REGIONS, VAR_PILL, VAR_PSKY,
-                                  VAR_AVG, VAR_MATHRAX, VAR_B9, VAR_N9, VAR_CLONE, VAR_S9, VAR_BF, VAR_SEQ, VAR_BATTEN
+                                  VAR_AVG, VAR_MATHRAX, VAR_B9, VAR_N9, VAR_CLONE, VAR_S9, VAR_BF, VAR_SEQ, VAR_BATTEN,
+                                  VAR_CALC
                                  };
     for (size_t i = 0; i < sizeof(OWN); i++) {
         g[OWN[i]] = g[VAR_CLASSIC];
@@ -460,7 +465,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_EVENODD || variant == VAR_CONSEC || variant == VAR_THERMO || variant == VAR_SANDWICH ||
             variant == VAR_KROPKI || variant == VAR_XV || variant == VAR_GT || variant == VAR_QUAD ||
             variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_SKY ||
-            variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
+            variant == VAR_LK || variant == VAR_PALINDROME || variant == VAR_WPAL || variant == VAR_REGIONSUM || variant == VAR_XSUM ||
             variant == VAR_ZIPPER || variant == VAR_FRAME || variant == VAR_BETWEEN || variant == VAR_ENTROPIC ||
             variant == VAR_MODULAR || variant == VAR_OUTSIDE || variant == VAR_ROSSINI || variant == VAR_DUTCH ||
             variant == VAR_PARITY || variant == VAR_SLOW || variant == VAR_FORTRESS || variant == VAR_NABNER ||
@@ -469,7 +474,7 @@ const sudoku_geom_t *sudoku_geom(int variant)
             variant == VAR_PRODUCT || variant == VAR_REGIONS || variant == VAR_PILL || variant == VAR_PSKY ||
             variant == VAR_AVG || variant == VAR_MATHRAX || variant == VAR_B9 || variant == VAR_N9 ||
             variant == VAR_CLONE || variant == VAR_S9 || variant == VAR_BF || variant == VAR_SEQ ||
-            variant == VAR_BATTEN) {
+            variant == VAR_BATTEN || variant == VAR_CALC) {
         variant = VAR_CLASSIC;
     }
     return &s_geom[variant];
@@ -490,7 +495,7 @@ static int line_kind_of(int variant)
            variant == VAR_PARITY ? LINE_PARITY : variant == VAR_SLOW ? LINE_SLOW : variant == VAR_NABNER ? LINE_NABNER :
            variant == VAR_LOCKOUT ? LINE_LOCKOUT : variant == VAR_DARROW ? LINE_DARROW :
            variant == VAR_TEN ? LINE_TEN : variant == VAR_PILL ? LINE_PILL :
-           variant == VAR_AVG ? LINE_AVG : variant == VAR_SEQ ? LINE_SEQ : LINE_THERMO;
+           variant == VAR_AVG ? LINE_AVG : variant == VAR_SEQ ? LINE_SEQ : variant == VAR_WPAL ? LINE_WPAL : LINE_THERMO;
 }
 
 /* (documented in gen_internal.h) */
@@ -1245,6 +1250,44 @@ bool gen_geom_product(const uint8_t cage_of[81], const uint16_t *prods, int ncag
     return true;
 }
 
+/* (documented in gen_internal.h) */
+bool gen_geom_calc(const uint8_t cage_of[81], const uint8_t *ops, const uint16_t *vals, int ncages, sudoku_geom_t *out)
+{
+    static const uint8_t ZERO[CAGES_MAX];
+    if (!gen_geom_killer(cage_of, ZERO, ncages, out)) {   /* (the cages, no sums: their cells differ) */
+        return false;
+    }
+    out->variant = VAR_CALC;
+    for (int k = 0; k < ncages; k++) {
+        const int n = out->cage_n[k], v = vals[k];
+        switch (ops[k]) {
+        case MX_SUM:
+            if (v < n * (n + 1) / 2 || v > n * (19 - n) / 2) {
+                return false;
+            }
+            out->cage_sum[k] = (uint8_t)v;
+            break;
+        case MX_PROD:
+            if (v < 1) {
+                return false;
+            }
+            out->cage_prod[k] = (uint16_t)v;
+            break;
+        case MX_DIFF:
+        case MX_QUOT:
+            if (n != 2 || v > 9 || v < (ops[k] == MX_DIFF ? 1 : 2) || (ops[k] == MX_DIFF && v > 8)) {
+                return false;
+            }
+            out->cage_dq[k] = (uint8_t)v;
+            break;
+        default:
+            return false;
+        }
+        out->cage_op[k] = ops[k];
+    }
+    return true;
+}
+
 /* (documented in generator.h) */
 bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out)
 {
@@ -1265,32 +1308,43 @@ bool sudoku_geom_jigsaw(const uint8_t regions[81], sudoku_geom_t *out)
 }
 
 /* (documented in generator.h) */
-bool sudoku_geom_jigsaw7(const uint8_t regions[81], sudoku_geom_t *out)
+bool sudoku_geom_jigsaw_n(int n, const uint8_t regions[81], sudoku_geom_t *out)
 {
-    int count[7] = {0};
+    if (n < 6 || n > 8) {
+        return false;
+    }
+    int count[8] = {0};
     uint8_t map[81] = {0};
     for (int c = 0; c < 81; c++) {
-        if (c / 9 >= 7 || c % 9 >= 7) {
+        if (c / 9 >= n || c % 9 >= n) {
             continue;                               /* (off the board) */
         }
-        if (regions[c] > 6) {
+        if (regions[c] >= n) {
             return false;
         }
         map[c] = regions[c];
         count[regions[c]]++;
     }
-    for (int i = 0; i < 7; i++) {
-        if (count[i] != 7) {
+    for (int i = 0; i < n; i++) {
+        if (count[i] != n) {
             return false;
         }
     }
-    geom_build(out, VAR_JIG7, 7, 1, 7, false, false, map);
+    geom_build(out, n == 6 ? VAR_JIG6 : n == 7 ? VAR_JIG7 : VAR_JIG8, n, 1, n, false, false, map);
     return true;
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_jigsaw7(const uint8_t regions[81], sudoku_geom_t *out)
+{
+    return sudoku_geom_jigsaw_n(7, regions, out);
 }
 
 /* (documented in generator.h) */
 bool sudoku_geom_jigsaw_of(int variant, const uint8_t regions[81], sudoku_geom_t *out)
 {
-    return variant == VAR_JIG7 ? sudoku_geom_jigsaw7(regions, out)
-           : variant == VAR_JIGSAW && sudoku_geom_jigsaw(regions, out);
+    if (!is_jigsaw_variant(variant)) {
+        return false;
+    }
+    return variant == VAR_JIGSAW ? sudoku_geom_jigsaw(regions, out) : sudoku_geom_jigsaw_n(jigsaw_side(variant), regions, out);
 }

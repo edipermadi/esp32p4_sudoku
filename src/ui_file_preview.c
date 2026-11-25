@@ -10,6 +10,8 @@
 #include "stats_db.h"
 #include "generator.h"
 #include "timezones.h"
+
+LV_FONT_DECLARE(font_clue_12)     /* (Calcudoku Killer's cage signs; ui_internal.h declares it for the other screens) */
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -97,7 +99,7 @@ static void pv_draw_cb(lv_event_t *e)
         }
     }
     /* Killer cages: a dashed line just inside each cage edge, the sum in its first cell */
-    if (s_pv_var == VAR_KILLER || s_pv_var == VAR_SUMLESS || s_pv_var == VAR_PRODUCT) {
+    if (s_pv_var == VAR_KILLER || s_pv_var == VAR_SUMLESS || s_pv_var == VAR_PRODUCT || s_pv_var == VAR_CALC) {
         lv_draw_line_dsc_t d;
         lv_draw_line_dsc_init(&d);
         d.color = C_ACCENT;
@@ -143,12 +145,17 @@ static void pv_draw_cb(lv_event_t *e)
                     d.p2.y = yb;
                     lv_draw_line(layer, &d);
                 }
-                if (g->cage_cell[k][0] == cell && (g->cage_sum[k] || g->cage_prod[k])) {   /* the top-left cell: the sum */
+                if (g->cage_cell[k][0] == cell && (g->cage_sum[k] || g->cage_prod[k] || g->cage_dq[k])) {   /* the top-left cell: the sum */
                     char t[8];
-                    snprintf(t, sizeof(t), "%d", g->cage_prod[k] ? g->cage_prod[k] : g->cage_sum[k]);
+                    const int num = g->cage_prod[k] ? g->cage_prod[k] : g->cage_dq[k] ? g->cage_dq[k] : g->cage_sum[k];
+                    if (g->cage_op[k]) {
+                        sudoku_mathrax_label(g->cage_op[k], num, t);   /* (Calcudoku Killer: "12x") */
+                    } else {
+                        snprintf(t, sizeof(t), "%d", num);
+                    }
                     lv_draw_label_dsc_t sd;
                     lv_draw_label_dsc_init(&sd);
-                    sd.font = &lv_font_montserrat_12;
+                    sd.font = g->cage_op[k] ? &font_clue_12 : &lv_font_montserrat_12;   /* (Calcudoku Killer: its signs) */
                     sd.color = C_ACCENT;
                     sd.text = t;
                     sd.text_local = 1;

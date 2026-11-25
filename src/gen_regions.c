@@ -115,17 +115,18 @@ void gen_jigsaw_map(uint8_t map[81], uint32_t *rng)
 }
 
 /**
- * @brief Jigsaw 7x7: the most cells any region of a map has in one row or column (7: a whole line).
+ * @brief A small Jigsaw: the most cells any region of a map has in one row or column (n: a whole line).
  * @param[in] map  the region of each cell
+ * @param[in] n  the board's side
  * @return it
  */
-static int jigsaw7_straightest(const uint8_t map[81])
+static int jigsaw_straightest(const uint8_t map[81], int n)
 {
     int most = 0;
-    for (int reg = 0; reg < 7; reg++) {
-        for (int i = 0; i < 7; i++) {
+    for (int reg = 0; reg < n; reg++) {
+        for (int i = 0; i < n; i++) {
             int row = 0, col = 0;
-            for (int j = 0; j < 7; j++) {
+            for (int j = 0; j < n; j++) {
                 row += map[i * 9 + j] == reg;
                 col += map[j * 9 + i] == reg;
             }
@@ -137,15 +138,18 @@ static int jigsaw7_straightest(const uint8_t map[81])
 }
 
 /* (documented in gen_internal.h) */
-void gen_jigsaw7_map(uint8_t map[81], uint32_t *rng)
+void gen_jigsaw_n_map(int n, uint8_t map[81], uint32_t *rng)
 {
-    for (int tries = 0; tries < 50; tries++) {      /* (the rows reshaped; again while a region stays row-like) */
+    /* 7x7: from its rows (7 has no boxes), 150 trades; 6x6, 8x8: from their 2x3 or 2x4 boxes, a trade per cell */
+    const int bw = n / 2, want = n == 7 ? 150 : n * n;
+    for (int tries = 0; tries < 50; tries++) {      /* (again while a region stays line-like) */
         for (int c = 0; c < 81; c++) {
-            map[c] = c / 9 < 7 && c % 9 < 7 ? (uint8_t)(c / 9) : 0xFF;   /* (the rows; off the board: no region) */
+            const int r = c / 9, k = c % 9;
+            map[c] = r >= n || k >= n ? 0xFF : n == 7 ? (uint8_t)r : (uint8_t)(r / 2 * 2 + k / bw);
         }
-        jigsaw_reshape(map, 7, 150, rng);
-        if (jigsaw7_straightest(map) <= 5) {
-            break;                                  /* (no region with 6 or 7 cells in one line) */
+        jigsaw_reshape(map, n, want, rng);
+        if (jigsaw_straightest(map, n) <= n - 2) {
+            break;                                  /* (no region with n - 1 or n cells in one line) */
         }
     }
     for (int c = 0; c < 81; c++) {
@@ -292,6 +296,40 @@ bool gen_product_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudo
         }
     }
     return gen_geom_product(cage_of, prods, n, out);
+}
+
+/* (documented in gen_internal.h) */
+bool gen_calc_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out)
+{
+    if (!gen_killer_cages(full, max_size, rng, out)) {
+        return false;
+    }
+    uint8_t cage_of[81], ops[CAGES_MAX];
+    uint16_t vals[CAGES_MAX];
+    memcpy(cage_of, out->cage_of, 81);
+    const int n = out->ncages;
+    for (int k = 0; k < n; k++) {
+        const int m = out->cage_n[k];
+        int sum = 0, prod = 1;
+        for (int i = 0; i < m; i++) {
+            sum += full[out->cage_cell[k][i]];
+            prod *= full[out->cage_cell[k][i]];
+        }
+        int pick = m == 1 ? 0 : m == 2 ? (int)(rnd(rng) % 4) : (int)(rnd(rng) % 2) * 2;   /* + - x /, or + x */
+        if (m == 2) {
+            const int a = full[out->cage_cell[k][0]], b = full[out->cage_cell[k][1]];
+            const int hi = a > b ? a : b, lo = a > b ? b : a;
+            if (pick == 3 && hi % lo) {
+                pick = 1;                           /* (no quotient: a difference) */
+            }
+            vals[k] = (uint16_t)(pick == 1 ? hi - lo : pick == 3 ? hi / lo : pick == 2 ? prod : sum);
+        } else {
+            vals[k] = (uint16_t)(pick == 2 ? prod : sum);
+        }
+        static const uint8_t OPS[] = {MX_SUM, MX_DIFF, MX_PROD, MX_QUOT};
+        ops[k] = OPS[pick];
+    }
+    return gen_geom_calc(cage_of, ops, vals, n, out);
 }
 
 /**

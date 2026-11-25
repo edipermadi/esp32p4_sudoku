@@ -71,7 +71,7 @@ void continue_discard(uint16_t id);
 /**
  * @brief The cells on a puzzle's board (for "36 / 81 filled").
  * @param[in] id  the puzzle
- * @return 81, or 36 (Mini 6x6), 64 (Mini 8x8), 49 (Jigsaw 7x7), 16 (Kids 4x4)
+ * @return 81, or 36 (Mini 6x6), 64 (Mini 8x8), 49 (Jigsaw 7x7), 36 / 64 (Jigsaw 6x6 / 8x8), 16 (Kids 4x4)
  */
 int continue_cells(uint16_t id);
 /** @} */

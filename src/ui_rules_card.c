@@ -32,6 +32,9 @@ static const uint8_t PIC_SUMLESS[] = {0, 1, 2, 5, 0xFE, 0xFF};   /**< a cage ove
 static const uint8_t PIC_PILL[] = {0, 1, 2, 3, 4, 0xFF};    /**< (1 2) 3 4 5: 12 = 3 + 4 + 5 */
 static const uint8_t PIC_AVG[] = {0, 1, 2, 3, 0xFF};       /**< (5) 3 8 4: 3 + 8 + 4 = 3 x 5 */
 static const uint8_t PIC_PROD[] = {12, 0, 1, 0xFE, 70, 2, 3, 6, 0xFE, 0xFF};   /**< 3 x 4 = 12, and an empty 70 */
+static const uint8_t PIC_CALC[] = {1, 0, 1, 0xFE, 1, 2, 3, 0xFE, 1, 4, 5, 0xFE, 1, 6, 7, 0xFE, 0xFF};   /**< four pairs */
+/** @brief Calcudoku Killer's picture: its four cages' labels (3 + 4, 8 / 2, 6 - 1, 5 x 9) */
+static const char *const PIC_CALC_LABELS[] = {"7+", "4\xc3\xb7", "5\xe2\x88\x92", "45\xc3\x97"};
 static const uint8_t PIC_DMARKS[] = {0, DMARK_DR, 0xFF};   /**< 3 and 4 corner to corner: a mark; 8 and 4: none */
 static const uint8_t PIC_SEQ[] = {0, 1, 2, 3, 0xFF};      /**< 2 4 6 8: a step of 2 */
 static const uint8_t PIC_TEN[] = {0, 1, 2, 5, 4, 0xFF};    /**< 3 7 | 1 5 4: two runs of 10 */
@@ -48,6 +51,14 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_JIG7] = {
         .w = 7, .h = 7, .digits = "123...." "45....." "6......" "7......" "......." "......." ".......",
         .regions = "aaabbbb" "aaccbbb" "acccddd" "aeccddd" "eeeffdg" "eefffgg" "effgggg", .left_clue = -1
+    },
+    [VAR_JIG6] = {
+        .w = 6, .h = 6, .digits = "123..." "4....." "56...." "......" "......" "......",
+        .regions = "aaabbb" "acccbb" "aacddb" "eccdff" "eeddff" "eeedff", .left_clue = -1
+    },
+    [VAR_JIG8] = {
+        .w = 8, .h = 8, .digits = "1234...." "5.67...." "8......." "........" "........" "........" "........" "........",
+        .regions = "aaaabbbb" "acaabbdb" "accccddb" "eccfdddg" "ecfffdgg" "eeffhdgg" "eefhhhgg" "eefhhhhg", .left_clue = -1
     },
     [VAR_MINI8] = {.w = 8, .h = 4, .bw = 4, .bh = 2, .digits = "12345678" "56781234" "........" "........", .left_clue = -1},
     [VAR_HYPER] = {
@@ -99,6 +110,10 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
         4, 4, 0, 0, ".3.." "7..." ".5.3" "..7.", NULL, NULL, NULL, NULL, NULL, PIC_PALINDROME, NULL, -1, 0, NULL,
         NULL, LINE_PALINDROME
     },
+    [VAR_WPAL] = {
+        .w = 4, .h = 4, .digits = ".3.." "8..." ".5.7" "..2.", .thermo = PIC_PALINDROME, .left_clue = -1,
+        .line_kind = LINE_WPAL
+    },
     [VAR_REGIONSUM] = {
         6, 1, 3, 1, "426538", NULL, NULL, NULL, NULL, NULL, PIC_REGIONSUM, NULL, -1, 0, NULL, NULL,
         LINE_REGIONSUM
@@ -130,6 +145,7 @@ static const rules_pic_t RULES_PIC[VAR_COUNT] = {
     [VAR_TEN] = {3, 2, 0, 0, "371" "945", NULL, NULL, NULL, NULL, NULL, PIC_TEN, NULL, -1, 0, NULL, NULL, LINE_TEN},
     [VAR_159] = {9, 1, 0, 0, "321465798", "100010001", NULL, NULL, NULL, NULL, NULL, NULL, -1},
     [VAR_PRODUCT] = {4, 2, 0, 0, "34.." "....", NULL, NULL, NULL, NULL, NULL, NULL, PIC_PROD, -1},
+    [VAR_CALC] = {.w = 4, .h = 2, .digits = "3482" "6159", .cages = PIC_CALC, .left_clue = -1, .cage_labels = PIC_CALC_LABELS},
     [VAR_ANTIDIAG] = {
         5, 5, 0, 0, "3...7" ".7.3." "..3.." ".1.7." "7...3", "10001" "01010" "00100" "01010" "10001",
         NULL, NULL, NULL, NULL, NULL, NULL, -1
@@ -181,6 +197,12 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     [VAR_JIG7] = "A 7x7 grid with the digits 1 to 7: every row, every column and every irregular region (outlined "
     "with thick lines) holds 1 to 7, each once. Here the top-left region has all seven. Every puzzle has its own "
     "regions.",
+    [VAR_JIG6] = "A 6x6 grid with the digits 1 to 6: every row, every column and every irregular region (outlined "
+    "with thick lines) holds 1 to 6, each once. Here the top-left region has all six. Every puzzle has its own "
+    "regions.",
+    [VAR_JIG8] = "An 8x8 grid with the digits 1 to 8: every row, every column and every irregular region (outlined "
+    "with thick lines) holds 1 to 8, each once. Here the top-left region has all eight. Every puzzle has its own "
+    "regions.",
     [VAR_MINI8] = "An 8x8 grid: every row, column and 2x4 box (two rows of four) holds 1 to 8, each once.",
     [VAR_HYPER] = "Classic rules, and the four tinted 3x3 windows also hold 1 to 9, each once.",
     [VAR_JIGSAW] = "Classic rules, but the boxes are irregular regions of nine cells, outlined with thick lines. "
@@ -230,6 +252,9 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "diagonal: 3 + 1 + 4 + 2 = 10. Digits can repeat on a diagonal where the boxes allow it.",
     [VAR_PALINDROME] = "Classic rules, and each grey line reads the same from both ends: 3, 7, 5, 7, 3. Its first "
     "and last cells hold the same digit, so do the second and the second to last, and so on.",
+    [VAR_WPAL] = "Classic rules, and on each olive line, two cells the same distance from its middle are both odd or "
+    "both even: 3, 8, 5, 2, 7 (3 and 7 odd, 8 and 2 even). Unlike Palindrome, they needn't be the same digit, and "
+    "they may share a row, column or box.",
     [VAR_REGIONSUM] = "Classic rules, and on each blue line the digits in each box it passes through add up to the "
     "same total: 2 + 6 = 5 + 3 = 8. A box the line enters twice counts both parts together.",
     [VAR_XSUM] = "Classic rules, and a clue left of a row or above a column is the sum of the first X digits "
@@ -284,6 +309,10 @@ static const char *const RULES_TEXT[VAR_COUNT] = {
     "digit in column 5 where its 5 is, and the digit in column 9 where its 9 is (those columns are tinted). Here "
     "the 3 in column 1 puts the 1 in column 3, the 6 in column 5 puts the 5 in column 6, and the 8 in column 9 "
     "puts the 9 in column 8.",
+    [VAR_CALC] = "Classic rules, plus cages (dashed outlines), each with a number and a sign. With a plus sign the "
+    "cage's digits add up to the number, with a times sign they multiply to it. A two-cell cage may have a minus "
+    "sign instead (its two digits are that far apart) or a divide sign (the larger is that many times the "
+    "smaller). Here 3 + 4 = 7, 8 is 4 times 2, 6 and 1 are 5 apart, 5 times 9 is 45. No digit repeats in a cage.",
     [VAR_PRODUCT] = "Classic rules, plus cages (dashed outlines): the digits in a cage multiply to the number in its "
     "corner, and no digit repeats in a cage. Here 3 x 4 = 12, and the three empty cells make 70: 2, 5 and 7.",
     [VAR_CHESS] = "Classic rules, and no digit repeats a chess knight's move apart, nor in cells that touch, side by "
@@ -482,8 +511,11 @@ static void rules_pic_draw_cb(lv_event_t *e)
     }
     if (p->cages) {                                 /* dashed cages with their sums */
         const uint8_t *q = p->cages;
+        int nth = 0;                                /* (the cage's place, for its label) */
         while (*q != 0xFF) {
             int sum = *q++, first = *q;
+            const char *label = p->cage_labels ? p->cage_labels[nth] : NULL;
+            nth++;
             uint8_t in[16];
             int n = 0;
             while (*q != 0xFE) {
@@ -532,11 +564,14 @@ static void rules_pic_draw_cb(lv_event_t *e)
             if (!sum) {
                 continue;                           /* (Sumless Killer: no sum) */
             }
-            char t[4];
-            snprintf(t, sizeof(t), "%d", sum);
+            char t[8];
+            snprintf(t, sizeof(t), "%s", label ? label : "");
+            if (!label) {
+                snprintf(t, sizeof(t), "%d", sum);
+            }
             lv_draw_label_dsc_t d;
             lv_draw_label_dsc_init(&d);
-            d.font = &lv_font_montserrat_12;
+            d.font = label ? &font_clue_12 : &lv_font_montserrat_12;   /* (Calcudoku Killer: its signs) */
             d.color = C_TEXT;
             d.text = t;
             d.text_local = 1;

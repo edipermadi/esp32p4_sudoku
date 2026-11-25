@@ -265,11 +265,11 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool lines = variant == VAR_ARROW || variant == VAR_RENBAN || variant == VAR_WHISPER || variant == VAR_DUTCH ||
                        variant == VAR_PARITY || variant == VAR_NABNER || variant == VAR_SEQ;
     const bool sky = variant == VAR_SKY, lk = variant == VAR_LK, xsum = variant == VAR_XSUM;
-    const bool pal = variant == VAR_PALINDROME, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
+    const bool pal = variant == VAR_PALINDROME || variant == VAR_WPAL, rsum = variant == VAR_REGIONSUM, frame = variant == VAR_FRAME;
     const bool zip = variant == VAR_ZIPPER, betw = variant == VAR_BETWEEN;
     const bool ends = variant == VAR_LOCKOUT || variant == VAR_DARROW || variant == VAR_TEN || variant == VAR_AVG;
     const bool sumless = variant == VAR_SUMLESS, dcons = variant == VAR_DIAGCONSEC;
-    const bool prodk = variant == VAR_PRODUCT, xregions = variant == VAR_REGIONS;
+    const bool prodk = variant == VAR_PRODUCT, xregions = variant == VAR_REGIONS, calc = variant == VAR_CALC;
     const bool pill = variant == VAR_PILL, psky = variant == VAR_PSKY;
     const bool grp = variant == VAR_ENTROPIC || variant == VAR_MODULAR;
     const bool outs = variant == VAR_OUTSIDE, ross = variant == VAR_ROSSINI;
@@ -279,7 +279,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
     const bool n9 = variant == VAR_N9, clone = variant == VAR_CLONE, s9 = variant == VAR_S9;
     const bool bf = variant == VAR_BF, batten = variant == VAR_BATTEN;
     const bool own = jigsaw || killer || marks || thermo || sandwich || edges || quad || lines || sky || lk || xsum || fort ||
-                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || xregions || pill || psky ||
+                     pal || rsum || frame || zip || betw || grp || outs || ross || nroom || skysum || ends || sumless || dcons || prodk || calc || xregions || pill || psky ||
                      mrx || b9 || n9 || clone || s9 || bf || batten;
     if (sandwich) {
         gen_bread_tables();
@@ -303,8 +303,8 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         sudoku_gen_yield();
         if (jigsaw) {                               /* a new shape every few tries */
             if (t % 4 == 0) {
-                if (variant == VAR_JIG7) {
-                    gen_jigsaw7_map(map, &rng);
+                if (variant != VAR_JIGSAW) {
+                    gen_jigsaw_n_map(jigsaw_side(variant), map, &rng);
                 } else {
                     gen_jigsaw_map(map, &rng);
                 }
@@ -339,6 +339,11 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         } else if (prodk) {                         /* a grid, then cages and their products */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             if (!gen_product_cages(full, level >= GEN_HARD ? 5 : 3, &rng, jig)) {
+                continue;
+            }
+        } else if (calc) {                          /* a grid, then cages, each with an operation */
+            gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
+            if (!gen_calc_cages(full, level >= GEN_HARD ? 5 : 3, &rng, jig)) {
                 continue;
             }
         } else if (xregions) {                      /* a grid, then a few regions with different digits */
@@ -605,7 +610,7 @@ bool sudoku_generate(int variant, gen_level_t level, uint32_t seed, uint8_t give
         } else if (pal || rsum || zip || betw || grp || ends) {   /* a grid, then lines that keep their rule on it */
             gen_random_full_grid(sudoku_geom(VAR_CLASSIC), full, &rng, 0);
             int want = level >= GEN_HARD ? 10 : 8;
-            bool got = pal ? gen_palindrome_paths(full, &rng, want, jig) : rsum ? gen_regionsum_paths(full, &rng, want, jig)
+            bool got = pal ? gen_palindrome_paths(variant, full, &rng, want, jig) : rsum ? gen_regionsum_paths(full, &rng, want, jig)
                        : zip ? gen_zipper_paths(full, &rng, want, jig) : betw ? gen_between_paths(full, &rng, want, jig)
                        : ends ? gen_ends_paths(variant, full, &rng, want, jig) : gen_group_paths(variant, full, &rng, want, jig);
             if (!got) {

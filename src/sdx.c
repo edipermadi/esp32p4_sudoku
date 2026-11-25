@@ -118,7 +118,9 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
 {
     switch (p->variant) {
     case VAR_JIGSAW:
-    case VAR_JIG7: {
+    case VAR_JIG6:
+    case VAR_JIG7:
+    case VAR_JIG8: {
         uint8_t reg[81];
         if (strlen(p->regions) != 81) {
             return false;
@@ -136,6 +138,8 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
         return sudoku_geom_killer_text(p->cages, out);
     case VAR_PRODUCT:
         return sudoku_geom_product_text(p->cages, out);
+    case VAR_CALC:
+        return sudoku_geom_calc_text(p->cages, out);
     case VAR_REGIONS:
         return sudoku_geom_regions_text(p->cages, out);
     case VAR_QUAD:
@@ -155,6 +159,7 @@ bool sdx_geom(const sdx_puzzle_t *p, sudoku_geom_t *out)
     case VAR_RENBAN:
     case VAR_WHISPER:
     case VAR_PALINDROME:
+    case VAR_WPAL:
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:

@@ -193,6 +193,7 @@ void sudoku_layout_texts(const sudoku_geom_t *g, char *cages, int cages_len, cha
     case VAR_SUMLESS:
     case VAR_PRODUCT:
     case VAR_REGIONS:
+    case VAR_CALC:
         sudoku_cages_text(g, cages, cages_len);
         break;
     case VAR_QUAD:
@@ -1109,10 +1110,12 @@ bool sudoku_mathrax_text(const sudoku_geom_t *g, char *buf, int len)
  * @param[in] max  the largest number allowed (a sum: 45; a product: 3024)
  * @param[out] cage_of  gets each cell's cage (CAGE_NONE: none)
  * @param[out] nums  gets each cage's number (CAGES_MAX of them)
+ * @param[out] ops  gets each cage's operation, MX_SUM .. MX_QUOT, written after its number ("12x:..."); NULL: none
+ *             (Calcudoku Killer's only)
  * @param[out] n  gets how many cages
  * @return false if the text isn't that
  */
-static bool read_cages(const char *text, long max, uint8_t cage_of[81], uint16_t *nums, int *n)
+static bool read_cages(const char *text, long max, uint8_t cage_of[81], uint16_t *nums, uint8_t *ops, int *n)
 {
     memset(cage_of, CAGE_NONE, 81);
     *n = 0;
@@ -1123,6 +1126,14 @@ static bool read_cages(const char *text, long max, uint8_t cage_of[81], uint16_t
         }
         char *end;
         long sum = strtol(p, &end, 10);
+        if (ops) {                                  /* (Calcudoku Killer: its operation after the number) */
+            const char *k = *end && *end != ':' ? strchr(MX_CHARS + 1, *end) : NULL;
+            if (!k || k - MX_CHARS > MX_QUOT) {
+                return false;
+            }
+            ops[*n] = (uint8_t)(k - MX_CHARS);
+            end++;
+        }
         if (end == p || *end != ':' || sum < 0 || sum > max) {     /* (0: Sumless Killer's, Extra Regions') */
             return false;
         }
@@ -1156,7 +1167,7 @@ bool sudoku_geom_killer_text(const char *text, sudoku_geom_t *out)
     uint8_t cage_of[81], sums[CAGES_MAX];
     uint16_t nums[CAGES_MAX];
     int n;
-    if (!read_cages(text, 45, cage_of, nums, &n)) {
+    if (!read_cages(text, 45, cage_of, nums, NULL, &n)) {
         return false;
     }
     for (int k = 0; k < n; k++) {
@@ -1171,7 +1182,16 @@ bool sudoku_geom_product_text(const char *text, sudoku_geom_t *out)
     uint8_t cage_of[81];
     uint16_t nums[CAGES_MAX];
     int n;
-    return read_cages(text, 60480, cage_of, nums, &n) && gen_geom_product(cage_of, nums, n, out);
+    return read_cages(text, 60480, cage_of, nums, NULL, &n) && gen_geom_product(cage_of, nums, n, out);
+}
+
+/* (documented in generator.h) */
+bool sudoku_geom_calc_text(const char *text, sudoku_geom_t *out)
+{
+    uint8_t cage_of[81], ops[CAGES_MAX];
+    uint16_t nums[CAGES_MAX];
+    int n;
+    return read_cages(text, 60480, cage_of, nums, ops, &n) && gen_geom_calc(cage_of, ops, nums, n, out);
 }
 
 /* (documented in generator.h) */
@@ -1193,8 +1213,11 @@ bool sudoku_cages_text(const sudoku_geom_t *g, char *buf, int len)
     }
     buf[0] = 0;
     for (int k = 0; k < g->ncages; k++) {
-        int w = snprintf(buf + pos, (size_t)(len - pos), "%s%d:", k ? ";" : "",
-                         g->variant == VAR_PRODUCT ? g->cage_prod[k] : g->cage_sum[k]);
+        const int op = g->cage_op[k];               /* (Calcudoku Killer: the number, then its operation) */
+        const int num = op == MX_PROD || g->variant == VAR_PRODUCT ? g->cage_prod[k] : op == MX_DIFF || op == MX_QUOT
+                        ? g->cage_dq[k] : g->cage_sum[k];
+        int w = op ? snprintf(buf + pos, (size_t)(len - pos), "%s%d%c:", k ? ";" : "", num, MX_CHARS[op])
+                : snprintf(buf + pos, (size_t)(len - pos), "%s%d:", k ? ";" : "", num);
         if (w < 0 || w >= len - pos) {
             return false;
         }

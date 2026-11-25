@@ -317,9 +317,10 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             break;
         }
         case LINE_PALINDROME:                       /* two cells mirroring each other that differ */
+        case LINE_WPAL:                             /* (Weak: one odd, one even) */
             for (int i = 0; i < n / 2; i++) {
                 int a = cell[i], b = cell[n - 1 - i];
-                if (val[a] && val[b] && val[a] != val[b]) {
+                if (val[a] && val[b] && (geo->line_kind == LINE_WPAL ? ((val[a] ^ val[b]) & 1) : val[a] != val[b])) {
                     out[a] = out[b] = true;
                 }
             }
@@ -671,7 +672,16 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
-    for (int k = 0; k < geo->ncages && geo->cage_prod[0]; k++) {   /* Product Killer: a digit that doesn't divide, or full and wrong */
+    for (int k = 0; k < geo->ncages; k++) {         /* Calcudoku Killer's - and /: a full pair that doesn't make it */
+        const int a = geo->cage_cell[k][0], b = geo->cage_cell[k][1];
+        if (geo->cage_dq[k] && val[a] && val[b] && !is_calc_pair(geo->cage_op[k], geo->cage_dq[k], val[a], val[b])) {
+            out[a] = out[b] = true;
+        }
+    }
+    for (int k = 0; k < geo->ncages; k++) {         /* Product Killer: a digit that doesn't divide, or full and wrong */
+        if (!geo->cage_prod[k]) {
+            continue;                               /* (Calcudoku Killer: not an x cage) */
+        }
         int left = geo->cage_prod[k], filled = 0, n = geo->cage_n[k];
         bool bad = false;
         for (int i = 0; i < n; i++) {
@@ -701,7 +711,10 @@ int game_conflicts(const sudoku_geom_t *geo, const uint8_t *val, bool *out)
             }
         }
     }
-    for (int k = 0; k < geo->ncages && geo->cage_sum[0]; k++) {   /* Killer: a cage over its sum, or full and short of it */
+    for (int k = 0; k < geo->ncages; k++) {         /* Killer: a cage over its sum, or full and short of it */
+        if (!geo->cage_sum[k]) {
+            continue;                               /* (Sumless Killer, Extra Regions; Calcudoku Killer: not a + cage) */
+        }
         int sum = 0, filled = 0, n = geo->cage_n[k];
         for (int i = 0; i < n; i++) {
             int c = geo->cage_cell[k][i];

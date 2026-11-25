@@ -198,7 +198,9 @@ static void context(const sudoku_geom_t *G, const uint8_t v[81], int c)
     }
     if (G->cage_of[c] != CAGE_NONE) {
         int k = G->cage_of[c];
-        if (G->cage_prod[k]) {
+        if (G->cage_dq[k]) {
+            printf("         cage %s %d:", G->cage_op[k] == MX_DIFF ? "difference" : "quotient", G->cage_dq[k]);
+        } else if (G->cage_prod[k]) {
             printf("         cage product %d:", G->cage_prod[k]);
         } else {
             printf("         cage sum %d:", G->cage_sum[k]);
@@ -464,7 +466,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     regions[0] = cages[0] = marks[0] = thermos[0] = 0;
     switch (g->variant) {
     case VAR_JIGSAW:
+    case VAR_JIG6:
     case VAR_JIG7:
+    case VAR_JIG8:
         for (int i = 0; i < 81; i++) {
             regions[i] = (char)('0' + g->region[i]);
         }
@@ -473,6 +477,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_KILLER:
     case VAR_SUMLESS:
     case VAR_PRODUCT:
+    case VAR_CALC:
     case VAR_REGIONS:
         sudoku_cages_text(g, cages, len);
         break;
@@ -541,6 +546,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_RENBAN:
     case VAR_WHISPER:
     case VAR_PALINDROME:
+    case VAR_WPAL:
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
@@ -618,7 +624,8 @@ static void rule_json(const sudoku_geom_t *G, const uint8_t v[81], int c, int d)
         int t = G->thermo_of[c], p = G->thermo_pos[c];
         if (G->line_kind != LINE_THERMO && G->line_kind != LINE_SLOW) {   /* Arrow, Renban, Whispers, ...: the line (and a neighbour) */
             int o = -1, m = G->thermo_n[t] - 1 - p;
-            if ((G->line_kind == LINE_PALINDROME || G->line_kind == LINE_ZIPPER) && m != p && v[G->thermo_cell[t][m]]) {
+            if ((G->line_kind == LINE_PALINDROME || G->line_kind == LINE_ZIPPER || G->line_kind == LINE_WPAL) && m != p &&
+                    v[G->thermo_cell[t][m]]) {
                 o = G->thermo_cell[t][m];             /* (the cell mirroring it) */
             }
             const bool nbr = G->line_kind == LINE_WHISPER || G->line_kind == LINE_DUTCH || G->line_kind == LINE_PARITY;
@@ -868,7 +875,8 @@ static void layout_json(const sudoku_geom_t *G)
     }
     printf("],\n \"cages\": [");
     for (int k = 0; k < G->ncages; k++) {
-        printf("%s{\"sum\": %d, \"prod\": %d, \"cells\": [", k ? ", " : "", G->cage_sum[k], G->cage_prod[k]);
+        printf("%s{\"sum\": %d, \"prod\": %d, \"op\": %d, \"dq\": %d, \"cells\": [", k ? ", " : "", G->cage_sum[k],
+               G->cage_prod[k], G->cage_op[k], G->cage_dq[k]);
         for (int j = 0; j < G->cage_n[k]; j++) {
             printf("%s%d", j ? "," : "", G->cage_cell[k][j]);
         }

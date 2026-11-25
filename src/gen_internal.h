@@ -500,6 +500,27 @@ bool gen_geom_product(const uint8_t cage_of[81], const uint16_t *prods, int ncag
  */
 uint16_t gen_product_allow(const sudoku_geom_t *G, const uint8_t *v, int c, int i);
 /**
+ * @brief Builds a Calcudoku Killer board: a classic board plus cages, each with an operation and its number.
+ * @param[in] cage_of  the cage of each cell (CAGE_NONE: none)
+ * @param[in] ops      each cage's MX_SUM, MX_DIFF, MX_PROD or MX_QUOT
+ * @param[in] vals     each cage's number: a sum, a product, a difference (1-8) or a quotient (2-9)
+ * @param[in] ncages   how many cages
+ * @param[out] out     gets the board
+ * @return false if the cages aren't a board's (see gen_geom_killer()), a number can't be its cage's, or a - or /
+ *         cage hasn't two cells
+ */
+bool gen_geom_calc(const uint8_t cage_of[81], const uint8_t *ops, const uint16_t *vals, int ncages, sudoku_geom_t *out);
+/**
+ * @brief Calcudoku Killer: the digits cell i may hold by its two-cell - or / cage (with the other cell's digit,
+ * or any digit it could hold)
+ * @param[in] G  the board
+ * @param[in] v  the digits (0: empty; i's own is left out)
+ * @param[in] c  i's cage
+ * @param[in] i  the cell
+ * @return a candidate mask
+ */
+uint16_t gen_calc_pair_allow(const sudoku_geom_t *G, const uint8_t *v, int c, int i);
+/**
  * @brief Builds a board from its decorations: a classic board with lines of the variant's kind (Thermo,
  *        Arrow, Renban, Whispers).
  * @param[in] variant    the variant
@@ -729,12 +750,14 @@ bool gen_geom_sky(const uint8_t clues[18], sudoku_geom_t *out);
  */
 void gen_jigsaw_map(uint8_t map[81], uint32_t *rng);
 /**
- * @brief A random Jigsaw 7x7 map: the seven rows, reshaped the same way (more trades: rows are far from boxes),
- * drawn again while a region keeps 6 or more cells in one row or column; the cells off the 7x7 get region 0.
+ * @brief A random small Jigsaw map (6x6, 7x7, 8x8): the 2x3 or 2x4 boxes (7x7: the seven rows, with more trades:
+ * rows are far from boxes) reshaped the same way, drawn again while a region keeps n - 1 or more cells in one row
+ * or column; the cells off the board get region 0.
+ * @param[in] n  the board's side: 6, 7 or 8
  * @param[out] map  gets the region of each cell
  * @param[in,out] rng  the random state
  */
-void gen_jigsaw7_map(uint8_t map[81], uint32_t *rng);
+void gen_jigsaw_n_map(int n, uint8_t map[81], uint32_t *rng);
 /**
  * @brief Random cages over a solved grid: from each cell not in a cage yet (in a
  * random order), a cage grows to 2..max_size cells through neighbours whose
@@ -765,6 +788,16 @@ bool gen_sumless_cages(const uint8_t full[81], uint32_t *rng, sudoku_geom_t *out
  * @return false: no cages
  */
 bool gen_product_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out);
+/**
+ * @brief Calcudoku Killer: cages drawn over the full grid as for Killer, each given an operation: a two-cell cage
+ * any of + - x (and / where one digit divides the other), a bigger one + or x, a single cell +
+ * @param[in] full  the solution
+ * @param[in] max_size  the cage size aimed at, as gen_killer_cages()
+ * @param[in,out] rng  the random state
+ * @param[out] out  gets the board
+ * @return false: no cages
+ */
+bool gen_calc_cages(const uint8_t full[81], int max_size, uint32_t *rng, sudoku_geom_t *out);
 /**
  * @brief Extra Regions: up to want regions of 5 to 9 connected cells over the full grid, each with
  *        different digits, reaching over a box, a row and a column, and never touching another (corners too)
@@ -814,15 +847,17 @@ bool gen_ends_paths(int variant, const uint8_t full[81], uint32_t *rng, int want
  */
 bool gen_group_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
 /**
- * @brief Palindrome: up to want lines (3-9 cells) over the full grid, grown from the middle out, a
- * cell at each end at a time, both holding the same digit (so they never see each other)
+ * @brief Palindrome, Weak Palindrome: up to want lines (3-9 cells) over the full grid, grown from the middle out, a
+ * cell at each end at a time, both holding the same digit (so they never see each other); Weak Palindrome: both odd
+ * or both even
+ * @param[in] variant  VAR_PALINDROME or VAR_WPAL
  * @param[in] full  the solution
  * @param[in,out] rng  the random state
  * @param[in] want  lines wanted
  * @param[out] out  gets the lines
  * @return false: fewer than 3
  */
-bool gen_palindrome_paths(const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
+bool gen_palindrome_paths(int variant, const uint8_t full[81], uint32_t *rng, int want, sudoku_geom_t *out);
 /**
  * @brief Region Sum Lines: up to want lines over the full grid, random walks of up to 8 cells kept at
  * the longest length (3 or more) where each box they pass through adds up to the same

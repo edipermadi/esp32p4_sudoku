@@ -232,6 +232,9 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
     if (v == VAR_PRODUCT && buf && sudoku_geom_product_text(cages, buf)) {
         return buf;
     }
+    if (v == VAR_CALC && buf && sudoku_geom_calc_text(cages, buf)) {
+        return buf;
+    }
     if (v == VAR_REGIONS && buf && sudoku_geom_regions_text(cages, buf)) {
         return buf;
     }
@@ -247,7 +250,7 @@ const sudoku_geom_t *puzzle_geom(uint16_t id, sudoku_geom_t *buf, int *variant)
             sudoku_geom_marks(v, marks, buf)) {
         return buf;
     }
-    if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER || v == VAR_PALINDROME ||
+    if ((v == VAR_THERMO || v == VAR_ARROW || v == VAR_RENBAN || v == VAR_WHISPER || v == VAR_PALINDROME || v == VAR_WPAL ||
             v == VAR_REGIONSUM || v == VAR_ZIPPER || v == VAR_BETWEEN || v == VAR_ENTROPIC || v == VAR_MODULAR ||
             v == VAR_DUTCH || v == VAR_PARITY || v == VAR_SLOW || v == VAR_NABNER || v == VAR_LOCKOUT ||
             v == VAR_DARROW || v == VAR_TEN || v == VAR_PILL || v == VAR_AVG || v == VAR_SEQ) &&

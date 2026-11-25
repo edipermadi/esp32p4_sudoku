@@ -182,6 +182,10 @@ typedef enum {
     KIND_BATTEN,                         /**< Battenburg */
     KIND_MINI8,                          /**< Mini 8x8 */
     KIND_JIG7,                           /**< Jigsaw 7x7 */
+    KIND_JIG6,                           /**< Jigsaw 6x6 */
+    KIND_JIG8,                           /**< Jigsaw 8x8 */
+    KIND_WPAL,                           /**< Weak Palindrome */
+    KIND_CALC,                           /**< Calcudoku Killer */
     KIND_COUNT                           /**< how many kinds */
 } stats_kind_t;
 /**

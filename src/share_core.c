@@ -31,7 +31,9 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     const char *key = NULL;
     switch (variant) {
     case VAR_JIGSAW:
+    case VAR_JIG6:
     case VAR_JIG7:
+    case VAR_JIG8:
         for (int i = 0; i < 81; i++) {
             extra[i] = (char)('0' + G->region[i]);
         }
@@ -41,6 +43,7 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     case VAR_KILLER:
     case VAR_SUMLESS:
     case VAR_PRODUCT:
+    case VAR_CALC:
     case VAR_REGIONS:
         key = sudoku_cages_text(G, extra, sizeof(extra)) ? "cages" : NULL;
         break;
@@ -67,6 +70,7 @@ bool share_text(const sudoku_geom_t *G, int variant, const uint8_t *givens, char
     case VAR_RENBAN:
     case VAR_WHISPER:
     case VAR_PALINDROME:
+    case VAR_WPAL:
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
@@ -149,7 +153,9 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
     extra[0] = 0;
     switch (variant) {
     case VAR_JIGSAW:
+    case VAR_JIG6:
     case VAR_JIG7:
+    case VAR_JIG8:
         for (int i = 0; i < 81; i++) {
             regions[i] = (char)('0' + G->region[i]);
         }
@@ -158,6 +164,7 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
     case VAR_KILLER:
     case VAR_SUMLESS:
     case VAR_PRODUCT:
+    case VAR_CALC:
     case VAR_REGIONS:
         if (sudoku_cages_text(G, extra, sizeof(extra))) {
             cages = extra;
@@ -269,6 +276,7 @@ int share_pz_line(const sudoku_geom_t *G, int variant, int level, const uint8_t 
     case VAR_RENBAN:
     case VAR_WHISPER:
     case VAR_PALINDROME:
+    case VAR_WPAL:
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:

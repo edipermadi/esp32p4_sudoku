@@ -275,6 +275,7 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                  lk == LINE_ARROW ? "The arrow's shaft adds up to its circle" :
                  lk == LINE_RENBAN ? "The digits on this line are a run of consecutive digits" :
                  lk == LINE_PALINDROME ? "This line reads the same from both ends" :
+                 lk == LINE_WPAL ? "Cells the same distance from this line's middle are both odd or both even" :
                  lk == LINE_REGIONSUM ? "In each box this line passes through, its digits add up to the same" :
                  lk == LINE_ZIPPER ? "Cells the same distance from this line's middle add up to the same total" :
                  lk == LINE_BETWEEN ? "The digits on this line lie between the digits in its two circles" :
@@ -592,9 +593,16 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
             mark[geo->cage_cell[k][i]] = 1;
         }
         int c0 = k >= 0 && k < geo->ncages ? geo->cage_cell[k][0] : 0;
-        const bool prod = geo->variant == VAR_PRODUCT;
-        const int num = k >= 0 && k < geo->ncages ? (prod ? geo->cage_prod[k] : geo->cage_sum[k]) : 0;
-        snprintf(u1, sizeof(u1), "the %d cage", num);
+        const int op = k >= 0 && k < geo->ncages ? geo->cage_op[k] : 0;   /* (Calcudoku Killer: its operation) */
+        const bool prod = geo->variant == VAR_PRODUCT || op == MX_PROD;
+        const int num = k >= 0 && k < geo->ncages ? (prod ? geo->cage_prod[k] : op == MX_DIFF || op == MX_QUOT
+                        ? geo->cage_dq[k] : geo->cage_sum[k]) : 0;
+        char lab[8];
+        sudoku_mathrax_label(op, num, lab);
+        snprintf(u1, sizeof(u1), "the %s cage", op ? lab : "");
+        if (!op) {
+            snprintf(u1, sizeof(u1), "the %d cage", num);
+        }
         char digs[24] = "";
         size_t len = 0;
         for (int d = 1; d <= 9; d++) {
@@ -602,9 +610,15 @@ const char *hint_explain(const sudoku_geom_t *geo, const sudoku_step_t *h, int s
                 len += snprintf(digs + len, sizeof(digs) - len, "%s%d", len ? ", " : "", d);
             }
         }
-        snprintf(tech, sizeof(tech), "The cage at row %d, column %d %s %d: with what's in it and around "
-                 "it, its empty cells can only be %s. ", c0 / 9 + 1, c0 % 9 + 1, prod ? "multiplies to" : "adds up to",
-                 num, digs);
+        char says[48];                              /* what the cage's number says */
+        if (op == MX_DIFF || op == MX_QUOT) {
+            snprintf(says, sizeof(says), op == MX_DIFF ? "holds two digits %d apart" : "holds two digits, one %d times "
+                     "the other", num);
+        } else {
+            snprintf(says, sizeof(says), "%s %d", prod ? "multiplies to" : "adds up to", num);
+        }
+        snprintf(tech, sizeof(tech), "The cage at row %d, column %d %s: with what's in it and around "
+                 "it, its empty cells can only be %s. ", c0 / 9 + 1, c0 % 9 + 1, says, digs);
     } else if (t->kind == TECH_NAKED_TRIPLE || t->kind == TECH_X_WING || t->kind == TECH_SWORDFISH ||
                t->kind == TECH_XY_WING) {
         for (int i = 0; i < t->ncells; i++) {

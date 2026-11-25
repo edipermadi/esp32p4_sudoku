@@ -453,6 +453,14 @@ uint16_t gen_line_allow(const sudoku_geom_t *G, int t, int p, const uint8_t *v, 
         }
         break;
     }
+    case LINE_WPAL: {                               /* the parity the cell mirroring it can have */
+        int m = n - 1 - p;
+        if (m != p && LMASK(cell[m])) {
+            const uint16_t mm = LMASK(cell[m]), even = 0x154, odd = 0x2AA;
+            free &= (uint16_t)((mm & even ? even : 0) | (mm & odd ? odd : 0));
+        }
+        break;
+    }
     case LINE_REGIONSUM: {                          /* each box's part adds up to the same total */
         /* per box the line crosses: the range its part can add up to (its cells' digits differ: a
          * box); the cell asked about's own box without it (own_lo, own_hi) */
@@ -1460,6 +1468,23 @@ uint16_t gen_product_allow(const sudoku_geom_t *G, const uint8_t *v, int c, int 
     return empty ? product_sets(p, empty, (uint16_t)(0x3FE & ~used)) : 0;
 }
 
+/* (documented in gen_internal.h) */
+uint16_t gen_calc_pair_allow(const sudoku_geom_t *G, const uint8_t *v, int c, int i)
+{
+    const int o = G->cage_cell[c][0] == i ? G->cage_cell[c][1] : G->cage_cell[c][0], x = v[o];
+    const int op = G->cage_op[c], val = G->cage_dq[c];
+    uint16_t ok = 0;
+    for (int d = 1; d <= 9; d++) {
+        for (int y = x ? x : 1; y <= (x ? x : 9); y++) {   /* (its digit, or any digit it could hold) */
+            if (y != d && (G->all >> y & 1) && is_calc_pair(op, val, d, y)) {
+                ok |= (uint16_t)(1u << d);
+                break;
+            }
+        }
+    }
+    return ok;
+}
+
 /**
  * @brief 159 Sudoku: the digits a cell may hold by its row's columns 1, 5 and 9 (the digit in column k is the
  * column of the k): as one of those, where its digit points must take k; holding 1, 5 or 9, its row's column for
@@ -2031,6 +2056,8 @@ static uint16_t grid_free(const grid_t *g, int i)
         if (!G->cage_sum[c]) {                      /* (Sumless Killer, Extra Regions: no repeat, and no sum) */
             if (G->cage_prod[c] && free) {
                 free &= gen_product_allow(G, g->v, c, i);   /* (Product Killer: what the product still allows) */
+            } else if (G->cage_dq[c] && free) {
+                free &= gen_calc_pair_allow(G, g->v, c, i);   /* (Calcudoku Killer: a - or / pair) */
             }
             WHY(FIT_CAGE);
             return free;

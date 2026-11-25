@@ -35,6 +35,8 @@ static const learn_lesson_t LESSONS[] = {
     {"Hyper windows", "The four tinted windows hold 1-9 too: a digit can have one place left in one.", VAR_HYPER, TECH_NONE, false},
     {"Jigsaw regions", "Irregular regions instead of boxes: count a digit's places region by region.", VAR_JIGSAW, TECH_NONE, false},
     {"Jigsaw 7x7 regions", "Seven irregular regions on a 7x7 board: count a digit's places region by region.", VAR_JIG7, TECH_NONE, false},
+    {"Jigsaw 6x6 regions", "Six irregular regions on a 6x6 board: count a digit's places region by region.", VAR_JIG6, TECH_NONE, false},
+    {"Jigsaw 8x8 regions", "Eight irregular regions on an 8x8 board: count a digit's places region by region.", VAR_JIG8, TECH_NONE, false},
     {"Disjoint groups", "The cells in the same place in each box hold 1-9 too: a digit can have one place left in a group.", VAR_DISJOINT, TECH_NONE, false},
     {"Asterisk", "The nine asterisk cells hold 1-9 too: a digit can have one place left among them.", VAR_ASTERISK, TECH_NONE, false},
     {"Center Dot", "The nine box centres hold 1-9 too: a digit can have one place left among them.", VAR_CENTERDOT, TECH_NONE, false},
@@ -72,6 +74,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Renban line", "A run of consecutive digits in any order: the line's length bounds how far apart they are.", VAR_RENBAN, TECH_LINE, false},
     {"German Whispers", "Neighbours on a green line are 5 or more apart: no 5 on it, and low and high take turns.", VAR_WHISPER, TECH_LINE, false},
     {"Palindrome line", "The line reads the same from both ends: mirrored cells hold the same digit.", VAR_PALINDROME, TECH_LINE, false},
+    {"Weak Palindrome line", "Mirrored cells on the line are both odd or both even: one sets the other's parity.", VAR_WPAL, TECH_LINE, false},
     {"Region Sum line", "Each box's part of the line adds up the same: a short part bounds a long one.", VAR_REGIONSUM, TECH_LINE, false},
     {"Zipper line", "Cells the same distance from the middle add up to the same total: the middle's digit.", VAR_ZIPPER, TECH_LINE, false},
     {"Between line", "The cells between the circles lie between the circles' digits.", VAR_BETWEEN, TECH_LINE, false},
@@ -91,6 +94,7 @@ static const learn_lesson_t LESSONS[] = {
     {"Killer cage", "A cage's sum allows only some sets of digits: with what's around it, its cells narrow down.", VAR_KILLER, TECH_CAGE, false},
     {"Sumless cage", "No digit repeats in a cage: its cells see each other, like a box's, across box borders.", VAR_SUMLESS, TECH_NONE, false},
     {"Product cage", "A cage's digits multiply to its number: only some sets of digits do, and each must divide it.", VAR_PRODUCT, TECH_CAGE, false},
+    {"Calcudoku cage", "A cage's sign says how its digits make its number: added, multiplied, or a pair apart or divided.", VAR_CALC, TECH_CAGE, false},
     {"Sandwich clue", "The sum between a row's 1 and 9 leaves the 1 and the 9 only a few places in that row or column.", VAR_SANDWICH, TECH_SANDWICH, false},
     {"Skyscraper clue", "How many buildings are seen: a 1 means the 9 is first, a 9 that they rise 1 to 9.", VAR_SKY, TECH_SKY, false},
     {"Little Killer clue", "A diagonal's sum, repeats allowed: what's left of it bounds its empty cells.", VAR_LK, TECH_LK, false},
@@ -144,7 +148,9 @@ int learn_group(int k)
     case VAR_X:
     case VAR_HYPER:
     case VAR_JIGSAW:
+    case VAR_JIG6:
     case VAR_JIG7:
+    case VAR_JIG8:
     case VAR_DISJOINT:
     case VAR_ASTERISK:
     case VAR_CENTERDOT:
@@ -180,6 +186,7 @@ int learn_group(int k)
     case VAR_KILLER:
     case VAR_SUMLESS:
     case VAR_PRODUCT:
+    case VAR_CALC:
     case VAR_SANDWICH:
     case VAR_SKY:
     case VAR_LK:

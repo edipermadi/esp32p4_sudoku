@@ -20,6 +20,7 @@ static bool is_line_variant(int variant)
     case VAR_RENBAN:
     case VAR_WHISPER:
     case VAR_PALINDROME:
+    case VAR_WPAL:
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
@@ -119,10 +120,13 @@ uint8_t canon_symmetries(int variant)
         return 0x35;                    /* columns stay columns (columns 1, 5, 9 and the column numbers in them) */
     case VAR_JIGSAW:                    /* (its regions turned too: canon_hash_geom()) */
     case VAR_JIG7:
+    case VAR_JIG6:
+    case VAR_JIG8:
     case VAR_KILLER:                    /* (its cages turned too; and these two's) */
     case VAR_SUMLESS:
     case VAR_REGIONS:
     case VAR_PRODUCT:
+    case VAR_CALC:
     case VAR_KROPKI:                    /* (its dots turned too) */
     case VAR_XV:                        /* (its marks turned too) */
         return 0xFF;
@@ -193,7 +197,7 @@ int canon_cell(int t, int n, int cell)
 bool is_canon_layout(int variant)
 {
     return is_jigsaw_variant(variant) || variant == VAR_KILLER || variant == VAR_SUMLESS || variant == VAR_REGIONS ||
-           variant == VAR_PRODUCT || is_mark_variant(variant) || is_line_variant(variant) || is_clue_variant(variant) ||
+           variant == VAR_PRODUCT || variant == VAR_CALC || is_mark_variant(variant) || is_line_variant(variant) || is_clue_variant(variant) ||
            variant == VAR_QUAD || variant == VAR_MATHRAX || variant == VAR_CLONE || variant == VAR_S9 ||
            variant == VAR_BATTEN;
 }
@@ -571,15 +575,15 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
         }
         return hash_copy(variant, best, sizeof(best));
     }
-    const bool prod = variant == VAR_PRODUCT;
-    const bool killer = variant == VAR_KILLER || prod;   /* (sums, products: their digits as they are) */
+    const bool prod = variant == VAR_PRODUCT, calc = variant == VAR_CALC;
+    const bool killer = variant == VAR_KILLER || prod || calc;   /* (sums, products: their digits as they are) */
     const bool cages = !is_jigsaw_variant(variant);   /* Killer, Sumless, Product, Extra Regions: cages (CAGE_NONE: none) */
     const int n = G->n;                             /* (Jigsaw 7x7: turned as a 7x7, its cells at the top left) */
     /* a copy: the givens (renumbered in reading order; Killer's and Product Killer's as they are), each cell's region
      * or cage (numbered in reading order from 1; 0: in no cage), then the sums (a byte each) or products (two) in that
-     * order */
-    uint8_t best[81 * 2 + 2 * CAGES_MAX], cur[81 * 2 + 2 * CAGES_MAX];
-    const int len = 81 * 2 + (prod ? 2 * G->ncages : killer ? G->ncages : 0);
+     * order (Calcudoku Killer: each cage's operation, then its number in two bytes) */
+    uint8_t best[81 * 2 + 3 * CAGES_MAX], cur[81 * 2 + 3 * CAGES_MAX];
+    const int len = 81 * 2 + (calc ? 3 * G->ncages : prod ? 2 * G->ncages : killer ? G->ncages : 0);
     for (int t = 0; t < 8; t++) {
         if (!(sym >> t & 1)) {
             continue;
@@ -608,7 +612,13 @@ uint64_t canon_hash_geom(const sudoku_geom_t *G, const uint8_t givens[81])
             }
         }
         for (int c = 0; killer && c < G->ncages; c++) {   /* each cage's sum or product, by its number in this copy */
-            if (lab[c] && prod) {
+            if (lab[c] && calc) {
+                const int op = G->cage_op[c];
+                const int num = op == MX_PROD ? G->cage_prod[c] : op == MX_SUM ? G->cage_sum[c] : G->cage_dq[c];
+                cur[162 + 3 * (lab[c] - 1)] = (uint8_t)op;
+                cur[162 + 3 * (lab[c] - 1) + 1] = (uint8_t)(num >> 8);
+                cur[162 + 3 * (lab[c] - 1) + 2] = (uint8_t)num;
+            } else if (lab[c] && prod) {
                 cur[162 + 2 * (lab[c] - 1)] = (uint8_t)(G->cage_prod[c] >> 8);   /* (up to 60480: two bytes) */
                 cur[162 + 2 * (lab[c] - 1) + 1] = (uint8_t)G->cage_prod[c];
             } else if (lab[c]) {

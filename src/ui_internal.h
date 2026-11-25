@@ -230,6 +230,8 @@ typedef struct {
     const char *mathrax;                /**< Mathrax: a circle's clue as drawn ("9+") at the picture's centre, may be NULL */
     const char *s9;                     /**< Search Nine: w*h arrows, '.' none or 'u', 'r', 'd', 'l'; may be NULL */
     const char *batten;                 /**< Battenburg: w*h, '1' a mark at the cell's bottom-right corner; may be NULL */
+    const char *const *cage_labels;     /**< Calcudoku Killer: each cage's label as drawn ("12x"), in cages' order,
+                                         *   instead of its sum; may be NULL */
 } rules_pic_t;
 
 /* ------------------------------------------------------------- send a puzzle by sound (the format: share_core.h) */
@@ -860,7 +862,7 @@ void draw_dmark(lv_layer_t *layer, int cx, int cy, bool dl, int half);
  * digits (translucent): LINE_THERMO a wide soft grey line from a round bulb; LINE_ARROW a grey
  * ring (the circle) and a thin shaft from its edge with an arrowhead at the end; LINE_RENBAN a
  * wide purple band; LINE_AVG a teal ring and a thin teal line from its edge; LINE_PILL as LINE_ARROW with a capsule round its first two cells; LINE_WHISPER a narrow green line, LINE_DUTCH an amber one, LINE_PARITY a red one,
- * LINE_NABNER a brown one, LINE_SEQ a wider indigo one; LINE_BETWEEN a thin grey line between two rings, LINE_DARROW the same in blue,
+ * LINE_NABNER a brown one, LINE_SEQ a wider indigo one, LINE_WPAL a wider olive one; LINE_BETWEEN a thin grey line between two rings, LINE_DARROW the same in blue,
  * LINE_LOCKOUT a thin grey one between two diamonds;
  * LINE_SLOW as LINE_THERMO. Also the rules card's picture.
  * @param[in] layer  where

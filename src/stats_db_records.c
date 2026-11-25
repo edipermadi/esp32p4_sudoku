@@ -99,6 +99,10 @@ static const rec_fast_t REC_FAST[] = {
     {"Fastest Battenburg", OF_VARIANT(71)},
     {"Fastest Mini 8x8", OF_VARIANT(72)},
     {"Fastest Jigsaw 7x7", OF_VARIANT(73)},
+    {"Fastest Jigsaw 6x6", OF_VARIANT(74)},
+    {"Fastest Jigsaw 8x8", OF_VARIANT(75)},
+    {"Fastest Weak Palindrome", OF_VARIANT(76)},
+    {"Fastest Calcudoku Killer", OF_VARIANT(77)},
 };
 
 #define REC_OTHERS 5                    /**< the records after the fastest ones (a day, a run, a streak, solved, time) */

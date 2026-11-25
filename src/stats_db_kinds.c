@@ -21,7 +21,7 @@ static const char *const STATS_KIND_NAMES[KIND_COUNT] = {"New puzzles", "Daily p
                                                          "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers",
                                                          "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates", "Mathrax",
                                                          "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
-                                                         "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8", "Jigsaw 7x7"
+                                                         "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8", "Jigsaw 7x7", "Jigsaw 6x6", "Jigsaw 8x8", "Weak Palindrome", "Calcudoku Killer"
                                                         };
 
 /** Each kind's prefix in level names (stats_kind_prefix()). */
@@ -40,7 +40,7 @@ static const char *const STATS_KIND_PREFIX[KIND_COUNT] = {"Generated", "Daily", 
                                                           "Anti-Diagonal", "Pill Arrows", "Odd/Even Skyscrapers",
                                                           "Chess Sudoku", "Magic Square", "Average Lines", "Dutch Flatmates", "Mathrax",
                                                           "Point Symmetry", "Before Nine", "Quadro", "Anti-Queen 9s",
-                                                          "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8", "Jigsaw 7x7"
+                                                          "Next to Nine", "Clone Sudoku", "Search Nine", "Battlefield", "Sequence Lines", "Battenburg", "Mini 8x8", "Jigsaw 7x7", "Jigsaw 6x6", "Jigsaw 8x8", "Weak Palindrome", "Calcudoku Killer"
                                                          };
 
 /* (documented in stats_db.h) */
@@ -202,6 +202,14 @@ int stats_kind_of(int variant, bool daily)
         return KIND_MINI8;
     case VAR_JIG7:
         return KIND_JIG7;
+    case VAR_JIG6:
+        return KIND_JIG6;
+    case VAR_JIG8:
+        return KIND_JIG8;
+    case VAR_WPAL:
+        return KIND_WPAL;
+    case VAR_CALC:
+        return KIND_CALC;
     default:
         return KIND_NEW;
     }

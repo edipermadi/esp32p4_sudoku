@@ -195,6 +195,11 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
                 return false;
             }
         }
+        for (int i = 0; g->line_kind == LINE_WPAL && i < n / 2; i++) {
+            if ((sol[g->thermo_cell[t][i]] ^ sol[g->thermo_cell[t][n - 1 - i]]) & 1) {
+                return false;
+            }
+        }
         for (int i = 0; g->line_kind == LINE_ZIPPER && i < n / 2; i++) {   /* one total: the middle (odd) or the middle pair's */
             int tot = n % 2 ? sol[g->thermo_cell[t][n / 2]] : sol[g->thermo_cell[t][n / 2 - 1]] + sol[g->thermo_cell[t][n / 2]];
             if (sol[g->thermo_cell[t][i]] + sol[g->thermo_cell[t][n - 1 - i]] != tot) {
@@ -523,6 +528,10 @@ static bool is_solved_ok(const sudoku_geom_t *g, const uint8_t givens[81], const
         if (g->cage_prod[k] && prod != g->cage_prod[k]) {   /* Product Killer */
             return false;
         }
+        if (g->cage_dq[k] && (g->cage_n[k] != 2 ||   /* Calcudoku Killer's - and / */
+                              !is_calc_pair(g->cage_op[k], g->cage_dq[k], sol[g->cage_cell[k][0]], sol[g->cage_cell[k][1]]))) {
+            return false;
+        }
         for (int i = 0; i < g->cage_n[k]; i++) {   /* and no repeat in a cage */
             for (int j = 0; j < i; j++) {
                 if (sol[g->cage_cell[k][i]] == sol[g->cage_cell[k][j]]) {
@@ -585,7 +594,9 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     regions[0] = cages[0] = marks[0] = thermos[0] = 0;
     switch (g->variant) {
     case VAR_JIGSAW:
+    case VAR_JIG6:
     case VAR_JIG7:
+    case VAR_JIG8:
         for (int i = 0; i < 81; i++) {
             regions[i] = (char)('0' + g->region[i]);
         }
@@ -594,6 +605,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_KILLER:
     case VAR_SUMLESS:
     case VAR_PRODUCT:
+    case VAR_CALC:
     case VAR_REGIONS:
         sudoku_cages_text(g, cages, len);
         break;
@@ -665,6 +677,7 @@ static void layout_texts(const sudoku_geom_t *g, char regions[82], char *cages, 
     case VAR_RENBAN:
     case VAR_WHISPER:
     case VAR_PALINDROME:
+    case VAR_WPAL:
     case VAR_REGIONSUM:
     case VAR_ZIPPER:
     case VAR_BETWEEN:
@@ -1107,10 +1120,16 @@ static void test_canon(void)
                 }
             }
             const bool turned = !lines && !is_jigsaw_variant(v) && v != VAR_KILLER && v != VAR_SUMLESS && v != VAR_REGIONS &&
-                                v != VAR_PRODUCT;   /* (marks, circles, outside clues: turn_layout()) */
+                                v != VAR_PRODUCT && v != VAR_CALC;   /* (marks, circles, outside clues: turn_layout()) */
+            uint16_t calc_vals[CAGES_MAX];          /* (Calcudoku Killer: each cage's number) */
+            for (int k = 0; k < board.ncages; k++) {
+                calc_vals[k] = board.cage_op[k] == MX_PROD ? board.cage_prod[k] : board.cage_op[k] == MX_SUM
+                               ? board.cage_sum[k] : board.cage_dq[k];
+            }
             const bool built = turned ? turn_layout(&board, t, &tb) : lines ? sudoku_geom_lines_text(v, lt, &tb)
                                : marks ? sudoku_geom_marks(v, mt, &tb) : is_jigsaw_variant(v) ? sudoku_geom_jigsaw_of(v, map, &tb)
                                : v == VAR_PRODUCT ? gen_geom_product(cage_of, board.cage_prod, board.ncages, &tb)
+                               : v == VAR_CALC ? gen_geom_calc(cage_of, board.cage_op, calc_vals, board.ncages, &tb)
                                : gen_geom_killer(cage_of, board.cage_sum, board.ncages, &tb);
             tb.variant = (uint8_t)v;                /* (Extra Regions: built as a Sumless Killer, as its text is) */
             CHECKF(built, "%s: turn %d: the board turned", variant_name(v), t);
@@ -1214,9 +1233,16 @@ static void test_canon(void)
                 sw[c] = giv[c] == 1 ? 2 : giv[c] == 2 ? 1 : giv[c];
             }
             CHECKF(canon_hash_geom(&board, sw) != h, "%s: 1 and 2 swapped, the same hash", variant_name(v));
-        } else if (v == VAR_KILLER || v == VAR_PRODUCT) {   /* a cage's sum or product changed: another */
+        } else if (v == VAR_KILLER || v == VAR_PRODUCT || v == VAR_CALC) {   /* a cage's sum or product changed: another */
             tb = board;
-            if (v == VAR_PRODUCT) {
+            if (v == VAR_CALC) {                    /* (its number, or its operation) */
+                tb.cage_dq[0] = (uint8_t)(tb.cage_dq[0] + 1);
+                tb.cage_sum[0] = (uint8_t)(tb.cage_sum[0] + (tb.cage_op[0] == MX_SUM));
+                tb.cage_prod[0] = (uint16_t)(tb.cage_prod[0] + (tb.cage_op[0] == MX_PROD ? 256 : 0));
+                CHECKF(canon_hash_geom(&tb, giv) != h, "%s: a number changed, the same hash", variant_name(v));
+                tb = board;
+                tb.cage_op[0] = tb.cage_op[0] == MX_SUM ? MX_PROD : MX_SUM;
+            } else if (v == VAR_PRODUCT) {
                 tb.cage_prod[0] = (uint16_t)(tb.cage_prod[0] + 256);   /* (its high byte) */
             } else {
                 tb.cage_sum[0]++;
@@ -1991,7 +2017,7 @@ static void test_batten(void)
 }
 
 /* Jigsaw 7x7: its map read (seven regions of seven on the 7x7, the cells off it ignored) and refused when it isn't
- * one; made maps are connected; the board's units */
+ * one; Jigsaw 6x6, 7x7, 8x8: made maps are connected and not line-like */
 static void test_jig7(void)
 {
     static sudoku_geom_t b;
@@ -2004,47 +2030,101 @@ static void test_jig7(void)
     CHECK(sudoku_geom_jigsaw7(map, &b) && b.variant == VAR_JIG7 && b.n == 7 && b.ncells == 49 && b.nunits == 21 &&
           !b.used[7] && b.used[60] && b.region[60] == 6);
     CHECK(sudoku_geom_jigsaw_of(VAR_JIG7, map, &b) && !sudoku_geom_jigsaw_of(VAR_CLASSIC, map, &b));
+    CHECK(!sudoku_geom_jigsaw_of(VAR_JIG6, map, &b) && !sudoku_geom_jigsaw_of(VAR_JIG8, map, &b));
     map[0] = 1;                                     /* (region a six cells, b eight) */
     CHECK(!sudoku_geom_jigsaw7(map, &b));
     map[0] = 7;
     CHECK(!sudoku_geom_jigsaw7(map, &b));
-    uint32_t rng = 3;
-    for (int k = 0; k < 50; k++) {                  /* made maps: seven connected regions of seven */
-        gen_jigsaw7_map(map, &rng);
-        CHECK(sudoku_geom_jigsaw7(map, &b));
-        for (int reg = 0; reg < 7; reg++) {
-            int cells[7], n = 0, seen = 1;
-            for (int c = 0; c < 81; c++) {
-                if (b.used[c] && map[c] == reg && n < 7) {
-                    cells[n++] = c;
+    CHECK(!sudoku_geom_jigsaw_n(5, map, &b) && !sudoku_geom_jigsaw_n(9, map, &b));
+    static const uint8_t SIDES[] = {6, 7, 8};
+    for (size_t s = 0; s < sizeof(SIDES); s++) {
+        const int n = SIDES[s];
+        uint32_t rng = 3;
+        for (int k = 0; k < 50; k++) {              /* made maps: n connected regions of n */
+            gen_jigsaw_n_map(n, map, &rng);
+            CHECK(sudoku_geom_jigsaw_n(n, map, &b) && b.n == n && b.ncells == n * n && b.nunits == 3 * n &&
+                  b.variant == (n == 6 ? VAR_JIG6 : n == 7 ? VAR_JIG7 : VAR_JIG8));
+            for (int reg = 0; reg < n; reg++) {
+                int cells[8], cnt = 0, seen = 1;
+                for (int c = 0; c < 81; c++) {
+                    if (b.used[c] && map[c] == reg && cnt < 8) {
+                        cells[cnt++] = c;
+                    }
                 }
-            }
-            unsigned in = 1;                        /* (grown from the first cell, side by side) */
-            for (int round = 0; round < 7; round++) {
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < n && !(in >> i & 1); j++) {
-                        const int d = abs(cells[i] - cells[j]);
-                        if ((in >> j & 1) && (d == 9 || (d == 1 && cells[i] / 9 == cells[j] / 9))) {
-                            in |= 1u << i;
-                            seen++;
+                unsigned in = 1;                    /* (grown from the first cell, side by side) */
+                for (int round = 0; round < n; round++) {
+                    for (int i = 0; i < cnt; i++) {
+                        for (int j = 0; j < cnt && !(in >> i & 1); j++) {
+                            const int d = abs(cells[i] - cells[j]);
+                            if ((in >> j & 1) && (d == 9 || (d == 1 && cells[i] / 9 == cells[j] / 9))) {
+                                in |= 1u << i;
+                                seen++;
+                            }
                         }
                     }
                 }
-            }
-            CHECKF(n == 7 && seen == 7, "Jigsaw 7x7 map %d region %d in one piece", k, reg);
-            int most = 0;                           /* (and not a row or a column, nearly) */
-            for (int i = 0; i < 7; i++) {
-                int row = 0, col = 0;
-                for (int j = 0; j < 7; j++) {
-                    row += b.used[i * 9 + j] && map[i * 9 + j] == reg;
-                    col += b.used[j * 9 + i] && map[j * 9 + i] == reg;
+                CHECKF(cnt == n && seen == n, "Jigsaw %dx%d map %d region %d in one piece", n, n, k, reg);
+                int most = 0;                       /* (and not a row or a column, nearly) */
+                for (int i = 0; i < n; i++) {
+                    int row = 0, col = 0;
+                    for (int j = 0; j < n; j++) {
+                        row += b.used[i * 9 + j] && map[i * 9 + j] == reg;
+                        col += b.used[j * 9 + i] && map[j * 9 + i] == reg;
+                    }
+                    most = row > most ? row : most;
+                    most = col > most ? col : most;
                 }
-                most = row > most ? row : most;
-                most = col > most ? col : most;
+                CHECKF(most <= n - 2, "Jigsaw %dx%d map %d region %d: %d in one line", n, n, k, reg, most);
             }
-            CHECKF(most <= 5, "Jigsaw 7x7 map %d region %d: %d in one line", k, reg, most);
         }
     }
+}
+
+/* Calcudoku Killer: its text read and written back, bad texts refused, a - or / cage only on two cells; a pair that
+ * doesn't make its cage's number is a conflict; made puzzles use every operation */
+static void test_calc(void)
+{
+    static sudoku_geom_t b;
+    char buf[256];
+    CHECK(sudoku_geom_calc_text("3+:0,1;12x:2,3,4;4-:9,10;3/:11,12", &b) && b.variant == VAR_CALC && b.ncages == 4);
+    CHECK(b.cage_op[0] == MX_SUM && b.cage_sum[0] == 3 && b.cage_op[1] == MX_PROD && b.cage_prod[1] == 12 &&
+          b.cage_op[2] == MX_DIFF && b.cage_dq[2] == 4 && b.cage_op[3] == MX_QUOT && b.cage_dq[3] == 3);
+    CHECK(sudoku_cages_text(&b, buf, sizeof(buf)) && !strcmp(buf, "3+:0,1;12x:2,3,4;4-:9,10;3/:11,12"));
+    CHECK(!sudoku_geom_calc_text("3:0,1", &b));     /* (no operation) */
+    CHECK(!sudoku_geom_calc_text("3E:0,1", &b));    /* (not one of + - x /) */
+    CHECK(!sudoku_geom_calc_text("4-:0,1,2", &b));  /* (- and /: two cells) */
+    CHECK(!sudoku_geom_calc_text("1/:0,1", &b));    /* (a quotient of 1: the same digit twice) */
+    CHECK(!sudoku_geom_calc_text("9-:0,1", &b));    /* (no two digits 9 apart) */
+    CHECK(!sudoku_geom_calc_text("2+:0,1", &b));    /* (two different digits: 3 or more) */
+    CHECK(!sudoku_geom_killer_text("3+:0,1", &b) && !sudoku_geom_product_text("3x:0,1", &b));
+    CHECK(is_calc_pair(MX_DIFF, 4, 2, 6) && is_calc_pair(MX_DIFF, 4, 6, 2) && !is_calc_pair(MX_DIFF, 4, 2, 5));
+    CHECK(is_calc_pair(MX_QUOT, 3, 2, 6) && is_calc_pair(MX_QUOT, 3, 9, 3) && !is_calc_pair(MX_QUOT, 3, 2, 5));
+    uint8_t v[81] = {0};                            /* a pair that doesn't make it: a conflict */
+    CHECK(sudoku_geom_calc_text("3+:0,1;12x:2,3,4;4-:9,10;3/:11,12", &b));
+    bool out[81];
+    v[9] = 2;
+    v[10] = 6;
+    CHECK(game_conflicts(&b, v, out) == 0);
+    v[10] = 5;
+    CHECK(game_conflicts(&b, v, out) == 2 && out[9] && out[10]);
+    v[9] = v[10] = 0;
+    v[11] = 2;
+    v[12] = 5;
+    CHECK(game_conflicts(&b, v, out) == 2 && out[11] && out[12]);
+    v[11] = v[12] = 0;
+    v[2] = 5;                                       /* (x: 5 doesn't divide 12) */
+    CHECK(game_conflicts(&b, v, out) == 1 && out[2]);
+    int seen[MX_QUOT + 1] = {0};
+    for (uint32_t seed = 1; seed <= 6; seed++) {    /* made puzzles: every operation shows up */
+        uint8_t g[81];
+        gen_level_t got;
+        CHECK(sudoku_generate(VAR_CALC, GEN_EASY, seed, g, &b, &got) && b.variant == VAR_CALC);
+        for (int k = 0; k < b.ncages; k++) {
+            seen[b.cage_op[k]]++;
+            CHECK(b.cage_op[k] >= MX_SUM && b.cage_op[k] <= MX_QUOT);
+        }
+    }
+    CHECK(seen[MX_SUM] && seen[MX_DIFF] && seen[MX_PROD] && seen[MX_QUOT]);
 }
 
 static void test_sdx_edges(void)
@@ -2132,6 +2212,7 @@ static void test_hints(void)
         {VAR_CLASSIC, 0, 0, 0}, {VAR_CLASSIC, 0, 0, 300}, {VAR_CLASSIC, 0, 0, 1599},
         {VAR_X, GEN_MEDIUM, 5, -1}, {VAR_MINI, GEN_HARD, 6, -1}, {VAR_KIDS, GEN_MEDIUM, 7, -1},
         {VAR_KILLER, GEN_EASY, 8, -1}, {VAR_JIGSAW, GEN_EASY, 9, -1}, {VAR_JIG7, GEN_EASY, 10, -1},
+        {VAR_JIG6, GEN_EASY, 11, -1}, {VAR_JIG8, GEN_EASY, 12, -1},
     };
     for (size_t i = 0; i < sizeof(CASES) / sizeof(CASES[0]); i++) {
         const sudoku_geom_t *G;
@@ -3147,7 +3228,7 @@ int main(int argc, char **argv)
         {"Next to Nine and Clone Sudoku", test_n9_clone},
         {"Search Nine", test_s9},       {"Battlefield", test_bf},
         {"Sequence Lines", test_seq},  {"Battenburg", test_batten},
-        {"Jigsaw 7x7", test_jig7},     {"hint words", test_hint_words},
+        {"Jigsaw 6x6, 7x7, 8x8", test_jig7}, {"Calcudoku Killer", test_calc},     {"hint words", test_hint_words},
         {"share", test_share},               {"daily puzzle", test_daily},
         {"undo history", test_history},      {"import parsing", test_import_parse},
         {"rain (screen saver)", test_rain},

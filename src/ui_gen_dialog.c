@@ -31,37 +31,37 @@ static const char *const GEN_CAT_NAMES[GEN_CATS] = {"Grids", "Marks", "Lines", "
 static const uint8_t GEN_CAT_VARS[GEN_CATS][GEN_CAT_SLOTS + 1] = {
     {
         VAR_KIDS, VAR_MINI, VAR_MINI8, VAR_CLASSIC, VAR_CENTERDOT, VAR_GIRANDOLA, VAR_ASTERISK, VAR_X, VAR_HYPER, VAR_REGIONS,
-        VAR_DISJOINT, VAR_CLONE, VAR_JIGSAW, VAR_JIG7, VAR_PSYM, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
+        VAR_DISJOINT, VAR_CLONE, VAR_JIG6, VAR_JIG7, VAR_JIG8, VAR_JIGSAW, VAR_PSYM, VAR_MAGIC, VAR_ANTIDIAG, VAR_159, VAR_ARGYLE, GEN_CAT_END
     },
     {
         VAR_EVENODD, VAR_CONSEC, VAR_GT, VAR_FORTRESS, VAR_QUAD, VAR_MATHRAX, VAR_XV, VAR_KROPKI, VAR_KING, VAR_KNIGHT,
         VAR_CHESS, VAR_AQ9, VAR_S9, VAR_FLATMATES, VAR_QUADRO, VAR_BATTEN, VAR_DIAGCONSEC, VAR_NONCONSEC, VAR_DIAGNC, GEN_CAT_END
     },
     {
-        VAR_THERMO, VAR_SLOW, VAR_ARROW, VAR_AVG, VAR_PILL, VAR_PALINDROME, VAR_RENBAN, VAR_PARITY, VAR_WHISPER, VAR_DUTCH, VAR_DARROW,
+        VAR_THERMO, VAR_SLOW, VAR_ARROW, VAR_AVG, VAR_PILL, VAR_PALINDROME, VAR_WPAL, VAR_RENBAN, VAR_PARITY, VAR_WHISPER, VAR_DUTCH, VAR_DARROW,
         VAR_REGIONSUM, VAR_ZIPPER, VAR_SEQ, VAR_NABNER, VAR_BETWEEN, VAR_LOCKOUT, VAR_TEN, VAR_ENTROPIC, VAR_MODULAR, GEN_CAT_END
     },
     {
-        VAR_KILLER, VAR_FRAME, VAR_OUTSIDE, VAR_SKY, VAR_LK, VAR_PRODUCT, VAR_SANDWICH, VAR_ROSSINI, VAR_XSUM,
+        VAR_KILLER, VAR_FRAME, VAR_OUTSIDE, VAR_SKY, VAR_LK, VAR_PRODUCT, VAR_CALC, VAR_SANDWICH, VAR_ROSSINI, VAR_XSUM,
         VAR_B9, VAR_N9, VAR_BF, VAR_PSKY, VAR_SKYSUM, VAR_NROOMS, VAR_SUMLESS, GEN_CAT_END
     },
 };
 /** @brief each variant's button text (shorter than variant_name() where four across need it) */
 static const char *const GEN_VAR_LABEL[VAR_COUNT] = {
-    [VAR_CLASSIC] = "Classic", [VAR_X] = "X-Sudoku", [VAR_MINI] = "Mini 6x6", [VAR_MINI8] = "Mini 8x8", [VAR_JIG7] = "Jigsaw 7x7", [VAR_HYPER] = "Hyper",
+    [VAR_CLASSIC] = "Classic", [VAR_X] = "X-Sudoku", [VAR_MINI] = "Mini 6x6", [VAR_MINI8] = "Mini 8x8", [VAR_JIG7] = "Jigsaw 7x7", [VAR_JIG6] = "Jigsaw 6x6", [VAR_JIG8] = "Jigsaw 8x8", [VAR_HYPER] = "Hyper",
     [VAR_JIGSAW] = "Jigsaw", [VAR_KILLER] = "Killer", [VAR_KNIGHT] = "Anti-Knight", [VAR_EVENODD] = "Even-Odd",
     [VAR_CONSEC] = "Consecutive", [VAR_THERMO] = "Thermo", [VAR_SANDWICH] = "Sandwich", [VAR_KIDS] = "Kids 4x4",
     [VAR_KING] = "Anti-King", [VAR_NONCONSEC] = "Non-Consec.", [VAR_DISJOINT] = "Disjoint", [VAR_ASTERISK] = "Asterisk",
     [VAR_KROPKI] = "Kropki", [VAR_XV] = "XV", [VAR_GT] = "Greater-Than", [VAR_QUAD] = "Quadruple", [VAR_ARROW] = "Arrow",
     [VAR_RENBAN] = "Renban", [VAR_WHISPER] = "Whispers", [VAR_SKY] = "Skyscraper", [VAR_LK] = "Little Killer",
-    [VAR_PALINDROME] = "Palindrome", [VAR_REGIONSUM] = "Region Sum", [VAR_XSUM] = "X-Sums", [VAR_ZIPPER] = "Zipper",
+    [VAR_PALINDROME] = "Palindrome", [VAR_WPAL] = "Weak Pal.", [VAR_REGIONSUM] = "Region Sum", [VAR_XSUM] = "X-Sums", [VAR_ZIPPER] = "Zipper",
     [VAR_FRAME] = "Frame", [VAR_BETWEEN] = "Between", [VAR_ENTROPIC] = "Entropic", [VAR_MODULAR] = "Modular",
     [VAR_CENTERDOT] = "Center Dot", [VAR_OUTSIDE] = "Outside", [VAR_ROSSINI] = "Rossini", [VAR_DIAGNC] = "Diagonal NC",
     [VAR_DUTCH] = "Dutch", [VAR_PARITY] = "Parity", [VAR_SLOW] = "Slow Thermo", [VAR_FORTRESS] = "Fortress",
     [VAR_ARGYLE] = "Argyle", [VAR_NABNER] = "Nabner", [VAR_NROOMS] = "Numbered", [VAR_SKYSUM] = "Sum Sky",
     [VAR_LOCKOUT] = "Lockout", [VAR_SUMLESS] = "Sumless", [VAR_DARROW] = "Double Arrow",
     [VAR_DIAGCONSEC] = "Diagonal C.", [VAR_TEN] = "10 Lines", [VAR_GIRANDOLA] = "Girandola",
-    [VAR_159] = "159 Sudoku", [VAR_PRODUCT] = "Product", [VAR_REGIONS] = "Extra Regions",
+    [VAR_159] = "159 Sudoku", [VAR_PRODUCT] = "Product", [VAR_CALC] = "Calcudoku", [VAR_REGIONS] = "Extra Regions",
     [VAR_ANTIDIAG] = "Anti-Diagonal", [VAR_PILL] = "Pill Arrow", [VAR_PSKY] = "Odd/Even Sky",
     [VAR_CHESS] = "Chess", [VAR_MAGIC] = "Magic Square", [VAR_AVG] = "Average", [VAR_FLATMATES] = "Flatmates",
     [VAR_MATHRAX] = "Mathrax", [VAR_PSYM] = "Point Sym.", [VAR_B9] = "Before Nine",
@@ -79,6 +79,8 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_MINI] = "6x6 with 2x3 boxes: rows, columns and boxes hold 1-6 once each.",
     [VAR_MINI8] = "8x8 with 2x4 boxes: rows, columns and boxes hold 1-8 once each.",
     [VAR_JIG7] = "7x7 with seven irregular regions (thick borders); rows, columns and regions hold 1-7 once each.",
+    [VAR_JIG6] = "6x6 with six irregular regions (thick borders); rows, columns and regions hold 1-6 once each.",
+    [VAR_JIG8] = "8x8 with eight irregular regions (thick borders); rows, columns and regions hold 1-8 once each.",
     [VAR_HYPER] = "9x9, and the four tinted 3x3 windows also hold 1-9 once each.",
     [VAR_JIGSAW] = "9x9 with nine irregular regions (thick borders) instead of boxes; each holds 1-9 once.",
     [VAR_KILLER] = "9x9 with cages (dashed): a cage's digits add up to its sum, none repeated. Few or no givens.",
@@ -102,6 +104,7 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_SKY] = "9x9: a clue by a row or column is how many buildings are seen from there (taller ones hide shorter).",
     [VAR_LK] = "9x9: a clue with an arrow outside the grid is the sum of the digits along that diagonal.",
     [VAR_PALINDROME] = "9x9 with grey lines: each line reads the same from both ends.",
+    [VAR_WPAL] = "9x9 with olive lines: cells mirrored about a line's middle are both odd or both even.",
     [VAR_REGIONSUM] = "9x9 with blue lines: a line's digits add up to the same in each box it passes through.",
     [VAR_XSUM] = "9x9: a clue by a row or column is the sum of its first X digits, X being the first digit.",
     [VAR_ZIPPER] = "9x9 with pink lines: cells the same distance from a line's middle add up to the same total.",
@@ -144,6 +147,7 @@ static const char *const GEN_VAR_DESC[VAR_COUNT] = {
     [VAR_PSKY] = "9x9 with clues outside: a ringed clue counts the odd buildings seen, a shaded one the even.",
     [VAR_159] = "9x9: in each row, the digits in columns 1, 5 and 9 say where its 1, 5 and 9 are.",
     [VAR_PRODUCT] = "9x9 with cages (dashed): a cage's digits multiply to its number, none repeated. Up to Hard.",
+    [VAR_CALC] = "9x9 with cages (dashed): a cage's digits make its number by its sign (plus, minus, times, divide).",
     [VAR_REGIONS] = "9x9 with a few shaded regions: no digit repeats in a region.",
     [VAR_SLOW] = "9x9 with thermometers: the digits rise from the bulb, or stay the same where they may.",
     [VAR_FORTRESS] = "9x9: each grey cell holds a bigger digit than every white cell side by side with it.",

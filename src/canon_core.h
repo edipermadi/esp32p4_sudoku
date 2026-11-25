@@ -36,13 +36,14 @@ extern "C" {
  * - Anti-Queen 9s: 9 kept, the rest any way.
  *
  * With their layout turned with the givens (canon_hash_geom(); digits as they are but where said):
- * - Jigsaw, Jigsaw 7x7: its regions, relabelled in reading order (digits any way);
- * - Killer, Product Killer: their cages relabelled in reading order, with their sums or products; Sumless
+ * - Jigsaw, Jigsaw 6x6, 7x7, 8x8: its regions, relabelled in reading order (digits any way);
+ * - Killer, Product Killer, Calcudoku Killer: their cages relabelled in reading order, with their sums or products
+ *   (Calcudoku's: each cage's operation and number); Sumless
  *   Killer, Extra Regions: their cages or shaded regions (digits any way);
  * - the marks: Kropki, XV, Consecutive (between side-by-side cells), Greater-Than (its signs turned round with
  *   their cells), Even-Odd, Fortress (on cells), Diagonal Consecutive (at corners);
  * - Quadruple, Mathrax: their circles moved with their four cells, sorted;
- * - the 20 line variants: their lines sorted, each from its start where its way matters (a bulb, a circle, a
+ * - the 21 line variants: their lines sorted, each from its start where its way matters (a bulb, a circle, a
  *   pill), else whichever way round is smaller; Pill Arrows only as it is or mirrored about the main diagonal
  *   (its pill reads left to right or top to bottom);
  * - Sandwich, Next to Nine, Battlefield: each clue with its row or column (the same from either end: all 8);
