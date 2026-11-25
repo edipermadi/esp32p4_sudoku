@@ -39,6 +39,7 @@
 #include "saver_automata3d_core.h"
 #include "saver_stars_core.h"
 #include "saver_mandel_core.h"
+#include "saver_fluid_core.h"
 
 static int s_checks, s_failed;
 
@@ -3378,6 +3379,58 @@ static void test_mandel(void)
     CHECK(!mandel_key());
 }
 
+/* Liquid mixing: it starts full, in bands; stirred, the water stays incompressible and calm (no blow-up), the
+ * tank stays about full of dye; frames only from fresh colours, faded to black at 0; the same seed, the same */
+static void test_fluid(void)
+{
+    static const uint32_t COLOURS[FLUID_SPOONS] = {0x0000FF, 0x00FF00, 0xFF0000};
+    CHECK(fluid_start(9, COLOURS));
+    const float cells = (float)FLUID_N * FLUID_N;
+    float total = 0;
+    for (int k = 0; k < FLUID_SPOONS; k++) {
+        total += fluid_dye(k);
+        CHECKF(fluid_dye(k) > cells / FLUID_SPOONS * 0.6f, "fluid: band %d holds %.0f", k, fluid_dye(k));
+    }
+    CHECK(fabsf(total - cells) < 1.0f && fluid_speed() == 0);
+    static uint16_t frame[FLUID_SCREEN * FLUID_SCREEN];
+    CHECK(!fluid_frame(frame, 256));                /* (nothing handed over yet) */
+    CHECK(fluid_publish() && is_fluid_fresh() && !fluid_publish());   /* (not drawn yet: kept) */
+    CHECK(fluid_frame(frame, 256) && !is_fluid_fresh() && !fluid_frame(frame, 256));
+    const uint16_t *mid = frame + FLUID_SCREEN / 2 * FLUID_SCREEN;   /* (the middle row: blue left, red right) */
+    CHECKF(mid[0] == 0x001F && mid[FLUID_SCREEN - 1] == 0xF800, "fluid: %04x .. %04x", mid[0], mid[FLUID_SCREEN - 1]);
+    bool calm = true;
+    float most_div = 0;
+    for (int n = 0; n < 300; n++) {
+        fluid_step();
+        const float v = fluid_speed(), d = fluid_divergence();
+        calm &= v == v && v < 5.0f;                 /* (no NaN, no blow-up) */
+        most_div = d > most_div ? d : most_div;
+    }
+    CHECKF(calm && fluid_speed() > 0.2f, "fluid: speed %.2f", fluid_speed());
+    CHECKF(most_div < 0.3f, "fluid: divergence up to %.3f", most_div);
+    total = 0;
+    for (int k = 0; k < FLUID_SPOONS; k++) {
+        total += fluid_dye(k);
+    }
+    CHECKF(total > cells * 0.8f && total <= cells * 1.001f, "fluid: %.0f of %.0f cells of dye", total, cells);
+    CHECK(fluid_publish() && fluid_frame(frame, 0));
+    bool black = true;
+    for (int i = 0; i < FLUID_SCREEN * FLUID_SCREEN; i += 101) {
+        black &= frame[i] == 0;
+    }
+    CHECK(black);
+    float sig[2];                                   /* the same seed, the same stirring */
+    for (int k = 0; k < 2; k++) {
+        CHECK(fluid_start(33, COLOURS));
+        for (int n = 0; n < 50; n++) {
+            fluid_step();
+        }
+        sig[k] = fluid_dye(0) * 3 + fluid_dye(1) * 7 + fluid_speed();
+    }
+    CHECK(sig[0] == sig[1]);
+    fluid_free();
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -3399,6 +3452,7 @@ int main(int argc, char **argv)
         {"automata (screen saver)", test_automata}, {"3D automata (screen saver)", test_automata3d},
         {"stars (screen saver)", test_stars},
         {"Mandelbrot (screen saver)", test_mandel},
+        {"liquid mixing (screen saver)", test_fluid},
     };
     sudoku_geom_init();
     int failed_tests = 0;

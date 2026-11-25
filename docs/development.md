@@ -202,6 +202,8 @@ src/ui_saver_boids.c    the boids screen saver: trails erased and drawn, only th
 src/ui_saver_lissajous.c the Lissajous screen saver: the figure and its beam erased and drawn with the pen
 src/ui_saver_pendulum.c the double pendulum screen saver: its trail, rods and bobs erased and drawn with the pen
 src/ui_saver_stars.c    the starfield screen saver: each star's streak erased and drawn with the pen
+src/ui_saver_fluid.c    the liquid mixing screen saver: a worker task steps the liquid and hands over its colours;
+                        each frame draws the newest, scaled up; a fresh tank every 100 s
 src/ui_saver_mandel.c   the Mandelbrot screen saver: a worker task makes the next level while the shown one is
                         scaled up frame by frame; the zoom keeps the worker's pace; fades between dives
 src/ui_saver_automata.c the cellular automata screen savers (Game of Life, Brian's Brain, Langton's ant and the
@@ -214,6 +216,9 @@ src/saver_automata3d_core.c 3D cellular automata without LVGL: Generations rules
                         32^3 cube, each starting again when it ends
 src/saver_stars_core.c  a starfield without LVGL: stars nearer each step, projected, back far away once past;
                         the speed's waves and the view's roll
+src/saver_fluid_core.c  liquids mixing without LVGL: Stam's stable fluids on a 96x96 grid (advection, vorticity
+                        confinement, a Gauss-Seidel pressure solve), the dyes moved with MacCormack (sharp
+                        edges), the spoons; the colours scaled up smoothly
 src/saver_mandel_core.c a Mandelbrot zoom without LVGL: levels (keys) each twice as deep, a quarter of each from
                         the one before, inside spots skipped; the autopilot; a frame scaled from a key; past
                         level 10, perturbation: the middle in 128-bit fixed point (Q5.123), its orbit worked
