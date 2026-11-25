@@ -41,6 +41,7 @@
 #include "saver_mandel_core.h"
 #include "saver_fluid_core.h"
 #include "saver_ripple_core.h"
+#include "saver_galaxy_core.h"
 
 static int s_checks, s_failed;
 
@@ -3479,6 +3480,51 @@ static void test_ripple(void)
     CHECK(ripple_height(0, 0) == 0 && ripple_energy() == 0);
 }
 
+/* Galaxy collision: while the galaxies are far apart, every star keeps going round its core at its radius (the
+ * disks are built on circular orbits, the leapfrog keeps them); the cores come in, pass close, and with friction
+ * merge by the end; on the view at the start; seeds differ, the same seed is the same */
+static void test_galaxy(void)
+{
+    CHECK(galaxy_start(5) && !is_galaxy_done() && galaxy_time() == 0);
+    static float r0[GALAXY_STARS];
+    int shown = 0;
+    for (int i = 0; i < GALAXY_STARS; i++) {
+        int x, y, tone;
+        r0[i] = galaxy_radius(i);
+        shown += galaxy_get(i, &x, &y, &tone) && tone >= 0 && tone < GALAXY_TONES && (tone >= 3) == (i >= GALAXY_PER);
+    }
+    CHECKF(shown == GALAXY_STARS, "galaxy: %d of %d stars on the view at the start", shown, GALAXY_STARS);
+    const float apart = galaxy_separation();
+    while (galaxy_separation() > apart - 1.0f) {    /* (still far apart: the other core's pull small) */
+        galaxy_step();
+    }
+    float worst = 0;
+    for (int i = 0; i < GALAXY_STARS; i++) {
+        const float d = fabsf(galaxy_radius(i) - r0[i]) / r0[i];
+        worst = d > worst ? d : worst;
+    }
+    CHECKF(worst < 0.15f, "galaxy: a star's radius changed %.0f%% on the way in", worst * 100);
+    float closest = 1e9f;
+    while (!is_galaxy_done()) {
+        galaxy_step();
+        closest = galaxy_separation() < closest ? galaxy_separation() : closest;
+    }
+    CHECKF(closest < 1.5f && galaxy_separation() < 0.6f, "galaxy: closest %.2f, at the end %.2f", closest,
+           galaxy_separation());
+    CHECK(galaxy_time() >= GALAXY_END && galaxy_time() < GALAXY_END + 0.1f);
+    float sep[3];                                   /* (seeds 7, 7 and 8, part way in) */
+    static const uint32_t SEEDS[3] = {7, 7, 8};
+    for (int k = 0; k < 3; k++) {
+        CHECK(galaxy_start(SEEDS[k]));
+        for (int n = 0; n < 500; n++) {
+            galaxy_step();
+        }
+        sep[k] = galaxy_separation() + galaxy_radius(17);
+    }
+    CHECK(sep[0] == sep[1] && sep[0] != sep[2]);
+    galaxy_free();
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -3502,6 +3548,7 @@ int main(int argc, char **argv)
         {"Mandelbrot (screen saver)", test_mandel},
         {"liquid mixing (screen saver)", test_fluid},
         {"water ripples (screen saver)", test_ripple},
+        {"galaxy collision (screen saver)", test_galaxy},
     };
     sudoku_geom_init();
     int failed_tests = 0;

@@ -1511,6 +1511,15 @@ bool saver_ripple_start(lv_obj_t *parent);
  *         on). */
 void saver_ripple_stop(void);
 /**
+ * @brief The galaxy collision screen saver starts (ui_saver_galaxy.c): two galaxies meeting, their stars dots on
+ *        the savers' picture, 25 frames a second.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it
+ */
+bool saver_galaxy_start(lv_obj_t *parent);
+/** @brief The galaxy collision screen saver stops: its picture and memory go (nothing if it isn't on). */
+void saver_galaxy_stop(void);
+/**
  * @brief A cellular automaton screen saver starts (ui_saver_automata.c: Game of Life, Brian's Brain,
  *        Langton's ant and the rest): its rule on a grid of dots on the savers' picture.
  * @param[in] parent  the screen saver's cover

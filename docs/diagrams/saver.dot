@@ -13,6 +13,7 @@ digraph saver {
     mandel[label="Mandelbrot: a zoom into the set,\nnext level made on the worker core\n(deep: 128-bit reference orbit),\nabout 12 fps, CPU at full speed"];
     fluid [label="Liquid mixing: three colours stirred,\nthe liquid stepped on the worker core,\na fresh tank every 100 s, about 11 fps,\nCPU at full speed"];
     ripple[label="Water ripples: raindrops on a tiled pool,\nthe waves stepped on the worker core,\nabout 12 fps, CPU at full speed"];
+    galaxy[label="Galaxy collision: two disks of stars meet,\ntidal tails, a merger, the next pair,\n25 fps, CPU at full speed"];
     liss  [label="Lissajous (blue, yellow dot),\nturning figure and beam, 25 fps,\nnew ratio every 16 s"];
     boids [label="Boids (blue, green, yellow\nflocks; red hawks), fading trails, 25 fps,\nCPU at full speed"];
     attr  [label="Strange attractor,\ndrawn point by point for 2 minutes,\nthen cleared, the next,\nCPU at full speed"];
@@ -42,6 +43,7 @@ digraph saver {
     clk -> mandel [label="Mandelbrot"];
     clk -> fluid [label="Liquid mixing"];
     clk -> ripple [label="Water ripples"];
+    clk -> galaxy [label="Galaxy collision"];
     clk -> life [label="an automaton"];
     clk -> a3d [label="a 3D automaton"];
     clk -> dark [label="Dark"];
@@ -56,6 +58,7 @@ digraph saver {
     mandel -> tap1;
     fluid -> tap1;
     ripple -> tap1;
+    galaxy -> tap1;
     life -> tap1;
     a3d -> tap1;
     tap1 -> wake [label="yes"];
