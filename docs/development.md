@@ -204,6 +204,8 @@ src/ui_saver_pendulum.c the double pendulum screen saver: its trail, rods and bo
 src/ui_saver_stars.c    the starfield screen saver: each star's streak erased and drawn with the pen
 src/ui_saver_fluid.c    the liquid mixing screen saver: a worker task steps the liquid and hands over its colours;
                         each frame draws the newest, scaled up; a fresh tank every 100 s
+src/ui_saver_ripple.c   the water ripples screen saver: a worker task steps the waves and shades the pool;
+                        each frame doubles the newest picture's pixels
 src/ui_saver_mandel.c   the Mandelbrot screen saver: a worker task makes the next level while the shown one is
                         scaled up frame by frame; the zoom keeps the worker's pace; fades between dives
 src/ui_saver_automata.c the cellular automata screen savers (Game of Life, Brian's Brain, Langton's ant and the
@@ -219,6 +221,8 @@ src/saver_stars_core.c  a starfield without LVGL: stars nearer each step, projec
 src/saver_fluid_core.c  liquids mixing without LVGL: Stam's stable fluids on a 96x96 grid (advection, vorticity
                         confinement, a Gauss-Seidel pressure solve), the dyes moved with MacCormack (sharp
                         edges), the spoons; the colours scaled up smoothly
+src/saver_ripple_core.c water ripples without LVGL: the wave equation on two integer height fields (360x360),
+                        raindrops and stones; the tiled floor refracted by the slope, glints
 src/saver_mandel_core.c a Mandelbrot zoom without LVGL: levels (keys) each twice as deep, a quarter of each from
                         the one before, inside spots skipped; the autopilot; a frame scaled from a key; past
                         level 10, perturbation: the middle in 128-bit fixed point (Q5.123), its orbit worked

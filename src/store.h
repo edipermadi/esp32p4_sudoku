@@ -356,7 +356,7 @@ const char *store_lock_pin(void);
 void store_set_lock_pin(const char *pin);
 
 /** @brief Screen saver (Settings > Display): what shows at the screen timeout until a touch; Dark saves
- * power instead (sudoku.db's setting saver_clock: 0 to 25). */
+ * power instead (sudoku.db's setting saver_clock: 0 to 26). */
 typedef enum {
     SAVER_MODE_DARK = 0,                    /**< nothing: dark at once, saving power */
     SAVER_MODE_CLOCK = 1,                   /**< a dim clock moving about */
@@ -384,6 +384,7 @@ typedef enum {
     SAVER_MODE_STARS = 23,                  /**< flying through a starfield, in 3Blue1Brown's colours */
     SAVER_MODE_MANDEL = 24,                 /**< a zoom into the Mandelbrot set, in 3Blue1Brown's colours */
     SAVER_MODE_FLUID = 25,                  /**< coloured liquids stirred and mixing, in 3Blue1Brown's colours */
+    SAVER_MODE_RIPPLE = 26,                 /**< raindrops rippling a pool, in 3Blue1Brown's blues */
     SAVER_MODE_COUNT                        /**< how many */
 } store_saver_t;
 /**

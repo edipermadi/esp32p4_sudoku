@@ -6,7 +6,8 @@
  *        digital rain (ui_saver_rain.c), a strange attractor (ui_saver_attractor.c), a flock of boids
  *        (ui_saver_boids.c), a Lissajous figure (ui_saver_lissajous.c), double pendulums
  *        (ui_saver_pendulum.c), a starfield flown through (ui_saver_stars.c), a zoom into the Mandelbrot set
- *        (ui_saver_mandel.c), liquids stirred and mixing (ui_saver_fluid.c), a cellular automaton
+ *        (ui_saver_mandel.c), liquids stirred and mixing (ui_saver_fluid.c), raindrops
+ *        rippling a pool (ui_saver_ripple.c), a cellular automaton
  *        (ui_saver_automata.c: Game of Life, Brian's Brain, Langton's ant and eight more), or a 3D
  *        cellular automaton in a turning cube (ui_saver_automata3d.c: Crystal growth, Diamond growth,
  *        Pyroclastic, Builder 1). After "Screen saver for" minutes (or at once, for Dark) the screen goes
@@ -105,6 +106,8 @@ static bool saver_show_start(uint8_t mode)
         return saver_mandel_start(s_saver);
     case SAVER_MODE_FLUID:
         return saver_fluid_start(s_saver);
+    case SAVER_MODE_RIPPLE:
+        return saver_ripple_start(s_saver);
     case SAVER_MODE_ANT:
         return saver_automata_start(s_saver, AUTO_R_ANT);
     case SAVER_MODE_BRAIN:
@@ -160,6 +163,7 @@ static void saver_show_stop(void)
     saver_stars_stop();
     saver_mandel_stop();
     saver_fluid_stop();
+    saver_ripple_stop();
     saver_automata_stop();
     saver_automata3d_stop();
     if (s_saver) {

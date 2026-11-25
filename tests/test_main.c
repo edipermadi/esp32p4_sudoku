@@ -40,6 +40,7 @@
 #include "saver_stars_core.h"
 #include "saver_mandel_core.h"
 #include "saver_fluid_core.h"
+#include "saver_ripple_core.h"
 
 static int s_checks, s_failed;
 
@@ -3431,6 +3432,53 @@ static void test_fluid(void)
     fluid_free();
 }
 
+/* Water ripples: a still pool shows its floor; a drop's rings spread out round it alike every way, and die away;
+ * pictures only when fresh; the same seed, the same rain */
+static void test_ripple(void)
+{
+    static const uint32_t COLOURS[RIPPLE_TONES] = {0x0000FF, 0x00FF00, 0xFFFFFF};
+    CHECK(ripple_start(4, COLOURS) && ripple_energy() == 0);
+    static uint16_t frame[RIPPLE_SCREEN * RIPPLE_SCREEN];
+    CHECK(!ripple_frame(frame) && ripple_publish() && !ripple_publish() && ripple_frame(frame) && !ripple_frame(frame));
+    CHECK(frame[0] == 0x07E0 && frame[1] == 0x07E0);   /* (a joint, doubled) */
+    const uint16_t tile = frame[(RIPPLE_SCREEN / 2 + 30) * RIPPLE_SCREEN + RIPPLE_SCREEN / 2 + 30];
+    CHECK((tile & 0x07E0) == 0 && (tile & 0x1F) > 0x10);   /* (a tile: blue, a little darker at most) */
+    const int c = RIPPLE_W / 2;
+    ripple_drop(c, c, 6, 3000);
+    CHECK(ripple_height(c, c) == -3000 && ripple_height(c + 7, c) == 0);
+    const double e0 = ripple_energy();
+    bool alike = true;
+    for (int n = 0; n < 60; n++) {
+        ripple_waves();
+        for (int d = 1; d < 70; d += 3) {           /* (alike every way round: across, down, both sides) */
+            const int h = ripple_height(c + d, c);
+            alike &= h == ripple_height(c - d, c) && h == ripple_height(c, c + d) && h == ripple_height(c, c - d);
+        }
+    }
+    CHECK(alike);
+    int far = 0;                                    /* the rings have spread: there's a wave 30 or more cells out */
+    for (int d = 30; d < 80; d++) {
+        far = abs(ripple_height(c + d, c)) > far ? abs(ripple_height(c + d, c)) : far;
+    }
+    CHECKF(far > 20, "ripple: farthest wave %d", far);
+    for (int n = 0; n < 400; n++) {
+        ripple_waves();
+    }
+    CHECKF(ripple_energy() < e0 * 0.2, "ripple: energy %.3g of %.3g", ripple_energy(), e0);
+    double sig[2];                                  /* the same seed, the same rain */
+    for (int k = 0; k < 2; k++) {
+        CHECK(ripple_start(21, COLOURS));
+        for (int n = 0; n < 200; n++) {
+            ripple_step();
+        }
+        sig[k] = ripple_energy();
+    }
+    CHECK(sig[0] == sig[1] && sig[0] > 0);
+    ripple_waves();                                 /* (an odd number of steps: the fields swapped; freed all the same) */
+    ripple_free();
+    CHECK(ripple_height(0, 0) == 0 && ripple_energy() == 0);
+}
+
 int main(int argc, char **argv)
 {
     static const test_t TESTS[] = {
@@ -3453,6 +3501,7 @@ int main(int argc, char **argv)
         {"stars (screen saver)", test_stars},
         {"Mandelbrot (screen saver)", test_mandel},
         {"liquid mixing (screen saver)", test_fluid},
+        {"water ripples (screen saver)", test_ripple},
     };
     sudoku_geom_init();
     int failed_tests = 0;

@@ -1501,6 +1501,16 @@ bool saver_fluid_start(lv_obj_t *parent);
  *         on). */
 void saver_fluid_stop(void);
 /**
+ * @brief The water ripples screen saver starts (ui_saver_ripple.c): raindrops rippling a pool on the savers'
+ *        picture, about 12 frames a second, the waves stepped by a worker task.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (or no worker)
+ */
+bool saver_ripple_start(lv_obj_t *parent);
+/** @brief The water ripples screen saver stops: its worker first, then its picture and memory (nothing if it isn't
+ *         on). */
+void saver_ripple_stop(void);
+/**
  * @brief A cellular automaton screen saver starts (ui_saver_automata.c: Game of Life, Brian's Brain,
  *        Langton's ant and the rest): its rule on a grid of dots on the savers' picture.
  * @param[in] parent  the screen saver's cover
