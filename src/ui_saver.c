@@ -5,7 +5,8 @@
  *        chosen shows at full speed: a dim clock (digital, or analog: ui_saver_analog.c) moving about,
  *        digital rain (ui_saver_rain.c), a strange attractor (ui_saver_attractor.c), a flock of boids
  *        (ui_saver_boids.c), a Lissajous figure (ui_saver_lissajous.c), double pendulums
- *        (ui_saver_pendulum.c), a starfield flown through (ui_saver_stars.c), a cellular automaton
+ *        (ui_saver_pendulum.c), a starfield flown through (ui_saver_stars.c), a zoom into the Mandelbrot set
+ *        (ui_saver_mandel.c), a cellular automaton
  *        (ui_saver_automata.c: Game of Life, Brian's Brain, Langton's ant and eight more), or a 3D
  *        cellular automaton in a turning cube (ui_saver_automata3d.c: Crystal growth, Diamond growth,
  *        Pyroclastic, Builder 1). After "Screen saver for" minutes (or at once, for Dark) the screen goes
@@ -100,6 +101,8 @@ static bool saver_show_start(uint8_t mode)
         return saver_pendulum_start(s_saver);
     case SAVER_MODE_STARS:
         return saver_stars_start(s_saver);
+    case SAVER_MODE_MANDEL:
+        return saver_mandel_start(s_saver);
     case SAVER_MODE_ANT:
         return saver_automata_start(s_saver, AUTO_R_ANT);
     case SAVER_MODE_BRAIN:
@@ -153,6 +156,7 @@ static void saver_show_stop(void)
     saver_lissajous_stop();
     saver_pendulum_stop();
     saver_stars_stop();
+    saver_mandel_stop();
     saver_automata_stop();
     saver_automata3d_stop();
     if (s_saver) {

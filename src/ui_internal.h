@@ -1481,6 +1481,16 @@ bool saver_stars_start(lv_obj_t *parent);
 /** @brief The starfield screen saver stops: its picture and memory go (nothing if it isn't on). */
 void saver_stars_stop(void);
 /**
+ * @brief The Mandelbrot screen saver starts (ui_saver_mandel.c): a zoom into the Mandelbrot set on the savers'
+ *        picture, about 12 frames a second, its next levels made by a worker task.
+ * @param[in] parent  the screen saver's cover
+ * @return false if there was no memory for it (or no worker)
+ */
+bool saver_mandel_start(lv_obj_t *parent);
+/** @brief The Mandelbrot screen saver stops: its worker first, then its picture and memory (nothing if it isn't
+ *         on). */
+void saver_mandel_stop(void);
+/**
  * @brief A cellular automaton screen saver starts (ui_saver_automata.c: Game of Life, Brian's Brain,
  *        Langton's ant and the rest): its rule on a grid of dots on the savers' picture.
  * @param[in] parent  the screen saver's cover
