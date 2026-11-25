@@ -215,7 +215,9 @@ src/saver_automata3d_core.c 3D cellular automata without LVGL: Generations rules
 src/saver_stars_core.c  a starfield without LVGL: stars nearer each step, projected, back far away once past;
                         the speed's waves and the view's roll
 src/saver_mandel_core.c a Mandelbrot zoom without LVGL: levels (keys) each twice as deep, a quarter of each from
-                        the one before, inside spots skipped; the autopilot; a frame scaled from a key
+                        the one before, inside spots skipped; the autopilot; a frame scaled from a key; past
+                        level 10, perturbation: the middle in 128-bit fixed point (Q5.123), its orbit worked
+                        out in that, each pixel's difference from it in floats, rebasing
 src/saver_pendulum_core.c a double pendulum without LVGL: the equations of motion stepped with RK4, the trail
 src/saver_lissajous_core.c Lissajous figures without LVGL: the ratios, the drifting phase, shrinking between ratios, the beam
 src/saver_boids_core.c  a flock of boids without LVGL: separation, alignment, cohesion, the edges, trails

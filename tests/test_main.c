@@ -3217,6 +3217,29 @@ static void test_stars(void)
     stars_step();                                   /* (nothing, with no stars) */
 }
 
+/**
+ * @brief The Mandelbrot pixel value of a point worked out in doubles (the truth, for the saver's floats).
+ * @param[in] cx  the point's x
+ * @param[in] cy  its y
+ * @param[in] max_iter  steps at most
+ * @return its value as saver_mandel_core.c makes it, or MANDEL_INSIDE
+ */
+static uint16_t mandel_truth(double cx, double cy, int max_iter)
+{
+    double zx = 0, zy = 0;
+    for (int n = 0; n < max_iter; n++) {
+        const double x2 = zx * zx, y2 = zy * zy;
+        if (x2 + y2 > MANDEL_BAILOUT) {
+            double nu = n + 1.0 - log2(0.5 * log2(x2 + y2));
+            nu = nu < 0 ? 0 : sqrt(nu) * MANDEL_TONE;
+            return (uint16_t)(nu > 65534.0 ? 65534.0 : nu);
+        }
+        zy = 2 * zx * zy + cy;
+        zx = x2 - y2 + cx;
+    }
+    return MANDEL_INSIDE;
+}
+
 /* Mandelbrot: points in and out; a key made from the one before matches the points worked out afresh; a frame
  * at 0 is the key through the palette, at 1 the next key's view; a dive ends, and the same seed dives the same */
 static void test_mandel(void)
@@ -3226,8 +3249,27 @@ static void test_mandel(void)
     CHECK(mandel_point(-0.1f, 0.75f, 2000, 1e-7f) == MANDEL_INSIDE);  /* (a small bulb: the cycle check) */
     const uint16_t far = mandel_point(2, 2, 100, 1e-6f), near = mandel_point(-0.75f, 0.05f, 2000, 1e-7f);
     CHECK(far != MANDEL_INSIDE && near != MANDEL_INSIDE && near > far);   /* (nearer the edge: more steps) */
-    CHECK(mandel_max_iter(0) < mandel_max_iter(5) && mandel_max_iter(100) <= 4095);
+    CHECK(mandel_max_iter(0) < mandel_max_iter(5) && mandel_max_iter(1000) == MANDEL_MAX_ITER);
     CHECK(mandel_start(11) && !is_mandel_shown() && !is_mandel_ready());
+    /* from a reference orbit (128-bit fixed point, then the differences in floats) against the truth (doubles):
+     * a reference inside the set, two on its edge, one outside (its orbit escapes: the points rebase). Near
+     * the edge, after a thousand steps, a point is chaotic: plain floats (the point itself rounded) go wrong
+     * more often than the reference's way */
+    static const float REFS[][2] = {{-0.75f, 0.1f}, {-0.7436447f, 0.1318252f}, {-0.74f, 0.25f}, {0.3f, 0.5f}};
+    int near_ok = 0, plain_ok = 0, tried = 0;
+    for (size_t r = 0; r < sizeof(REFS) / sizeof(REFS[0]); r++) {
+        for (int k = 0; k < 200; k++) {
+            const float dx = (float)(k % 20 - 10) * 7.3e-4f, dy = (float)(k / 20 - 5) * 6.1e-4f;
+            const uint16_t t = mandel_truth((double)REFS[r][0] + dx, (double)REFS[r][1] + dy, 2000);
+            const uint16_t a = mandel_point(REFS[r][0] + dx, REFS[r][1] + dy, 2000, 0);
+            const uint16_t b = mandel_point_near(REFS[r][0], REFS[r][1], dx, dy, 2000);
+            tried++;
+            plain_ok += a == t || (a != MANDEL_INSIDE && t != MANDEL_INSIDE && abs((int)a - (int)t) <= 8);
+            near_ok += b == t || (b != MANDEL_INSIDE && t != MANDEL_INSIDE && abs((int)b - (int)t) <= 8);
+        }
+    }
+    CHECKF(near_ok >= tried * 97 / 100 && near_ok >= plain_ok, "mandel: reference's way %d, plain %d of %d right",
+           near_ok, plain_ok, tried);
     while (!mandel_work(64)) {
     }
     mandel_advance();
@@ -3282,15 +3324,42 @@ static void test_mandel(void)
     CHECK(frames_ok);
     CHECKF(same == checked, "mandel: %d of %d reused pixels differ", checked - same, checked);
     CHECK(levels >= 3 && moved >= 2);
-    int ends = 0, deepest = 0;                      /* a dive ends (floats run out), and a new one begins */
-    for (int k = 0; k < 40 && !ends; k++) {
+    /* deeper than floats reach (a key's pixels a few float steps apart): the key against the truth (doubles),
+     * and far better than plain floats would do. Points that escape after a thousand steps near the edge are
+     * chaotic: floats' rounding, grown over the orbit, sends some of them a few steps either way, so about 4 in
+     * 5 come out right (plain floats here: under 2 in 3; the middle moved exactly) */
+    while (mandel_level() < MANDEL_PLAIN_LEVELS + 4 && !is_mandel_dive_end()) {
         while (!mandel_work(720)) {
         }
-        ends += is_mandel_dive_end();
-        deepest = mandel_level();
         mandel_advance();
     }
-    CHECK(ends && deepest > 5 && mandel_level() == 0);
+    CHECK(mandel_level() == MANDEL_PLAIN_LEVELS + 4);
+    {
+        const uint16_t *key = mandel_key();         /* (pixels against the truth, in doubles) */
+        double mx0, my0;
+        mandel_middle(&mx0, &my0);
+        const double pd = ldexp(1.0, -(MANDEL_D0_EXP + mandel_level()));
+        int ok = 0, n = 0, outside = 0, plain_right = 0;
+        uint32_t rng = 5;
+        for (int k = 0; k < 300; k++) {
+            rng = rng * 1103515245u + 12345u;
+            const int i = (int)(rng >> 8) % MANDEL_W, j = (int)(rng >> 18) % MANDEL_W;
+            const uint16_t t = mandel_truth(mx0 + (i - MANDEL_W / 2) * pd, my0 + (j - MANDEL_W / 2) * pd,
+                                            mandel_max_iter(mandel_level())), v = key[j * MANDEL_W + i];
+            n++;
+            outside += t != MANDEL_INSIDE;
+            ok += v == t || (v != MANDEL_INSIDE && t != MANDEL_INSIDE && abs((int)v - (int)t) <= 8);
+            const uint16_t p = mandel_point((float)(mx0 + (i - MANDEL_W / 2) * pd), (float)(my0 + (j - MANDEL_W / 2) * pd),
+                                            mandel_max_iter(mandel_level()), 0);
+            plain_right += p == t || (p != MANDEL_INSIDE && t != MANDEL_INSIDE && abs((int)p - (int)t) <= 8);
+        }
+        CHECKF(ok >= n * 3 / 4 && ok >= plain_right + n / 10 && outside > n / 4,
+               "mandel: deep key: %d of %d pixels right, plain floats %d (%d outside)", ok, n, plain_right, outside);
+        float cx, cy, d;
+        int mx, my;
+        mandel_view(&cx, &cy, &d, &mx, &my);
+        CHECK(d == ldexpf(1.0f, -(MANDEL_D0_EXP + MANDEL_PLAIN_LEVELS + 4)));
+    }
     uint32_t sig[2];                                /* the same seed, the same dive */
     for (int k = 0; k < 2; k++) {
         CHECK(mandel_start(77));

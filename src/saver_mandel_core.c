@@ -9,25 +9,43 @@
 #include <string.h>
 
 #define HALF            (MANDEL_W / 2)        /**< a key's middle, px */
-#define START_X         (-0.6f)               /**< level 0's middle */
+#define START_X         (-0.75f)              /**< level 0's middle */
 #define START_STEER     170                   /**< level 0: how far the middle may move (anywhere round the set) */
 #define PICKS           16                    /**< the autopilot chooses among this many most detailed spots */
-#define FLOAT_ROOM      24.0f                 /**< a pixel at least this many float steps of its point: else the
-                                               *   dive is as deep as floats allow */
+#define FX_FRAC         123                   /**< fixed point: fraction bits (Q5.123: a sign, 4 integer bits) */
+#define REF_ESCAPE      4.0f                  /**< the reference orbit stops once |Z|^2 is past this */
+#define REF_N           (MANDEL_MAX_ITER + 1) /**< the reference orbit's Zs at most */
+
+/** @brief A number in signed fixed point, Q5.123: four 32-bit words, the lowest first, two's complement. */
+typedef struct {
+    uint32_t w[4];                        /**< the words */
+} fx_t;
 
 static uint16_t *s_keys[2];               /**< the two keys: shown, being made (NULL: none) */
 static uint32_t s_rng = 1;                /**< xorshift32 state (never 0) */
 
+/** @brief A reference orbit's Z: rounded to floats, and what the rounding left off (Z = x + rx, y + ry, to some
+ *         48 bits); the four side by side, one cache read a step. */
+typedef struct {
+    float x, y;                           /**< Z, rounded */
+    float rx, ry;                         /**< the rest */
+} ref_t;
+
+static ref_t *s_ref;                      /**< the reference orbit, REF_N Zs */
+
 /* the shown key */
 static int s_shown = -1;                  /**< which of s_keys (-1: none yet) */
-static float s_cx, s_cy, s_d;             /**< its middle, a pixel's size */
+static fx_t s_fx, s_fy;                   /**< its middle, exactly */
+static float s_cx, s_cy, s_d;             /**< its middle (roughly), a pixel's size */
 static int s_level;                       /**< its level */
 static int s_mx, s_my;                    /**< the next key's middle, from its middle, px */
 static bool s_dive_end;                   /**< the next key begins a new dive */
 
 /* the key being made */
 static int m_buf;                         /**< which of s_keys */
-static float m_cx, m_cy, m_d;             /**< its middle, a pixel's size */
+static fx_t m_fx, m_fy;                   /**< its middle, exactly */
+static float m_cx, m_cy, m_d;             /**< its middle (roughly), a pixel's size */
+static int m_ref_len;                     /**< its reference orbit: Z_0 .. Z_len (-1: not worked out yet) */
 static int m_level;                       /**< its level */
 static int m_row;                         /**< rows done */
 static bool m_reuse;                      /**< every other pixel from the shown key's middle */
@@ -53,7 +71,228 @@ static uint32_t rnd(void)
 int mandel_max_iter(int level)
 {
     const int n = 160 + 80 * level;
-    return n > 4000 ? 4000 : n;
+    return n > MANDEL_MAX_ITER ? MANDEL_MAX_ITER : n;
+}
+
+/* ---------------------------------------------------------------- 128-bit fixed point */
+
+/**
+ * @brief Is it below 0?
+ * @param[in] a  the number
+ * @return true if so
+ */
+static bool is_fx_neg(const fx_t *a)
+{
+    return (a->w[3] >> 31) != 0;
+}
+
+/**
+ * @brief Minus it.
+ * @param[in] a  the number
+ * @return -a
+ */
+static fx_t fx_neg(fx_t a)
+{
+    uint32_t carry = 1;
+    for (int k = 0; k < 4; k++) {
+        const uint32_t v = ~a.w[k] + carry;
+        carry = carry && v == 0;
+        a.w[k] = v;
+    }
+    return a;
+}
+
+/**
+ * @brief A sum.
+ * @param[in] a  one
+ * @param[in] b  the other
+ * @return a + b
+ */
+static fx_t fx_add(fx_t a, fx_t b)
+{
+    uint64_t carry = 0;
+    for (int k = 0; k < 4; k++) {
+        carry += (uint64_t)a.w[k] + b.w[k];
+        a.w[k] = (uint32_t)carry;
+        carry >>= 32;
+    }
+    return a;
+}
+
+/**
+ * @brief A product (the 256-bit product's bits FX_FRAC up, the signs set aside; no overflow check: the orbit
+ *        stops well before).
+ * @param[in] a  one
+ * @param[in] b  the other
+ * @return a b
+ */
+static fx_t fx_mul(fx_t a, fx_t b)
+{
+    const bool na = is_fx_neg(&a), nb = is_fx_neg(&b);
+    a = na ? fx_neg(a) : a;
+    b = nb ? fx_neg(b) : b;
+    uint32_t p[8] = {0};
+    for (int i = 0; i < 4; i++) {
+        uint64_t carry = 0;
+        for (int j = 0; j < 4; j++) {
+            carry += (uint64_t)a.w[i] * b.w[j] + p[i + j];
+            p[i + j] = (uint32_t)carry;
+            carry >>= 32;
+        }
+        p[i + 4] = (uint32_t)carry;
+    }
+    fx_t r;                                     /* (123 = 3 words and 27 bits) */
+    for (int k = 0; k < 4; k++) {
+        r.w[k] = p[k + 3] >> (FX_FRAC - 96) | p[k + 4] << (128 - FX_FRAC);
+    }
+    return na != nb ? fx_neg(r) : r;
+}
+
+/**
+ * @brief A whole number times a power of two, in fixed point.
+ * @param[in] v  the number (|v| below 2^24)
+ * @param[in] e  the power: v 2^e
+ * @return it (0 if it is below the fixed point's last bit)
+ */
+static fx_t fx_from_int(int32_t v, int e)
+{
+    fx_t r = {{0, 0, 0, 0}};
+    uint32_t m = (uint32_t)(v < 0 ? -v : v);
+    int sh = FX_FRAC + e;                           /* where m's lowest bit goes */
+    if (sh < 0) {
+        m = sh > -32 ? m >> -sh : 0;
+        sh = 0;
+    }
+    const int k = sh / 32, b = sh % 32;
+    if (k < 4) {
+        r.w[k] = m << b;
+        if (b && k + 1 < 4) {
+            r.w[k + 1] = m >> (32 - b);
+        }
+    }
+    return v < 0 ? fx_neg(r) : r;
+}
+
+/**
+ * @brief A float in fixed point, exactly.
+ * @param[in] f  the float (|f| below 16)
+ * @return it
+ */
+static fx_t fx_from_float(float f)
+{
+    int e;
+    const float m = frexpf(f, &e);                  /* f = m 2^e, |m| in [0.5, 1) */
+    return fx_from_int((int32_t)ldexpf(m, 24), e - 24);
+}
+
+/**
+ * @brief A fixed point number as a float (rounded down to 24 bits or so).
+ * @param[in] a  the number
+ * @return it
+ */
+static float fx_to_float(fx_t a)
+{
+    const bool neg = is_fx_neg(&a);
+    a = neg ? fx_neg(a) : a;
+    int k = 3;
+    while (k > 0 && !a.w[k]) {
+        k--;
+    }
+    float f = ldexpf((float)a.w[k], 32 * k - FX_FRAC);
+    if (k > 0) {
+        f += ldexpf((float)a.w[k - 1], 32 * (k - 1) - FX_FRAC);
+    }
+    return neg ? -f : f;
+}
+
+/* ---------------------------------------------------------------- points */
+
+/**
+ * @brief An escaped point's pixel value: its count smoothed, on a square-root scale.
+ * @param[in] n  the step z escaped at
+ * @param[in] r2  |z|^2 then
+ * @return the value (up to 0xFFFE)
+ */
+static uint16_t escaped(int n, float r2)
+{
+    float nu = (float)n + 1.0f - log2f(0.5f * log2f(r2));
+    nu = nu < 0 ? 0 : sqrtf(nu) * MANDEL_TONE;
+    return (uint16_t)(nu > 65534.0f ? 65534.0f : nu);
+}
+
+/**
+ * @brief The reference orbit, from 0, in fixed point, kept in s_ref (as floats and their rests): Z_0 = 0, Z_k+1 = Z_k^2 + C, up to
+ *        the steps given or until it escapes.
+ * @param[in] cx  C's x
+ * @param[in] cy  C's y
+ * @param[in] max_iter  steps at most
+ * @return the last Z kept, len: Z_0 .. Z_len (1 at least)
+ */
+static int make_ref(fx_t cx, fx_t cy, int max_iter)
+{
+    fx_t zx = {{0, 0, 0, 0}}, zy = {{0, 0, 0, 0}};
+    s_ref[0] = (ref_t) {0, 0, 0, 0};
+    int n = 1;
+    for (; n <= max_iter; n++) {
+        const fx_t x2 = fx_mul(zx, zx), y2 = fx_mul(zy, zy), xy = fx_mul(zx, zy);
+        zx = fx_add(fx_add(x2, fx_neg(y2)), cx);
+        zy = fx_add(fx_add(xy, xy), cy);
+        ref_t *r = &s_ref[n];
+        r->x = fx_to_float(zx);
+        r->y = fx_to_float(zy);
+        r->rx = fx_to_float(fx_add(zx, fx_neg(fx_from_float(r->x))));   /* (the rest the float left off) */
+        r->ry = fx_to_float(fx_add(zy, fx_neg(fx_from_float(r->y))));
+        if (r->x * r->x + r->y * r->y > REF_ESCAPE) {
+            break;
+        }
+    }
+    return n > max_iter ? max_iter : n;
+}
+
+/**
+ * @brief A point near the reference: its difference from the reference orbit iterated in floats (dz -> 2 Z dz +
+ *        dz^2 + dc), z = Z + dz; when z comes nearer 0 than dz is, or the reference runs out, z itself becomes
+ *        the difference from the orbit's start (rebasing, so the difference stays small next to Z). z is (Z's
+ *        float + dz) + the rest of Z: near a rebase Z's float and dz nearly cancel, which floats add exactly,
+ *        and the rest keeps the result as good as the fixed point's (Z's float alone would be off by its
+ *        rounding, more than a deep pixel's size).
+ * @param[in] dcx  its x minus the reference's
+ * @param[in] dcy  its y minus the reference's
+ * @param[in] max_iter  steps at most
+ * @param[in] len  the reference orbit's last Z (make_ref())
+ * @return its pixel value, or MANDEL_INSIDE
+ */
+static uint16_t point_near(float dcx, float dcy, int max_iter, int len)
+{
+    float dx = 0, dy = 0;
+    int m = 0;
+    for (int n = 0; n < max_iter; n++) {
+        const float zx0 = s_ref[m].x, zy0 = s_ref[m].y;
+        const float ndx = 2.0f * (zx0 * dx - zy0 * dy) + dx * dx - dy * dy + dcx;
+        dy = 2.0f * (zx0 * dy + zy0 * dx) + 2.0f * dx * dy + dcy;
+        dx = ndx;
+        m++;
+        const ref_t *r = &s_ref[m];
+        const float zx = (r->x + dx) + r->rx, zy = (r->y + dy) + r->ry, r2 = zx * zx + zy * zy;
+        if (r2 > MANDEL_BAILOUT) {
+            return escaped(n + 1, r2);
+        }
+        if (r2 < dx * dx + dy * dy || m == len) {
+            dx = zx;                                /* (rebased: from Z_0 = 0 again) */
+            dy = zy;
+            m = 0;
+        }
+    }
+    return MANDEL_INSIDE;
+}
+
+/* (documented in saver_mandel_core.h) */
+uint16_t mandel_point_near(float cx, float cy, float dcx, float dcy, int max_iter)
+{
+    if (!s_ref || max_iter > MANDEL_MAX_ITER) {
+        return 0;
+    }
+    return point_near(dcx, dcy, max_iter, make_ref(fx_from_float(cx), fx_from_float(cy), max_iter));
 }
 
 /* (documented in saver_mandel_core.h) */
@@ -67,10 +306,8 @@ uint16_t mandel_point(float cx, float cy, int max_iter, float eps)
     int check = 8, count = 0;
     for (int n = 0; n < max_iter; n++) {
         const float x2 = zx * zx, y2 = zy * zy;
-        if (x2 + y2 > MANDEL_BAILOUT) {             /* out: the count, smoothed, on a square-root scale */
-            float nu = (float)n + 1.0f - log2f(0.5f * log2f(x2 + y2));
-            nu = nu < 0 ? 0 : sqrtf(nu) * MANDEL_TONE;
-            return (uint16_t)(nu > 65534.0f ? 65534.0f : nu);
+        if (x2 + y2 > MANDEL_BAILOUT) {             /* out */
+            return escaped(n, x2 + y2);
         }
         zy = 2.0f * zx * zy + cy;
         zx = x2 - y2 + cx;
@@ -95,9 +332,8 @@ static void begin_dive(int buf)
 {
     m_buf = buf;
     m_level = 0;
-    m_cx = START_X;
-    m_cy = 0;
-    m_d = MANDEL_SPAN / MANDEL_W;
+    m_fx = fx_from_float(START_X);
+    m_fy = fx_from_int(0, 0);
     m_reuse = false;
 }
 
@@ -105,8 +341,12 @@ static void begin_dive(int buf)
 static void begin_key(void)
 {
     m_row = 0;
+    m_cx = fx_to_float(m_fx);
+    m_cy = fx_to_float(m_fy);
+    m_d = ldexpf(1.0f, -(MANDEL_D0_EXP + m_level));   /* (a power of two: the middle moves exactly) */
     m_max = mandel_max_iter(m_level);
     m_eps = m_d * 0.01f;
+    m_ref_len = -1;
     __atomic_store_n(&m_ready, 0, __ATOMIC_RELEASE);
 }
 
@@ -118,7 +358,10 @@ bool mandel_start(uint32_t seed)
             s_keys[k] = malloc((size_t)MANDEL_W * MANDEL_W * sizeof(uint16_t));
         }
     }
-    if (!s_keys[0] || !s_keys[1]) {
+    if (!s_ref) {
+        s_ref = malloc(REF_N * sizeof(ref_t));
+    }
+    if (!s_keys[0] || !s_keys[1] || !s_ref) {
         mandel_free();
         return false;
     }
@@ -138,6 +381,8 @@ void mandel_free(void)
         free(s_keys[k]);
         s_keys[k] = NULL;
     }
+    free(s_ref);
+    s_ref = NULL;
     s_shown = -1;
 }
 
@@ -170,6 +415,11 @@ bool mandel_work(int rows)
     }
     uint16_t *out = s_keys[m_buf];
     const uint16_t *prev = m_reuse ? s_keys[s_shown] : NULL;
+    const bool near = m_level > MANDEL_PLAIN_LEVELS;   /* (deeper: from the reference orbit) */
+    if (near && m_ref_len < 0) {
+        m_ref_len = make_ref(m_fx, m_fy, m_max);   /* (the key's first call: the orbit at its middle) */
+        rows--;
+    }
     for (; rows > 0 && m_row < MANDEL_W; rows--, m_row++) {
         const int j = m_row;
         uint16_t *o = out + j * MANDEL_W;
@@ -191,7 +441,8 @@ bool mandel_work(int rows)
                     continue;
                 }
             }
-            o[i] = mandel_point(m_cx + (float)(i - HALF) * m_d, cy, m_max, m_eps);
+            o[i] = near ? point_near((float)(i - HALF) * m_d, (float)(j - HALF) * m_d, m_max, m_ref_len)
+                   : mandel_point(m_cx + (float)(i - HALF) * m_d, cy, m_max, m_eps);
         }
     }
     if (m_row < MANDEL_W) {
@@ -218,8 +469,9 @@ bool is_mandel_ready(void)
  *        highest counts outside the set) near its middle, one of the PICKS best at random.
  * @param[out] mx  gets how far across, px
  * @param[out] my  gets how far down, px
+ * @return false if there's no spot outside the set near the middle (sunk into it: time for a new dive)
  */
-static void steer(int *mx, int *my)
+static bool steer(int *mx, int *my)
 {
     const uint16_t *key = s_keys[s_shown];
     const int reach = s_level ? MANDEL_STEER : START_STEER;
@@ -246,25 +498,14 @@ static void steer(int *mx, int *my)
             }
         }
     }
+    *mx = *my = 0;
     if (!n) {
-        *mx = *my = 0;                              /* (all inside: straight on) */
-        return;
+        return false;
     }
     const int k = (int)(rnd() % (uint32_t)n);
     *mx = best_x[k];
     *my = best_y[k];
-}
-
-/**
- * @brief Can a key one level deeper than the shown one still be told apart pixel from pixel in floats?
- * @return true if so
- */
-static bool is_deeper_ok(void)
-{
-    float m = fabsf(s_cx) > fabsf(s_cy) ? fabsf(s_cx) : fabsf(s_cy);
-    int e;
-    frexpf(m > 0.25f ? m : 0.25f, &e);
-    return s_level + 1 < MANDEL_LEVELS && s_d * 0.5f >= FLOAT_ROOM * ldexpf(1.0f, e - 24);
+    return true;
 }
 
 /* (documented in saver_mandel_core.h) */
@@ -274,21 +515,22 @@ void mandel_advance(void)
         return;
     }
     s_shown = m_buf;
+    s_fx = m_fx;
+    s_fy = m_fy;
     s_cx = m_cx;
     s_cy = m_cy;
     s_d = m_d;
     s_level = m_level;
-    s_dive_end = !is_deeper_ok();
+    s_dive_end = s_level + 1 >= MANDEL_LEVELS || !steer(&s_mx, &s_my);
     if (s_dive_end) {
         s_mx = s_my = 0;
         begin_dive(1 - s_shown);
     } else {
-        steer(&s_mx, &s_my);
         m_buf = 1 - s_shown;
         m_level = s_level + 1;
-        m_cx = s_cx + (float)s_mx * s_d;
-        m_cy = s_cy + (float)s_my * s_d;
-        m_d = s_d * 0.5f;
+        const int e = -(MANDEL_D0_EXP + s_level);   /* (the shown key's pixel: 2^e, exactly) */
+        m_fx = fx_add(s_fx, fx_from_int(s_mx, e));
+        m_fy = fx_add(s_fy, fx_from_int(s_my, e));
         m_reuse = true;
     }
     begin_key();
@@ -347,6 +589,29 @@ void mandel_frame(uint16_t *out, float p, const uint16_t pal[1024], uint32_t shi
 const uint16_t *mandel_key(void)
 {
     return s_shown >= 0 ? s_keys[s_shown] : NULL;
+}
+
+/**
+ * @brief A fixed point number as a double (to the double's 53 bits).
+ * @param[in] a  the number
+ * @return it
+ */
+static double fx_to_double(fx_t a)
+{
+    const bool neg = is_fx_neg(&a);
+    a = neg ? fx_neg(a) : a;
+    double f = 0;
+    for (int k = 0; k < 4; k++) {
+        f += ldexp((double)a.w[k], 32 * k - FX_FRAC);
+    }
+    return neg ? -f : f;
+}
+
+/* (documented in saver_mandel_core.h) */
+void mandel_middle(double *cx, double *cy)
+{
+    *cx = fx_to_double(s_fx);
+    *cy = fx_to_double(s_fy);
 }
 
 /* (documented in saver_mandel_core.h) */

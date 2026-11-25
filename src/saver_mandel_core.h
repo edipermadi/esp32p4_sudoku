@@ -16,7 +16,16 @@ extern "C" {
  * @ingroup ui_sudoku
  * @brief The Mandelbrot set (the points c where z -> z^2 + c, from z = 0, stays near 0), zoomed into for ever:
  *        a dive goes down level by level, each level twice as deep as the one before, and starts again from
- *        the whole set once single-precision floats run out (some 2^12 to 2^15 times deeper).
+ *        the whole set after MANDEL_LEVELS levels, or when the autopilot finds nothing but the set's inside.
+ *
+ * Down to MANDEL_PLAIN_LEVELS each point is worked out in floats. Deeper than that floats can't tell one
+ * pixel's point from the next (a float holds 24 bits), so a key's middle is kept exactly in 128-bit fixed
+ * point (Q5.123), its orbit (the reference) worked out in that once per key and kept as floats, and each
+ * pixel follows only its small difference from the reference, in floats (perturbation): the difference dz
+ * goes dz -> 2 Z dz + dz^2 + dc, which floats hold well however small it gets. When a pixel's z comes nearer
+ * 0 than its difference, or the reference ends (it escaped), z itself becomes the difference from the
+ * orbit's start ("rebasing"), which keeps it right. A key's pixel is a power of two, so the middle moves
+ * exactly from key to key.
  *
  * Each level is a key: MANDEL_W x MANDEL_W pixels, each from the smooth escape count of its point (how many
  * steps z took to leave the circle of radius 16, with the fraction that hides the bands; MANDEL_TONE), or
@@ -35,10 +44,15 @@ extern "C" {
 #define MANDEL_W        720                   /**< a key's size, px (the screen) */
 #define MANDEL_INSIDE   0xFFFFu               /**< a key's pixel: in the set */
 #define MANDEL_BAILOUT  256.0f                /**< |z|^2 beyond this: escaped */
-#define MANDEL_SPAN     3.2f                  /**< level 0's width, in the plane */
+#define MANDEL_D0_EXP   8                     /**< level 0's pixel: 2^-8 in the plane (a key 2.8 wide); level L's:
+                                               *   2^-(8 + L) */
 #define MANDEL_STEER    64                    /**< the most the middle moves from one key to the next, the
                                                *   shown key's px */
-#define MANDEL_LEVELS   20                    /**< a dive's levels at most */
+#define MANDEL_LEVELS   110                   /**< a dive's levels at most (2^-117, a deep key's pixel, is about
+                                               *   the smallest number a float holds unrounded) */
+#define MANDEL_PLAIN_LEVELS 10                /**< levels up to this work each point out in floats; deeper, from
+                                               *   the reference orbit */
+#define MANDEL_MAX_ITER 20000                 /**< steps a point gets at most, at any level */
 #define MANDEL_TONE     80.0f                 /**< a key's pixel: the square root of its escape count times this
                                                *   (so the palette's 1024 colours span counts 0-164, 164-655 ...:
                                                *   the colours spread out where the counts climb, deeper in) */
@@ -109,6 +123,18 @@ void mandel_frame(uint16_t *out, float p, const uint16_t pal[1024], uint32_t shi
  */
 uint16_t mandel_point(float cx, float cy, int max_iter, float eps);
 /**
+ * @brief A point's pixel value worked out from a reference orbit (the deep levels' way; for the tests): the
+ *        reference's orbit at (cx, cy) in fixed point, then the point's difference from it in floats.
+ *        mandel_start() first (the orbit's memory).
+ * @param[in] cx  the reference's x
+ * @param[in] cy  its y
+ * @param[in] dcx  the point's x minus the reference's
+ * @param[in] dcy  its y minus the reference's
+ * @param[in] max_iter  steps at most (MANDEL_MAX_ITER at most)
+ * @return its pixel value, or MANDEL_INSIDE (0 without the orbit's memory)
+ */
+uint16_t mandel_point_near(float cx, float cy, float dcx, float dcy, int max_iter);
+/**
  * @brief The steps a level's points get at most.
  * @param[in] level  0 ..
  * @return them
@@ -128,6 +154,12 @@ const uint16_t *mandel_key(void);
  * @param[out] my  gets the same, down
  */
 void mandel_view(float *cx, float *cy, float *d, int *mx, int *my);
+/**
+ * @brief The shown key's middle, as doubles (for the tests: exact to the double's 53 bits).
+ * @param[out] cx  gets its x
+ * @param[out] cy  gets its y
+ */
+void mandel_middle(double *cx, double *cy);
 
 /** @} */
 

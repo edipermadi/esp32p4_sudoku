@@ -10,7 +10,8 @@
  * and LVGL redrawing the whole screen take some 40 ms each, so it runs at about 12 frames a second, which a slow
  * zoom hides well. The zoom keeps pace
  * with the worker: it goes as fast as the next key is coming along (never more than MB_MAX_RATE), so it is
- * quick near the top and slows down deeper in, where each point takes more steps; it holds still for a
+ * quick near the top and slows down deeper in (half a minute a level from level 11, where the core switches to
+ * perturbation from a 128-bit reference orbit, a minute by level 18), where each point takes more steps; it holds still for a
  * moment if the next key is late. A dive's last level fades out to black, and the next dive, from the whole
  * set again, fades in.
  */
